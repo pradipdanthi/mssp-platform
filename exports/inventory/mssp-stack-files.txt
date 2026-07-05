@@ -1,0 +1,15 @@
+/home/secadmin/mssp-stack/docker-compose.yml
+/home/secadmin/mssp-stack/docker-compose.yml.bak.2026-05-29-0731
+/home/secadmin/mssp-stack/docker-compose.yml.bak.2026-05-29-0745
+/home/secadmin/mssp-stack/docker-compose.yml.bak.2026-05-29-0755
+/home/secadmin/mssp-stack/docker-compose.yml.bkp
+/home/secadmin/mssp-stack/filebeat/filebeat.yml
+/home/secadmin/mssp-stack/install.sh
+/home/secadmin/mssp-stack/mapping.json
+/home/secadmin/mssp-stack/nginx/nginx.conf
+/home/secadmin/mssp-stack/wazuh-alerts/alerts.json
+/home/secadmin/mssp-stack/wazuh-live-logs/active-responses.log
+/home/secadmin/mssp-stack/wazuh-live-logs/api.log
+/home/secadmin/mssp-stack/wazuh-live-logs/cluster.log
+/home/secadmin/mssp-stack/wazuh-live-logs/integrations.log
+/home/secadmin/mssp-stack/wazuh-live-logs/ossec.log

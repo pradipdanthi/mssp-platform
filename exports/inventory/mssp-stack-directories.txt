@@ -1,0 +1,13 @@
+/home/secadmin/mssp-stack
+/home/secadmin/mssp-stack/filebeat
+/home/secadmin/mssp-stack/nginx
+/home/secadmin/mssp-stack/wazuh-alerts
+/home/secadmin/mssp-stack/wazuh-dashboard
+/home/secadmin/mssp-stack/wazuh-dashboard/config
+/home/secadmin/mssp-stack/wazuh-live-logs
+/home/secadmin/mssp-stack/wazuh-live-logs/alerts
+/home/secadmin/mssp-stack/wazuh-live-logs/api
+/home/secadmin/mssp-stack/wazuh-live-logs/archives
+/home/secadmin/mssp-stack/wazuh-live-logs/cluster
+/home/secadmin/mssp-stack/wazuh-live-logs/firewall
+/home/secadmin/mssp-stack/wazuh-live-logs/wazuh
