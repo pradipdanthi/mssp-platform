@@ -1,0 +1,15 @@
+.env
+*.key
+*.pem
+*.p12
+*.pfx
+*.log
+logs/
+data/
+backups/
+**/registry/
+**/volume/
+**/volumes/
+.vscode/
+.DS_Store
+Thumbs.db
