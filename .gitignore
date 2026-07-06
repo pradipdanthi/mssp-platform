@@ -13,3 +13,13 @@ backups/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# generated snapshots and validation output
+reports/
+exports/
+
+# accidental top-level copies
+configs/install.sh
+configs/mapping.json
+configs/wazuh-alerts/
+configs/wazuh-live-logs/

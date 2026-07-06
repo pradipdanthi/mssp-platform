@@ -1,0 +1,11 @@
+Excluded from Git on purpose:
+/home/secadmin/mssp-stack/wazuh-alerts/alerts.json
+/home/secadmin/mssp-stack/wazuh-live-logs/alerts/alerts.json
+
+Also excluded:
+- private keys
+- certificates
+- databases
+- Docker volumes
+- logs
+- runtime state
