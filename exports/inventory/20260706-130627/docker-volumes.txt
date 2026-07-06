@@ -1,0 +1,11 @@
+DRIVER    VOLUME NAME
+local     0abff546aea123fd06a7ed27b7599eaa5ac653e82a55040688060dc407463ec7
+local     60b0d1190d25040415ce346a7531bff78f0a3e0b01825ca6d81a0f5dd2b1e002
+local     b5794614517f9590d421bcffe06baa80794dea9047c52eeea82d6d67da72ab84
+local     c9758c29b41118ea25b1e60a94e83a7627c4dd57e7117b8dd610bd2f21afa0a5
+local     mssp-stack_filebeat-data
+local     mssp-stack_opensearch-storage
+local     mssp-stack_shuffle-apps-storage
+local     mssp-stack_thehive-db-storage
+local     mssp-stack_thehive-storage
+local     mssp-stack_wazuh-manager-storage

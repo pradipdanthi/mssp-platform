@@ -1,0 +1,31 @@
+NAMES                    IMAGE                                         STATUS                   PORTS
+romantic_williams        ad6458bbaf30                                  Exited (2) 2 weeks ago   
+peaceful_shamir          64d97c4d7184                                  Exited (2) 2 weeks ago   
+kind_euler               c85c705aaae2                                  Exited (2) 2 weeks ago   
+adoring_sammet           ee6921c88792                                  Exited (1) 2 weeks ago   
+bold_swartz              ee6921c88792                                  Exited (1) 2 weeks ago   
+affectionate_goodall     ee6921c88792                                  Exited (1) 2 weeks ago   
+objective_thompson       ee6921c88792                                  Exited (1) 2 weeks ago   
+nervous_shtern           ee6921c88792                                  Exited (1) 2 weeks ago   
+adoring_bardeen          54a65a14a5ea                                  Exited (2) 4 weeks ago   
+upbeat_merkle            da90446a6176                                  Exited (2) 4 weeks ago   
+suspicious_jemison       cc37bd639857                                  Exited (2) 4 weeks ago   
+gracious_bose            6ecd46de41b1                                  Exited (2) 4 weeks ago   
+inspiring_shannon        d79b02a4f151                                  Exited (2) 4 weeks ago   
+pedantic_khayyam         86f494a4b9de                                  Exited (2) 4 weeks ago   
+amazing_noyce            34a7801ab1b0                                  Exited (2) 4 weeks ago   
+quizzical_driscoll       d5e59fcfeda0                                  Exited (2) 4 weeks ago   
+youthful_chebyshev       3ca420e0e226                                  Exited (2) 4 weeks ago   
+filebeat-wazuh           docker.elastic.co/beats/filebeat-oss:7.10.2   Up 26 hours              
+wazuh-manager-local      wazuh/wazuh-manager:4.7.2                     Up 26 hours              1514/tcp, 0.0.0.0:1515->1515/tcp, [::]:1515->1515/tcp, 514/udp, 1516/tcp, 0.0.0.0:55000->55000/tcp, [::]:55000->55000/tcp
+sweet_lehmann            fc253ffa94d7                                  Exited (2) 5 weeks ago   
+opensearch-node-local    opensearchproject/opensearch:2.11.0           Up 26 hours              0.0.0.0:9200->9200/tcp, [::]:9200->9200/tcp, 9600/tcp, 0.0.0.0:9300->9300/tcp, [::]:9300->9300/tcp, 9650/tcp
+wazuh-dashboard          wazuh/wazuh-dashboard:4.7.2                   Up 26 hours              443/tcp, 0.0.0.0:5601->5601/tcp, [::]:5601->5601/tcp
+shuffle-frontend         ghcr.io/shuffle/shuffle-frontend:latest       Up 26 hours              0.0.0.0:3001->80/tcp, [::]:3001->80/tcp, 0.0.0.0:4433->443/tcp, [::]:4433->443/tcp
+shuffle-orborus          ghcr.io/shuffle/shuffle-orborus:latest        Up 26 hours              
+thehive-local            strangebee/thehive:5.2                        Up 26 hours              0.0.0.0:9000->9000/tcp, [::]:9000->9000/tcp
+shuffle-backend          ghcr.io/shuffle/shuffle-backend:latest        Up 26 hours              0.0.0.0:5001->5001/tcp, [::]:5001->5001/tcp
+thehive-postgres-local   postgres:15-alpine                            Up 26 hours              5432/tcp
+nginx-cluster-proxy      nginx:1.25-alpine                             Up 26 hours              80/tcp, 0.0.0.0:1514->1514/tcp, [::]:1514->1514/tcp
+exciting_shaw            4b33657bf81e                                  Created                  
+tenzir-node              tenzir/tenzir:main                            Up 26 hours              
