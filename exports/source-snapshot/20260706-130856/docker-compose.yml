@@ -1,0 +1,247 @@
+services:
+  # ==============================================================================
+  # 💾 DATABASE LAYER: COMPRESSED SECURITY LOG ARCHIVING & DATA REPOSITORY
+  # ==============================================================================
+  opensearch-db:
+    image: opensearchproject/opensearch:2.11.0
+    container_name: opensearch-node-local
+
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+
+    environment:
+      - cluster.name=local-mssp-cluster
+      - node.name=opensearch-single-core
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms4g -Xmx4g"
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+      - compatibility.override_main_response_version=true
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+
+    volumes:
+      - opensearch-storage:/usr/share/opensearch/data
+
+    networks:
+      - mssp-network
+
+    restart: unless-stopped
+
+  # ==============================================================================
+  # 📊 SIEM LAYER: DECODING RULE CORRELATION & MULTI-TENANT ENGINE
+  # ==============================================================================
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.7.2
+    container_name: wazuh-manager-local
+    depends_on:
+      opensearch-db:
+        condition: service_started
+
+    environment:
+      - WAZUH_CLUSTER_ROLE=master
+
+    volumes:
+      - wazuh-manager-storage:/var/ossec/data
+      - ./wazuh-live-logs:/var/ossec/logs
+
+    networks:
+      - mssp-network
+
+    ports:
+      - "55000:55000"
+      - "1515:1515"
+
+    restart: unless-stopped
+
+  # ==============================================================================
+  # 🤖 SOAR LAYER: SHUFFLE FULL ORCHESTRATION PIPELINE NETWORK
+  # ==============================================================================
+  shuffle-frontend:
+    image: ghcr.io/shuffle/shuffle-frontend:latest
+    container_name: shuffle-frontend
+    depends_on:
+      - shuffle-backend
+
+    ports:
+      - "3001:80"
+      - "4433:443"
+
+    environment:
+      - BACKEND_URL=http://shuffle-backend:5001
+
+    networks:
+      - mssp-network
+
+    restart: unless-stopped
+
+  shuffle-backend:
+    image: ghcr.io/shuffle/shuffle-backend:latest
+    container_name: shuffle-backend
+    depends_on:
+      opensearch-db:
+        condition: service_started
+
+    ports:
+      - "5001:5001"
+
+    environment:
+      - SHUFFLE_APP_HOTLOAD_FOLDER=/shuffle-apps
+      - SHUFFLE_APP_DOWNLOAD_FOLDER=/shuffle-apps
+      - SHUFFLE_APP_OUTPUT_DIR=/shuffle-apps
+      - DOCKER_API_VERSION=1.40
+      - SHUFFLE_BACKEND_PORT=5001
+      - SHUFFLE_LOGS_DISABLED=false
+      - SHUFFLE_OPENSEARCH_URL=http://opensearch-node-local:9200
+      - SHUFFLE_ENCRYPTION_KEY=ChangeThisToASecret32CharString!!!
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - shuffle-apps-storage:/shuffle-apps
+
+    networks:
+      - mssp-network
+
+    restart: unless-stopped
+
+  shuffle-orborus:
+    image: ghcr.io/shuffle/shuffle-orborus:latest
+    container_name: shuffle-orborus
+    depends_on:
+      - shuffle-backend
+
+    environment:
+      - SHUFFLE_APP_HOTLOAD_FOLDER=/shuffle-apps
+      - BASE_URL=http://shuffle-backend:5001
+      - DOCKER_API_VERSION=1.40
+      - CLEANUP_CONTAINERS=true
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+    networks:
+      - mssp-network
+
+    restart: unless-stopped
+
+  # ==============================================================================
+  # 📑 CASE MANAGEMENT DESK: INTERNAL SOC TICKETING HUB & PRODUCTION DB
+  # ==============================================================================
+  thehive-postgres-local:
+    image: postgres:15-alpine
+    container_name: thehive-postgres-local
+
+    environment:
+      - POSTGRES_USER=thehive
+      - POSTGRES_PASSWORD=SecureTheHivePass2026!
+      - POSTGRES_DB=thehive
+
+    volumes:
+      - thehive-db-storage:/var/lib/postgresql/data
+
+    networks:
+      - mssp-network
+
+    restart: unless-stopped
+
+  thehive:
+    image: strangebee/thehive:5.2
+    container_name: thehive-local
+    depends_on:
+      thehive-postgres-local:
+        condition: service_started
+
+    ports:
+      - "9000:9000"
+
+    environment:
+      - THEHIVE_BACKEND=postgres
+
+    volumes:
+      - thehive-storage:/opt/thehive/data
+
+    networks:
+      - mssp-network
+
+    restart: unless-stopped
+
+  # ==============================================================================
+  # 📑 PERIMETER TRAFFIC CONTROL: LAYER-4 TCP REVERSE PROXY STREAM MANAGER
+  # ==============================================================================
+  nginx-load-balancer:
+    image: nginx:1.25-alpine
+    container_name: nginx-cluster-proxy
+
+    ports:
+      - "1514:1514"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+    networks:
+      - mssp-network
+
+    restart: always
+
+  # ==============================================================================
+  # 📊 WAZUH DASHBOARD (FIXED - NOW INSIDE SERVICES)
+  # ==============================================================================
+  wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:4.7.2
+    container_name: wazuh-dashboard
+
+    depends_on:
+      - opensearch-db
+      - wazuh-manager
+
+    ports:
+      - "5601:5601"
+
+    environment:
+      - OPENSEARCH_HOSTS=["http://opensearch-db:9200"]
+      - WAZUH_API_URL=https://wazuh-manager:55000
+      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
+
+    volumes:
+      - ./wazuh-dashboard/config/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+
+    networks:
+      - mssp-network
+
+    restart: unless-stopped
+
+  filebeat-wazuh:
+    image: docker.elastic.co/beats/filebeat-oss:7.10.2
+    container_name: filebeat-wazuh
+    user: root
+    depends_on:
+      - opensearch-db
+      - wazuh-manager
+    volumes:
+      - ./wazuh-live-logs:/var/ossec/logs:ro
+     # - ./wazuh-live-logs:/var/ossec/logs:ro
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+    networks:
+      - mssp-network
+    restart: unless-stopped
+
+
+
+volumes:
+  opensearch-storage:
+  wazuh-manager-storage:
+  shuffle-apps-storage:
+  thehive-db-storage:
+  thehive-storage:
+
+networks:
+  mssp-network:
+    driver: bridge

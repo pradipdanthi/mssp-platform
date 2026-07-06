@@ -1,0 +1,8 @@
+NETWORK ID     NAME                      DRIVER    SCOPE
+f6d47d6fc3de   bridge                    bridge    local
+eeed366b64bb   host                      host      local
+aa86fe70d169   mssp-internal-mesh        bridge    local
+3f15d8c65398   mssp-network              bridge    local
+09198680ec6f   mssp-stack_mssp-network   bridge    local
+b241a5de4014   none                      null      local
+49af62f88731   tenzir-network            bridge    local
