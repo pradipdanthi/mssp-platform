@@ -1,0 +1,270 @@
+name: mssp-stack
+services:
+  filebeat-wazuh:
+    container_name: filebeat-wazuh
+    depends_on:
+      opensearch-db:
+        condition: service_started
+        required: true
+      wazuh-manager:
+        condition: service_started
+        required: true
+    image: docker.elastic.co/beats/filebeat-oss:7.10.2
+    networks:
+      mssp-network: null
+    restart: unless-stopped
+    user: root
+    volumes:
+      - type: bind
+        source: /home/secadmin/mssp-stack/wazuh-live-logs
+        target: /var/ossec/logs
+        read_only: true
+        bind:
+          create_host_path: true
+      - type: bind
+        source: /home/secadmin/mssp-stack/filebeat/filebeat.yml
+        target: /usr/share/filebeat/filebeat.yml
+        read_only: true
+        bind:
+          create_host_path: true
+  nginx-load-balancer:
+    container_name: nginx-cluster-proxy
+    image: nginx:1.25-alpine
+    networks:
+      mssp-network: null
+    ports:
+      - mode: ingress
+        target: 1514
+        published: "1514"
+        protocol: tcp
+    restart: always
+    volumes:
+      - type: bind
+        source: /home/secadmin/mssp-stack/nginx/nginx.conf
+        target: /etc/nginx/nginx.conf
+        read_only: true
+        bind:
+          create_host_path: true
+  opensearch-db:
+    container_name: opensearch-node-local
+    environment:
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: -Xms4g -Xmx4g
+      bootstrap.memory_lock: "true"
+      cluster.name: local-mssp-cluster
+      compatibility.override_main_response_version: "true"
+      discovery.type: single-node
+      node.name: opensearch-single-core
+    image: opensearchproject/opensearch:2.11.0
+    networks:
+      mssp-network: null
+    ports:
+      - mode: ingress
+        target: 9200
+        published: "9200"
+        protocol: tcp
+      - mode: ingress
+        target: 9300
+        published: "9300"
+        protocol: tcp
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - type: volume
+        source: opensearch-storage
+        target: /usr/share/opensearch/data
+        volume: {}
+  shuffle-backend:
+    container_name: shuffle-backend
+    depends_on:
+      opensearch-db:
+        condition: service_started
+        required: true
+    environment:
+      DOCKER_API_VERSION: "1.40"
+      SHUFFLE_APP_DOWNLOAD_FOLDER: /shuffle-apps
+      SHUFFLE_APP_HOTLOAD_FOLDER: /shuffle-apps
+      SHUFFLE_APP_OUTPUT_DIR: /shuffle-apps
+      SHUFFLE_BACKEND_PORT: "5001"
+      SHUFFLE_ENCRYPTION_KEY: ChangeThisToASecret32CharString!!!
+      SHUFFLE_LOGS_DISABLED: "false"
+      SHUFFLE_OPENSEARCH_URL: http://opensearch-node-local:9200
+    image: ghcr.io/shuffle/shuffle-backend:latest
+    networks:
+      mssp-network: null
+    ports:
+      - mode: ingress
+        target: 5001
+        published: "5001"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: true
+      - type: volume
+        source: shuffle-apps-storage
+        target: /shuffle-apps
+        volume: {}
+  shuffle-frontend:
+    container_name: shuffle-frontend
+    depends_on:
+      shuffle-backend:
+        condition: service_started
+        required: true
+    environment:
+      BACKEND_URL: http://shuffle-backend:5001
+    image: ghcr.io/shuffle/shuffle-frontend:latest
+    networks:
+      mssp-network: null
+    ports:
+      - mode: ingress
+        target: 80
+        published: "3001"
+        protocol: tcp
+      - mode: ingress
+        target: 443
+        published: "4433"
+        protocol: tcp
+    restart: unless-stopped
+  shuffle-orborus:
+    container_name: shuffle-orborus
+    depends_on:
+      shuffle-backend:
+        condition: service_started
+        required: true
+    environment:
+      BASE_URL: http://shuffle-backend:5001
+      CLEANUP_CONTAINERS: "true"
+      DOCKER_API_VERSION: "1.40"
+      SHUFFLE_APP_HOTLOAD_FOLDER: /shuffle-apps
+    image: ghcr.io/shuffle/shuffle-orborus:latest
+    networks:
+      mssp-network: null
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind:
+          create_host_path: true
+  thehive:
+    container_name: thehive-local
+    depends_on:
+      thehive-postgres-local:
+        condition: service_started
+        required: true
+    environment:
+      THEHIVE_BACKEND: postgres
+    image: strangebee/thehive:5.2
+    networks:
+      mssp-network: null
+    ports:
+      - mode: ingress
+        target: 9000
+        published: "9000"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: thehive-storage
+        target: /opt/thehive/data
+        volume: {}
+  thehive-postgres-local:
+    container_name: thehive-postgres-local
+    environment:
+      POSTGRES_DB: thehive
+      POSTGRES_PASSWORD: SecureTheHivePass2026!
+      POSTGRES_USER: thehive
+    image: postgres:15-alpine
+    networks:
+      mssp-network: null
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: thehive-db-storage
+        target: /var/lib/postgresql/data
+        volume: {}
+  wazuh-dashboard:
+    container_name: wazuh-dashboard
+    depends_on:
+      opensearch-db:
+        condition: service_started
+        required: true
+      wazuh-manager:
+        condition: service_started
+        required: true
+    environment:
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: "true"
+      OPENSEARCH_HOSTS: '["http://opensearch-db:9200"]'
+      WAZUH_API_URL: https://wazuh-manager:55000
+    image: wazuh/wazuh-dashboard:4.7.2
+    networks:
+      mssp-network: null
+    ports:
+      - mode: ingress
+        target: 5601
+        published: "5601"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: /home/secadmin/mssp-stack/wazuh-dashboard/config/opensearch_dashboards.yml
+        target: /usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+        bind:
+          create_host_path: true
+  wazuh-manager:
+    container_name: wazuh-manager-local
+    depends_on:
+      opensearch-db:
+        condition: service_started
+        required: true
+    environment:
+      WAZUH_CLUSTER_ROLE: master
+    image: wazuh/wazuh-manager:4.7.2
+    networks:
+      mssp-network: null
+    ports:
+      - mode: ingress
+        target: 55000
+        published: "55000"
+        protocol: tcp
+      - mode: ingress
+        target: 1515
+        published: "1515"
+        protocol: tcp
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: wazuh-manager-storage
+        target: /var/ossec/data
+        volume: {}
+      - type: bind
+        source: /home/secadmin/mssp-stack/wazuh-live-logs
+        target: /var/ossec/logs
+        bind:
+          create_host_path: true
+networks:
+  mssp-network:
+    name: mssp-stack_mssp-network
+    driver: bridge
+volumes:
+  opensearch-storage:
+    name: mssp-stack_opensearch-storage
+  shuffle-apps-storage:
+    name: mssp-stack_shuffle-apps-storage
+  thehive-db-storage:
+    name: mssp-stack_thehive-db-storage
+  thehive-storage:
+    name: mssp-stack_thehive-storage
+  wazuh-manager-storage:
+    name: mssp-stack_wazuh-manager-storage

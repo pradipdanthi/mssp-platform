@@ -1,0 +1,10 @@
+Current checksum:
+MD5  (logs/archives/2026/Jun/ossec-archive-04) = d41d8cd98f00b204e9800998ecf8427e
+SHA1 (logs/archives/2026/Jun/ossec-archive-04) = da39a3ee5e6b4b0d3255bfef95601890afd80709
+SHA256 (logs/archives/2026/Jun/ossec-archive-04) = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+Chained checksum:
+MD5  (logs/archives/2026/Jun/ossec-archive-03.log.sum) = a118334c051d100351733e2dd8bc0d52
+SHA1 (logs/archives/2026/Jun/ossec-archive-03.log.sum) = d370cdd7e004f8d3454e1bbf50a0f6eeba3050b6
+SHA256 (logs/archives/2026/Jun/ossec-archive-03.log.sum) = 049838a7888d59b04e26ec64b4dc95d489e05a0e8ef6ddaf1f5003b080128573
+
