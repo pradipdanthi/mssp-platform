@@ -5,8 +5,9 @@ from typing import Any, Dict, List
 import psycopg
 from psycopg.rows import dict_row
 import redis
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 
+from app.api.dependencies import get_current_user, require_roles, require_tenant_match
 from app.api.routes.auth import router as auth_router
 
 
@@ -60,15 +61,26 @@ def fetch_one(query: str, params: tuple = ()) -> Dict[str, Any]:
     return rows[0]
 
 
+# KB-011: roles allowed on every /admin/* endpoint and allowed cross-tenant
+# read access on /customer/* endpoints (for support/troubleshooting).
+# Customer roles (customer_admin, customer_viewer) are never in this tuple,
+# so they are rejected with 403 on /admin/* automatically.
+ADMIN_SOC_ROLES = ("platform_admin", "soc_manager", "soc_analyst")
+
+
 app = FastAPI(
     title=APP_NAME,
     description="Backend API foundation for the MSSP Control Plane.",
     version="0.1.0",
 )
 
-# KB-010: auth/RBAC foundation. Existing endpoints below are unchanged and
-# remain unauthenticated in this phase.
+# KB-010: auth/RBAC foundation.
 app.include_router(auth_router)
+
+# KB-011: /admin/* and /customer/* endpoints below are now protected with
+# authentication, role checks, and tenant isolation (see
+# app/api/dependencies.py). /health, /auth/login, /auth/roles, and /docs
+# remain public by design.
 
 
 @app.get("/")
@@ -111,7 +123,9 @@ def health() -> Dict[str, Any]:
 
 
 @app.get("/admin/dashboard")
-def admin_dashboard() -> Dict[str, Any]:
+def admin_dashboard(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
     overview = fetch_one(
         """
         SELECT
@@ -178,7 +192,9 @@ def admin_dashboard() -> Dict[str, Any]:
 
 
 @app.get("/admin/tenants")
-def admin_tenants() -> Dict[str, Any]:
+def admin_tenants(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
     rows = fetch_all(
         """
         SELECT
@@ -205,7 +221,9 @@ def admin_tenants() -> Dict[str, Any]:
 
 
 @app.get("/admin/appliances")
-def admin_appliances() -> Dict[str, Any]:
+def admin_appliances(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
     rows = fetch_all(
         """
         SELECT
@@ -242,7 +260,9 @@ def admin_appliances() -> Dict[str, Any]:
 
 
 @app.get("/admin/alerts")
-def admin_alerts() -> Dict[str, Any]:
+def admin_alerts(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
     rows = fetch_all(
         """
         SELECT
@@ -271,7 +291,9 @@ def admin_alerts() -> Dict[str, Any]:
 
 
 @app.get("/admin/incidents")
-def admin_incidents() -> Dict[str, Any]:
+def admin_incidents(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
     rows = fetch_all(
         """
         SELECT
@@ -298,7 +320,10 @@ def admin_incidents() -> Dict[str, Any]:
 
 
 @app.get("/customer/dashboard/{short_code}")
-def customer_dashboard(short_code: str) -> Dict[str, Any]:
+def customer_dashboard(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
     tenant = fetch_one(
         """
         SELECT id::text, name, short_code, status, sla_level, business_criticality, timezone
@@ -310,6 +335,12 @@ def customer_dashboard(short_code: str) -> Dict[str, Any]:
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: customer_admin/customer_viewer may only see their own tenant.
+    # Raises 404 (not 403) on a tenant mismatch so a customer token can never
+    # tell "wrong tenant" apart from "tenant doesn't exist". platform_admin,
+    # soc_manager, and soc_analyst are exempt (cross-tenant support access).
+    require_tenant_match(tenant["id"], current_user)
 
     tenant_id = tenant["id"]
 
@@ -417,7 +448,10 @@ def customer_dashboard(short_code: str) -> Dict[str, Any]:
 
 
 @app.get("/customer/incidents/{short_code}")
-def customer_incidents(short_code: str) -> Dict[str, Any]:
+def customer_incidents(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
     tenant = fetch_one(
         "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
         (short_code.upper(),),
@@ -425,6 +459,9 @@ def customer_incidents(short_code: str) -> Dict[str, Any]:
 
     if not tenant:
         raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
 
     rows = fetch_all(
         """

@@ -94,10 +94,12 @@ The core product architecture is fixed as follows:
 
 - **VM name:** mssp-control
 - **Project path:** `/opt/mssp-control`
-- **Active Git branch:** `kb010-auth-rbac`
+- **Active Git branch:** `kb011-protect-admin-customer-apis`
 - **Known-good baseline tag:** `kb008-validated-foundation`
 - **Known-good baseline commit:** `c52bca1`
 - **AI development rules tag:** `kb009a-ai-development-rules`
+- **KB-010 Phase 1 validated tag:** `kb010-auth-rbac-phase1-validated` (commit `7fbb3d2`)
+- **KB-011 status:** implemented and **VALIDATED** (`KB-011 PROTECTED APIS VALIDATION PASSED`) — not yet committed.
 
 ### Current services (Docker Compose)
 
@@ -114,14 +116,14 @@ The core product architecture is fixed as follows:
 - `/health` endpoint works and reports API, database, and Redis status.
 - PostgreSQL connectivity works.
 - Redis connectivity works.
-- Read-only admin/customer preview API endpoints exist and passed KB-008 validation:
-  - `GET /admin/dashboard`
-  - `GET /admin/tenants`
-  - `GET /admin/appliances`
-  - `GET /admin/alerts`
-  - `GET /admin/incidents`
-  - `GET /customer/dashboard/{short_code}`
-  - `GET /customer/incidents/{short_code}`
+- Admin/customer API endpoints exist and are now protected (KB-011), validated by `scripts/kb011_validate_protected_apis.sh`:
+  - `GET /admin/dashboard` — `platform_admin`, `soc_manager`, `soc_analyst` only
+  - `GET /admin/tenants` — `platform_admin`, `soc_manager`, `soc_analyst` only
+  - `GET /admin/appliances` — `platform_admin`, `soc_manager`, `soc_analyst` only
+  - `GET /admin/alerts` — `platform_admin`, `soc_manager`, `soc_analyst` only
+  - `GET /admin/incidents` — `platform_admin`, `soc_manager`, `soc_analyst` only
+  - `GET /customer/dashboard/{short_code}` — any authenticated role; `customer_admin`/`customer_viewer` limited to their own tenant (404 on mismatch)
+  - `GET /customer/incidents/{short_code}` — same as above
 
 ### Current database
 
@@ -155,12 +157,12 @@ audit_logs
 - **KB-001 to KB-007:** Proxmox host preparation, Ubuntu VM creation, Docker installation, PostgreSQL and Redis foundation, MSSP schema creation, demo tenant/appliance/alert/incident data, final foundation validation.
 - **KB-008:** FastAPI backend foundation, PostgreSQL connectivity, Redis connectivity, `/health` endpoint, read-only admin/customer preview endpoints, validation script passed.
 - **KB-009A:** AI development rules and prompt framework — documentation only, no runtime changes.
-- **KB-010 (Phase 1):** Authentication/Login + Role-Based Access Control foundation. Added `platform_users.password_hash`, renamed the top role from `super_admin` to `platform_admin`, added `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, JWT access tokens, and reusable `require_roles`/`require_tenant_match` RBAC/tenant-isolation dependencies. The existing `/admin/*` and `/customer/*` preview endpoints were intentionally left unauthenticated in this phase — KB-008 validation still passes unchanged. Validated by `scripts/kb010_validate_auth_rbac.sh`.
+- **KB-010 (Phase 1):** Authentication/Login + Role-Based Access Control foundation. Added `platform_users.password_hash`, renamed the top role from `super_admin` to `platform_admin`, added `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, JWT access tokens, and reusable `require_roles`/`require_tenant_match` RBAC/tenant-isolation dependencies. The existing `/admin/*` and `/customer/*` preview endpoints were intentionally left unauthenticated in this phase — KB-008 validation still passed unchanged at the time. Validated, committed (`7fbb3d2`), and tagged `kb010-auth-rbac-phase1-validated`.
+- **KB-011:** Protected the existing `/admin/*` and `/customer/*` preview endpoints using the KB-010 auth foundation (`require_roles`, `get_current_user`, `require_tenant_match` — no changes were needed to those dependencies themselves). `platform_admin`/`soc_manager`/`soc_analyst` can access all `/admin/*` endpoints and read any tenant's `/customer/*` data for support/troubleshooting; `customer_admin`/`customer_viewer` can only reach their own tenant's `/customer/*` data (404, not 403, on a tenant mismatch, to avoid confirming another tenant's existence). Added a permanent second demo tenant (`DEMO2`) and demo accounts for the 3 previously-missing roles (`platform_admin`, `soc_analyst`, `customer_admin`). Validated by `scripts/kb011_validate_protected_apis.sh` — result: `KB-011 PROTECTED APIS VALIDATION PASSED`. See `docs/KB011_PROTECTED_APIS_COMPLETION.md` for the full completion summary. **Not yet committed.**
 
 ### Next module
 
-- **KB-010 (Phase 2, optional/deferred):** attach the new RBAC/tenant-isolation dependencies to the existing `/admin/*` and `/customer/*` endpoints (requires an updated validation script).
-- **KB-011 (or next real feature module):** to be defined.
+- **KB-012 (or next real feature module):** to be defined once KB-011 is committed.
 
 ---
 
@@ -188,7 +190,7 @@ Every AI agent (Cursor, Claude, ChatGPT-assisted edits, or any future agent) wor
 - `.env` (never read its values back to the user, never edit blindly, never commit)
 - Any running container (no restarts unless explicitly instructed)
 
-Note: KB-010 was granted a specific, explicit one-time exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. This does not create a standing exception — future edits to these files still require explicit instruction in that task.
+Note: KB-010 was granted a specific, explicit one-time exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. KB-011 was separately granted an explicit one-time exception to add `Depends()` authentication/RBAC checks to the 7 existing `/admin/*` and `/customer/*` endpoints in `main.py` — no `docker-compose.yml` change was needed for KB-011. Neither exception creates a standing exception — future edits to these files still require explicit instruction in that task.
 
 ---
 
@@ -293,9 +295,12 @@ docker compose ps
 curl -fsS http://localhost:8000/health | jq .
 ./scripts/kb008_validate_backend_api_foundation.sh
 ./scripts/kb010_validate_auth_rbac.sh
+./scripts/kb011_validate_protected_apis.sh
 ```
 
-Any AI agent making backend changes should re-run (or ask the user to re-run) these commands and report the result before considering a task complete.
+**Important — KB-011 changed the meaning of the above list.** As of KB-011, `/admin/*` and `/customer/*` require a valid token, so `scripts/kb008_validate_backend_api_foundation.sh` (which calls those endpoints with no token and expects `200`) and `scripts/kb010_validate_auth_rbac.sh` (which internally re-runs the KB-008 script) are expected to **fail** on those specific checks if run after KB-011 ships. This is intentional and correct, not a defect. Both scripts are kept unmodified as historical records of pre-KB-011 behavior. `scripts/kb011_validate_protected_apis.sh` is the current must-pass gate for those 7 endpoints going forward.
+
+Any AI agent making backend changes should re-run (or ask the user to re-run) the currently-relevant commands and report the result before considering a task complete.
 
 ---
 

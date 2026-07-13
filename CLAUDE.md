@@ -83,20 +83,25 @@ Rules:
 
 ---
 
-## 6. Current Module: KB-010 (Phase 1 complete)
+## 6. Current Module: KB-011 (implemented and VALIDATED)
 
-**KB-010 Phase 1 — Authentication / Login + Role-Based Access Control foundation — is implemented:**
+**KB-010 Phase 1 — Authentication / Login + Role-Based Access Control foundation — validated, committed (`7fbb3d2`), tagged `kb010-auth-rbac-phase1-validated`:**
 - `platform_users.password_hash` column added (nullable, bcrypt hashes only).
-- The top admin role was renamed from `super_admin` to `platform_admin` (schema CHECK constraint and existing rows migrated via `postgres/init/002_kb010_auth_rbac.sql` / `scripts/kb010_create_auth_rbac.sh`).
-- New endpoints: `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`.
+- The top admin role was renamed from `super_admin` to `platform_admin`.
+- Endpoints: `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`.
 - JWT (PyJWT) access tokens; `get_current_user` re-checks the live database on every request (not just the token payload).
-- `require_roles(*roles)` and `require_tenant_match(...)` dependencies exist in `backend-api/app/api/dependencies.py` for future endpoints to use.
-- New modular files under `backend-api/app/core/`, `backend-api/app/db/`, `backend-api/app/api/`, `backend-api/app/schemas/`, `backend-api/app/services/` — `main.py` only got a 2-line edit (router import + `include_router`).
-- Validation: `scripts/kb010_validate_auth_rbac.sh`.
+- `require_roles(*roles)` and `require_tenant_match(...)` dependencies in `backend-api/app/api/dependencies.py`.
+- Demo users: `soc.manager@example.local` (`soc_manager`), `customer.viewer@demo.local` (`customer_viewer`).
 
-**Intentionally NOT done in Phase 1 (deferred):**
-- The existing `/admin/*` and `/customer/*` preview endpoints are **not** protected yet — KB-008 validation continues to pass unchanged.
-- Account lockout hardening (`failed_login_attempts`, `locked_until`) — deferred to a future security-hardening module.
-- A demo `platform_admin`-role user was not created; only a `soc_manager` demo user (`soc.manager@example.local`) and a `customer_viewer` demo user (`customer.viewer@demo.local`) were seeded.
+**KB-011 — Protect existing `/admin/*` and `/customer/*` endpoints — implemented and VALIDATED:**
+- `backend-api/app/main.py` edited: 5 `/admin/*` endpoints now use `Depends(require_roles("platform_admin", "soc_manager", "soc_analyst"))`; both `/customer/*` endpoints now use `Depends(get_current_user)` plus a `require_tenant_match(tenant["id"], current_user)` call. No changes to `dependencies.py`, `auth.py`, or the database schema.
+- Tenant-mismatch on `/customer/*` returns **404** (not 403) to avoid confirming another tenant's existence — this reuses the existing KB-010 `require_tenant_match` behavior unchanged.
+- New fixture data (via new script, not a schema migration): tenant `DEMO2`, and demo users `platform.admin@example.local` (`platform_admin`), `soc.analyst@example.local` (`soc_analyst`), `customer.admin@demo2.local` (`customer_admin`, tenant `DEMO2`).
+- New scripts: `scripts/kb011_seed_rbac_fixtures.sh` (creates the fixtures above; hidden password prompts, bcrypt hashes only) and `scripts/kb011_validate_protected_apis.sh` (full 401/403/404/200 coverage across all 5 roles and all 7 protected endpoints).
+- Full plan: `docs/KB011_IMPLEMENTATION_PLAN.md`. Decisions: `docs/KB011_DECISION_QUESTIONS.md` (all approved as recommended: 1A, 2A, 3A, 4A). Completion summary: `docs/KB011_PROTECTED_APIS_COMPLETION.md`.
 
-Do not start KB-010 Phase 2 (protecting existing endpoints) or KB-011 until the user explicitly kicks it off in a new prompt.
+**Status: implementation complete, validation PASSED.** Result: `KB-011 PROTECTED APIS VALIDATION PASSED`. **Not yet committed** — the user decides when to commit.
+
+**Known, intentional side effect:** `scripts/kb008_validate_backend_api_foundation.sh` and `scripts/kb010_validate_auth_rbac.sh` (which internally re-runs the KB-008 script) now fail on their unauthenticated `/admin/*`/`/customer/*` checks, because those endpoints now correctly require a token. Both scripts are left unmodified as historical records; `scripts/kb011_validate_protected_apis.sh` is the current must-pass gate for those endpoints.
+
+Do not start a KB-012 module until the user explicitly kicks it off in a new prompt.
