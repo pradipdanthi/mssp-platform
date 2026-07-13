@@ -12,6 +12,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.customer import router as customer_router
 from app.api.routes.health import router as health_router
+from app.api.routes.tenant_management import router as tenant_management_router
 
 APP_NAME = os.getenv("APP_NAME", "MSSP Control Plane API")
 APP_ENV = os.getenv("APP_ENV", "development")
@@ -35,3 +36,7 @@ app.include_router(health_router)
 # main.py; it did not change any auth/RBAC/tenant-isolation behavior.
 app.include_router(admin_router)
 app.include_router(customer_router)
+
+# KB-013: admin tenant management (GET one, POST, PATCH) - adds alongside
+# admin_router's existing GET /admin/tenants without modifying admin.py.
+app.include_router(tenant_management_router)

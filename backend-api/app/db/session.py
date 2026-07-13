@@ -60,6 +60,21 @@ def execute(query: str, params: Tuple[Any, ...] = ()) -> None:
         conn.commit()
 
 
+# KB-013: minimal addition for INSERT/UPDATE ... RETURNING ... statements
+# that need the resulting row back (e.g. admin tenant create/update).
+# execute() above intentionally doesn't return anything, and fetch_all()/
+# fetch_one() intentionally don't commit - this is the one write helper
+# that does both, added rather than changing either existing function's
+# behavior.
+def fetch_one_write(query: str, params: Tuple[Any, ...] = ()) -> Dict[str, Any]:
+    with db_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            row = cur.fetchone()
+        conn.commit()
+        return dict(row) if row else {}
+
+
 # KB-012: moved from app/main.py, unchanged, so app/api/routes/health.py (and
 # any other future module) has one shared place to get a Redis client from,
 # instead of each route file defining its own copy.
