@@ -83,19 +83,20 @@ Rules:
 
 ---
 
-## 6. Next Module: KB-010
+## 6. Current Module: KB-010 (Phase 1 complete)
 
-The next real software module after this documentation module (KB-009A) is:
+**KB-010 Phase 1 — Authentication / Login + Role-Based Access Control foundation — is implemented:**
+- `platform_users.password_hash` column added (nullable, bcrypt hashes only).
+- The top admin role was renamed from `super_admin` to `platform_admin` (schema CHECK constraint and existing rows migrated via `postgres/init/002_kb010_auth_rbac.sql` / `scripts/kb010_create_auth_rbac.sh`).
+- New endpoints: `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`.
+- JWT (PyJWT) access tokens; `get_current_user` re-checks the live database on every request (not just the token payload).
+- `require_roles(*roles)` and `require_tenant_match(...)` dependencies exist in `backend-api/app/api/dependencies.py` for future endpoints to use.
+- New modular files under `backend-api/app/core/`, `backend-api/app/db/`, `backend-api/app/api/`, `backend-api/app/schemas/`, `backend-api/app/services/` — `main.py` only got a 2-line edit (router import + `include_router`).
+- Validation: `scripts/kb010_validate_auth_rbac.sh`.
 
-**KB-010 — Authentication / Login + Role-Based Access Control (RBAC)**
+**Intentionally NOT done in Phase 1 (deferred):**
+- The existing `/admin/*` and `/customer/*` preview endpoints are **not** protected yet — KB-008 validation continues to pass unchanged.
+- Account lockout hardening (`failed_login_attempts`, `locked_until`) — deferred to a future security-hardening module.
+- A demo `platform_admin`-role user was not created; only a `soc_manager` demo user (`soc.manager@example.local`) and a `customer_viewer` demo user (`customer.viewer@demo.local`) were seeded.
 
-Expected shape of that work (for context, not to be started now):
-- Secure password hashing for `platform_users`.
-- Login endpoint issuing JWT (or equivalent) tokens.
-- Middleware/dependency to verify tokens and extract the caller's `tenant_id` and `role`.
-- Role checks for `super_admin`, `soc_manager`, `soc_analyst`, `customer_admin`, `customer_viewer` (matching the `platform_users.role` check constraint already in the schema).
-- Tenant-scoping enforcement on customer-role endpoints.
-- New code organized under `backend-api/app/core/security.py`, `backend-api/app/api/routes/auth.py`, and related `schemas`/`services` modules per the structure in `AGENTS.md` section 7 — not dumped into `main.py`.
-- A new validation script, e.g. `scripts/kb010_validate_auth_rbac.sh`, following the KB-008 script pattern.
-
-Do not start KB-010 implementation until the user explicitly kicks it off in a new prompt.
+Do not start KB-010 Phase 2 (protecting existing endpoints) or KB-011 until the user explicitly kicks it off in a new prompt.

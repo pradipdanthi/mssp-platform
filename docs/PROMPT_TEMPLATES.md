@@ -150,7 +150,7 @@ Required behavior:
 1. A login endpoint that accepts email + password and returns a JWT (or equivalent) access token on success, and a safe generic error on failure (no indication of whether the email or password was wrong).
 2. Passwords must be verified against a securely hashed value (bcrypt or argon2). Explain how existing platform_users rows will get a hashed password if none exists yet.
 3. A reusable dependency/middleware that verifies the token on protected endpoints and exposes the caller's user id, tenant_id (if any), and role to the route.
-4. Role-based access control matching platform_users.role values: super_admin, soc_manager, soc_analyst, customer_admin, customer_viewer.
+4. Role-based access control matching platform_users.role values: platform_admin, soc_manager, soc_analyst, customer_admin, customer_viewer.
 5. Tenant scoping: customer_admin and customer_viewer tokens must only ever be able to access their own tenant_id's data.
 6. New code must be organized under backend-api/app/core/security.py, backend-api/app/api/routes/auth.py, backend-api/app/schemas/, and backend-api/app/services/ — not added directly into the existing main.py logic (main.py may only be edited to wire in the new router).
 7. Never log or return plaintext passwords or password hashes anywhere.

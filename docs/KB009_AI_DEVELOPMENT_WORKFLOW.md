@@ -92,18 +92,18 @@ Rules:
 
 ---
 
-## 6. Next Module: KB-010
+## 6. Current Module: KB-010 (Phase 1 complete)
 
-**KB-010 — Authentication / Login + Role-Based Access Control (RBAC)**
+**KB-010 — Authentication / Login + Role-Based Access Control (RBAC), Phase 1** has been implemented:
 
-This is the next real software module after KB-009A. It will introduce:
+- A secure login endpoint (`POST /auth/login`) against the existing `platform_users` table.
+- Password hashing with bcrypt (`platform_users.password_hash`, added via migration).
+- JWT token issuance and verification (`GET /auth/me`).
+- Role-based access control matching the updated `platform_users.role` values (`platform_admin`, `soc_manager`, `soc_analyst`, `customer_admin`, `customer_viewer` — the top role was renamed from `super_admin` to `platform_admin` as part of this module).
+- `require_tenant_match(...)` foundation so customer-role tokens can only ever access their own `tenant_id` (built, not yet attached to any endpoint).
+- New modular backend files under `backend-api/app/core/`, `backend-api/app/db/`, `backend-api/app/api/`, `backend-api/app/schemas/`, and `backend-api/app/services/`, per the structure defined in `AGENTS.md`.
+- Validation script: `scripts/kb010_validate_auth_rbac.sh`.
 
-- A secure login endpoint against the existing `platform_users` table.
-- Password hashing (bcrypt/argon2) for stored credentials.
-- JWT (or equivalent) token issuance and verification.
-- Role-based access control matching the existing `platform_users.role` values (`super_admin`, `soc_manager`, `soc_analyst`, `customer_admin`, `customer_viewer`).
-- Tenant-scoping so customer-role tokens can only ever access their own `tenant_id`.
-- New modular backend files under `backend-api/app/core/`, `backend-api/app/api/routes/`, `backend-api/app/schemas/`, and `backend-api/app/services/`, per the structure defined in `AGENTS.md`.
-- A new validation script, e.g. `scripts/kb010_validate_auth_rbac.sh`.
+**Deferred to a later phase/module:** protecting the existing `/admin/*` and `/customer/*` preview endpoints (Phase 2), and account-lockout hardening columns.
 
-KB-010 implementation should not begin until explicitly started in a new prompt, using the "KB-010 initial prompt" template in `docs/PROMPT_TEMPLATES.md`.
+KB-010 Phase 2 or KB-011 should not begin until explicitly started in a new prompt, using the prompt templates in `docs/PROMPT_TEMPLATES.md`.

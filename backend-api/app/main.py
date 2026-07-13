@@ -7,6 +7,8 @@ from psycopg.rows import dict_row
 import redis
 from fastapi import FastAPI, HTTPException
 
+from app.api.routes.auth import router as auth_router
+
 
 APP_NAME = os.getenv("APP_NAME", "MSSP Control Plane API")
 APP_ENV = os.getenv("APP_ENV", "development")
@@ -63,6 +65,10 @@ app = FastAPI(
     description="Backend API foundation for the MSSP Control Plane.",
     version="0.1.0",
 )
+
+# KB-010: auth/RBAC foundation. Existing endpoints below are unchanged and
+# remain unauthenticated in this phase.
+app.include_router(auth_router)
 
 
 @app.get("/")

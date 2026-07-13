@@ -94,9 +94,10 @@ The core product architecture is fixed as follows:
 
 - **VM name:** mssp-control
 - **Project path:** `/opt/mssp-control`
-- **Active Git branch:** `kb009-developer-workflow`
+- **Active Git branch:** `kb010-auth-rbac`
 - **Known-good baseline tag:** `kb008-validated-foundation`
 - **Known-good baseline commit:** `c52bca1`
+- **AI development rules tag:** `kb009a-ai-development-rules`
 
 ### Current services (Docker Compose)
 
@@ -153,11 +154,13 @@ audit_logs
 
 - **KB-001 to KB-007:** Proxmox host preparation, Ubuntu VM creation, Docker installation, PostgreSQL and Redis foundation, MSSP schema creation, demo tenant/appliance/alert/incident data, final foundation validation.
 - **KB-008:** FastAPI backend foundation, PostgreSQL connectivity, Redis connectivity, `/health` endpoint, read-only admin/customer preview endpoints, validation script passed.
-- **KB-009A (this module):** AI development rules and prompt framework — documentation only, no runtime changes.
+- **KB-009A:** AI development rules and prompt framework — documentation only, no runtime changes.
+- **KB-010 (Phase 1):** Authentication/Login + Role-Based Access Control foundation. Added `platform_users.password_hash`, renamed the top role from `super_admin` to `platform_admin`, added `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, JWT access tokens, and reusable `require_roles`/`require_tenant_match` RBAC/tenant-isolation dependencies. The existing `/admin/*` and `/customer/*` preview endpoints were intentionally left unauthenticated in this phase — KB-008 validation still passes unchanged. Validated by `scripts/kb010_validate_auth_rbac.sh`.
 
 ### Next module
 
-- **KB-010:** Authentication/Login + Role-Based Access Control (RBAC).
+- **KB-010 (Phase 2, optional/deferred):** attach the new RBAC/tenant-isolation dependencies to the existing `/admin/*` and `/customer/*` endpoints (requires an updated validation script).
+- **KB-011 (or next real feature module):** to be defined.
 
 ---
 
@@ -184,6 +187,8 @@ Every AI agent (Cursor, Claude, ChatGPT-assisted edits, or any future agent) wor
 - `postgres/init/001_mssp_core_schema.sql` (schema must not be deleted/recreated/replaced without explicit instruction)
 - `.env` (never read its values back to the user, never edit blindly, never commit)
 - Any running container (no restarts unless explicitly instructed)
+
+Note: KB-010 was granted a specific, explicit one-time exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. This does not create a standing exception — future edits to these files still require explicit instruction in that task.
 
 ---
 
@@ -287,6 +292,7 @@ git status --short
 docker compose ps
 curl -fsS http://localhost:8000/health | jq .
 ./scripts/kb008_validate_backend_api_foundation.sh
+./scripts/kb010_validate_auth_rbac.sh
 ```
 
 Any AI agent making backend changes should re-run (or ask the user to re-run) these commands and report the result before considering a task complete.

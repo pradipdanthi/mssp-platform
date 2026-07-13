@@ -18,13 +18,14 @@ This project is a private, multi-tenant, AI-assisted MSSP/SOC control plane. Ful
 ## Current State
 
 - VM: `mssp-control`, project path `/opt/mssp-control`.
-- Active branch: `kb009-developer-workflow`.
-- Known-good baseline tag: `kb008-validated-foundation` (commit `c52bca1`).
+- Active branch: `kb010-auth-rbac`.
+- Known-good baseline tag: `kb008-validated-foundation` (commit `c52bca1`). AI rules tag: `kb009a-ai-development-rules`.
 - Running containers: `mssp-postgres`, `mssp-redis`, `mssp-backend-api`.
-- Backend: `backend-api/app/main.py` — FastAPI app with working `/health`, admin preview endpoints (`/admin/dashboard`, `/admin/tenants`, `/admin/appliances`, `/admin/alerts`, `/admin/incidents`), and customer preview endpoints (`/customer/dashboard/{short_code}`, `/customer/incidents/{short_code}`).
-- Database schema: `postgres/init/001_mssp_core_schema.sql` — already defines `tenants`, `platform_users`, `tenant_contacts`, `appliance_activation_tokens`, `appliances`, `protected_assets`, `appliance_heartbeats`, `security_alerts`, `incidents`, `incident_alerts`, `incident_timeline`, `incident_comments`, `notification_events`, `customer_recommendations`, `monthly_reports`, `audit_logs`.
-- Completed: KB-001–KB-007 (infra/foundation), KB-008 (backend API foundation), KB-009A (this AI rules module).
-- Next module: KB-010 — Authentication/Login + Role-Based Access Control.
+- Backend: `backend-api/app/main.py` — FastAPI app with working `/health`, admin preview endpoints (`/admin/dashboard`, `/admin/tenants`, `/admin/appliances`, `/admin/alerts`, `/admin/incidents`), and customer preview endpoints (`/customer/dashboard/{short_code}`, `/customer/incidents/{short_code}`) — all still unauthenticated by design in KB-010 Phase 1.
+- Auth: `backend-api/app/api/routes/auth.py` — `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, backed by JWT (PyJWT) + bcrypt, with `get_current_user`/`require_roles`/`require_tenant_match` dependencies in `backend-api/app/api/dependencies.py` available for future use.
+- Database schema: `postgres/init/001_mssp_core_schema.sql` (original) + `postgres/init/002_kb010_auth_rbac.sql` (adds `platform_users.password_hash`, renames role `super_admin` → `platform_admin`). Tables: `tenants`, `platform_users`, `tenant_contacts`, `appliance_activation_tokens`, `appliances`, `protected_assets`, `appliance_heartbeats`, `security_alerts`, `incidents`, `incident_alerts`, `incident_timeline`, `incident_comments`, `notification_events`, `customer_recommendations`, `monthly_reports`, `audit_logs`.
+- Completed: KB-001–KB-007 (infra/foundation), KB-008 (backend API foundation), KB-009A (AI rules module), KB-010 Phase 1 (auth/RBAC foundation).
+- Next: KB-010 Phase 2 (optional — protect existing preview endpoints) or KB-011.
 
 ## Security Rules (mandatory, no exceptions)
 
@@ -57,6 +58,8 @@ Do not modify these unless the current user request explicitly names the file/ac
 - Do not run `git add .` or `git commit` unless explicitly instructed in that same request.
 - Do not convert the product to Streamlit; do not expose Wazuh directly to customers.
 
+(KB-010 was granted a one-time, explicit exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. This does not create a standing exception — future edits to these files still require explicit instruction.)
+
 ## Validation Commands (must keep working)
 
 ```bash
@@ -66,6 +69,7 @@ git status --short
 docker compose ps
 curl -fsS http://localhost:8000/health | jq .
 ./scripts/kb008_validate_backend_api_foundation.sh
+./scripts/kb010_validate_auth_rbac.sh
 ```
 
 ## Backend Structure Expectations
