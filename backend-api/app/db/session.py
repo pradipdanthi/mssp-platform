@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Tuple
 
 import psycopg
+import redis
 from psycopg.rows import dict_row
 
 
@@ -57,3 +58,17 @@ def execute(query: str, params: Tuple[Any, ...] = ()) -> None:
         with conn.cursor() as cur:
             cur.execute(query, params)
         conn.commit()
+
+
+# KB-012: moved from app/main.py, unchanged, so app/api/routes/health.py (and
+# any other future module) has one shared place to get a Redis client from,
+# instead of each route file defining its own copy.
+def redis_client() -> redis.Redis:
+    return redis.Redis(
+        host=_env("REDIS_HOST", "redis"),
+        port=int(_env("REDIS_PORT", "6379")),
+        password=_env("REDIS_PASSWORD"),
+        decode_responses=True,
+        socket_connect_timeout=5,
+        socket_timeout=5,
+    )

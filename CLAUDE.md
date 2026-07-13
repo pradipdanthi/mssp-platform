@@ -83,7 +83,7 @@ Rules:
 
 ---
 
-## 6. Current Module: KB-011 (implemented and VALIDATED)
+## 6. Current Module: KB-012 (implemented and VALIDATED)
 
 **KB-010 Phase 1 — Authentication / Login + Role-Based Access Control foundation — validated, committed (`7fbb3d2`), tagged `kb010-auth-rbac-phase1-validated`:**
 - `platform_users.password_hash` column added (nullable, bcrypt hashes only).
@@ -93,15 +93,21 @@ Rules:
 - `require_roles(*roles)` and `require_tenant_match(...)` dependencies in `backend-api/app/api/dependencies.py`.
 - Demo users: `soc.manager@example.local` (`soc_manager`), `customer.viewer@demo.local` (`customer_viewer`).
 
-**KB-011 — Protect existing `/admin/*` and `/customer/*` endpoints — implemented and VALIDATED:**
-- `backend-api/app/main.py` edited: 5 `/admin/*` endpoints now use `Depends(require_roles("platform_admin", "soc_manager", "soc_analyst"))`; both `/customer/*` endpoints now use `Depends(get_current_user)` plus a `require_tenant_match(tenant["id"], current_user)` call. No changes to `dependencies.py`, `auth.py`, or the database schema.
-- Tenant-mismatch on `/customer/*` returns **404** (not 403) to avoid confirming another tenant's existence — this reuses the existing KB-010 `require_tenant_match` behavior unchanged.
-- New fixture data (via new script, not a schema migration): tenant `DEMO2`, and demo users `platform.admin@example.local` (`platform_admin`), `soc.analyst@example.local` (`soc_analyst`), `customer.admin@demo2.local` (`customer_admin`, tenant `DEMO2`).
-- New scripts: `scripts/kb011_seed_rbac_fixtures.sh` (creates the fixtures above; hidden password prompts, bcrypt hashes only) and `scripts/kb011_validate_protected_apis.sh` (full 401/403/404/200 coverage across all 5 roles and all 7 protected endpoints).
-- Full plan: `docs/KB011_IMPLEMENTATION_PLAN.md`. Decisions: `docs/KB011_DECISION_QUESTIONS.md` (all approved as recommended: 1A, 2A, 3A, 4A). Completion summary: `docs/KB011_PROTECTED_APIS_COMPLETION.md`.
+**KB-011 — Protect existing `/admin/*` and `/customer/*` endpoints — validated, committed (`30ef305`), tagged `kb011-protected-apis-validated`:**
+- 5 `/admin/*` endpoints require `Depends(require_roles("platform_admin", "soc_manager", "soc_analyst"))`; both `/customer/*` endpoints require `Depends(get_current_user)` plus a `require_tenant_match(tenant["id"], current_user)` call. No changes to `dependencies.py` or `auth.py`.
+- Tenant-mismatch on `/customer/*` returns **404** (not 403) to avoid confirming another tenant's existence.
+- Fixture data: tenant `DEMO2`, and demo users `platform.admin@example.local` (`platform_admin`), `soc.analyst@example.local` (`soc_analyst`), `customer.admin@demo2.local` (`customer_admin`, tenant `DEMO2`).
+- Scripts: `scripts/kb011_seed_rbac_fixtures.sh`, `scripts/kb011_validate_protected_apis.sh` (full 401/403/404/200 coverage across all 5 roles and all 7 protected endpoints). Completion summary: `docs/KB011_PROTECTED_APIS_COMPLETION.md`.
 
-**Status: implementation complete, validation PASSED.** Result: `KB-011 PROTECTED APIS VALIDATION PASSED`. **Not yet committed** — the user decides when to commit.
+**KB-012 — Backend API Route Modularization Foundation — implemented and VALIDATED:**
+- Structure-only change, **no behavior change**. Moved the 5 `/admin/*` endpoints into `backend-api/app/api/routes/admin.py`, the 2 `/customer/*` endpoints into `backend-api/app/api/routes/customer.py`, and `GET /` / `GET /health` into `backend-api/app/api/routes/health.py` — all moved unchanged (same paths, methods, SQL, response shapes, `Depends(...)` signatures).
+- `backend-api/app/main.py` is now app wiring only: env/app metadata, the `FastAPI` object, and `app.include_router(...)` for `auth_router`, `health_router`, `admin_router`, `customer_router`. No route decorators or SQL helpers remain in it.
+- Added `redis_client()` to `backend-api/app/db/session.py`, moved unchanged from `main.py` — this consolidates all DB/Redis helper functions into one shared module (`db_conn`, `fetch_all`, `fetch_one`, `execute`, `redis_client`), removing the duplicate copies that used to live in `main.py`.
+- New script: `scripts/kb012_validate_route_modularization.sh` — checks the 3 new files exist, `main.py` has no route decorators, `main.py` includes all 4 routers, `/health` and `/auth/roles` remain public and working, `/openapi.json` still lists all 12 expected paths unchanged, and then reruns `scripts/kb011_validate_protected_apis.sh` **unmodified** as the full auth/RBAC/tenant-isolation behavior-regression gate.
+- Completion summary: `docs/KB012_ROUTE_MODULARIZATION_COMPLETION.md`.
 
-**Known, intentional side effect:** `scripts/kb008_validate_backend_api_foundation.sh` and `scripts/kb010_validate_auth_rbac.sh` (which internally re-runs the KB-008 script) now fail on their unauthenticated `/admin/*`/`/customer/*` checks, because those endpoints now correctly require a token. Both scripts are left unmodified as historical records; `scripts/kb011_validate_protected_apis.sh` is the current must-pass gate for those endpoints.
+**Status: implementation complete, validation PASSED.** Result: `KB-012 ROUTE MODULARIZATION VALIDATION PASSED`. **Not yet committed** — the user decides when to commit.
 
-Do not start a KB-012 module until the user explicitly kicks it off in a new prompt.
+**Known, intentional side effect (unchanged from KB-011):** `scripts/kb008_validate_backend_api_foundation.sh` and `scripts/kb010_validate_auth_rbac.sh` still fail on their unauthenticated `/admin/*`/`/customer/*` checks, because those endpoints correctly require a token. Both scripts are left unmodified as historical records; `scripts/kb011_validate_protected_apis.sh` remains the must-pass gate for those endpoints, and `scripts/kb012_validate_route_modularization.sh` is the current must-pass gate for the file/route structure.
+
+Do not start a KB-013 module until the user explicitly kicks it off in a new prompt.

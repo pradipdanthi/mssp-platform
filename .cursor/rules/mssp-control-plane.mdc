@@ -18,14 +18,15 @@ This project is a private, multi-tenant, AI-assisted MSSP/SOC control plane. Ful
 ## Current State
 
 - VM: `mssp-control`, project path `/opt/mssp-control`.
-- Active branch: `kb011-protect-admin-customer-apis`.
-- Known-good baseline tag: `kb008-validated-foundation` (commit `c52bca1`). AI rules tag: `kb009a-ai-development-rules`. KB-010 validated tag: `kb010-auth-rbac-phase1-validated` (commit `7fbb3d2`).
+- Active branch: `kb012-api-route-modularization`.
+- Known-good baseline tag: `kb008-validated-foundation` (commit `c52bca1`). AI rules tag: `kb009a-ai-development-rules`. KB-010 validated tag: `kb010-auth-rbac-phase1-validated` (commit `7fbb3d2`). KB-011 validated tag: `kb011-protected-apis-validated` (commit `30ef305`).
 - Running containers: `mssp-postgres`, `mssp-redis`, `mssp-backend-api`.
-- Backend: `backend-api/app/main.py` — FastAPI app with public `/health`; admin endpoints (`/admin/dashboard`, `/admin/tenants`, `/admin/appliances`, `/admin/alerts`, `/admin/incidents`) require `Depends(require_roles("platform_admin","soc_manager","soc_analyst"))`; customer endpoints (`/customer/dashboard/{short_code}`, `/customer/incidents/{short_code}`) require `Depends(get_current_user)` plus `require_tenant_match(...)` (404, not 403, on tenant mismatch). **KB-011: implemented and VALIDATED** (`KB-011 PROTECTED APIS VALIDATION PASSED`), not yet committed.
-- Auth: `backend-api/app/api/routes/auth.py` — `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, backed by JWT (PyJWT) + bcrypt, with `get_current_user`/`require_roles`/`require_tenant_match` dependencies in `backend-api/app/api/dependencies.py` (unchanged by KB-011).
-- Database schema: `postgres/init/001_mssp_core_schema.sql` (original) + `postgres/init/002_kb010_auth_rbac.sql` (adds `platform_users.password_hash`, renames role `super_admin` → `platform_admin`). No schema changes in KB-011 — only new fixture *rows* (tenant `DEMO2`; users `platform.admin@example.local`, `soc.analyst@example.local`, `customer.admin@demo2.local`) added via `scripts/kb011_seed_rbac_fixtures.sh`. Tables: `tenants`, `platform_users`, `tenant_contacts`, `appliance_activation_tokens`, `appliances`, `protected_assets`, `appliance_heartbeats`, `security_alerts`, `incidents`, `incident_alerts`, `incident_timeline`, `incident_comments`, `notification_events`, `customer_recommendations`, `monthly_reports`, `audit_logs`.
-- Completed: KB-001–KB-007 (infra/foundation), KB-008 (backend API foundation), KB-009A (AI rules module), KB-010 Phase 1 (auth/RBAC foundation, validated/committed), KB-011 (protect `/admin/*` and `/customer/*`, validated — see `docs/KB011_PROTECTED_APIS_COMPLETION.md`), not yet committed.
-- Next: KB-012 (or next real feature module), once KB-011 is committed and the user kicks off the next module.
+- Backend: `backend-api/app/main.py` is now (KB-012) app wiring only — env/app metadata, the `FastAPI` object, and `include_router(...)` for `auth_router`, `health_router`, `admin_router`, `customer_router`. All route logic lives under `backend-api/app/api/routes/`: `auth.py` (KB-010), `health.py` (`GET /`, `GET /health` — public), `admin.py` (5 `/admin/*` endpoints, `Depends(require_roles("platform_admin","soc_manager","soc_analyst"))`), `customer.py` (2 `/customer/*` endpoints, `Depends(get_current_user)` + `require_tenant_match(...)`, 404 not 403 on tenant mismatch). **KB-012: implemented and VALIDATED** (`KB-012 ROUTE MODULARIZATION VALIDATION PASSED`), not yet committed. No auth/RBAC/tenant-isolation behavior changed — only file locations.
+- Auth: `backend-api/app/api/routes/auth.py` — `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, backed by JWT (PyJWT) + bcrypt, with `get_current_user`/`require_roles`/`require_tenant_match` dependencies in `backend-api/app/api/dependencies.py` (unchanged by KB-011 and KB-012).
+- Database schema: `postgres/init/001_mssp_core_schema.sql` (original) + `postgres/init/002_kb010_auth_rbac.sql` (adds `platform_users.password_hash`, renames role `super_admin` → `platform_admin`). No schema changes in KB-011 or KB-012 — only new fixture *rows* from KB-011 (tenant `DEMO2`; users `platform.admin@example.local`, `soc.analyst@example.local`, `customer.admin@demo2.local`) via `scripts/kb011_seed_rbac_fixtures.sh`. Tables: `tenants`, `platform_users`, `tenant_contacts`, `appliance_activation_tokens`, `appliances`, `protected_assets`, `appliance_heartbeats`, `security_alerts`, `incidents`, `incident_alerts`, `incident_timeline`, `incident_comments`, `notification_events`, `customer_recommendations`, `monthly_reports`, `audit_logs`.
+- `backend-api/app/db/session.py` now holds every shared DB/Redis helper (`db_conn`, `fetch_all`, `fetch_one`, `execute`, `redis_client`) — `redis_client()` was added here in KB-012, moved unchanged from `main.py`.
+- Completed: KB-001–KB-007 (infra/foundation), KB-008 (backend API foundation), KB-009A (AI rules module), KB-010 Phase 1 (auth/RBAC foundation, validated/committed), KB-011 (protect `/admin/*` and `/customer/*`, validated/committed, tag `kb011-protected-apis-validated`), KB-012 (route modularization, validated — see `docs/KB012_ROUTE_MODULARIZATION_COMPLETION.md`), not yet committed.
+- Next: KB-013 (or next real feature module), once KB-012 is committed and the user kicks off the next module.
 
 ## Security Rules (mandatory, no exceptions)
 
@@ -58,7 +59,7 @@ Do not modify these unless the current user request explicitly names the file/ac
 - Do not run `git add .` or `git commit` unless explicitly instructed in that same request.
 - Do not convert the product to Streamlit; do not expose Wazuh directly to customers.
 
-(KB-010 was granted a one-time, explicit exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. KB-011 was separately granted a one-time, explicit exception to add `Depends()` auth/RBAC checks to the 7 existing `/admin/*`/`/customer/*` endpoints in `main.py` — no `docker-compose.yml` change was needed for KB-011. Neither creates a standing exception — future edits to these files still require explicit instruction.)
+(KB-010 was granted a one-time, explicit exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. KB-011 was separately granted a one-time, explicit exception to add `Depends()` auth/RBAC checks to the 7 existing `/admin/*`/`/customer/*` endpoints in `main.py` — no `docker-compose.yml` change was needed for KB-011. KB-012 was separately granted a one-time, explicit exception to remove all route logic from `main.py` (moved into `backend-api/app/api/routes/health.py`/`admin.py`/`customer.py`), leaving it as app wiring only — again no `docker-compose.yml` change. None of these creates a standing exception — future edits to these files still require explicit instruction.)
 
 ## Validation Commands (must keep working)
 
@@ -71,9 +72,10 @@ curl -fsS http://localhost:8000/health | jq .
 ./scripts/kb008_validate_backend_api_foundation.sh
 ./scripts/kb010_validate_auth_rbac.sh
 ./scripts/kb011_validate_protected_apis.sh
+./scripts/kb012_validate_route_modularization.sh
 ```
 
-**KB-011 note:** `/admin/*` and `/customer/*` now require a valid token, so the KB-008 script's (and KB-010 script's embedded call to it) unauthenticated checks against those endpoints are expected to fail now that KB-011 has shipped and validated — this is intentional, not a defect. Both scripts stay unmodified as historical records; `scripts/kb011_validate_protected_apis.sh` is the current must-pass gate for those 7 endpoints and has passed.
+**KB-011 note:** `/admin/*` and `/customer/*` require a valid token, so the KB-008 script's (and KB-010 script's embedded call to it) unauthenticated checks against those endpoints are expected to fail — this is intentional, not a defect. Both scripts stay unmodified as historical records. **KB-012 note:** `scripts/kb011_validate_protected_apis.sh` remains the must-pass gate for those 7 endpoints; `scripts/kb012_validate_route_modularization.sh` is the current must-pass gate confirming the route-file reorganization (main.py → app/api/routes/health.py, admin.py, customer.py) introduced no behavior change — it reruns `kb011_validate_protected_apis.sh` unmodified as part of its own checks, and both have passed.
 
 ## Backend Structure Expectations
 
