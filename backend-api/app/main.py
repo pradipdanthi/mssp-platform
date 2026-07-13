@@ -7,12 +7,15 @@ admin, customer, auth) now lives under app/api/routes/.
 import os
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 
 from app.api.routes.admin import router as admin_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.customer import router as customer_router
 from app.api.routes.health import router as health_router
 from app.api.routes.tenant_management import router as tenant_management_router
+from app.api.routes.user_management import router as user_management_router
+from app.core.error_handlers import validation_exception_handler
 
 APP_NAME = os.getenv("APP_NAME", "MSSP Control Plane API")
 APP_ENV = os.getenv("APP_ENV", "development")
@@ -22,6 +25,16 @@ app = FastAPI(
     description="Backend API foundation for the MSSP Control Plane.",
     version="0.1.0",
 )
+
+# KB-014 fix: sanitize 422 validation-error responses globally so a
+# whole-model validator error (e.g. UserCreateRequest's role/tenant_id
+# check) can never echo a submitted password/new_password value back to the
+# caller. See app/core/error_handlers.py for the full explanation. This
+# changes response *content* only for errors that contain a sensitive key -
+# the 422 status code and {"detail": [...]} shape are unchanged, and every
+# other existing 422 response (e.g. KB-013's tenant validation errors) is
+# unaffected.
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
 
 # KB-010: auth/RBAC foundation. Public: POST /auth/login, GET /auth/roles.
 # Protected: GET /auth/me.
@@ -40,3 +53,6 @@ app.include_router(customer_router)
 # KB-013: admin tenant management (GET one, POST, PATCH) - adds alongside
 # admin_router's existing GET /admin/tenants without modifying admin.py.
 app.include_router(tenant_management_router)
+
+# KB-014: admin user management (list, GET one, POST, PATCH, PATCH password).
+app.include_router(user_management_router)
