@@ -1,0 +1,94 @@
+---
+description: MSSP Control Plane project rules — always apply to every request in this repository.
+globs:
+alwaysApply: true
+---
+
+# MSSP Control Plane — Always-Applied Project Rules
+
+This project is a private, multi-tenant, AI-assisted MSSP/SOC control plane. Full detail lives in `AGENTS.md` and `CLAUDE.md` at the repository root — read them. This file is the condensed rule set Cursor injects into every request.
+
+## Project Summary
+
+- We are building a branded, web-based MSSP/SOC control plane — not a Wazuh dashboard, not a Streamlit prototype.
+- Architecture: FastAPI backend + PostgreSQL + Redis + Docker Compose, with future separate admin and customer dashboard frontends.
+- Wazuh, Suricata, MISP, TheHive/Cortex, Shuffle/n8n, Prometheus/Grafana are backend detection engines/adapters only. Customers never log into them directly.
+- The platform is multi-tenant: SOC/admin dashboard manages all tenants; customer dashboard shows only that customer's own data.
+
+## Current State
+
+- VM: `mssp-control`, project path `/opt/mssp-control`.
+- Active branch: `kb009-developer-workflow`.
+- Known-good baseline tag: `kb008-validated-foundation` (commit `c52bca1`).
+- Running containers: `mssp-postgres`, `mssp-redis`, `mssp-backend-api`.
+- Backend: `backend-api/app/main.py` — FastAPI app with working `/health`, admin preview endpoints (`/admin/dashboard`, `/admin/tenants`, `/admin/appliances`, `/admin/alerts`, `/admin/incidents`), and customer preview endpoints (`/customer/dashboard/{short_code}`, `/customer/incidents/{short_code}`).
+- Database schema: `postgres/init/001_mssp_core_schema.sql` — already defines `tenants`, `platform_users`, `tenant_contacts`, `appliance_activation_tokens`, `appliances`, `protected_assets`, `appliance_heartbeats`, `security_alerts`, `incidents`, `incident_alerts`, `incident_timeline`, `incident_comments`, `notification_events`, `customer_recommendations`, `monthly_reports`, `audit_logs`.
+- Completed: KB-001–KB-007 (infra/foundation), KB-008 (backend API foundation), KB-009A (this AI rules module).
+- Next module: KB-010 — Authentication/Login + Role-Based Access Control.
+
+## Security Rules (mandatory, no exceptions)
+
+- Never commit `.env`. Never print `.env` values. Never expose secrets.
+- Never hardcode passwords, API keys, JWT secrets, Wazuh credentials, or customer tokens.
+- Never return password hashes in API responses.
+- Use secure password hashing (bcrypt/argon2) and JWT (or equivalent) for authentication.
+- Use role-based access control on every protected endpoint.
+- Handle Wazuh/API timeouts and malformed alerts safely — never crash ingestion on bad input.
+- Never expose stack traces to customers; log detailed errors server-side for SOC/admin troubleshooting.
+- Prefer safe, loud failure over silent failure.
+
+## Tenant Isolation Rules (mandatory, no exceptions)
+
+- Every tenant-owned table has `tenant_id`; every query touching it must filter by `tenant_id`.
+- Customer-facing endpoints must derive `tenant_id` from the authenticated caller, never trust a client-supplied tenant identifier without cross-checking it against the caller's own tenant.
+- Customer A must never see Customer B's data under any circumstance.
+- SOC/admin cross-tenant endpoints must live under admin-only routes and require an admin/SOC role.
+- Any new tenant-owned table must include `tenant_id UUID NOT NULL REFERENCES tenants(id)` plus a supporting index, matching the existing schema style.
+
+## Do-Not-Touch Rules
+
+Do not modify these unless the current user request explicitly names the file/action:
+
+- `backend-api/app/main.py`
+- `docker-compose.yml`
+- `postgres/init/001_mssp_core_schema.sql` (never delete/recreate/replace the schema)
+- `.env` (never read its values back, never edit blindly, never commit)
+- Do not restart, stop, or rebuild any Docker container unless explicitly instructed.
+- Do not run `git add .` or `git commit` unless explicitly instructed in that same request.
+- Do not convert the product to Streamlit; do not expose Wazuh directly to customers.
+
+## Validation Commands (must keep working)
+
+```bash
+cd /opt/mssp-control
+git branch --show-current
+git status --short
+docker compose ps
+curl -fsS http://localhost:8000/health | jq .
+./scripts/kb008_validate_backend_api_foundation.sh
+```
+
+## Backend Structure Expectations
+
+Future backend code must be modular, not piled into `main.py`:
+
+```
+backend-api/app/main.py            # app wiring only
+backend-api/app/core/config.py     # settings/env loading
+backend-api/app/core/security.py   # password hashing, JWT, RBAC helpers
+backend-api/app/db/session.py      # database connection/session management
+backend-api/app/api/routes/        # one router module per feature area
+backend-api/app/schemas/           # Pydantic request/response models
+backend-api/app/services/          # business logic
+```
+
+Use parameterized SQL only (no string-formatted queries). Config comes from environment variables only, matching the existing `_env()` helper pattern.
+
+## Communication Rules (the user is not a programmer)
+
+- Explain changes in simple language, always naming the exact file and its full path.
+- Provide complete file content or complete edits — never partial snippets, never "add the rest yourself," never `TODO`/placeholder code in production files.
+- Provide exact commands and their expected output.
+- Never hide a failed command.
+- Never make a large architectural change without first explaining it in plain language and getting explicit approval.
+- Always show `git status --short` after changes, then stop and wait — do not commit automatically.
