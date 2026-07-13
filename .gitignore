@@ -1,0 +1,11 @@
+.env
+*.log
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
+.venv/
+.vscode/
+.DS_Store
+docker-compose.yml.backup-*
