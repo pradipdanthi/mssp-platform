@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.appliance_agent import router as appliance_agent_router
 from app.api.routes.appliance_management import router as appliance_management_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.customer import router as customer_router
@@ -61,3 +62,8 @@ app.include_router(user_management_router)
 # KB-015: admin appliance management (GET/PATCH one appliance, create/list/
 # revoke appliance activation tokens for a tenant).
 app.include_router(appliance_management_router)
+
+# KB-016: appliance-facing registration and heartbeat receiver (no human
+# JWT/RBAC - authenticated by activation token / durable appliance API key
+# instead, see app/api/routes/appliance_agent.py).
+app.include_router(appliance_agent_router)

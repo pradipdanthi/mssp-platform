@@ -75,6 +75,33 @@ def fetch_one_write(query: str, params: Tuple[Any, ...] = ()) -> Dict[str, Any]:
         return dict(row) if row else {}
 
 
+# KB-016: minimal addition for callers that need more than one write
+# statement to succeed or fail together as a single atomic unit (e.g.
+# appliance registration: create the appliance row, then consume the
+# activation token, only committing if both succeed; or heartbeat: insert
+# the heartbeat row and update the appliance's last-seen fields together).
+# None of fetch_all()/fetch_one()/execute()/fetch_one_write() above are
+# changed - this is a new, separate helper for the one new use case that
+# genuinely needs multi-statement transaction control.
+@contextmanager
+def db_transaction():
+    """
+    Yield a cursor for one or more statements against a single connection
+    and a single transaction. Commits once, on clean exit; rolls back the
+    entire transaction if any exception is raised inside the `with` block
+    (including an application-level exception the caller raises itself,
+    e.g. to signal "lost a race to consume a one-time token").
+    """
+    with db_conn() as conn:
+        try:
+            with conn.cursor() as cur:
+                yield cur
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+
 # KB-012: moved from app/main.py, unchanged, so app/api/routes/health.py (and
 # any other future module) has one shared place to get a Redis client from,
 # instead of each route file defining its own copy.

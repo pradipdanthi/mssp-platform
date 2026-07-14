@@ -48,6 +48,14 @@ SENSITIVE_KEYS = {
     "jwt",
     "secret",
     "jwt_secret",
+    # KB-016: appliance registration/heartbeat introduces these field
+    # names (see app/schemas/appliance_agent.py). None of them matched
+    # any existing entry above by exact string, so a 422 on e.g.
+    # activation_token would previously have echoed the caller's raw
+    # value back in "input" unredacted.
+    "activation_token",
+    "appliance_api_key",
+    "api_key",
 }
 
 
