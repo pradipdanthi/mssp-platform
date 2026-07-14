@@ -19,6 +19,13 @@ Design notes (see docs/KB015 planning discussion for the full rationale):
 - ActivationTokenCreateResponse is the ONLY model in this file that ever
   carries the raw one-time token, and only at creation time. No other
   endpoint (list, revoke, or any future GET) returns a `token` field.
+
+KB-017 addition: ApplianceCredentialMetadata (safe, read-only credential
+state) and ApplianceCredentialRotateResponse (one-time rotated key) follow
+the same principle - neither model has an appliance_api_key_hash field, so
+it is structurally impossible for either endpoint to leak it. Only
+ApplianceCredentialRotateResponse ever carries the raw appliance_api_key,
+and only immediately after a rotation.
 """
 
 from typing import List, Literal, Optional
@@ -94,3 +101,37 @@ class ActivationTokenCreateResponse(BaseModel):
 
 class ActivationTokensListResponse(BaseModel):
     tokens: List[ActivationTokenMetadata]
+
+
+class ApplianceCredentialMetadata(BaseModel):
+    """
+    KB-017: safe, read-only view of an appliance's durable API credential
+    state for GET /admin/appliances/{appliance_id}/credential. Deliberately
+    has no appliance_api_key and no appliance_api_key_hash field -
+    structurally impossible to leak either through this model, the same
+    principle ActivationTokenMetadata above already uses for token_hash.
+    """
+
+    appliance_id: str
+    has_appliance_api_key: bool
+    appliance_api_key_hint: Optional[str] = None
+    appliance_key_created_at: Optional[str] = None
+    appliance_key_last_used_at: Optional[str] = None
+    status: str
+    last_seen_at: Optional[str] = None
+
+
+class ApplianceCredentialRotateResponse(BaseModel):
+    """
+    KB-017: response for POST /admin/appliances/{appliance_id}/credential/rotate.
+    This is the only place the new raw appliance_api_key is ever returned -
+    generated fresh at rotation time, returned exactly once here, never
+    stored or logged. No appliance_api_key_hash field - the hash is never
+    returned by any endpoint in this file.
+    """
+
+    appliance_id: str
+    appliance_api_key: str
+    api_key_hint: str
+    appliance_key_created_at: str
+    message: str

@@ -45,6 +45,25 @@ redemption time regardless of the stored status value.
 appliance_id/tenant_id/token_id are UUID path parameters, validated by
 FastAPI/Pydantic before any query runs - an invalid UUID never produces a
 raw database error, only a clean 422.
+
+KB-017 addition: two credential-focused endpoints on top of the KB-015
+appliance/token endpoints above -
+
+- GET  /admin/appliances/{appliance_id}/credential          - safe credential metadata only
+- POST /admin/appliances/{appliance_id}/credential/rotate   - rotate/reissue the durable appliance API key
+
+These are deliberately separate from GET/PATCH
+/admin/appliances/{appliance_id} rather than folded into ApplianceDetail -
+the existing, already-validated KB-015 appliance detail response shape is
+left completely untouched. Read access reuses ADMIN_SOC_ROLES (same as
+appliance detail/token list); rotation uses its own, more restrictive
+ADMIN_APPLIANCE_CREDENTIAL_WRITE_ROLES = ("platform_admin",) rather than
+reusing ADMIN_APPLIANCE_WRITE_ROLES, so credential issuance permissions can
+diverge from general appliance-metadata write permissions in the future
+without a rename. Rotation is intentionally allowed even for a retired
+appliance and even when no credential has ever been issued (recovery /
+recommissioning), and never changes appliance status - it only ever
+touches the four appliance_api_key_* columns.
 """
 
 import hashlib
@@ -63,9 +82,12 @@ from app.schemas.appliances import (
     ActivationTokenCreateResponse,
     ActivationTokenMetadata,
     ActivationTokensListResponse,
+    ApplianceCredentialMetadata,
+    ApplianceCredentialRotateResponse,
     ApplianceDetail,
     ApplianceUpdateRequest,
 )
+from app.services.appliance_auth_service import generate_appliance_api_key
 
 router = APIRouter(tags=["admin-appliances"])
 
@@ -74,6 +96,13 @@ router = APIRouter(tags=["admin-appliances"])
 # soc_analyst keep read-only access (ADMIN_SOC_ROLES, imported from
 # admin.py), same read tier as tenant/user management.
 ADMIN_APPLIANCE_WRITE_ROLES = ("platform_admin",)
+
+# KB-017: credential rotation gets its own write-role constant, kept
+# distinct from ADMIN_APPLIANCE_WRITE_ROLES above even though the value is
+# identical today, so issuing a fresh appliance credential can be
+# permissioned separately from general appliance-metadata writes later
+# without renaming anything.
+ADMIN_APPLIANCE_CREDENTIAL_WRITE_ROLES = ("platform_admin",)
 
 # secrets.token_urlsafe(32) yields 256 bits of cryptographically secure
 # randomness (~43 URL-safe characters) - a fast, deterministic hash
@@ -127,6 +156,23 @@ _TOKEN_METADATA_COLUMNS = """
     used_at::text,
     created_by_user_id::text,
     created_at::text
+"""
+
+# KB-017: appliance_api_key_hash is deliberately never selected here - only
+# a boolean derived from it (has_appliance_api_key). No query in this file
+# ever puts the raw hash column into a result row that a response model
+# could accidentally expose.
+_APPLIANCE_CREDENTIAL_QUERY = """
+    SELECT
+        id::text AS appliance_id,
+        (appliance_api_key_hash IS NOT NULL) AS has_appliance_api_key,
+        appliance_api_key_hint,
+        appliance_key_created_at::text,
+        appliance_key_last_used_at::text,
+        status,
+        last_seen_at::text
+    FROM appliances
+    WHERE id = %s;
 """
 
 
@@ -321,3 +367,75 @@ def revoke_activation_token(
     if not token:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Activation token revoke failed")
     return token
+
+
+@router.get(
+    "/admin/appliances/{appliance_id}/credential",
+    response_model=ApplianceCredentialMetadata,
+)
+def get_appliance_credential(
+    appliance_id: UUID,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    credential = fetch_one(_APPLIANCE_CREDENTIAL_QUERY, (str(appliance_id),))
+    if not credential:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appliance not found")
+    return credential
+
+
+@router.post(
+    "/admin/appliances/{appliance_id}/credential/rotate",
+    response_model=ApplianceCredentialRotateResponse,
+)
+def rotate_appliance_credential(
+    appliance_id: UUID,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_CREDENTIAL_WRITE_ROLES)),
+) -> Dict[str, Any]:
+    # KB-016's generate_appliance_api_key() reused unchanged: (raw_key,
+    # key_hash, key_hint). raw_key is only ever placed in this function's
+    # return value below - never stored, never logged.
+    raw_key, key_hash, key_hint = generate_appliance_api_key()
+
+    try:
+        rotated = fetch_one_write(
+            """
+            UPDATE appliances
+            SET appliance_api_key_hash = %s,
+                appliance_api_key_hint = %s,
+                appliance_key_created_at = now(),
+                appliance_key_last_used_at = NULL
+            WHERE id = %s
+            RETURNING id::text, appliance_key_created_at::text;
+            """,
+            (key_hash, key_hint, str(appliance_id)),
+        )
+    except UniqueViolation:
+        # appliance_api_key_hash is UNIQUE. With 256 bits of
+        # secrets.token_urlsafe() randomness a real collision is not
+        # realistically expected - this is a defensive backstop only,
+        # never a normal-path outcome (same pattern already used for
+        # activation token_hash collisions in create_activation_token
+        # above).
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Credential rotation failed, please retry",
+        )
+
+    if not rotated:
+        # Rotation is intentionally allowed regardless of appliance status
+        # (including retired) and regardless of whether a credential was
+        # ever previously issued - the only reason this UPDATE returns no
+        # row is that appliance_id does not exist.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appliance not found")
+
+    return {
+        "appliance_id": rotated["id"],
+        "appliance_api_key": raw_key,
+        "api_key_hint": key_hint,
+        "appliance_key_created_at": rotated["appliance_key_created_at"],
+        "message": (
+            "Appliance credential rotated successfully. The previous "
+            "appliance_api_key is now invalid. Store this new "
+            "appliance_api_key securely - it will not be shown again."
+        ),
+    }
