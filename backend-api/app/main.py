@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.appliance_management import router as appliance_management_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.customer import router as customer_router
 from app.api.routes.health import router as health_router
@@ -56,3 +57,7 @@ app.include_router(tenant_management_router)
 
 # KB-014: admin user management (list, GET one, POST, PATCH, PATCH password).
 app.include_router(user_management_router)
+
+# KB-015: admin appliance management (GET/PATCH one appliance, create/list/
+# revoke appliance activation tokens for a tenant).
+app.include_router(appliance_management_router)
