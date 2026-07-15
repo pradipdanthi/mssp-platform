@@ -1,4 +1,4 @@
-import { getCustomerDashboard } from "../api/customer";
+import { getCustomerReports } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
 
@@ -6,7 +6,7 @@ export default function ReportsPage() {
   const { user } = useAuth();
   const shortCode = user?.tenant_short_code ?? null;
   const { status, data, errorMessage } = useCustomerQuery(
-    () => getCustomerDashboard(shortCode as string),
+    () => getCustomerReports(shortCode as string),
     Boolean(shortCode),
     [shortCode]
   );
@@ -25,7 +25,9 @@ export default function ReportsPage() {
   return (
     <div>
       <h1 className="page-title">Reports</h1>
-      <p className="page-subtitle">Read-only monthly reports from your customer dashboard.</p>
+      <p className="page-subtitle">
+        Read-only published monthly security reports for your organization.
+      </p>
 
       {status === "loading" && <div className="state-message">Loading reports...</div>}
       {status === "forbidden" && (
@@ -36,25 +38,32 @@ export default function ReportsPage() {
       )}
 
       {status === "success" && data && (
-        data.monthly_reports.length === 0 ? (
-          <div className="state-message">No monthly reports yet.</div>
+        data.reports.length === 0 ? (
+          <div className="state-message">
+            No published monthly reports yet. Drafts prepared by your SOC team are not shown here
+            until they are published.
+          </div>
         ) : (
           <table className="data-table">
             <thead>
               <tr>
+                <th>Title</th>
                 <th>Month</th>
                 <th>Status</th>
+                <th>Summary</th>
                 <th>Published</th>
-                <th>Executive Summary</th>
+                <th>Created</th>
               </tr>
             </thead>
             <tbody>
-              {data.monthly_reports.map((report) => (
-                <tr key={String(report.report_month)}>
+              {data.reports.map((report) => (
+                <tr key={report.report_id}>
+                  <td>{report.title}</td>
                   <td>{String(report.report_month)}</td>
                   <td>{report.status}</td>
+                  <td>{report.summary ?? "—"}</td>
                   <td>{report.published_at ?? "—"}</td>
-                  <td>{report.executive_summary ?? "—"}</td>
+                  <td>{report.created_at ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

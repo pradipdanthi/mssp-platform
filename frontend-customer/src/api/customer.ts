@@ -140,3 +140,22 @@ export interface CustomerAssetsResponse {
 export function getCustomerAssets(shortCode: string): Promise<CustomerAssetsResponse> {
   return request<CustomerAssetsResponse>(`/customer/assets/${encodeURIComponent(shortCode)}`);
 }
+
+export interface CustomerReport {
+  report_id: string;
+  report_month: string;
+  status: string;
+  title: string;
+  summary: string | null;
+  created_at: string | null;
+  published_at: string | null;
+}
+
+export interface CustomerReportsResponse {
+  tenant: CustomerTenant;
+  reports: CustomerReport[];
+}
+
+export function getCustomerReports(shortCode: string): Promise<CustomerReportsResponse> {
+  return request<CustomerReportsResponse>(`/customer/reports/${encodeURIComponent(shortCode)}`);
+}
