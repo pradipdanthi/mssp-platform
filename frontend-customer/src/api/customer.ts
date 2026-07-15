@@ -105,3 +105,38 @@ export function getCustomerIncidents(shortCode: string): Promise<CustomerInciden
 export function getCustomerAlerts(shortCode: string): Promise<CustomerAlertsResponse> {
   return request<CustomerAlertsResponse>(`/customer/alerts/${encodeURIComponent(shortCode)}`);
 }
+
+export interface CustomerAppliance {
+  appliance_name: string;
+  site_name: string;
+  status: string;
+  last_seen_at: string | null;
+  health_status: string | null;
+  cpu_percent: number | null;
+  memory_percent: number | null;
+  disk_percent: number | null;
+  agent_version: string | null;
+}
+
+export interface CustomerProtectedAsset {
+  asset_id: string;
+  hostname: string | null;
+  asset_type: string;
+  criticality: string;
+  status: string;
+  os_name: string | null;
+  owner: string | null;
+  last_seen_at: string | null;
+  appliance_name: string | null;
+  site_name: string | null;
+}
+
+export interface CustomerAssetsResponse {
+  tenant: CustomerTenant;
+  appliances: CustomerAppliance[];
+  assets: CustomerProtectedAsset[];
+}
+
+export function getCustomerAssets(shortCode: string): Promise<CustomerAssetsResponse> {
+  return request<CustomerAssetsResponse>(`/customer/assets/${encodeURIComponent(shortCode)}`);
+}

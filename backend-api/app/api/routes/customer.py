@@ -236,3 +236,93 @@ def customer_alerts(
     )
 
     return {"tenant": tenant, "alerts": rows}
+
+
+@router.get("/assets/{short_code}")
+def customer_assets(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-023: Tenant-scoped customer appliance posture and protected assets.
+
+    Returns only customer-safe fields. Does not expose API keys, key hints,
+    activation tokens, hashes, IPs, health_snapshot/details JSON, or
+    credential timestamps.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    tenant_id = tenant["id"]
+
+    appliances = fetch_all(
+        """
+        SELECT
+            a.appliance_name,
+            a.site_name,
+            a.status,
+            a.last_seen_at,
+            h.health_status,
+            h.cpu_percent,
+            h.memory_percent,
+            h.disk_percent,
+            a.agent_version
+        FROM appliances a
+        LEFT JOIN LATERAL (
+            SELECT
+                health_status,
+                cpu_percent,
+                memory_percent,
+                disk_percent
+            FROM appliance_heartbeats h
+            WHERE h.appliance_id = a.id
+            ORDER BY h.heartbeat_at DESC
+            LIMIT 1
+        ) h ON true
+        WHERE a.tenant_id = %s
+        ORDER BY a.site_name, a.appliance_name
+        LIMIT 200;
+        """,
+        (tenant_id,),
+    )
+
+    assets = fetch_all(
+        """
+        SELECT
+            pa.id::text AS asset_id,
+            pa.hostname,
+            pa.asset_type,
+            pa.criticality,
+            pa.status,
+            pa.os_name,
+            pa.owner,
+            pa.last_seen_at,
+            a.appliance_name,
+            a.site_name
+        FROM protected_assets pa
+        LEFT JOIN appliances a ON a.id = pa.appliance_id
+        WHERE pa.tenant_id = %s
+        ORDER BY
+            CASE pa.criticality
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+                ELSE 5
+            END,
+            pa.hostname NULLS LAST,
+            pa.created_at DESC
+        LIMIT 200;
+        """,
+        (tenant_id,),
+    )
+
+    return {"tenant": tenant, "appliances": appliances, "assets": assets}
