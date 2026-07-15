@@ -189,3 +189,50 @@ def customer_incidents(
     )
 
     return {"tenant": tenant, "incidents": rows}
+
+
+@router.get("/alerts/{short_code}")
+def customer_alerts(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-022: Tenant-scoped, customer-visible alerts only.
+
+    Returns only customer-safe fields. Does not expose raw_event, IPs,
+    external_alert_id, technical AI fields, MITRE mappings, or secrets.
+    Filtered to customer_visible = true for the matched tenant.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    rows = fetch_all(
+        """
+        SELECT
+            id::text AS alert_id,
+            alert_title AS title,
+            severity,
+            status,
+            source_tool AS source,
+            ai_plain_summary AS summary,
+            alert_description AS description,
+            event_time AS detected_at,
+            destination_host AS hostname
+        FROM security_alerts
+        WHERE tenant_id = %s
+          AND customer_visible = true
+        ORDER BY event_time DESC NULLS LAST, created_at DESC
+        LIMIT 100;
+        """,
+        (tenant["id"],),
+    )
+
+    return {"tenant": tenant, "alerts": rows}

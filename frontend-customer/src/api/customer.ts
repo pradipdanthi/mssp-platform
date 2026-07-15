@@ -77,10 +77,31 @@ export interface CustomerIncidentsResponse {
   incidents: CustomerIncident[];
 }
 
+export interface CustomerAlert {
+  alert_id: string;
+  title: string;
+  severity: string;
+  status: string;
+  source: string;
+  summary: string | null;
+  description: string | null;
+  detected_at: string | null;
+  hostname: string | null;
+}
+
+export interface CustomerAlertsResponse {
+  tenant: CustomerTenant;
+  alerts: CustomerAlert[];
+}
+
 export function getCustomerDashboard(shortCode: string): Promise<CustomerDashboardResponse> {
   return request<CustomerDashboardResponse>(`/customer/dashboard/${encodeURIComponent(shortCode)}`);
 }
 
 export function getCustomerIncidents(shortCode: string): Promise<CustomerIncidentsResponse> {
   return request<CustomerIncidentsResponse>(`/customer/incidents/${encodeURIComponent(shortCode)}`);
+}
+
+export function getCustomerAlerts(shortCode: string): Promise<CustomerAlertsResponse> {
+  return request<CustomerAlertsResponse>(`/customer/alerts/${encodeURIComponent(shortCode)}`);
 }
