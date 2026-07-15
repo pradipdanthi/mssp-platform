@@ -69,6 +69,8 @@ a {
 .brand-logo {
   display: block;
   flex-shrink: 0;
+  object-fit: contain;
+  background: transparent;
 }
 
 .brand-mark,
@@ -629,4 +631,39 @@ a {
   font-size: 0.8rem;
   color: var(--text-muted);
   margin-bottom: 12px;
+}
+
+/* Activation tokens (KB-019) */
+
+.activation-tokens-section {
+  margin-top: 36px;
+  padding-top: 8px;
+}
+
+.activation-readonly-note {
+  margin-bottom: 16px;
+}
+
+.activation-tenant-picker {
+  max-width: 420px;
+  margin-bottom: 18px;
+}
+
+.activation-tenant-select {
+  width: 100%;
+}
+
+.activation-create-form {
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-panel);
+}
+
+.activation-create-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
 }

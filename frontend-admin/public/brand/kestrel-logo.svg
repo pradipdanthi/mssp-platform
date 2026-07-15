@@ -1,7 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-hidden="true">
-  <!-- KB-018A: full logo artwork uses the same mark geometry at login scale.
-       Product/company/legal text is intentionally omitted  it comes from
-       frontend-admin/public/app-config.json at runtime. -->
+  <!-- KB-018A/KB-019: logo mark geometry. No product/company/legal text. -->
   <defs>
     <linearGradient id="kc-logo-accent" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#38BDF8"/>

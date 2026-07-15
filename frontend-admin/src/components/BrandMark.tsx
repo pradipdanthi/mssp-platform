@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { useBrand } from "../config/BrandContext";
 
 type BrandMarkVariant = "mark" | "logo";
@@ -9,13 +10,27 @@ interface BrandMarkProps {
 
 export default function BrandMark({ variant = "mark", className }: BrandMarkProps) {
   const brand = useBrand();
-  const src = variant === "logo" ? brand.logo.logoSrc : brand.logo.markSrc;
+  const preferredSrc = variant === "logo" ? brand.logo.logoSrc : brand.logo.markSrc;
+  const [src, setSrc] = useState(preferredSrc);
+
+  useEffect(() => {
+    setSrc(preferredSrc);
+  }, [preferredSrc]);
+
+  // If the preferred logo asset fails to load, fall back to the known-good
+  // mark SVG so the login/sidebar never shows a browser broken-image icon.
+  function handleError() {
+    if (src !== brand.logo.markSrc) {
+      setSrc(brand.logo.markSrc);
+    }
+  }
 
   return (
     <img
       className={className ?? (variant === "logo" ? "brand-logo" : "brand-mark")}
       src={src}
       alt={brand.logo.alt}
+      onError={handleError}
     />
   );
 }

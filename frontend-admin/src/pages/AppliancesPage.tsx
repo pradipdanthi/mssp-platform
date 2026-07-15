@@ -1,12 +1,27 @@
-import React, { useState } from "react";
-import { Appliance, getAppliances } from "../api/admin";
+import React, { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Appliance, Tenant, getAppliances, getTenants } from "../api/admin";
 import {
+  ActivationTokenMetadata,
   ApplianceCredentialMetadata,
+  createActivationToken,
   getApplianceCredential,
+  listActivationTokens,
+  revokeActivationToken,
   rotateApplianceCredential,
 } from "../api/appliances";
 import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+
+function apiErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiError) {
+    if (typeof err.detail === "string") return err.detail;
+    if (err.status === 403) return "Access denied for this action.";
+    if (err.status === 404) return "Not found.";
+    if (err.status === 409) return "This token cannot be revoked in its current status.";
+  }
+  return fallback;
+}
 
 export default function AppliancesPage() {
   const { status, data, errorMessage } = useAdminQuery(() => getAppliances(), []);
@@ -15,7 +30,8 @@ export default function AppliancesPage() {
     <div>
       <h1 className="page-title">Appliances</h1>
       <p className="page-subtitle">
-        Read-only appliance list, with credential visibility and rotation (KB-017).
+        Appliance list with credential visibility/rotation, plus tenant activation-token
+        management.
       </p>
 
       {status === "loading" && <div className="state-message">Loading appliances...</div>}
@@ -50,6 +66,8 @@ export default function AppliancesPage() {
           </table>
         )
       )}
+
+      {status === "success" && <ActivationTokensSection />}
     </div>
   );
 }
@@ -78,11 +96,7 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
       const result = await getApplianceCredential(appliance.id);
       setCredential(result);
     } catch (err) {
-      setCredentialError(
-        err instanceof ApiError && typeof err.detail === "string"
-          ? err.detail
-          : "Could not load credential metadata."
-      );
+      setCredentialError(apiErrorMessage(err, "Could not load credential metadata."));
     } finally {
       setCredentialLoading(false);
     }
@@ -104,16 +118,9 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
       setNewRawKey(result.appliance_api_key);
       setNewKeyHint(result.api_key_hint);
       setConfirmingRotate(false);
-      // Refresh the safe metadata (hint/created_at) shown above - the raw
-      // key itself is never re-fetched or persisted, it only exists in
-      // newRawKey until closeRotateResult() clears it.
       void loadCredential();
     } catch (err) {
-      setRotateError(
-        err instanceof ApiError && typeof err.detail === "string"
-          ? err.detail
-          : "Credential rotation failed. Please try again."
-      );
+      setRotateError(apiErrorMessage(err, "Credential rotation failed. Please try again."));
     } finally {
       setRotating(false);
     }
@@ -234,6 +241,343 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
         </tr>
       )}
     </React.Fragment>
+  );
+}
+
+function ActivationTokensSection() {
+  const { user } = useAuth();
+  const canManageTokens = user?.role === "platform_admin";
+
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantsError, setTenantsError] = useState<string | null>(null);
+  const [tenantsLoading, setTenantsLoading] = useState(true);
+  const [selectedTenantId, setSelectedTenantId] = useState("");
+
+  const [tokens, setTokens] = useState<ActivationTokenMetadata[]>([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [tokensError, setTokensError] = useState<string | null>(null);
+
+  const [siteName, setSiteName] = useState("");
+  const [expiresInHours, setExpiresInHours] = useState(24);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // Raw activation token lives only here in component state - never in
+  // sessionStorage/localStorage, never in a URL, never logged.
+  const [rawToken, setRawToken] = useState<string | null>(null);
+  const [rawTokenHint, setRawTokenHint] = useState<string | null>(null);
+  const [copyConfirmed, setCopyConfirmed] = useState(false);
+
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setTenantsLoading(true);
+    setTenantsError(null);
+    getTenants()
+      .then((result) => {
+        if (cancelled) return;
+        setTenants(result.tenants);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setTenantsError(apiErrorMessage(err, "Could not load tenants."));
+      })
+      .finally(() => {
+        if (!cancelled) setTenantsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadTokens = useCallback(async (tenantId: string) => {
+    if (!tenantId) {
+      setTokens([]);
+      return;
+    }
+    setTokensLoading(true);
+    setTokensError(null);
+    setRevokeError(null);
+    try {
+      const result = await listActivationTokens(tenantId);
+      setTokens(result.tokens);
+    } catch (err) {
+      setTokens([]);
+      setTokensError(apiErrorMessage(err, "Could not load activation tokens."));
+    } finally {
+      setTokensLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTenantId) {
+      setTokens([]);
+      setTokensError(null);
+      return;
+    }
+    void loadTokens(selectedTenantId);
+  }, [selectedTenantId, loadTokens]);
+
+  function clearRawTokenPanel() {
+    setRawToken(null);
+    setRawTokenHint(null);
+    setCopyConfirmed(false);
+  }
+
+  function handleTenantChange(nextId: string) {
+    clearRawTokenPanel();
+    setCreateError(null);
+    setRevokeError(null);
+    setConfirmRevokeId(null);
+    setSiteName("");
+    setExpiresInHours(24);
+    setSelectedTenantId(nextId);
+  }
+
+  async function handleCreate(event: FormEvent) {
+    event.preventDefault();
+    if (!canManageTokens || !selectedTenantId) return;
+    setCreating(true);
+    setCreateError(null);
+    clearRawTokenPanel();
+    try {
+      const result = await createActivationToken(selectedTenantId, {
+        site_name: siteName.trim(),
+        expires_in_hours: expiresInHours,
+      });
+      // Keep raw token in local state only for one-time display.
+      setRawToken(result.token);
+      setRawTokenHint(result.metadata.token_hint);
+      setSiteName("");
+      setExpiresInHours(24);
+      await loadTokens(selectedTenantId);
+    } catch (err) {
+      setCreateError(apiErrorMessage(err, "Could not create activation token."));
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleRevokeConfirmed(tokenId: string) {
+    if (!canManageTokens) return;
+    setRevokingId(tokenId);
+    setRevokeError(null);
+    try {
+      await revokeActivationToken(tokenId);
+      setConfirmRevokeId(null);
+      if (selectedTenantId) {
+        await loadTokens(selectedTenantId);
+      }
+    } catch (err) {
+      setRevokeError(apiErrorMessage(err, "Could not revoke activation token."));
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  async function handleCopyRawToken() {
+    if (!rawToken) return;
+    try {
+      await navigator.clipboard.writeText(rawToken);
+      setCopyConfirmed(true);
+    } catch {
+      setCopyConfirmed(false);
+    }
+  }
+
+  const selectedTenant = tenants.find((t) => t.id === selectedTenantId) ?? null;
+
+  return (
+    <section className="activation-tokens-section">
+      <h2 className="section-title">Activation Tokens</h2>
+      <p className="page-subtitle">
+        Create and manage appliance activation tokens for a selected tenant. The raw token is shown
+        only once at creation time.
+      </p>
+
+      {!canManageTokens && (
+        <div className="state-message activation-readonly-note">
+          Read-only view. Only platform_admin can create or revoke activation tokens.
+        </div>
+      )}
+
+      {tenantsLoading && <div className="state-message">Loading tenants...</div>}
+      {tenantsError && <div className="state-message state-error">{tenantsError}</div>}
+
+      {!tenantsLoading && !tenantsError && (
+        <div className="activation-tenant-picker">
+          <label className="form-label" htmlFor="activation-tenant">
+            Tenant
+          </label>
+          <select
+            id="activation-tenant"
+            className="form-input activation-tenant-select"
+            value={selectedTenantId}
+            onChange={(e) => handleTenantChange(e.target.value)}
+          >
+            <option value="">Select a tenant...</option>
+            {tenants.map((tenant) => (
+              <option key={tenant.id} value={tenant.id}>
+                {tenant.name} ({tenant.short_code})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {selectedTenantId && (
+        <>
+          {canManageTokens && (
+            <form className="activation-create-form" onSubmit={handleCreate}>
+              <div className="activation-create-grid">
+                <div>
+                  <label className="form-label" htmlFor="activation-site-name">
+                    Site name
+                  </label>
+                  <input
+                    id="activation-site-name"
+                    className="form-input"
+                    type="text"
+                    value={siteName}
+                    onChange={(e) => setSiteName(e.target.value)}
+                    required
+                    minLength={1}
+                    maxLength={200}
+                    placeholder="e.g. Main HQ"
+                  />
+                </div>
+                <div>
+                  <label className="form-label" htmlFor="activation-expires-hours">
+                    Expires in (hours)
+                  </label>
+                  <input
+                    id="activation-expires-hours"
+                    className="form-input"
+                    type="number"
+                    min={1}
+                    max={720}
+                    value={expiresInHours}
+                    onChange={(e) => setExpiresInHours(Number(e.target.value))}
+                    required
+                  />
+                </div>
+              </div>
+              {createError && <div className="state-message state-error">{createError}</div>}
+              <button className="btn btn-primary" type="submit" disabled={creating || !siteName.trim()}>
+                {creating ? "Creating..." : "Create activation token"}
+              </button>
+            </form>
+          )}
+
+          {rawToken && (
+            <div className="one-time-secret-panel">
+              <p className="one-time-secret-warning">
+                Copy this token now. It will not be shown again.
+              </p>
+              <code className="one-time-secret-value">{rawToken}</code>
+              {rawTokenHint && <div className="one-time-secret-hint">Hint: {rawTokenHint}</div>}
+              {selectedTenant && (
+                <div className="one-time-secret-hint">
+                  Tenant: {selectedTenant.name} ({selectedTenant.short_code})
+                </div>
+              )}
+              <div className="confirm-actions">
+                <button className="btn btn-primary" type="button" onClick={handleCopyRawToken}>
+                  {copyConfirmed ? "Copied!" : "Copy to clipboard"}
+                </button>
+                <button className="btn btn-ghost" type="button" onClick={clearRawTokenPanel}>
+                  Close and clear from screen
+                </button>
+              </div>
+            </div>
+          )}
+
+          {tokensLoading && <div className="state-message">Loading activation tokens...</div>}
+          {tokensError && <div className="state-message state-error">{tokensError}</div>}
+          {revokeError && <div className="state-message state-error">{revokeError}</div>}
+
+          {!tokensLoading && !tokensError && tokens.length === 0 && (
+            <div className="state-message">No activation tokens for this tenant yet.</div>
+          )}
+
+          {!tokensLoading && tokens.length > 0 && (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Token ID</th>
+                  <th>Site</th>
+                  <th>Hint</th>
+                  <th>Status</th>
+                  <th>Expires</th>
+                  <th>Used</th>
+                  <th>Created</th>
+                  {canManageTokens && <th>Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.map((tok) => {
+                  const canRevoke = canManageTokens && tok.status === "pending";
+                  return (
+                    <tr key={tok.id}>
+                      <td title={tok.id}>{tok.id.slice(0, 8)}...</td>
+                      <td>{tok.site_name}</td>
+                      <td>{tok.token_hint ?? "—"}</td>
+                      <td>
+                        <span className={`badge badge-${tok.status}`}>{tok.status}</span>
+                      </td>
+                      <td>{tok.expires_at ?? "—"}</td>
+                      <td>{tok.used_at ?? "—"}</td>
+                      <td>{tok.created_at}</td>
+                      {canManageTokens && (
+                        <td>
+                          {confirmRevokeId === tok.id ? (
+                            <div className="confirm-actions">
+                              <button
+                                className="btn btn-warning btn-small"
+                                type="button"
+                                disabled={revokingId === tok.id}
+                                onClick={() => handleRevokeConfirmed(tok.id)}
+                              >
+                                {revokingId === tok.id ? "Revoking..." : "Confirm revoke"}
+                              </button>
+                              <button
+                                className="btn btn-ghost btn-small"
+                                type="button"
+                                disabled={revokingId === tok.id}
+                                onClick={() => setConfirmRevokeId(null)}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              className="btn btn-ghost btn-small"
+                              type="button"
+                              disabled={!canRevoke}
+                              title={
+                                canRevoke
+                                  ? "Revoke this pending activation token"
+                                  : "Only pending tokens can be revoked"
+                              }
+                              onClick={() => setConfirmRevokeId(tok.id)}
+                            >
+                              Revoke
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

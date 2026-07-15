@@ -37,7 +37,9 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <BrandMark variant="logo" className="brand-logo login-brand-logo" />
+          {/* Prefer mark SVG on login: same geometry as logo, avoids broken-image
+              if logoSrc ever fails to parse; BrandMark also falls back on error. */}
+          <BrandMark variant="mark" className="brand-logo login-brand-logo" />
           <div className="login-brand-copy">
             <span className="login-brand-product">{brand.productName}</span>
             <span className="login-brand-portal">{brand.portalName}</span>
