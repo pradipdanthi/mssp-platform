@@ -82,6 +82,23 @@ services:
     networks:
       - mssp-backend
 
+  # KB-021: customer portal foundation. Separate from frontend-admin.
+  # Vite dev server; proxies /api to backend-api (no CORS changes).
+  frontend-customer:
+    build:
+      context: ./frontend-customer
+    container_name: mssp-frontend-customer
+    restart: unless-stopped
+    depends_on:
+      - backend-api
+    ports:
+      - "3001:5173"
+    volumes:
+      - ./frontend-customer:/app
+      - /app/node_modules
+    networks:
+      - mssp-backend
+
 volumes:
   postgres_data:
   redis_data:

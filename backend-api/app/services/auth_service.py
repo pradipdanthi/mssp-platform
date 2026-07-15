@@ -23,10 +23,24 @@ class AccountNotActiveError(Exception):
 def get_user_by_email(email: str) -> Dict[str, Any]:
     return fetch_one(
         """
-        SELECT id::text, tenant_id::text, user_type, role, full_name, email,
-               phone, status, password_hash, last_login_at, created_at, updated_at
-        FROM platform_users
-        WHERE lower(email) = lower(%s);
+        SELECT
+            u.id::text,
+            u.tenant_id::text,
+            u.user_type,
+            u.role,
+            u.full_name,
+            u.email,
+            u.phone,
+            u.status,
+            u.password_hash,
+            u.last_login_at,
+            u.created_at,
+            u.updated_at,
+            t.short_code AS tenant_short_code,
+            t.name AS tenant_name
+        FROM platform_users u
+        LEFT JOIN tenants t ON t.id = u.tenant_id
+        WHERE lower(u.email) = lower(%s);
         """,
         (email,),
     )
@@ -35,10 +49,24 @@ def get_user_by_email(email: str) -> Dict[str, Any]:
 def get_user_by_id(user_id: str) -> Dict[str, Any]:
     return fetch_one(
         """
-        SELECT id::text, tenant_id::text, user_type, role, full_name, email,
-               phone, status, password_hash, last_login_at, created_at, updated_at
-        FROM platform_users
-        WHERE id = %s;
+        SELECT
+            u.id::text,
+            u.tenant_id::text,
+            u.user_type,
+            u.role,
+            u.full_name,
+            u.email,
+            u.phone,
+            u.status,
+            u.password_hash,
+            u.last_login_at,
+            u.created_at,
+            u.updated_at,
+            t.short_code AS tenant_short_code,
+            t.name AS tenant_name
+        FROM platform_users u
+        LEFT JOIN tenants t ON t.id = u.tenant_id
+        WHERE u.id = %s;
         """,
         (user_id,),
     )
@@ -83,6 +111,8 @@ def to_public_user(user: Dict[str, Any]) -> Dict[str, Any]:
         "user_type": user["user_type"],
         "role": user["role"],
         "tenant_id": user.get("tenant_id"),
+        "tenant_short_code": user.get("tenant_short_code"),
+        "tenant_name": user.get("tenant_name"),
         "status": user["status"],
         "last_login_at": last_login_at,
     }

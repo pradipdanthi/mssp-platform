@@ -23,6 +23,10 @@ class UserPublic(BaseModel):
     user_type: str
     role: str
     tenant_id: Optional[str] = None
+    # KB-021: customer portal uses short_code for /customer/{short_code}
+    # paths. Null for platform/SOC users (and any account without a tenant).
+    tenant_short_code: Optional[str] = None
+    tenant_name: Optional[str] = None
     status: str
     last_login_at: Optional[str] = None
 
