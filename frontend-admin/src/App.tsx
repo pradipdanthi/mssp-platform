@@ -1,0 +1,79 @@
+import { Navigate, Route, Routes } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext";
+import { useBrand } from "./config/BrandContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import LoginPage from "./pages/LoginPage";
+import DashboardPage from "./pages/DashboardPage";
+import TenantsPage from "./pages/TenantsPage";
+import UsersPage from "./pages/UsersPage";
+import AppliancesPage from "./pages/AppliancesPage";
+import AlertsPage from "./pages/AlertsPage";
+import IncidentsPage from "./pages/IncidentsPage";
+
+function RootRedirect() {
+  const { token, loading } = useAuth();
+  const brand = useBrand();
+  if (loading) {
+    return <div className="app-loading">Loading {brand.portalName}...</div>;
+  }
+  return <Navigate to={token ? "/dashboard" : "/login"} replace />;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<RootRedirect />} />
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute>
+            <DashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tenants"
+        element={
+          <ProtectedRoute>
+            <TenantsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute>
+            <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/appliances"
+        element={
+          <ProtectedRoute>
+            <AppliancesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/alerts"
+        element={
+          <ProtectedRoute>
+            <AlertsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/incidents"
+        element={
+          <ProtectedRoute>
+            <IncidentsPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* Unknown routes redirect safely rather than showing a raw 404. */}
+      <Route path="*" element={<RootRedirect />} />
+    </Routes>
+  );
+}

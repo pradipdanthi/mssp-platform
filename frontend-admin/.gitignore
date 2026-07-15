@@ -1,0 +1,17 @@
+# KB-018: never commit installed dependencies or build output. See the
+# Dockerfile/docs/KB018 completion notes for why package-lock.json is not
+# yet present in this module - it is not ignored here, since it should be
+# committed once generated and reviewed, just not created by hand.
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# TypeScript / Vite generated build artifacts (must never be committed).
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Never commit a local env override for the frontend.
+.env
+.env.*

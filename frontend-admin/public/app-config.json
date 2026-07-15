@@ -1,0 +1,15 @@
+{
+  "productName": "Kestrel Cyber",
+  "portalName": "Kestrel Cyber Control Plane",
+  "companyName": "Keroxsys",
+  "legalEntityName": "Cicilia Consultancy",
+  "tagline": "AI-Assisted Managed SOC Platform",
+  "supportEmail": "soc@keroxsys.com",
+  "portalDomain": "portal.keroxsys.com",
+  "documentTitle": "Kestrel Cyber Control Plane - Admin",
+  "logo": {
+    "markSrc": "/brand/kestrel-mark.svg",
+    "logoSrc": "/brand/kestrel-logo.svg",
+    "alt": "Kestrel Cyber"
+  }
+}
