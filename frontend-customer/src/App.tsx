@@ -10,6 +10,7 @@ import IncidentsPage from "./pages/IncidentsPage";
 import IncidentDetailPage from "./pages/IncidentDetailPage";
 import AssetsPage from "./pages/AssetsPage";
 import AssetDetailPage from "./pages/AssetDetailPage";
+import ApplianceDetailPage from "./pages/ApplianceDetailPage";
 import ReportsPage from "./pages/ReportsPage";
 import ReportDetailPage from "./pages/ReportDetailPage";
 import RecommendationsPage from "./pages/RecommendationsPage";
@@ -84,6 +85,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AssetDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/appliances/:applianceId"
+        element={
+          <ProtectedRoute>
+            <ApplianceDetailPage />
           </ProtectedRoute>
         }
       />

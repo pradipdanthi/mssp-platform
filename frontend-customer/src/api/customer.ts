@@ -143,6 +143,7 @@ export function getCustomerAlertDetail(
 }
 
 export interface CustomerAppliance {
+  appliance_id: string;
   appliance_name: string;
   site_name: string;
   status: string;
@@ -188,6 +189,47 @@ export function getCustomerAssetDetail(
 ): Promise<CustomerAssetDetailResponse> {
   return request<CustomerAssetDetailResponse>(
     `/customer/assets/${encodeURIComponent(shortCode)}/${encodeURIComponent(assetId)}`
+  );
+}
+
+export interface CustomerApplianceLinkedAsset {
+  asset_id: string;
+  hostname: string | null;
+  asset_type: string;
+  criticality: string;
+  status: string;
+  last_seen_at: string | null;
+}
+
+export interface CustomerApplianceDetail {
+  appliance_id: string;
+  appliance_name: string;
+  site_name: string;
+  status: string;
+  last_seen_at: string | null;
+  health_status: string | null;
+  cpu_percent: number | null;
+  memory_percent: number | null;
+  disk_percent: number | null;
+  agent_version: string | null;
+  config_version: string | null;
+  update_status: string | null;
+  latest_heartbeat_at: string | null;
+  protected_assets_count: number;
+  protected_assets: CustomerApplianceLinkedAsset[];
+}
+
+export interface CustomerApplianceDetailResponse {
+  tenant: CustomerTenant;
+  appliance: CustomerApplianceDetail;
+}
+
+export function getCustomerApplianceDetail(
+  shortCode: string,
+  applianceId: string
+): Promise<CustomerApplianceDetailResponse> {
+  return request<CustomerApplianceDetailResponse>(
+    `/customer/appliances/${encodeURIComponent(shortCode)}/${encodeURIComponent(applianceId)}`
   );
 }
 

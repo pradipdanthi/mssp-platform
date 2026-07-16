@@ -418,6 +418,7 @@ def customer_assets(
     appliances = fetch_all(
         """
         SELECT
+            a.id::text AS appliance_id,
             a.appliance_name,
             a.site_name,
             a.status,
@@ -530,6 +531,102 @@ def customer_asset_detail(
         raise HTTPException(status_code=404, detail="Asset not found")
 
     return {"tenant": tenant, "asset": asset}
+
+
+@router.get("/appliances/{short_code}/{appliance_id}")
+def customer_appliance_detail(
+    short_code: str,
+    appliance_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-035: Tenant-scoped, read-only customer appliance detail.
+
+    Looks up by appliance_id (UUID). Returns customer-safe posture fields,
+    latest heartbeat metrics, and linked protected assets (safe list fields).
+    Missing/wrong-tenant → 404. Does not expose IPs, health_snapshot,
+    appliance_uuid, credentials, activation tokens, or secrets.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    appliance = fetch_one(
+        """
+        SELECT
+            a.id::text AS appliance_id,
+            a.appliance_name,
+            a.site_name,
+            a.status,
+            a.last_seen_at,
+            a.agent_version,
+            a.config_version,
+            a.update_status,
+            h.health_status,
+            h.cpu_percent,
+            h.memory_percent,
+            h.disk_percent,
+            h.heartbeat_at AS latest_heartbeat_at
+        FROM appliances a
+        LEFT JOIN LATERAL (
+            SELECT
+                health_status,
+                cpu_percent,
+                memory_percent,
+                disk_percent,
+                heartbeat_at
+            FROM appliance_heartbeats h
+            WHERE h.appliance_id = a.id
+            ORDER BY h.heartbeat_at DESC
+            LIMIT 1
+        ) h ON true
+        WHERE a.tenant_id = %s
+          AND a.id = %s;
+        """,
+        (tenant["id"], appliance_id),
+    )
+
+    if not appliance:
+        raise HTTPException(status_code=404, detail="Appliance not found")
+
+    protected_assets = fetch_all(
+        """
+        SELECT
+            pa.id::text AS asset_id,
+            pa.hostname,
+            pa.asset_type,
+            pa.criticality,
+            pa.status,
+            pa.last_seen_at
+        FROM protected_assets pa
+        WHERE pa.tenant_id = %s
+          AND pa.appliance_id = %s
+        ORDER BY
+            CASE pa.criticality
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+                ELSE 5
+            END,
+            pa.hostname NULLS LAST,
+            pa.created_at DESC
+        LIMIT 200;
+        """,
+        (tenant["id"], appliance_id),
+    )
+
+    appliance["protected_assets_count"] = len(protected_assets)
+    appliance["protected_assets"] = protected_assets
+
+    return {"tenant": tenant, "appliance": appliance}
 
 
 @router.get("/reports/{short_code}")

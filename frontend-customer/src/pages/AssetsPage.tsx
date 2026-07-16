@@ -62,8 +62,12 @@ export default function AssetsPage() {
               </thead>
               <tbody>
                 {data.appliances.map((row) => (
-                  <tr key={`${row.appliance_name}-${row.site_name}`}>
-                    <td>{row.appliance_name}</td>
+                  <tr key={row.appliance_id}>
+                    <td>
+                      <Link to={`/appliances/${encodeURIComponent(row.appliance_id)}`}>
+                        {row.appliance_name}
+                      </Link>
+                    </td>
                     <td>{row.site_name}</td>
                     <td>
                       <span className={`badge badge-${row.status}`}>{row.status}</span>
