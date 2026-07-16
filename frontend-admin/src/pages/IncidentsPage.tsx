@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getIncidents } from "../api/admin";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
@@ -37,7 +38,7 @@ export default function IncidentsPage() {
               {data.incidents.map((incident) => (
                 <tr key={incident.id}>
                   <td>{incident.tenant_name}</td>
-                  <td>{incident.incident_number}</td>
+                  <td><Link to={`/incidents/${incident.id}`}>{incident.incident_number}</Link></td>
                   <td>{incident.title}</td>
                   <td>
                     <span className={`badge badge-${incident.severity}`}>{incident.severity}</span>

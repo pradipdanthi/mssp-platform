@@ -10,9 +10,10 @@ soc_manager, and soc_analyst may call them (401 with no/invalid token, 403
 for a valid token with a different role, e.g. customer_admin/customer_viewer).
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Literal, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import require_roles
 from app.db.session import fetch_all, fetch_one
@@ -165,10 +166,28 @@ def admin_appliances(
 
 @router.get("/alerts")
 def admin_alerts(
+    alert_status: Optional[
+        Literal["new", "triaged", "incident_created", "false_positive", "closed"]
+    ] = Query(default=None, alias="status"),
+    severity: Optional[Literal["low", "medium", "high", "critical"]] = None,
+    tenant_id: Optional[UUID] = None,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
+    where = []
+    params = []
+    if alert_status is not None:
+        where.append("sa.status = %s")
+        params.append(alert_status)
+    if severity is not None:
+        where.append("sa.severity = %s")
+        params.append(severity)
+    if tenant_id is not None:
+        where.append("sa.tenant_id = %s")
+        params.append(tenant_id)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             sa.id::text,
             t.name AS tenant_name,
@@ -187,19 +206,39 @@ def admin_alerts(
             sa.created_at
         FROM security_alerts sa
         JOIN tenants t ON t.id = sa.tenant_id
+        {where_sql}
         ORDER BY sa.created_at DESC
         LIMIT 100;
-        """
+        """,
+        tuple(params),
     )
     return {"alerts": rows}
 
 
 @router.get("/incidents")
 def admin_incidents(
+    incident_status: Optional[
+        Literal["open", "in_progress", "waiting_customer", "resolved", "closed"]
+    ] = Query(default=None, alias="status"),
+    severity: Optional[Literal["low", "medium", "high", "critical"]] = None,
+    tenant_id: Optional[UUID] = None,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
+    where = []
+    params = []
+    if incident_status is not None:
+        where.append("i.status = %s")
+        params.append(incident_status)
+    if severity is not None:
+        where.append("i.severity = %s")
+        params.append(severity)
+    if tenant_id is not None:
+        where.append("i.tenant_id = %s")
+        params.append(tenant_id)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             i.id::text,
             t.name AS tenant_name,
@@ -216,8 +255,10 @@ def admin_incidents(
         FROM incidents i
         JOIN tenants t ON t.id = i.tenant_id
         LEFT JOIN platform_users u ON u.id = i.assigned_to_user_id
+        {where_sql}
         ORDER BY i.created_at DESC
         LIMIT 100;
-        """
+        """,
+        tuple(params),
     )
     return {"incidents": rows}

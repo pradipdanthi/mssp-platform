@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getAlerts } from "../api/admin";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
@@ -39,7 +40,7 @@ export default function AlertsPage() {
                   <td>
                     <span className={`badge badge-${alert.severity}`}>{alert.severity}</span>
                   </td>
-                  <td>{alert.alert_title}</td>
+                  <td><Link to={`/alerts/${alert.id}`}>{alert.alert_title}</Link></td>
                   <td>{alert.source_tool ?? "—"}</td>
                   <td>
                     <span className={`badge badge-${alert.status}`}>{alert.status}</span>

@@ -129,6 +129,33 @@ export interface AlertsListResponse {
   alerts: Alert[];
 }
 
+export interface AlertDetail extends Alert {
+  tenant_id: string;
+  appliance_id: string | null;
+  appliance_name: string | null;
+  asset_id: string | null;
+  asset_hostname: string | null;
+  alert_description: string | null;
+  event_time: string | null;
+  source_user: string | null;
+  raw_event: Record<string, unknown>;
+  ai_technical_summary: string | null;
+  ai_business_impact: string | null;
+  ai_recommended_action: string | null;
+  ai_false_positive_score: number | null;
+  mitre_mapping: Record<string, unknown>;
+  updated_at: string;
+}
+
+export interface AlertDetailResponse {
+  alert: AlertDetail;
+}
+
+export interface AlertTriageUpdate {
+  status?: "new" | "triaged" | "incident_created" | "false_positive" | "closed";
+  customer_visible?: boolean;
+}
+
 export interface Incident {
   id: string;
   tenant_name: string;
@@ -139,13 +166,82 @@ export interface Incident {
   status: string;
   assigned_to: string | null;
   customer_visible_summary: string | null;
-  customer_action_required: boolean;
+  customer_action_required: string | null;
   opened_at: string | null;
   created_at: string;
 }
 
 export interface IncidentsListResponse {
   incidents: Incident[];
+}
+
+export interface IncidentTimelineEvent {
+  id: string;
+  event_type: string;
+  visibility: "internal" | "customer";
+  title: string;
+  details: string | null;
+  created_by_user_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface IncidentComment {
+  id: string;
+  visibility: "internal" | "customer";
+  comment_text: string;
+  created_by_user_id: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface IncidentDetail extends Incident {
+  tenant_id: string;
+  primary_alert_id: string | null;
+  assigned_to_user_id: string | null;
+  business_impact: string | null;
+  customer_action_required: string | null;
+  resolution_summary: string | null;
+  internal_notes: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  updated_at: string;
+}
+
+export interface IncidentDetailResponse {
+  incident: IncidentDetail;
+  timeline: IncidentTimelineEvent[];
+  comments: IncidentComment[];
+}
+
+export interface IncidentTriageUpdate {
+  status?: "open" | "in_progress" | "waiting_customer" | "resolved" | "closed";
+  assigned_to_user_id?: string | null;
+  customer_visible_summary?: string | null;
+}
+
+export interface IncidentCommentCreate {
+  comment_text: string;
+  visibility: "internal" | "customer";
+}
+
+export interface IncidentCommentResponse {
+  comment: IncidentComment;
+}
+
+export interface TriageListFilters {
+  status?: string;
+  severity?: string;
+  tenant_id?: string;
+}
+
+function withFilters(path: string, filters?: TriageListFilters): string {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.severity) params.set("severity", filters.severity);
+  if (filters?.tenant_id) params.set("tenant_id", filters.tenant_id);
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
 }
 
 export function getDashboard(): Promise<DashboardResponse> {
@@ -164,10 +260,48 @@ export function getAppliances(): Promise<AppliancesListResponse> {
   return request<AppliancesListResponse>("/admin/appliances");
 }
 
-export function getAlerts(): Promise<AlertsListResponse> {
-  return request<AlertsListResponse>("/admin/alerts");
+export function getAlerts(filters?: TriageListFilters): Promise<AlertsListResponse> {
+  return request<AlertsListResponse>(withFilters("/admin/alerts", filters));
 }
 
-export function getIncidents(): Promise<IncidentsListResponse> {
-  return request<IncidentsListResponse>("/admin/incidents");
+export function getAlertDetail(alertId: string): Promise<AlertDetailResponse> {
+  return request<AlertDetailResponse>(`/admin/alerts/${encodeURIComponent(alertId)}`);
+}
+
+export function updateAlertTriage(
+  alertId: string,
+  update: AlertTriageUpdate
+): Promise<AlertDetailResponse> {
+  return request<AlertDetailResponse>(`/admin/alerts/${encodeURIComponent(alertId)}`, {
+    method: "PATCH",
+    body: update,
+  });
+}
+
+export function getIncidents(filters?: TriageListFilters): Promise<IncidentsListResponse> {
+  return request<IncidentsListResponse>(withFilters("/admin/incidents", filters));
+}
+
+export function getIncidentDetail(incidentId: string): Promise<IncidentDetailResponse> {
+  return request<IncidentDetailResponse>(`/admin/incidents/${encodeURIComponent(incidentId)}`);
+}
+
+export function updateIncidentTriage(
+  incidentId: string,
+  update: IncidentTriageUpdate
+): Promise<IncidentDetailResponse> {
+  return request<IncidentDetailResponse>(`/admin/incidents/${encodeURIComponent(incidentId)}`, {
+    method: "PATCH",
+    body: update,
+  });
+}
+
+export function addIncidentComment(
+  incidentId: string,
+  comment: IncidentCommentCreate
+): Promise<IncidentCommentResponse> {
+  return request<IncidentCommentResponse>(
+    `/admin/incidents/${encodeURIComponent(incidentId)}/comments`,
+    { method: "POST", body: comment }
+  );
 }
