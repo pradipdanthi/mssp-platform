@@ -1,8 +1,8 @@
 # CONTEXT.md — MSSP Control Plane Current Snapshot
 
-Status: Living context file for AI agents and humans. Refreshed in **KB-036** (Enterprise Platform Architecture Roadmap).  
+Status: Living context file for AI agents and humans. Refreshed after **KB-039–KB-060** overnight batch.  
 Project path: `/opt/mssp-control`  
-VM: **100 — `mssp-control`** (`192.168.0.201`)
+VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 
 **How to use:** Read with `AGENTS.md`, `CLAUDE.md`, and `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` at session start.
 
@@ -10,163 +10,88 @@ VM: **100 — `mssp-control`** (`192.168.0.201`)
 
 ---
 
-## 1. Latest validated feature baseline
+## 1. Latest validated baseline
 
 | Item | Value |
 |---|---|
-| Latest validated feature KB | **KB-035** — Customer Appliance Detail UI |
-| Commit | **`1ac1df3`** |
-| Tag | **`kb035-customer-appliance-detail-validated`** |
-| Active docs module | **KB-038** — Tenant deployment mode planning (cloud / on-prem / hybrid) |
-| Registry planning baseline | **KB-037** — `kb037-cluster-appliance-registry-planning-validated` (`688f3cc`) |
+| Latest feature baseline | **KB-035** — Customer Appliance Detail UI (`1ac1df3`, `kb035-customer-appliance-detail-validated`) |
+| Architecture / registry planning | **KB-036–KB-038** (docs) |
+| Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
+| Roadmap execution | **KB-039 through KB-060** committed on that branch |
+| Aggregate tag | `kb039-kb060-roadmap-batch-complete` (points at HEAD after docs sync) |
+| Morning snapshot (user) | One Proxmox snapshot after review — e.g. `qm snapshot 100 kb060-ok` |
 
 ---
 
-## 2. Enterprise platform vision (not a Wazuh dashboard)
+## 2. What KB-039–KB-060 delivered
 
-We are building a **strong enterprise-style open-source MSSP / SOC / MDR / XDR platform**.
+### Docs / planning / Ansible (no live SOC tool installs)
 
-Monitoring and response scope includes: endpoints, servers, network traffic, firewalls/network devices, applications, cloud/on-prem environments, alerts, incidents/cases, vulnerabilities, threat intelligence, automation/playbooks, and customer reporting.
-
-**MSSP Control Plane** (FastAPI + PostgreSQL + Redis + admin/customer UIs) is the product. Open-source engines are **backend adapters only**.
-
-Full roadmap: `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`
-
----
-
-## 3. Enterprise capability stack (planned — mostly not deployed yet)
-
-| Layer | Tools |
+| KB | Summary |
 |---|---|
-| Control plane | FastAPI, PostgreSQL, Redis, admin + customer dashboards (**deployed VM 100**) |
-| SIEM / endpoint | Wazuh Manager/API, Wazuh Indexer/OpenSearch, Wazuh Dashboard, Wazuh Agents |
-| Network / NDR | Suricata, Zeek |
-| Case management | TheHive, Cortex (if needed) |
-| SOAR | Shuffle |
-| Threat intel | MISP (OpenCTI future optional) |
-| Vulnerability | Greenbone / OpenVAS |
-| DFIR | Velociraptor, osquery (optional) |
-| Deployment automation | Ansible + Docker Compose first; Terraform later; K8s future optional |
-| Observability | Prometheus/Grafana (or equivalent) |
+| KB-039 | Ansible foundation (`ansible/` inventory VMs 100–111, stub playbooks) |
+| KB-040–042 | Wazuh VM plan, install playbook stubs, agent onboarding stubs |
+| KB-043–046 | Suricata / Zeek plans + integration plans |
+| KB-047–049 | TheHive, Shuffle, Wazuh→Shuffle→TheHive workflow plans |
+| KB-050–051 | MISP + threat-intel enrichment plans |
+| KB-052–053 | Greenbone + vulnerability→recommendation plans |
+| KB-054–055 | Velociraptor + DFIR evidence safety plans |
+| KB-059 | Multi-cluster capacity / customer placement plan |
+| KB-060 | Backup, monitoring (VM 111), upgrade, ops runbook |
 
-**Critical:** The real SOC stack has **not deployed yet**. No live ingestion adapters. Data is mostly app/database-driven today.
+### Control-plane code (runtime)
 
----
+| KB | Summary |
+|---|---|
+| KB-056 | Admin SOC triage: alert/incident detail, PATCH triage, comments, list filters, admin UI detail pages |
+| KB-057 | `POST /appliance/alerts` — customer-safe normalized ingest (appliance API key auth) |
+| KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
 
-## 4. Deployment models
-
-### A. Cloud-hosted MSSP
-
-Shared SOC clusters; multiple customers per cluster by **capacity** (agents, EPS, GB/day, retention, performance, isolation) — not a fixed customer count.
-
-### B. On-prem appliance
-
-Logs stay on customer site; appliance runs local stack; only **safe metadata** syncs to control plane.
-
-### C. Hybrid
-
-Mixed on-prem processing + central sync; some customers on dedicated cloud clusters.
-
-### Normalization rule
-
-Control plane consumes **normalized, tenant-scoped records** regardless of source (Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, on-prem appliance, etc.).
-
-Record concepts: `tenant`, `source_platform`, `asset`, `alert`, `incident`/`case`, `recommendation`, `vulnerability`, `report`, `visibility_status`, `sync_health_status`.
+**Still not done:** creating VMs 101–111, installing Wazuh/Suricata/etc., schema for `soc_clusters` / `deployment_mode`.
 
 ---
 
-## 5. Planned VM layout
-
-| VM | Name | Purpose | Status |
-|---|---|---|---|
-| **VM 100** | `mssp-control` | Control Plane (`192.168.0.201`) | **Deployed** |
-| **VM 101** | `wazuh-stack` | Wazuh Manager, Indexer/OpenSearch, Dashboard | Future |
-| **VM 102** | `thehive` | TheHive (+ Cortex if needed) | Future |
-| **VM 103** | `shuffle` | SOAR | Future |
-| **VM 104** | `windows-endpoint-lab` | Windows + Wazuh Agent | Future |
-| **VM 105** | `linux-endpoint-lab` | Linux + Wazuh Agent | Future |
-| **VM 106** | `suricata-sensor` | Suricata IDS/IPS | Future |
-| **VM 107** | `zeek-sensor` | Zeek NSM | Future |
-| **VM 108** | `misp` | MISP threat intel | Future |
-| **VM 109** | `greenbone` | Greenbone/OpenVAS | Future |
-| **VM 110** | `velociraptor` | DFIR | Future |
-| **VM 111** | `monitoring` | Prometheus/Grafana | Future |
-
-Do not install SOC tools on VM 100 or create VMs 101–111 until the matching KB is approved.
-
-Future: **cluster registry**, **appliance registry**, **deployment automation** (KB-037–039).
-
----
-
-## 6. Running services (VM 100)
+## 3. Running services (VM 100)
 
 | Container | Role |
 |---|---|
 | `mssp-postgres` | PostgreSQL |
 | `mssp-redis` | Redis |
-| `mssp-backend-api` | FastAPI port **8000** |
-| `mssp-frontend-admin` | Admin/SOC UI port **3000** |
+| `mssp-backend-api` | FastAPI port **8000** (rebuilt for KB-056–058) |
+| `mssp-frontend-admin` | Admin/SOC UI port **3000** (rebuilt) |
 | `mssp-frontend-customer` | Customer portal port **3001** |
 
 ---
 
-## 7. Control plane — what is built today
+## 4. Customer portal safety (unchanged)
 
-### Admin / SOC (KB-010–020, KB-016/017)
-
-Auth/RBAC, tenant/user/appliance admin APIs, activation tokens, appliance registration/heartbeat, credential rotation, admin frontend foundation.
-
-### Customer portal (KB-021–035)
-
-Dashboard v2; alerts/incidents/assets/appliances/reports/recommendations (list + detail); notifications; account hardening. **No `/admin` calls.**
+Customer portal must never expose raw logs, raw engine alerts, raw JSON, packet captures, credentials, hashes, tokens, API keys, internal notes, or unfiltered SOC data. Customer UI never calls `/admin`.
 
 ---
 
-## 8. Customer data safety
+## 5. Morning checklist (for the human)
 
-Customer portal must never expose: raw logs, raw Wazuh/Suricata/Zeek alerts, raw JSON, packet captures, credentials, hashes, tokens, API keys, internal/admin notes, stack traces, unfiltered SOC data.
-
----
-
-## 9. Future KB roadmap (after KB-036)
-
-KB-037 through KB-060 — see `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`.
-
-Examples: **KB-038** tenant deployment mode (cloud/on-prem/hybrid), KB-039 deployment automation, KB-039 Ansible automation, KB-040–042 Wazuh, KB-043–046 Suricata/Zeek, KB-047–049 TheHive/Shuffle, KB-050–051 MISP, KB-052–053 Greenbone, KB-054–055 Velociraptor, KB-056–057 SOC ops + live integration, KB-058–060 on-prem/scale/ops.
-
-User must explicitly kick off each KB. **No tool installs until approved.**
-
----
-
-## 10. Roadmap phases (summary)
-
-| Phase | Theme |
-|---|---|
-| Phase 1 | Control plane foundation (KB-010–035) — mostly complete |
-| Phase 2 | Architecture roadmap (KB-036) — this docs module |
-| Phase 3–12 | Registry, automation, Wazuh, network sensors, case/SOAR, intel, vuln, DFIR, SOC ops, on-prem/scale/ops (KB-037–060) |
-
-Phase 12 covers on-prem appliance, multi-cluster placement, and operations runbooks (KB-058–060).
+1. Review branch: `git log --oneline kb038-tenant-deployment-mode-planning-validated..HEAD`
+2. Optional live KB-056 triage validation (needs platform admin password):
+   ```bash
+   cd /opt/mssp-control
+   ./scripts/kb056_validate_admin_soc_triage_dashboard_enhancements.sh
+   ```
+3. Confirm health: `curl -fsS http://localhost:8000/health | jq .`
+4. **One Proxmox snapshot** (on Proxmox host, not inside VM):
+   ```bash
+   qm snapshot 100 kb060-ok
+   ```
 
 ---
 
-## 11. Safe KB workflow
-
-**Planning before implementation** · **no .env** · **no /admin** from customer UI · **validation before commit**
-
-KB-036 validation success line:
-
-```text
-KB-036 MSSP PLATFORM ARCHITECTURE ROADMAP VALIDATION PASSED
-```
-
----
-
-## 12. Key paths
+## 6. Key paths
 
 | Path | Purpose |
 |---|---|
-| `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` | Enterprise architecture roadmap |
-| `scripts/kb036_validate_mssp_platform_architecture_roadmap.sh` | KB-036 docs gate |
+| `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` | Enterprise roadmap |
+| `ansible/` | Deployment automation stubs |
+| `templates/on-prem-appliance/` | On-prem template placeholders |
+| `scripts/kb039_kb060_validate_all.sh` | Master docs+module runner |
 | `AGENTS.md` | Full rulebook |
 | `docs/AI_PROMPT_LEDGER.md` | Change ledger |

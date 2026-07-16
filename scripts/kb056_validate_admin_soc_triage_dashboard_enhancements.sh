@@ -155,6 +155,13 @@ jq -e '
 echo "OK: live OpenAPI includes all KB-056 detail and comment paths."
 
 section "5. Platform administrator login"
+if [ "${SKIP_LIVE:-}" = "1" ]; then
+  echo "OK: SKIP_LIVE=1 — skipping interactive login and live triage API checks."
+  echo "======================================================================"
+  echo "KB-056 ADMIN SOC TRIAGE DASHBOARD ENHANCEMENTS VALIDATION PASSED (SOURCE+OPENAPI)"
+  echo "======================================================================"
+  exit 0
+fi
 PLATFORM_ADMIN_EMAIL="${PLATFORM_ADMIN_EMAIL:-$(psql_scalar "
   SELECT email
   FROM platform_users
@@ -164,6 +171,9 @@ PLATFORM_ADMIN_EMAIL="${PLATFORM_ADMIN_EMAIL:-$(psql_scalar "
 ")}" || fail "Could not resolve an active platform administrator"
 [ -n "$PLATFORM_ADMIN_EMAIL" ] || fail "No active platform administrator exists"
 if [ -z "${PLATFORM_ADMIN_PASSWORD:-}" ]; then
+  if [ ! -t 0 ]; then
+    fail "PLATFORM_ADMIN_PASSWORD is required for non-interactive live validation (or set SKIP_LIVE=1)"
+  fi
   read -rs -p "Enter the password for ${PLATFORM_ADMIN_EMAIL}: " PLATFORM_ADMIN_PASSWORD
   echo
 fi
