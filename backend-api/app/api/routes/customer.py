@@ -729,3 +729,47 @@ def customer_recommendation_detail(
         raise HTTPException(status_code=404, detail="Recommendation not found")
 
     return {"tenant": tenant, "recommendation": recommendation}
+
+
+@router.get("/notifications/{short_code}")
+def customer_notifications(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-033: Tenant-scoped, read-only customer notification history.
+
+    Returns only customer-safe fields from notification_events.
+    Does not expose recipient PII, provider IDs, error_message,
+    incident_id/alert_id, or secrets.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    rows = fetch_all(
+        """
+        SELECT
+            id::text AS notification_id,
+            notification_type,
+            status,
+            message_body,
+            sent_at,
+            delivered_at,
+            created_at
+        FROM notification_events
+        WHERE tenant_id = %s
+        ORDER BY created_at DESC
+        LIMIT 100;
+        """,
+        (tenant["id"],),
+    )
+
+    return {"tenant": tenant, "notifications": rows}

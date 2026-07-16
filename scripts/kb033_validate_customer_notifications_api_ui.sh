@@ -1,0 +1,384 @@
+#!/usr/bin/env bash
+# KB-033: Validate Customer Notifications API + Notifications Page.
+# Interactive: prompts for customer.viewer@demo.local password (never hardcoded).
+# Optional: CUSTOMER_VIEWER_PASSWORD env for non-interactive runs.
+# Creates temporary DEMO/DEMO2 notification_events fixtures, then cleans them up.
+set -euo pipefail
+
+PROJECT_DIR="/opt/mssp-control"
+API_BASE="http://localhost:8000"
+FRONTEND_BASE="http://localhost:3001"
+BODY_FILE="/tmp/kb033-body.txt"
+LOGIN_FILE="/tmp/kb033-login.json"
+
+DEMO_MESSAGE="KB033 DEMO notification message body"
+DEMO2_MESSAGE="KB033 DEMO2 notification message body"
+
+cd "$PROJECT_DIR"
+
+echo "======================================================================"
+echo "KB-033: Validate Customer Notifications API and UI"
+echo "Target: $PROJECT_DIR"
+echo "======================================================================"
+
+fail() {
+  echo
+  echo "VALIDATION FAILED: $1" >&2
+  cleanup_fixtures || true
+  rm -f "$BODY_FILE" "$LOGIN_FILE"
+  exit 1
+}
+
+section() {
+  echo
+  echo "----------------------------------------------------------------------"
+  echo "$1"
+  echo "----------------------------------------------------------------------"
+}
+
+psql_scalar() {
+  local sql="$1"
+  local raw line_count
+
+  raw="$(docker compose exec -T postgres psql \
+    -X -q -t -A \
+    -v ON_ERROR_STOP=1 \
+    -U "${POSTGRES_USER:-mssp_admin}" -d "${POSTGRES_DB:-mssp_control}" \
+    -c "$sql" 2>/dev/null)" || return 1
+
+  raw="$(printf '%s\n' "$raw" | sed 's/\r$//' | grep -v '^[[:space:]]*$' || true)"
+  line_count="$(printf '%s\n' "$raw" | grep -c '.' || true)"
+  if [ "$line_count" != "1" ]; then
+    echo "psql_scalar: expected exactly 1 non-blank output line, got $line_count" >&2
+    return 1
+  fi
+  printf '%s' "$raw"
+}
+
+cleanup_fixtures() {
+  docker compose exec -T postgres psql \
+    -X -q -v ON_ERROR_STOP=1 \
+    -U "${POSTGRES_USER:-mssp_admin}" -d "${POSTGRES_DB:-mssp_control}" \
+    -c "
+      DELETE FROM notification_events
+      WHERE message_body IN (
+        '${DEMO_MESSAGE}',
+        '${DEMO2_MESSAGE}'
+      );
+    " >/dev/null 2>&1 || true
+}
+
+cleanup() {
+  cleanup_fixtures
+  rm -f "$BODY_FILE" "$LOGIN_FILE"
+}
+trap cleanup EXIT
+
+login() {
+  local email="$1"
+  local password="$2"
+  local expected_role="$3"
+  local body response token role
+
+  body="$(jq -n --arg email "$email" --arg password "$password" '{email:$email,password:$password}')"
+  response="$(curl -sS -X POST "$API_BASE/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "$body" -o "$LOGIN_FILE" -w "%{http_code}" || true)"
+  [ "$response" = "200" ] || fail "Login failed for $email (HTTP $response)"
+  token="$(jq -r '.access_token // empty' "$LOGIN_FILE")"
+  role="$(jq -r '.user.role // empty' "$LOGIN_FILE")"
+  [ -n "$token" ] || fail "Login for $email returned no access_token"
+  [ "$role" = "$expected_role" ] || fail "Login for $email expected role $expected_role, got $role"
+  echo "$token"
+}
+
+assert_safe_notifications_payload() {
+  local label="$1"
+  local file="$2"
+
+  jq -e '
+    (. | keys | sort) == ["notifications","tenant"]
+    and (.tenant | has("id") and has("name") and has("short_code"))
+    and (.notifications | type == "array")
+  ' "$file" >/dev/null \
+    || fail "$label top-level / tenant shape invalid"
+
+  jq -e '
+    (.notifications | map(keys) | flatten | unique)
+    | all(.[]; . == "notification_id" or . == "notification_type" or . == "status"
+        or . == "message_body" or . == "sent_at" or . == "delivered_at" or . == "created_at")
+  ' "$file" >/dev/null \
+    || fail "$label notifications objects have unexpected keys"
+
+  local hit
+  hit="$(jq -r '
+    def check($path):
+      if type == "object" then
+        (keys_unsorted[] as $k
+          | ($k | ascii_downcase) as $kd
+          | if ($kd == "tenant_id"
+                or $kd == "incident_id"
+                or $kd == "alert_id"
+                or $kd == "recipient_name"
+                or $kd == "recipient_address"
+                or $kd == "provider"
+                or $kd == "provider_message_id"
+                or $kd == "error_message"
+                or $kd == "acknowledged_at"
+                or $kd == "api_key"
+                or $kd == "token"
+                or $kd == "token_hash"
+                or $kd == "password"
+                or $kd == "password_hash"
+                or $kd == "stack_trace"
+                or $kd == "internal_notes"
+                or $kd == "admin_notes"
+                or ($kd == "id" and $path != "tenant"))
+            then $k
+            else empty
+            end),
+        (to_entries[] | .key as $k | .value | check(if $path == "" then $k else ($path + "." + $k) end))
+      elif type == "array" then
+        .[] | check($path)
+      else
+        empty
+      end;
+    [check("")] | unique | .[]
+  ' "$file" 2>/dev/null || true)"
+  if [ -n "$hit" ]; then
+    fail "$label response exposes forbidden field key(s): $(echo "$hit" | tr '\n' ' ')"
+  fi
+  echo "OK: $label payload is customer-safe."
+}
+
+section "1. Required files exist"
+
+REQUIRED=(
+  "backend-api/app/api/routes/customer.py"
+  "frontend-customer/src/api/customer.ts"
+  "frontend-customer/src/pages/NotificationsPage.tsx"
+  "frontend-customer/src/App.tsx"
+  "frontend-customer/src/components/Layout.tsx"
+  "scripts/kb033_validate_customer_notifications_api_ui.sh"
+  "docs/KB033_CUSTOMER_NOTIFICATIONS_API_UI.md"
+)
+
+for f in "${REQUIRED[@]}"; do
+  [ -f "$f" ] || fail "$f is missing"
+  echo "found: $f"
+done
+
+section "2. Protected paths must remain unmodified"
+
+for p in frontend-admin/ postgres/init/ docker-compose.yml; do
+  git diff --quiet -- "$p" || fail "$p has working-tree changes but KB-033 must not modify it"
+  git diff --cached --quiet -- "$p" || fail "$p has staged changes but KB-033 must not modify it"
+  echo "OK: $p unmodified"
+done
+
+if git status --porcelain -- .env 2>/dev/null | grep -q .; then
+  fail ".env shows as changed/untracked"
+fi
+echo "OK: .env not changed/untracked."
+
+section "3. Backend source: notifications list endpoint"
+
+grep -q '@router.get("/notifications/{short_code}")' backend-api/app/api/routes/customer.py \
+  || fail "customer.py missing GET /notifications/{short_code}"
+grep -q 'def customer_notifications' backend-api/app/api/routes/customer.py \
+  || fail "customer.py missing customer_notifications"
+grep -q 'require_tenant_match' backend-api/app/api/routes/customer.py \
+  || fail "customer.py missing require_tenant_match"
+grep -q 'FROM notification_events' backend-api/app/api/routes/customer.py \
+  || fail "customer.py missing notification_events query"
+grep -q 'WHERE tenant_id = %s' backend-api/app/api/routes/customer.py \
+  || fail "customer.py missing tenant_id filter"
+
+DETAIL_BLOCK="$(awk '/def customer_notifications\(/,/^    return /' backend-api/app/api/routes/customer.py)"
+SELECT_BLOCK="$(echo "$DETAIL_BLOCK" | awk '/SELECT/,/FROM notification_events/')"
+for forbidden in tenant_id incident_id alert_id recipient_name recipient_address \
+  provider provider_message_id error_message acknowledged_at; do
+  if echo "$SELECT_BLOCK" | grep -qE "(^|[[:space:]]+)${forbidden}([[:space:]]|,|$|AS)"; then
+    fail "customer_notifications SELECT must not expose $forbidden"
+  fi
+done
+echo "OK: notifications route present with tenant filter and safe SELECT."
+
+section "4. Frontend: getCustomerNotifications + nav + no /admin"
+
+grep -q 'getCustomerNotifications' frontend-customer/src/api/customer.ts \
+  || fail "customer.ts missing getCustomerNotifications"
+grep -q '/customer/notifications/' frontend-customer/src/api/customer.ts \
+  || fail "customer.ts missing /customer/notifications/ path"
+grep -q 'getCustomerNotifications' frontend-customer/src/pages/NotificationsPage.tsx \
+  || fail "NotificationsPage.tsx must call getCustomerNotifications"
+grep -q 'path="/notifications"' frontend-customer/src/App.tsx \
+  || fail "App.tsx missing /notifications route"
+grep -q '/notifications' frontend-customer/src/components/Layout.tsx \
+  || fail "Layout.tsx missing Notifications nav item"
+
+if grep -REn '/admin' frontend-customer/src 2>/dev/null; then
+  fail "frontend-customer/src must not contain /admin"
+fi
+echo "OK: frontend uses customer notifications paths and has no /admin."
+
+section "5. Rebuild backend-api so the new route is live"
+
+echo "Running: docker compose build backend-api"
+docker compose build backend-api || fail "docker compose build backend-api failed"
+echo "Running: docker compose up -d backend-api"
+docker compose up -d backend-api || fail "docker compose up -d backend-api failed"
+
+echo "Waiting for backend /health..."
+UP=0
+for _ in $(seq 1 40); do
+  if curl -fsS "$API_BASE/health" -o "$BODY_FILE" 2>/dev/null; then
+    if jq -e '.api == "ok" and .database == "ok" and .redis == "ok"' "$BODY_FILE" >/dev/null 2>&1; then
+      UP=1
+      break
+    fi
+  fi
+  sleep 1
+done
+[ "$UP" = "1" ] || fail "backend /health not OK within 40s"
+echo "OK: backend health healthy."
+
+section "6. OpenAPI lists notifications route"
+
+OPENAPI="$(curl -fsS "$API_BASE/openapi.json" || fail "Could not fetch OpenAPI")"
+echo "$OPENAPI" | jq -e '.paths | has("/customer/notifications/{short_code}")' >/dev/null \
+  || fail "OpenAPI missing /customer/notifications/{short_code}"
+echo "OK: OpenAPI registers notifications route."
+
+section "7. Unauthenticated access returns 401"
+
+HTTP_CODE="$(curl -sS -o "$BODY_FILE" -w "%{http_code}" \
+  "$API_BASE/customer/notifications/DEMO" || true)"
+[ "$HTTP_CODE" = "401" ] || fail "Unauthenticated notifications request expected 401, got $HTTP_CODE"
+echo "OK: unauthenticated request returns 401."
+
+section "8. Create temporary KB-033 fixtures"
+
+cleanup_fixtures
+
+DEMO_TENANT_ID="$(psql_scalar "SELECT id::text FROM tenants WHERE short_code = 'DEMO';")" \
+  || fail "Could not resolve DEMO tenant id"
+DEMO2_TENANT_ID="$(psql_scalar "SELECT id::text FROM tenants WHERE short_code = 'DEMO2';")" \
+  || fail "Could not resolve DEMO2 tenant id"
+
+FIXTURE_DEMO_ID="$(psql_scalar "
+WITH inserted AS (
+  INSERT INTO notification_events (
+    tenant_id, notification_type, recipient_address, message_body, status, sent_at
+  ) VALUES (
+    '${DEMO_TENANT_ID}',
+    'email',
+    'kb033-demo-recipient@example.invalid',
+    '${DEMO_MESSAGE}',
+    'sent',
+    now()
+  )
+  RETURNING id
+)
+SELECT id::text FROM inserted;
+")" || fail "Could not create DEMO notification fixture"
+
+FIXTURE_DEMO2_ID="$(psql_scalar "
+WITH inserted AS (
+  INSERT INTO notification_events (
+    tenant_id, notification_type, recipient_address, message_body, status, sent_at
+  ) VALUES (
+    '${DEMO2_TENANT_ID}',
+    'whatsapp',
+    'kb033-demo2-recipient@example.invalid',
+    '${DEMO2_MESSAGE}',
+    'sent',
+    now()
+  )
+  RETURNING id
+)
+SELECT id::text FROM inserted;
+")" || fail "Could not create DEMO2 notification fixture"
+
+echo "OK: temporary DEMO/DEMO2 notification fixtures created."
+
+section "9. Login as customer.viewer@demo.local"
+
+if [ -z "${CUSTOMER_VIEWER_PASSWORD:-}" ]; then
+  echo
+  read -rs -p "Enter the password for customer.viewer@demo.local: " CUSTOMER_VIEWER_PASSWORD
+  echo
+fi
+[ -n "${CUSTOMER_VIEWER_PASSWORD:-}" ] || fail "Password was empty (set CUSTOMER_VIEWER_PASSWORD or type at prompt)"
+CUSTOMER_VIEWER_TOKEN="$(login "customer.viewer@demo.local" "$CUSTOMER_VIEWER_PASSWORD" "customer_viewer")"
+unset CUSTOMER_VIEWER_PASSWORD
+echo "OK: logged in as customer_viewer."
+
+section "10. DEMO customer can fetch DEMO notifications (200)"
+
+HTTP_CODE="$(curl -sS -o "$BODY_FILE" -w "%{http_code}" \
+  -H "Authorization: Bearer $CUSTOMER_VIEWER_TOKEN" \
+  "$API_BASE/customer/notifications/DEMO" || true)"
+[ "$HTTP_CODE" = "200" ] || fail "DEMO notifications expected 200, got $HTTP_CODE ($(cat "$BODY_FILE"))"
+
+jq -e --arg id "$FIXTURE_DEMO_ID" --arg msg "$DEMO_MESSAGE" '
+  .tenant.short_code == "DEMO"
+  and ([.notifications[] | select(.notification_id == $id and .message_body == $msg)] | length) == 1
+' "$BODY_FILE" >/dev/null \
+  || fail "DEMO notifications body missing expected fixture"
+
+jq -e --arg msg "$DEMO2_MESSAGE" '
+  ([.notifications[] | select(.message_body == $msg)] | length) == 0
+' "$BODY_FILE" >/dev/null \
+  || fail "DEMO notifications incorrectly include DEMO2 fixture message"
+
+assert_safe_notifications_payload "DEMO notifications" "$BODY_FILE"
+echo "OK: DEMO notifications 200 and tenant-isolated."
+
+section "11. DEMO customer gets 404 for DEMO2 notifications"
+
+HTTP_CODE="$(curl -sS -o "$BODY_FILE" -w "%{http_code}" \
+  -H "Authorization: Bearer $CUSTOMER_VIEWER_TOKEN" \
+  "$API_BASE/customer/notifications/DEMO2" || true)"
+[ "$HTTP_CODE" = "404" ] || fail "DEMO2 notifications as DEMO viewer expected 404, got $HTTP_CODE"
+echo "OK: cross-tenant notifications list returns 404."
+
+section "12. Frontend build"
+
+if docker compose exec -T frontend-customer npm run build; then
+  echo "OK: npm run build succeeded inside frontend-customer."
+else
+  fail "npm run build failed inside frontend-customer"
+fi
+
+section "13. Docs present"
+
+[ -f "docs/KB033_CUSTOMER_NOTIFICATIONS_API_UI.md" ] || fail "docs/KB033_CUSTOMER_NOTIFICATIONS_API_UI.md missing"
+grep -q 'GET /customer/notifications' docs/KB033_CUSTOMER_NOTIFICATIONS_API_UI.md \
+  || fail "docs missing endpoint documentation"
+echo "OK: completion docs present."
+
+section "14. Cleanup fixtures verification"
+
+cleanup_fixtures
+REMAINING="$(psql_scalar "
+  SELECT count(*) FROM notification_events
+  WHERE message_body IN (
+    '${DEMO_MESSAGE}',
+    '${DEMO2_MESSAGE}'
+  );
+")" || fail "Could not verify fixture cleanup"
+[ "$REMAINING" = "0" ] || fail "KB-033 fixtures not cleaned up (remaining=$REMAINING)"
+echo "OK: temporary fixtures cleaned up."
+
+section "15. Manual browser note"
+
+echo "curl validates API auth/tenant isolation and frontend build."
+echo "Manually open $FRONTEND_BASE, sign in as customer.viewer@demo.local,"
+echo "open Notifications, and confirm the read-only list."
+
+section "16. Final verdict"
+
+echo "======================================================================"
+echo "KB-033 CUSTOMER NOTIFICATIONS API UI VALIDATION PASSED"
+echo "======================================================================"

@@ -224,6 +224,29 @@ export function getCustomerReportDetail(
   );
 }
 
+export interface CustomerNotification {
+  notification_id: string;
+  notification_type: string;
+  status: string;
+  message_body: string;
+  sent_at: string | null;
+  delivered_at: string | null;
+  created_at: string | null;
+}
+
+export interface CustomerNotificationsResponse {
+  tenant: CustomerTenant;
+  notifications: CustomerNotification[];
+}
+
+export function getCustomerNotifications(
+  shortCode: string
+): Promise<CustomerNotificationsResponse> {
+  return request<CustomerNotificationsResponse>(
+    `/customer/notifications/${encodeURIComponent(shortCode)}`
+  );
+}
+
 export interface CustomerRecommendationItem {
   recommendation_id: string;
   title: string;
