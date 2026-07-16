@@ -191,6 +191,108 @@ def customer_incidents(
     return {"tenant": tenant, "incidents": rows}
 
 
+@router.get("/incidents/{short_code}/{incident_number}")
+def customer_incident_detail(
+    short_code: str,
+    incident_number: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-025: Tenant-scoped, read-only customer incident detail.
+
+    Looks up by incident_number (not internal UUID). Returns only customer-safe
+    incident fields, customer-visible timeline rows, and related alerts that are
+    customer_visible for the same tenant. Omits comments, internal notes,
+    assignment, and all secrets/raw internals.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    tenant_id = tenant["id"]
+
+    incident = fetch_one(
+        """
+        SELECT
+            incident_number,
+            title,
+            severity,
+            status,
+            customer_visible_summary,
+            business_impact,
+            customer_action_required,
+            resolution_summary,
+            opened_at,
+            resolved_at,
+            closed_at
+        FROM incidents
+        WHERE tenant_id = %s
+          AND incident_number = %s;
+        """,
+        (tenant_id, incident_number),
+    )
+
+    if not incident:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    # Schema has visibility IN ('internal','customer') — only customer rows.
+    timeline = fetch_all(
+        """
+        SELECT
+            event_type,
+            title,
+            created_at
+        FROM incident_timeline
+        WHERE incident_id = (
+            SELECT id FROM incidents
+            WHERE tenant_id = %s AND incident_number = %s
+        )
+          AND visibility = 'customer'
+        ORDER BY created_at ASC;
+        """,
+        (tenant_id, incident_number),
+    )
+
+    # Related alerts via incident_alerts; same tenant + customer_visible only.
+    related_alerts = fetch_all(
+        """
+        SELECT
+            sa.id::text AS alert_id,
+            sa.alert_title AS title,
+            sa.severity,
+            sa.status,
+            sa.source_tool AS source,
+            sa.ai_plain_summary AS summary,
+            sa.alert_description AS description,
+            sa.event_time AS detected_at,
+            sa.destination_host AS hostname
+        FROM incident_alerts ia
+        JOIN security_alerts sa ON sa.id = ia.alert_id
+        JOIN incidents i ON i.id = ia.incident_id
+        WHERE i.tenant_id = %s
+          AND i.incident_number = %s
+          AND sa.tenant_id = %s
+          AND sa.customer_visible = true
+        ORDER BY sa.event_time DESC NULLS LAST, sa.created_at DESC;
+        """,
+        (tenant_id, incident_number, tenant_id),
+    )
+
+    return {
+        "tenant": tenant,
+        "incident": incident,
+        "timeline": timeline,
+        "related_alerts": related_alerts,
+    }
+
+
 @router.get("/alerts/{short_code}")
 def customer_alerts(
     short_code: str,

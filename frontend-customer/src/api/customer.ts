@@ -39,11 +39,24 @@ export interface CustomerIncident {
   status: string;
   customer_visible_summary: string | null;
   business_impact?: string | null;
-  customer_action_required: boolean;
+  customer_action_required: string | boolean | null;
   resolution_summary?: string | null;
   opened_at: string | null;
   resolved_at?: string | null;
   closed_at?: string | null;
+}
+
+export interface CustomerIncidentTimelineEvent {
+  event_type: string;
+  title: string;
+  created_at: string | null;
+}
+
+export interface CustomerIncidentDetailResponse {
+  tenant: CustomerTenant;
+  incident: CustomerIncident;
+  timeline: CustomerIncidentTimelineEvent[];
+  related_alerts: CustomerAlert[];
 }
 
 export interface CustomerRecommendation {
@@ -100,6 +113,15 @@ export function getCustomerDashboard(shortCode: string): Promise<CustomerDashboa
 
 export function getCustomerIncidents(shortCode: string): Promise<CustomerIncidentsResponse> {
   return request<CustomerIncidentsResponse>(`/customer/incidents/${encodeURIComponent(shortCode)}`);
+}
+
+export function getCustomerIncidentDetail(
+  shortCode: string,
+  incidentNumber: string
+): Promise<CustomerIncidentDetailResponse> {
+  return request<CustomerIncidentDetailResponse>(
+    `/customer/incidents/${encodeURIComponent(shortCode)}/${encodeURIComponent(incidentNumber)}`
+  );
 }
 
 export function getCustomerAlerts(shortCode: string): Promise<CustomerAlertsResponse> {

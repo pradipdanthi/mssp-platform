@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getCustomerIncidents } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
@@ -53,8 +54,16 @@ export default function IncidentsPage() {
             <tbody>
               {data.incidents.map((inc) => (
                 <tr key={inc.incident_number}>
-                  <td>{inc.incident_number}</td>
-                  <td>{inc.title}</td>
+                  <td>
+                    <Link to={`/incidents/${encodeURIComponent(inc.incident_number)}`}>
+                      {inc.incident_number}
+                    </Link>
+                  </td>
+                  <td>
+                    <Link to={`/incidents/${encodeURIComponent(inc.incident_number)}`}>
+                      {inc.title}
+                    </Link>
+                  </td>
                   <td>
                     <span className={`badge badge-${inc.severity}`}>{inc.severity}</span>
                   </td>

@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import AlertsPage from "./pages/AlertsPage";
 import IncidentsPage from "./pages/IncidentsPage";
+import IncidentDetailPage from "./pages/IncidentDetailPage";
 import AssetsPage from "./pages/AssetsPage";
 import ReportsPage from "./pages/ReportsPage";
 import AccountPage from "./pages/AccountPage";
@@ -45,6 +46,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <IncidentsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/incidents/:incidentNumber"
+        element={
+          <ProtectedRoute>
+            <IncidentDetailPage />
           </ProtectedRoute>
         }
       />
