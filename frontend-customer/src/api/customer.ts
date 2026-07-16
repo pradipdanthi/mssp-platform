@@ -177,6 +177,20 @@ export function getCustomerAssets(shortCode: string): Promise<CustomerAssetsResp
   return request<CustomerAssetsResponse>(`/customer/assets/${encodeURIComponent(shortCode)}`);
 }
 
+export interface CustomerAssetDetailResponse {
+  tenant: CustomerTenant;
+  asset: CustomerProtectedAsset;
+}
+
+export function getCustomerAssetDetail(
+  shortCode: string,
+  assetId: string
+): Promise<CustomerAssetDetailResponse> {
+  return request<CustomerAssetDetailResponse>(
+    `/customer/assets/${encodeURIComponent(shortCode)}/${encodeURIComponent(assetId)}`
+  );
+}
+
 export interface CustomerReport {
   report_id: string;
   report_month: string;

@@ -480,6 +480,58 @@ def customer_assets(
     return {"tenant": tenant, "appliances": appliances, "assets": assets}
 
 
+@router.get("/assets/{short_code}/{asset_id}")
+def customer_asset_detail(
+    short_code: str,
+    asset_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-030: Tenant-scoped, read-only customer protected-asset detail.
+
+    Looks up by asset_id (UUID). Returns only customer-safe fields.
+    Optional LEFT JOIN to appliances for appliance_name/site_name only.
+    Missing/wrong-tenant → 404. Does not expose IPs, details JSON,
+    appliance_id, credentials, health_snapshot, or secrets.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    asset = fetch_one(
+        """
+        SELECT
+            pa.id::text AS asset_id,
+            pa.hostname,
+            pa.asset_type,
+            pa.criticality,
+            pa.status,
+            pa.os_name,
+            pa.owner,
+            pa.last_seen_at,
+            a.appliance_name,
+            a.site_name
+        FROM protected_assets pa
+        LEFT JOIN appliances a ON a.id = pa.appliance_id
+        WHERE pa.tenant_id = %s
+          AND pa.id = %s;
+        """,
+        (tenant["id"], asset_id),
+    )
+
+    if not asset:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+    return {"tenant": tenant, "asset": asset}
+
+
 @router.get("/reports/{short_code}")
 def customer_reports(
     short_code: str,

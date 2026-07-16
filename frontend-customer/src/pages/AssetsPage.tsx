@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getCustomerAssets } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
@@ -102,7 +103,11 @@ export default function AssetsPage() {
               <tbody>
                 {data.assets.map((asset) => (
                   <tr key={asset.asset_id}>
-                    <td>{asset.hostname ?? "—"}</td>
+                    <td>
+                      <Link to={`/assets/${encodeURIComponent(asset.asset_id)}`}>
+                        {asset.hostname ?? "—"}
+                      </Link>
+                    </td>
                     <td>{asset.asset_type}</td>
                     <td>
                       <span className={`badge badge-${asset.criticality}`}>{asset.criticality}</span>
