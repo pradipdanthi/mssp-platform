@@ -17,8 +17,8 @@ VM: **100 — `mssp-control`** (`192.168.0.201`)
 | Latest validated feature KB | **KB-035** — Customer Appliance Detail UI |
 | Commit | **`1ac1df3`** |
 | Tag | **`kb035-customer-appliance-detail-validated`** |
-| Active docs module | **KB-037** — Cluster and appliance registry planning (docs only) |
-| Architecture baseline | **KB-036** — `kb036-mssp-platform-architecture-roadmap-validated` (`c39fddc`) |
+| Active docs module | **KB-038** — Tenant deployment mode planning (cloud / on-prem / hybrid) |
+| Registry planning baseline | **KB-037** — `kb037-cluster-appliance-registry-planning-validated` (`688f3cc`) |
 
 ---
 
@@ -132,7 +132,7 @@ Customer portal must never expose: raw logs, raw Wazuh/Suricata/Zeek alerts, raw
 
 KB-037 through KB-060 — see `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`.
 
-Examples: **KB-037** cluster/appliance registry planning (in progress), KB-038 deployment mode, KB-039 Ansible automation, KB-040–042 Wazuh, KB-043–046 Suricata/Zeek, KB-047–049 TheHive/Shuffle, KB-050–051 MISP, KB-052–053 Greenbone, KB-054–055 Velociraptor, KB-056–057 SOC ops + live integration, KB-058–060 on-prem/scale/ops.
+Examples: **KB-038** tenant deployment mode (cloud/on-prem/hybrid), KB-039 deployment automation, KB-039 Ansible automation, KB-040–042 Wazuh, KB-043–046 Suricata/Zeek, KB-047–049 TheHive/Shuffle, KB-050–051 MISP, KB-052–053 Greenbone, KB-054–055 Velociraptor, KB-056–057 SOC ops + live integration, KB-058–060 on-prem/scale/ops.
 
 User must explicitly kick off each KB. **No tool installs until approved.**
 
