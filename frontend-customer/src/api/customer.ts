@@ -181,3 +181,29 @@ export interface CustomerReportsResponse {
 export function getCustomerReports(shortCode: string): Promise<CustomerReportsResponse> {
   return request<CustomerReportsResponse>(`/customer/reports/${encodeURIComponent(shortCode)}`);
 }
+
+export interface CustomerRecommendationItem {
+  recommendation_id: string;
+  title: string;
+  description: string;
+  priority: string;
+  category: string;
+  status: string;
+  due_at: string | null;
+  completed_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface CustomerRecommendationsResponse {
+  tenant: CustomerTenant;
+  recommendations: CustomerRecommendationItem[];
+}
+
+export function getCustomerRecommendations(
+  shortCode: string
+): Promise<CustomerRecommendationsResponse> {
+  return request<CustomerRecommendationsResponse>(
+    `/customer/recommendations/${encodeURIComponent(shortCode)}`
+  );
+}

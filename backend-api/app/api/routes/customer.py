@@ -473,3 +473,58 @@ def customer_reports(
     )
 
     return {"tenant": tenant, "reports": rows}
+
+
+@router.get("/recommendations/{short_code}")
+def customer_recommendations(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-026: Tenant-scoped customer-visible recommendations (all statuses).
+
+    Returns only customer-safe fields. Filters customer_visible = true.
+    Does not expose related_alert_id, related_incident_id, or secrets.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    rows = fetch_all(
+        """
+        SELECT
+            id::text AS recommendation_id,
+            title,
+            description,
+            priority,
+            category,
+            status,
+            due_at,
+            completed_at,
+            created_at,
+            updated_at
+        FROM customer_recommendations
+        WHERE tenant_id = %s
+          AND customer_visible = true
+        ORDER BY
+            CASE priority
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+                ELSE 5
+            END,
+            created_at DESC
+        LIMIT 100;
+        """,
+        (tenant["id"],),
+    )
+
+    return {"tenant": tenant, "recommendations": rows}
