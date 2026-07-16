@@ -10,6 +10,7 @@ import IncidentDetailPage from "./pages/IncidentDetailPage";
 import AssetsPage from "./pages/AssetsPage";
 import ReportsPage from "./pages/ReportsPage";
 import RecommendationsPage from "./pages/RecommendationsPage";
+import RecommendationDetailPage from "./pages/RecommendationDetailPage";
 import AccountPage from "./pages/AccountPage";
 
 function RootRedirect() {
@@ -79,6 +80,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <RecommendationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recommendations/:recommendationId"
+        element={
+          <ProtectedRoute>
+            <RecommendationDetailPage />
           </ProtectedRoute>
         }
       />

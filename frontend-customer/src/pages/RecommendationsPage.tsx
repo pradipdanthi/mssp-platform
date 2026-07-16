@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getCustomerRecommendations } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
@@ -61,7 +62,11 @@ export default function RecommendationsPage() {
             <tbody>
               {data.recommendations.map((rec) => (
                 <tr key={rec.recommendation_id}>
-                  <td>{rec.title}</td>
+                  <td>
+                    <Link to={`/recommendations/${encodeURIComponent(rec.recommendation_id)}`}>
+                      {rec.title}
+                    </Link>
+                  </td>
                   <td>
                     <span className={`badge badge-${rec.priority}`}>{rec.priority}</span>
                   </td>

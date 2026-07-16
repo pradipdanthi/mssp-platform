@@ -207,3 +207,17 @@ export function getCustomerRecommendations(
     `/customer/recommendations/${encodeURIComponent(shortCode)}`
   );
 }
+
+export interface CustomerRecommendationDetailResponse {
+  tenant: CustomerTenant;
+  recommendation: CustomerRecommendationItem;
+}
+
+export function getCustomerRecommendationDetail(
+  shortCode: string,
+  recommendationId: string
+): Promise<CustomerRecommendationDetailResponse> {
+  return request<CustomerRecommendationDetailResponse>(
+    `/customer/recommendations/${encodeURIComponent(shortCode)}/${encodeURIComponent(recommendationId)}`
+  );
+}

@@ -528,3 +528,54 @@ def customer_recommendations(
     )
 
     return {"tenant": tenant, "recommendations": rows}
+
+
+@router.get("/recommendations/{short_code}/{recommendation_id}")
+def customer_recommendation_detail(
+    short_code: str,
+    recommendation_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-027: Tenant-scoped, read-only customer recommendation detail.
+
+    Looks up by recommendation_id (UUID). Returns only customer-safe fields.
+    Filters customer_visible = true. Missing/hidden/wrong-tenant → 404.
+    Does not expose related_alert_id, related_incident_id, or secrets.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    recommendation = fetch_one(
+        """
+        SELECT
+            id::text AS recommendation_id,
+            title,
+            description,
+            priority,
+            category,
+            status,
+            due_at,
+            completed_at,
+            created_at,
+            updated_at
+        FROM customer_recommendations
+        WHERE tenant_id = %s
+          AND id = %s
+          AND customer_visible = true;
+        """,
+        (tenant["id"], recommendation_id),
+    )
+
+    if not recommendation:
+        raise HTTPException(status_code=404, detail="Recommendation not found")
+
+    return {"tenant": tenant, "recommendation": recommendation}
