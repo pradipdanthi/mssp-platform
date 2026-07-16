@@ -5,6 +5,7 @@ import {
   ApplianceCredentialMetadata,
   createActivationToken,
   getApplianceCredential,
+  getOnPremTemplate,
   listActivationTokens,
   revokeActivationToken,
   rotateApplianceCredential,
@@ -247,6 +248,9 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
 function ActivationTokensSection() {
   const { user } = useAuth();
   const canManageTokens = user?.role === "platform_admin";
+  const canDownloadTemplate = user?.role === "platform_admin" || user?.role === "soc_manager";
+  const [templateDownloading, setTemplateDownloading] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantsError, setTenantsError] = useState<string | null>(null);
@@ -388,6 +392,30 @@ function ActivationTokensSection() {
     }
   }
 
+  async function handleTemplateDownload() {
+    if (!canDownloadTemplate) return;
+    setTemplateDownloading(true);
+    setTemplateError(null);
+    try {
+      const bundle = await getOnPremTemplate();
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], {
+        type: "application/json",
+      });
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `${bundle.bundle_name}.${bundle.version}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setTemplateError(apiErrorMessage(err, "Could not download the on-prem template."));
+    } finally {
+      setTemplateDownloading(false);
+    }
+  }
+
   const selectedTenant = tenants.find((t) => t.id === selectedTenantId) ?? null;
 
   return (
@@ -397,6 +425,18 @@ function ActivationTokensSection() {
         Create and manage appliance activation tokens for a selected tenant. The raw token is shown
         only once at creation time.
       </p>
+
+      {canDownloadTemplate && (
+        <button
+          className="btn btn-primary"
+          type="button"
+          onClick={handleTemplateDownload}
+          disabled={templateDownloading}
+        >
+          {templateDownloading ? "Preparing template..." : "Download on-prem template"}
+        </button>
+      )}
+      {templateError && <div className="state-message state-error">{templateError}</div>}
 
       {!canManageTokens && (
         <div className="state-message activation-readonly-note">

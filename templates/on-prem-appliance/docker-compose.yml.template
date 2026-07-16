@@ -1,0 +1,17 @@
+services:
+  mssp-on-prem-appliance:
+    image: "<APPLIANCE_IMAGE>"
+    restart: unless-stopped
+    environment:
+      CONTROL_PLANE_URL: "<CONTROL_PLANE_URL>"
+      APPLIANCE_ACTIVATION_TOKEN: "<ACTIVATION_TOKEN>"
+      APPLIANCE_NAME: "<APPLIANCE_NAME>"
+      AGENT_VERSION: "<AGENT_VERSION>"
+    volumes:
+      - appliance_state:/var/lib/mssp-appliance
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  appliance_state:

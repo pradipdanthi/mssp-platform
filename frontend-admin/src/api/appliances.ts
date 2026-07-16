@@ -51,6 +51,19 @@ export interface ActivationTokenCreateResponse {
   metadata: ActivationTokenMetadata;
 }
 
+export interface OnPremTemplateFile {
+  path: string;
+  media_type: string;
+  content: string;
+}
+
+export interface OnPremTemplateBundle {
+  bundle_name: string;
+  version: string;
+  files: OnPremTemplateFile[];
+  contains_secrets: boolean;
+}
+
 export function getApplianceCredential(applianceId: string): Promise<ApplianceCredentialMetadata> {
   return request<ApplianceCredentialMetadata>(`/admin/appliances/${applianceId}/credential`);
 }
@@ -87,4 +100,8 @@ export function revokeActivationToken(tokenId: string): Promise<ActivationTokenM
   return request<ActivationTokenMetadata>(`/admin/appliance-activation-tokens/${tokenId}/revoke`, {
     method: "PATCH",
   });
+}
+
+export function getOnPremTemplate(): Promise<OnPremTemplateBundle> {
+  return request<OnPremTemplateBundle>("/admin/appliances/on-prem-template");
 }
