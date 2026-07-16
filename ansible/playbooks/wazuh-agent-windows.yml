@@ -1,0 +1,30 @@
+---
+# KB-042 stub: Wazuh agent onboarding — Windows — NOT for live execution yet.
+# Target: VM 104 (windows-endpoint-lab)
+# Manager: VM 101 (wazuh-stack) — deferred until KB-041 completes.
+#
+# Security: enrollment key via Ansible Vault — no secrets in Git.
+# Customer safety: agent telemetry processed by SOC; customers see summaries only.
+
+- name: Wazuh agent install — Windows (stub)
+  hosts: windows-endpoint-lab
+  gather_facts: false
+  vars:
+    wazuh_agent_windows_stub_mode: true
+    wazuh_manager_host_placeholder: "<SET_VIA_VAULT_OR_ENV>"
+  tasks:
+    - name: "Step 1 — Install Wazuh agent MSI (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: Install wazuh-agent MSI on VM 104 via win_package."
+
+    - name: "Step 2 — Configure manager address (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: Set WAZUH_MANAGER in ossec.conf — address from Vault."
+
+    - name: "Step 3 — Register and start agent service (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: Enrollment with auth key from Vault; start WazuhSvc."
+
+    - name: "Step 4 — Verify agent in manager (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: Confirm agent ID in Manager — admin API only."

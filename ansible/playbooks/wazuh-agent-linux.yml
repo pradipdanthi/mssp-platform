@@ -1,0 +1,30 @@
+---
+# KB-042 stub: Wazuh agent onboarding — Linux — NOT for live execution yet.
+# Target: VM 105 (linux-endpoint-lab)
+# Manager: VM 101 (wazuh-stack) — deferred until KB-041 completes.
+#
+# Security: enrollment key via Ansible Vault — no secrets in Git.
+# Customer safety: agent telemetry processed by SOC; customers see summaries only.
+
+- name: Wazuh agent install — Linux (stub)
+  hosts: linux-endpoint-lab
+  gather_facts: false
+  vars:
+    wazuh_agent_linux_stub_mode: true
+    wazuh_manager_host_placeholder: "<SET_VIA_VAULT_OR_ENV>"
+  tasks:
+    - name: "Step 1 — Install Wazuh agent package (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: apt/yum install wazuh-agent on VM 105."
+
+    - name: "Step 2 — Configure manager address (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: Point agent at Wazuh Manager on VM 101 — Vault for address."
+
+    - name: "Step 3 — Register and start agent (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: Enrollment with auth key from Vault; enable systemd service."
+
+    - name: "Step 4 — Verify agent in manager (stub)"
+      ansible.builtin.debug:
+        msg: "Deferred: Confirm agent ID visible in Manager API — admin only."
