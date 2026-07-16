@@ -8,7 +8,7 @@ because the field simply does not exist on it.
 
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LoginRequest(BaseModel):
@@ -29,6 +29,45 @@ class UserPublic(BaseModel):
     tenant_name: Optional[str] = None
     status: str
     last_login_at: Optional[str] = None
+    # KB-034: optional contact phone; never a secret.
+    phone: Optional[str] = None
+
+
+class ProfileUpdateRequest(BaseModel):
+    """KB-034: caller may update only full_name and/or phone."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    phone: Optional[str] = Field(default=None, max_length=40)
+
+    @model_validator(mode="after")
+    def at_least_one_field(self) -> "ProfileUpdateRequest":
+        if self.full_name is None and self.phone is None:
+            raise ValueError("Provide full_name and/or phone to update")
+        if self.full_name is not None:
+            cleaned = self.full_name.strip()
+            if not cleaned:
+                raise ValueError("full_name cannot be blank")
+            self.full_name = cleaned
+        if self.phone is not None:
+            cleaned_phone = self.phone.strip()
+            self.phone = cleaned_phone if cleaned_phone else None
+        return self
+
+
+class ChangePasswordRequest(BaseModel):
+    """KB-034: self-service password change. Never echoed back in responses."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+class ChangePasswordResponse(BaseModel):
+    status: str = "ok"
+    message: str = "Password updated"
 
 
 class TokenResponse(BaseModel):

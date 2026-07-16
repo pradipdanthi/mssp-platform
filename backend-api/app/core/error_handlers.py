@@ -42,6 +42,7 @@ from fastapi.responses import JSONResponse
 SENSITIVE_KEYS = {
     "password",
     "new_password",
+    "current_password",
     "password_hash",
     "access_token",
     "token",

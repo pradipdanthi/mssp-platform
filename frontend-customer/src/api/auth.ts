@@ -11,6 +11,7 @@ export interface UserPublic {
   tenant_name: string | null;
   status: string;
   last_login_at: string | null;
+  phone: string | null;
 }
 
 export interface TokenResponse {
@@ -29,4 +30,28 @@ export function login(email: string, password: string): Promise<TokenResponse> {
 
 export function me(): Promise<UserPublic> {
   return request<UserPublic>("/auth/me");
+}
+
+export interface ProfileUpdatePayload {
+  full_name?: string;
+  phone?: string | null;
+}
+
+export function updateMyProfile(payload: ProfileUpdatePayload): Promise<UserPublic> {
+  return request<UserPublic>("/auth/me", {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export interface ChangePasswordPayload {
+  current_password: string;
+  new_password: string;
+}
+
+export function changePassword(payload: ChangePasswordPayload): Promise<{ status: string; message: string }> {
+  return request<{ status: string; message: string }>("/auth/change-password", {
+    method: "POST",
+    body: payload,
+  });
 }

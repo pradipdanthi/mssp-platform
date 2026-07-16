@@ -1,8 +1,11 @@
 """
 KB-010: Authentication endpoints.
+KB-034: self-service profile update + password change.
 
 - POST /auth/login  - public, exchanges email+password for a JWT access token
 - GET  /auth/me     - requires a valid token, returns the caller's own profile
+- PATCH /auth/me    - update own full_name and/or phone only
+- POST /auth/change-password - change own password (current + new)
 - GET  /auth/roles  - public, static role catalog (no per-user data)
 
 None of these endpoints ever return password_hash - UserPublic (see
@@ -16,7 +19,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.api.dependencies import get_current_user
 from app.core.security import create_access_token
 from app.schemas.auth import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     LoginRequest,
+    ProfileUpdateRequest,
     RoleInfo,
     RolesResponse,
     TokenResponse,
@@ -26,7 +32,9 @@ from app.services.auth_service import (
     AccountNotActiveError,
     InvalidCredentialsError,
     authenticate_user,
+    change_own_password,
     to_public_user,
+    update_own_profile_fields,
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -102,6 +110,55 @@ def login(payload: LoginRequest) -> TokenResponse:
 @router.get("/me", response_model=UserPublic)
 def me(current_user: Dict[str, Any] = Depends(get_current_user)) -> UserPublic:
     return UserPublic(**to_public_user(current_user))
+
+
+@router.patch("/me", response_model=UserPublic)
+def update_me(
+    payload: ProfileUpdateRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> UserPublic:
+    """
+    KB-034: authenticated caller may update full_name and/or phone only.
+    Email, role, tenant_id, status, and password cannot be changed here.
+    """
+    # model_dump(exclude_unset=True) tells us whether phone was sent (including null).
+    raw = payload.model_dump(exclude_unset=True)
+    updated = update_own_profile_fields(
+        current_user["id"],
+        full_name=payload.full_name,
+        phone=payload.phone,
+        update_phone="phone" in raw,
+    )
+    return UserPublic(**to_public_user(updated))
+
+
+@router.post("/change-password", response_model=ChangePasswordResponse)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> ChangePasswordResponse:
+    """
+    KB-034: self-service password change. Requires current password.
+    Never returns password material.
+    """
+    try:
+        change_own_password(
+            current_user["id"],
+            payload.current_password,
+            payload.new_password,
+        )
+    except InvalidCredentialsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+    except AccountNotActiveError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is not active",
+        )
+
+    return ChangePasswordResponse()
 
 
 @router.get("/roles", response_model=RolesResponse)

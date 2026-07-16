@@ -626,3 +626,39 @@ a {
   margin-top: 2px;
   word-break: break-word;
 }
+
+.account-form {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  max-width: 28rem;
+}
+
+.account-form-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.account-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.account-input {
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  background: var(--bg-elevated, var(--bg-panel));
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.state-success {
+  color: var(--success);
+}
