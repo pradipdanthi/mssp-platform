@@ -128,6 +128,20 @@ export function getCustomerAlerts(shortCode: string): Promise<CustomerAlertsResp
   return request<CustomerAlertsResponse>(`/customer/alerts/${encodeURIComponent(shortCode)}`);
 }
 
+export interface CustomerAlertDetailResponse {
+  tenant: CustomerTenant;
+  alert: CustomerAlert;
+}
+
+export function getCustomerAlertDetail(
+  shortCode: string,
+  alertId: string
+): Promise<CustomerAlertDetailResponse> {
+  return request<CustomerAlertDetailResponse>(
+    `/customer/alerts/${encodeURIComponent(shortCode)}/${encodeURIComponent(alertId)}`
+  );
+}
+
 export interface CustomerAppliance {
   appliance_name: string;
   site_name: string;

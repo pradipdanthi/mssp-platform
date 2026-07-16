@@ -340,6 +340,56 @@ def customer_alerts(
     return {"tenant": tenant, "alerts": rows}
 
 
+@router.get("/alerts/{short_code}/{alert_id}")
+def customer_alert_detail(
+    short_code: str,
+    alert_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-029: Tenant-scoped, read-only customer alert detail.
+
+    Looks up by alert_id (UUID). Returns only customer-safe fields.
+    Filters customer_visible = true. Missing/hidden/wrong-tenant → 404.
+    Does not expose raw_event, IPs, external_alert_id, technical AI, MITRE, or secrets.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    alert = fetch_one(
+        """
+        SELECT
+            id::text AS alert_id,
+            alert_title AS title,
+            severity,
+            status,
+            source_tool AS source,
+            ai_plain_summary AS summary,
+            alert_description AS description,
+            event_time AS detected_at,
+            destination_host AS hostname
+        FROM security_alerts
+        WHERE tenant_id = %s
+          AND id = %s
+          AND customer_visible = true;
+        """,
+        (tenant["id"], alert_id),
+    )
+
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    return {"tenant": tenant, "alert": alert}
+
+
 @router.get("/assets/{short_code}")
 def customer_assets(
     short_code: str,

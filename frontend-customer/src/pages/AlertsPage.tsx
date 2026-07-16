@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getCustomerAlerts } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
@@ -60,7 +61,9 @@ export default function AlertsPage() {
             <tbody>
               {data.alerts.map((alert) => (
                 <tr key={alert.alert_id}>
-                  <td>{alert.title}</td>
+                  <td>
+                    <Link to={`/alerts/${encodeURIComponent(alert.alert_id)}`}>{alert.title}</Link>
+                  </td>
                   <td>
                     <span className={`badge badge-${alert.severity}`}>{alert.severity}</span>
                   </td>

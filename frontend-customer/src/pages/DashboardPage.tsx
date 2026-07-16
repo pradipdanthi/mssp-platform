@@ -178,9 +178,11 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.recent_alerts.map((alert, index) => (
-                  <tr key={`${alert.title}-${alert.detected_at ?? "t"}-${index}`}>
-                    <td>{alert.title}</td>
+                {data.recent_alerts.map((alert) => (
+                  <tr key={alert.alert_id}>
+                    <td>
+                      <Link to={`/alerts/${encodeURIComponent(alert.alert_id)}`}>{alert.title}</Link>
+                    </td>
                     <td>
                       <span className={`badge badge-${alert.severity}`}>{alert.severity}</span>
                     </td>

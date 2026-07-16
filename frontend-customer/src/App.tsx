@@ -5,6 +5,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import AlertsPage from "./pages/AlertsPage";
+import AlertDetailPage from "./pages/AlertDetailPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import IncidentDetailPage from "./pages/IncidentDetailPage";
 import AssetsPage from "./pages/AssetsPage";
@@ -40,6 +41,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AlertsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/alerts/:alertId"
+        element={
+          <ProtectedRoute>
+            <AlertDetailPage />
           </ProtectedRoute>
         }
       />
