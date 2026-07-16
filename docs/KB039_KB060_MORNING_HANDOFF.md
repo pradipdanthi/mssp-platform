@@ -19,22 +19,13 @@ git branch --show-current
 git log --oneline kb038-tenant-deployment-mode-planning-validated..HEAD
 ```
 
-## Optional: finish live KB-056 triage validation
+## KB-056 live triage validation
 
-Needs the platform admin password (interactive):
-
-```bash
-cd /opt/mssp-control
-./scripts/kb056_validate_admin_soc_triage_dashboard_enhancements.sh
-```
-
-Expected final line:
+**Done.** User ran `./scripts/kb056_validate_admin_soc_triage_dashboard_enhancements.sh` and got:
 
 ```text
-KB-056 ADMIN SOC TRIAGE DASHBOARD ENHANCEMENTS VALIDATION PASSED
+KB-056 ADMIN/SOC TRIAGE DASHBOARD ENHANCEMENTS VALIDATION PASSED
 ```
-
-Overnight used `SKIP_LIVE=1` which only proved source + OpenAPI registration.
 
 ## Single morning snapshot (Proxmox host)
 

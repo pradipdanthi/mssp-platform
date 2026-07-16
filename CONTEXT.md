@@ -72,11 +72,7 @@ Customer portal must never expose raw logs, raw engine alerts, raw JSON, packet 
 ## 5. Morning checklist (for the human)
 
 1. Review branch: `git log --oneline kb038-tenant-deployment-mode-planning-validated..HEAD`
-2. Optional live KB-056 triage validation (needs platform admin password):
-   ```bash
-   cd /opt/mssp-control
-   ./scripts/kb056_validate_admin_soc_triage_dashboard_enhancements.sh
-   ```
+2. KB-056 live triage validation — **PASSED**
 3. Confirm health: `curl -fsS http://localhost:8000/health | jq .`
 4. **One Proxmox snapshot** (on Proxmox host, not inside VM):
    ```bash
