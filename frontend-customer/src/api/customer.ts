@@ -221,3 +221,76 @@ export function getCustomerRecommendationDetail(
     `/customer/recommendations/${encodeURIComponent(shortCode)}/${encodeURIComponent(recommendationId)}`
   );
 }
+
+/** KB-028: client-side dashboard composition — only /customer/* dedicated APIs. */
+export interface CustomerDashboardV2Kpis {
+  open_incidents: number;
+  high_critical_alerts: number;
+  open_recommendations: number;
+  assets_monitored: number;
+  appliances_online: number;
+  appliances_other: number;
+}
+
+export interface CustomerDashboardV2Response {
+  tenant: CustomerTenant;
+  kpis: CustomerDashboardV2Kpis;
+  recent_incidents: CustomerIncident[];
+  recent_recommendations: CustomerRecommendationItem[];
+  recent_alerts: CustomerAlert[];
+  latest_report: CustomerReport | null;
+  recent_appliances: CustomerAppliance[];
+}
+
+const OPEN_INCIDENT_STATUSES = new Set(["open", "in_progress", "waiting_customer"]);
+const OPEN_RECOMMENDATION_STATUSES = new Set(["open", "in_progress"]);
+const HIGH_CRITICAL_SEVERITIES = new Set(["high", "critical"]);
+
+export async function getCustomerDashboardV2(
+  shortCode: string
+): Promise<CustomerDashboardV2Response> {
+  const [incidentsRes, alertsRes, recommendationsRes, assetsRes, reportsRes] =
+    await Promise.all([
+      getCustomerIncidents(shortCode),
+      getCustomerAlerts(shortCode),
+      getCustomerRecommendations(shortCode),
+      getCustomerAssets(shortCode),
+      getCustomerReports(shortCode),
+    ]);
+
+  const tenant =
+    incidentsRes.tenant ??
+    alertsRes.tenant ??
+    recommendationsRes.tenant ??
+    assetsRes.tenant ??
+    reportsRes.tenant;
+
+  const openIncidents = incidentsRes.incidents.filter((i) =>
+    OPEN_INCIDENT_STATUSES.has(i.status)
+  );
+  const highCriticalAlerts = alertsRes.alerts.filter((a) =>
+    HIGH_CRITICAL_SEVERITIES.has(a.severity)
+  );
+  const openRecommendations = recommendationsRes.recommendations.filter((r) =>
+    OPEN_RECOMMENDATION_STATUSES.has(r.status)
+  );
+  const appliancesOnline = assetsRes.appliances.filter((a) => a.status === "online");
+  const appliancesOther = assetsRes.appliances.filter((a) => a.status !== "online");
+
+  return {
+    tenant,
+    kpis: {
+      open_incidents: openIncidents.length,
+      high_critical_alerts: highCriticalAlerts.length,
+      open_recommendations: openRecommendations.length,
+      assets_monitored: assetsRes.assets.length,
+      appliances_online: appliancesOnline.length,
+      appliances_other: appliancesOther.length,
+    },
+    recent_incidents: incidentsRes.incidents.slice(0, 5),
+    recent_recommendations: recommendationsRes.recommendations.slice(0, 5),
+    recent_alerts: alertsRes.alerts.slice(0, 5),
+    latest_report: reportsRes.reports.length > 0 ? reportsRes.reports[0] : null,
+    recent_appliances: assetsRes.appliances.slice(0, 5),
+  };
+}
