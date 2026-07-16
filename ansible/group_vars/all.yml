@@ -1,0 +1,22 @@
+# KB-039: Placeholder group variables — NO SECRETS IN GIT
+---
+mssp_project_root: /opt/mssp-control
+mssp_control_plane_url: "http://192.168.0.201:8000"
+
+# Placeholder — set via Ansible Vault or runtime -e at deploy time
+ansible_user_placeholder: "<SET_VIA_VAULT_OR_ENV>"
+ssh_private_key_path_placeholder: "<SET_VIA_VAULT_OR_ENV>"
+
+# Wazuh placeholders (KB-040/041) — admin-only URLs, never customer API
+wazuh_manager_url_placeholder: "<SET_AT_DEPLOY_TIME>"
+wazuh_indexer_url_placeholder: "<SET_AT_DEPLOY_TIME>"
+wazuh_dashboard_url_placeholder: "<SET_AT_DEPLOY_TIME>"
+
+# Cluster registry alignment (KB-037)
+soc_cluster_code_placeholder: "SOC-LAB-01"
+
+# Tenant deployment mode awareness (KB-038) — routing enforced in control plane
+default_deployment_mode: cloud
+
+# Customer safety reminder for playbook authors
+customer_portal_raw_logs_policy: never

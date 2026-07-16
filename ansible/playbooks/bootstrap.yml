@@ -1,0 +1,23 @@
+---
+# KB-039 stub: Deployment automation foundation — NOT for live execution yet.
+# Purpose: document future bootstrap/connectivity-check playbook structure.
+# Deferred: run only after KB-040+ VMs exist and matching KB is approved.
+#
+# Security: no secrets in this file. Use Vault for credentials.
+# Customer safety: this playbook targets SOC infra only — not customer APIs.
+
+- name: MSSP platform bootstrap (stub)
+  hosts: all
+  gather_facts: false
+  vars:
+    bootstrap_stub_mode: true
+  tasks:
+    - name: KB-039 placeholder — connectivity check deferred
+      ansible.builtin.debug:
+        msg: >
+          Bootstrap stub only. Live ping/SSH checks deferred to KB-040+.
+          See docs/KB039_DEPLOYMENT_AUTOMATION_FOUNDATION.md.
+
+    - name: Reminder — no secrets in Git
+      ansible.builtin.debug:
+        msg: "Use Ansible Vault for credentials. Never commit secrets."
