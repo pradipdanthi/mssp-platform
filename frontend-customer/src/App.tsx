@@ -11,6 +11,7 @@ import IncidentDetailPage from "./pages/IncidentDetailPage";
 import AssetsPage from "./pages/AssetsPage";
 import AssetDetailPage from "./pages/AssetDetailPage";
 import ReportsPage from "./pages/ReportsPage";
+import ReportDetailPage from "./pages/ReportDetailPage";
 import RecommendationsPage from "./pages/RecommendationsPage";
 import RecommendationDetailPage from "./pages/RecommendationDetailPage";
 import AccountPage from "./pages/AccountPage";
@@ -90,6 +91,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ReportsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports/:reportId"
+        element={
+          <ProtectedRoute>
+            <ReportDetailPage />
           </ProtectedRoute>
         }
       />

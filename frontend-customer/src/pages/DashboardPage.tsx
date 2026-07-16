@@ -207,7 +207,11 @@ export default function DashboardPage() {
           ) : (
             <div className="dashboard-report-card">
               <div className="dashboard-report-card-body">
-                <div className="dashboard-report-card-title">{data.latest_report.title}</div>
+                <div className="dashboard-report-card-title">
+                  <Link to={`/reports/${encodeURIComponent(data.latest_report.report_id)}`}>
+                    {data.latest_report.title}
+                  </Link>
+                </div>
                 <div className="dashboard-report-card-meta">
                   <span>{String(data.latest_report.report_month)}</span>
                   <span className="dashboard-welcome-sep">·</span>
@@ -223,8 +227,11 @@ export default function DashboardPage() {
                   {data.latest_report.summary ?? "No executive summary provided."}
                 </p>
               </div>
-              <Link className="btn btn-ghost" to="/reports">
-                Open reports
+              <Link
+                className="btn btn-ghost"
+                to={`/reports/${encodeURIComponent(data.latest_report.report_id)}`}
+              >
+                Open report
               </Link>
             </div>
           )}

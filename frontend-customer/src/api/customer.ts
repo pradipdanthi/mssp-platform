@@ -210,6 +210,20 @@ export function getCustomerReports(shortCode: string): Promise<CustomerReportsRe
   return request<CustomerReportsResponse>(`/customer/reports/${encodeURIComponent(shortCode)}`);
 }
 
+export interface CustomerReportDetailResponse {
+  tenant: CustomerTenant;
+  report: CustomerReport;
+}
+
+export function getCustomerReportDetail(
+  shortCode: string,
+  reportId: string
+): Promise<CustomerReportDetailResponse> {
+  return request<CustomerReportDetailResponse>(
+    `/customer/reports/${encodeURIComponent(shortCode)}/${encodeURIComponent(reportId)}`
+  );
+}
+
 export interface CustomerRecommendationItem {
   recommendation_id: string;
   title: string;

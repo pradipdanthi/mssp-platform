@@ -577,6 +577,54 @@ def customer_reports(
     return {"tenant": tenant, "reports": rows}
 
 
+@router.get("/reports/{short_code}/{report_id}")
+def customer_report_detail(
+    short_code: str,
+    report_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-031: Tenant-scoped, read-only customer monthly report detail.
+
+    Looks up by report_id (UUID). Returns only customer-safe fields.
+    Filters status IN ('published', 'archived'). Draft/missing/wrong-tenant → 404.
+    Does not expose metrics JSON, report_file_path, updated_at, or secrets.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    # KB-011: see customer_dashboard() above for why this is 404, not 403.
+    require_tenant_match(tenant["id"], current_user)
+
+    report = fetch_one(
+        """
+        SELECT
+            id::text AS report_id,
+            report_month,
+            status,
+            ('Monthly Security Report — ' || to_char(report_month, 'Mon YYYY')) AS title,
+            executive_summary AS summary,
+            created_at,
+            published_at
+        FROM monthly_reports
+        WHERE tenant_id = %s
+          AND id = %s
+          AND status IN ('published', 'archived');
+        """,
+        (tenant["id"], report_id),
+    )
+
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    return {"tenant": tenant, "report": report}
+
+
 @router.get("/recommendations/{short_code}")
 def customer_recommendations(
     short_code: str,

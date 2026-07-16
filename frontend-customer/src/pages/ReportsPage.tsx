@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { getCustomerReports } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
@@ -58,7 +59,9 @@ export default function ReportsPage() {
             <tbody>
               {data.reports.map((report) => (
                 <tr key={report.report_id}>
-                  <td>{report.title}</td>
+                  <td>
+                    <Link to={`/reports/${encodeURIComponent(report.report_id)}`}>{report.title}</Link>
+                  </td>
                   <td>{String(report.report_month)}</td>
                   <td>{report.status}</td>
                   <td>{report.summary ?? "—"}</td>
