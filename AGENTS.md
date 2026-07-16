@@ -19,13 +19,13 @@ This is **not**:
 This **is**:
 - A multi-tenant Managed Security Service Provider (MSSP) platform.
 - A product where the SOC/admin team and paying customers each get their own branded dashboard.
-- A platform that uses open-source security engines (Wazuh, Suricata, MISP, TheHive/Cortex, Shuffle/n8n, Prometheus/Grafana, etc.) as **backend adapters and data sources**, never as the customer-facing UI.
+- A platform that uses an **enterprise open-source SOC stack** (Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, etc. — see KB-036 roadmap) as **backend adapters and data sources**, never as the customer-facing UI.
 
 ### Product goal
 
 Deliver a full MSSP platform where:
 - Our own backend (FastAPI) is the system of record and the only thing customers and SOC staff interact with directly.
-- Detection tools like Wazuh and Suricata feed alerts into our backend through adapters.
+- Detection tools like Wazuh feed alerts into our backend through adapters (future KB modules — **not deployed yet**).
 - AI is used to translate raw technical alerts into plain-English summaries, business impact statements, and recommended actions for customers.
 - SOC staff triage, investigate, and manage incidents through our own dashboard, not through third-party tool UIs.
 
@@ -78,14 +78,15 @@ The core product architecture is fixed as follows:
 - **Redis** — cache / queue for background work
 - **Docker Compose** — local/VM runtime orchestration
 - **Admin / SOC dashboard frontend** — `frontend-admin/` (port 3000; KB-018+)
-- **Customer dashboard frontend** — `frontend-customer/` (port 3001; KB-021–KB-031)
+- **Customer dashboard frontend** — `frontend-customer/` (port 3001; KB-021–KB-035)
 - **Wazuh and other open-source tools** — backend detection engines/adapters only
 
 ### Hard architecture rules
 
 - Do **not** convert the main product into Streamlit. Streamlit may only be used later for quick internal prototypes or SOC demo screens — it is never the customer-facing production platform.
 - Wazuh is a detection engine/adapter source, not the customer-facing product UI. Customers must never be given direct Wazuh logins. SOC/admin users work through our own platform dashboard; Wazuh data is normalized into our backend database.
-- Suricata and other future tools (MISP, TheHive/Cortex, Shuffle/n8n, Prometheus/Grafana) follow the same adapter pattern: external tool → adapter/ingestion code → our own database → our own API → our own dashboards.
+- **KB-036 approved enterprise SOC stack (roadmap):** Wazuh (Manager, Indexer/OpenSearch, Dashboard, Agents), Suricata, Zeek, TheHive (+ Cortex if needed), Shuffle, MISP, Greenbone/OpenVAS, Velociraptor (+ optional osquery), Ansible/Compose deployment automation, Prometheus/Grafana observability. OpenCTI and Kubernetes are **future optional** — not immediate scope. Tools are **not deployed yet** until their KB modules run.
+- All tools follow the same adapter pattern: external engine → normalize → PostgreSQL → admin API vs customer-safe API.
 - Any AI agent proposing to change this architecture (e.g. "let's just use Streamlit for everything" or "let's expose Wazuh directly to customers") must stop and explain the proposed change in plain language and get explicit user approval before making it. This counts as a "large architectural change" under section 8.
 
 ---
@@ -94,16 +95,17 @@ The core product architecture is fixed as follows:
 
 **Source of truth:** Git commits, tags, and validation-script output beat stale prose in this file, `CLAUDE.md`, the Cursor rule, or the prompt ledger. Always `git log` / `git tag` / `git status` and inspect live files before planning.
 
-- **VM name:** mssp-control
+- **VM name:** mssp-control (VM 100, `192.168.0.201`)
 - **Project path:** `/opt/mssp-control`
-- **Latest validated customer-portal feature KB:** **KB-031** (Customer Report Detail UI)
-- **Latest validated feature commit:** `d27bdea`
-- **Latest validated feature tag:** `kb031-customer-report-detail-validated`
+- **Latest validated feature KB:** **KB-035** (Customer Appliance Detail UI)
+- **Latest validated feature commit:** `1ac1df3`
+- **Latest validated feature tag:** `kb035-customer-appliance-detail-validated`
+- **Architecture roadmap doc:** `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` (KB-036 — enterprise MSSP/SOC/MDR/XDR roadmap, documentation only)
 - **Known-good early baseline tag:** `kb008-validated-foundation` (commit `c52bca1`)
 - **AI development rules tag:** `kb009a-ai-development-rules`
 - **KB-010 Phase 1 validated tag:** `kb010-auth-rbac-phase1-validated` (commit `7fbb3d2`)
 - **KB-011 validated tag:** `kb011-protected-apis-validated` (commit `30ef305`)
-- **Active docs-sync branch (KB-032):** `kb032-ai-context-doc-sync` (documentation only; no runtime change)
+- **Critical limitation:** Enterprise SOC stack (Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, etc.) **not deployed yet** — no live ingestion adapters
 
 ### Current services (Docker Compose)
 
@@ -122,21 +124,23 @@ The core product architecture is fixed as follows:
 - Route logic lives under `backend-api/app/api/routes/` (auth, health, admin, customer, plus later admin/appliance modules).
 - `/health` reports API, database, and Redis status.
 - Customer tenant isolation: `get_current_user` + resolve tenant by `short_code` + `require_tenant_match` → **404** (not 403) on mismatch.
-- Customer APIs (non-exhaustive; see `customer.py` and OpenAPI): dashboard, incidents (+ detail), alerts (+ detail), assets (+ protected-asset detail), reports (+ detail), recommendations (+ detail).
+- Customer APIs (non-exhaustive; see `customer.py` and OpenAPI): dashboard, incidents (+ detail), alerts (+ detail), assets (+ protected-asset detail), appliances (+ detail), reports (+ detail), recommendations (+ detail), notifications.
 
 ### Current customer portal (`frontend-customer/`, port 3001)
 
-Working through KB-031 (list + detail where noted):
+Working through KB-035 (list + detail where noted):
 
 | Area | Routes / behavior |
 |---|---|
 | Auth / shell | Login, branded layout, account page (KB-021) |
-| Dashboard v2 | KPIs + recent lists + latest report (KB-028); no legacy-only dashboard dependency for v2 composition |
+| Dashboard v2 | KPIs + recent lists + latest report (KB-028) |
 | Alerts | List (KB-022) + detail `/alerts/:alertId` (KB-029) |
 | Incidents | List + detail `/incidents/:incidentNumber` (KB-025) |
-| Assets | Appliances + protected assets list (KB-023) + protected-asset detail `/assets/:assetId` (KB-030); **no appliance detail yet** |
+| Assets | Appliances + protected assets list (KB-023) + protected-asset detail `/assets/:assetId` (KB-030) + appliance detail `/appliances/:applianceId` (KB-035) |
 | Reports | List (KB-024) + detail `/reports/:reportId` (KB-031); published/archived only; no PDF/metrics |
 | Recommendations | List (KB-026) + detail `/recommendations/:recommendationId` (KB-027) |
+| Notifications | History list (KB-033) |
+| Account | Profile + change password (KB-034) |
 
 **Hard rule:** `frontend-customer` must **never** call `/admin` APIs.
 
@@ -155,16 +159,13 @@ Working through KB-031 (list + detail where noted):
 - **KB-022–KB-024:** Customer alerts / assets / reports list APIs + UI.
 - **KB-025–KB-027:** Incident detail; recommendations list + detail.
 - **KB-028:** Customer Dashboard v2.
-- **KB-029–KB-031:** Alert detail; protected-asset detail; report detail — tags `kb029-…` through `kb031-customer-report-detail-validated` (`d27bdea`).
-- **KB-032:** AI context / documentation sync (this update) — docs only.
+- **KB-029–KB-035:** Alert detail; protected-asset detail; report detail; notifications; account hardening; appliance detail — through `kb035-customer-appliance-detail-validated` (`1ac1df3`).
+- **KB-032:** AI context / documentation sync — docs only.
+- **KB-036:** Enterprise platform architecture and deployment model roadmap — docs only (cloud/on-prem/hybrid, full capability stack, VM 100–111, KB-037–060).
 
-### Next module (after KB-032 docs sync is validated/committed)
+### Next module (after KB-036 docs sync is validated/committed)
 
-Feature candidates (user must explicitly kick off one):
-
-1. Customer **notifications** history
-2. Customer **appliance detail** (deferred from KB-030)
-3. Customer **account/profile hardening**
+Do **not** install SOC tools, create VMs 101–111, or build integration adapters until the relevant future KB is explicitly planned and approved. See `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` for KB-037 through KB-060 (cluster registry, deployment automation, Wazuh, Suricata/Zeek, TheHive/Shuffle, MISP, Greenbone, Velociraptor, live integration, on-prem appliance, ops runbooks).
 
 Do **not** implement a feature KB until a planning pass is reviewed and approved.
 
@@ -275,7 +276,7 @@ Additional standards:
 ## 8. Frontend Direction
 
 - **Admin frontend** exists at `frontend-admin/` (port 3000).
-- **Customer frontend** exists at `frontend-customer/` (port 3001) through KB-031 list/detail coverage above.
+- **Customer frontend** exists at `frontend-customer/` (port 3001) through KB-035 list/detail coverage above.
 - Streamlit may be used later purely for internal prototypes or SOC demo screens — never as the production customer-facing product.
 - Customer UI must call only `/api/customer/...` (and auth) paths — **never** `/admin`.
 - Do not scaffold unrelated frontend frameworks or rewrite the existing portals without an explicit approved module.
@@ -313,8 +314,8 @@ git status --short
 docker compose ps
 curl -fsS http://localhost:8000/health | jq .
 ./scripts/kb011_validate_protected_apis.sh
-./scripts/kb031_validate_customer_report_detail_ui.sh
-./scripts/kb032_validate_ai_context_doc_sync.sh
+./scripts/kb035_validate_customer_appliance_detail_ui.sh
+./scripts/kb036_validate_mssp_platform_architecture_roadmap.sh
 ```
 
 Older scripts (`kb008`, `kb010`, `kb012`, …) remain historical/regression tools. Prefer the newest module script for the area you changed. After KB-011, unauthenticated `/admin`/`/customer` checks in older scripts may fail by design.

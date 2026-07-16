@@ -1,19 +1,12 @@
 # CONTEXT.md — MSSP Control Plane Current Snapshot
 
-Status: Living context file for AI agents and humans. Recreated/refreshed in **KB-032** (AI Context and Documentation Sync).  
+Status: Living context file for AI agents and humans. Refreshed in **KB-036** (Enterprise Platform Architecture Roadmap).  
 Project path: `/opt/mssp-control`  
-VM: `mssp-control`
+VM: **100 — `mssp-control`** (`192.168.0.201`)
 
-**How to use this file:** Read it at the start of every session together with `AGENTS.md` and `CLAUDE.md`. It summarizes *where the lab is now*. It is not a substitute for inspecting live source or git.
+**How to use:** Read with `AGENTS.md`, `CLAUDE.md`, and `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` at session start.
 
-**Source of truth hierarchy (highest wins):**
-
-1. Live git commits / tags / `git status`
-2. Validation-script PASS/FAIL output
-3. Inspected source files (`customer.py`, `frontend-customer`, schema, etc.)
-4. This `CONTEXT.md` / `AGENTS.md` / ledger (must be updated when they drift)
-
-If documentation disagrees with git, **trust git** and fix the docs (that is what KB-032 exists for).
+**Source of truth hierarchy:** git commits/tags → validation PASS → live source files → this file / AGENTS.md / ledger.
 
 ---
 
@@ -21,223 +14,158 @@ If documentation disagrees with git, **trust git** and fix the docs (that is wha
 
 | Item | Value |
 |---|---|
-| Latest validated feature KB | **KB-031 — Customer Report Detail UI** |
-| Commit | **`d27bdea`** |
-| Tag | **`kb031-customer-report-detail-validated`** |
-| Docs-sync KB in progress | **KB-032** on branch `kb032-ai-context-doc-sync` (documentation only) |
-
-Recent customer-portal tags (newest first):
-
-- `kb031-customer-report-detail-validated` → `d27bdea`
-- `kb030-customer-asset-detail-validated` → `f85a72b`
-- `kb029-customer-alert-detail-validated` → `3633a03`
-- `kb028-customer-dashboard-v2-validated` → `5823909`
-- `kb027-customer-recommendation-detail-validated` → `1dccfb7`
-- `kb026-customer-recommendations-validated` → `4ad25b0`
-- `kb025-incident-detail-validated` → `d4eeb7e`
-- `kb024-customer-reports-validated` → `377c0a6`
-- `kb023-customer-assets-validated` → `1aab85a`
-- `kb022-customer-alerts-validated` → `b34f818`
-- `kb021-customer-frontend-validated` → `b0798b2`
-
-Older foundation tags still matter (examples): `kb020-production-bootstrap-demo-separation-validated`, `kb018-admin-frontend-foundation-validated`, `kb017-…`, `kb011-protected-apis-validated`, `kb010-auth-rbac-phase1-validated`, `kb008-validated-foundation`.
+| Latest validated feature KB | **KB-035** — Customer Appliance Detail UI |
+| Commit | **`1ac1df3`** |
+| Tag | **`kb035-customer-appliance-detail-validated`** |
+| Active docs module | **KB-036** — Enterprise MSSP/SOC/MDR/XDR architecture roadmap (docs only) |
 
 ---
 
-## 2. Running services
+## 2. Enterprise platform vision (not a Wazuh dashboard)
 
-Typical Docker Compose services on this VM:
+We are building a **strong enterprise-style open-source MSSP / SOC / MDR / XDR platform**.
+
+Monitoring and response scope includes: endpoints, servers, network traffic, firewalls/network devices, applications, cloud/on-prem environments, alerts, incidents/cases, vulnerabilities, threat intelligence, automation/playbooks, and customer reporting.
+
+**MSSP Control Plane** (FastAPI + PostgreSQL + Redis + admin/customer UIs) is the product. Open-source engines are **backend adapters only**.
+
+Full roadmap: `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`
+
+---
+
+## 3. Enterprise capability stack (planned — mostly not deployed yet)
+
+| Layer | Tools |
+|---|---|
+| Control plane | FastAPI, PostgreSQL, Redis, admin + customer dashboards (**deployed VM 100**) |
+| SIEM / endpoint | Wazuh Manager/API, Wazuh Indexer/OpenSearch, Wazuh Dashboard, Wazuh Agents |
+| Network / NDR | Suricata, Zeek |
+| Case management | TheHive, Cortex (if needed) |
+| SOAR | Shuffle |
+| Threat intel | MISP (OpenCTI future optional) |
+| Vulnerability | Greenbone / OpenVAS |
+| DFIR | Velociraptor, osquery (optional) |
+| Deployment automation | Ansible + Docker Compose first; Terraform later; K8s future optional |
+| Observability | Prometheus/Grafana (or equivalent) |
+
+**Critical:** The real SOC stack has **not deployed yet**. No live ingestion adapters. Data is mostly app/database-driven today.
+
+---
+
+## 4. Deployment models
+
+### A. Cloud-hosted MSSP
+
+Shared SOC clusters; multiple customers per cluster by **capacity** (agents, EPS, GB/day, retention, performance, isolation) — not a fixed customer count.
+
+### B. On-prem appliance
+
+Logs stay on customer site; appliance runs local stack; only **safe metadata** syncs to control plane.
+
+### C. Hybrid
+
+Mixed on-prem processing + central sync; some customers on dedicated cloud clusters.
+
+### Normalization rule
+
+Control plane consumes **normalized, tenant-scoped records** regardless of source (Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, on-prem appliance, etc.).
+
+Record concepts: `tenant`, `source_platform`, `asset`, `alert`, `incident`/`case`, `recommendation`, `vulnerability`, `report`, `visibility_status`, `sync_health_status`.
+
+---
+
+## 5. Planned VM layout
+
+| VM | Name | Purpose | Status |
+|---|---|---|---|
+| **VM 100** | `mssp-control` | Control Plane (`192.168.0.201`) | **Deployed** |
+| **VM 101** | `wazuh-stack` | Wazuh Manager, Indexer/OpenSearch, Dashboard | Future |
+| **VM 102** | `thehive` | TheHive (+ Cortex if needed) | Future |
+| **VM 103** | `shuffle` | SOAR | Future |
+| **VM 104** | `windows-endpoint-lab` | Windows + Wazuh Agent | Future |
+| **VM 105** | `linux-endpoint-lab` | Linux + Wazuh Agent | Future |
+| **VM 106** | `suricata-sensor` | Suricata IDS/IPS | Future |
+| **VM 107** | `zeek-sensor` | Zeek NSM | Future |
+| **VM 108** | `misp` | MISP threat intel | Future |
+| **VM 109** | `greenbone` | Greenbone/OpenVAS | Future |
+| **VM 110** | `velociraptor` | DFIR | Future |
+| **VM 111** | `monitoring` | Prometheus/Grafana | Future |
+
+Do not install SOC tools on VM 100 or create VMs 101–111 until the matching KB is approved.
+
+Future: **cluster registry**, **appliance registry**, **deployment automation** (KB-037–039).
+
+---
+
+## 6. Running services (VM 100)
 
 | Container | Role |
 |---|---|
 | `mssp-postgres` | PostgreSQL |
 | `mssp-redis` | Redis |
-| `mssp-backend-api` | FastAPI API on port **8000** |
-| `mssp-frontend-admin` | Admin/SOC UI on port **3000** |
-| `mssp-frontend-customer` | Customer portal on port **3001** |
-
-Health check:
-
-```bash
-curl -fsS http://localhost:8000/health | jq .
-```
-
-Expect `api`, `database`, and `redis` all `"ok"`.
+| `mssp-backend-api` | FastAPI port **8000** |
+| `mssp-frontend-admin` | Admin/SOC UI port **3000** |
+| `mssp-frontend-customer` | Customer portal port **3001** |
 
 ---
 
-## 3. Customer portal — what works today (through KB-031)
+## 7. Control plane — what is built today
 
-Location: `frontend-customer/` (browser: `http://localhost:3001`).
+### Admin / SOC (KB-010–020, KB-016/017)
 
-### Shell / auth (KB-021)
+Auth/RBAC, tenant/user/appliance admin APIs, activation tokens, appliance registration/heartbeat, credential rotation, admin frontend foundation.
 
-- Login, JWT session, branded layout, account page.
-- Demo customer example: `customer.viewer@demo.local` (password never stored in docs; use env or interactive prompt in scripts).
+### Customer portal (KB-021–035)
 
-### Dashboard v2 (KB-028)
-
-- Composes incidents, alerts, recommendations, assets, and reports via customer APIs (`getCustomerDashboardV2` / `Promise.all`).
-- KPI cards, recent lists, latest report card, appliance health snippet.
-- Links into detail pages where they exist (incidents, recommendations, alerts, reports).
-
-### Lists + detail pages
-
-| Domain | List | Detail | Notes |
-|---|---|---|---|
-| Alerts | KB-022 | KB-029 `/alerts/:alertId` | `customer_visible = true` only |
-| Incidents | earlier customer incidents API | KB-025 `/incidents/:incidentNumber` | Customer-visible timeline + related visible alerts; no comments |
-| Assets | KB-023 appliances + protected assets | KB-030 `/assets/:assetId` | **Protected asset** detail only; appliance rows are **not** detail-linked |
-| Reports | KB-024 | KB-031 `/reports/:reportId` | **Customer report detail**; published/archived only; drafts → 404 |
-| Recommendations | KB-026 | KB-027 `/recommendations/:recommendationId` | `customer_visible = true` |
-
-### Customer backend surface (`backend-api/app/api/routes/customer.py`)
-
-Representative routes (all under `/customer`, auth + tenant match):
-
-- `GET /customer/dashboard/{short_code}` (legacy composition still present; Dashboard v2 prefers composed list APIs)
-- `GET /customer/incidents/{short_code}` and `.../{incident_number}`
-- `GET /customer/alerts/{short_code}` and `.../{alert_id}`
-- `GET /customer/assets/{short_code}` and `.../{asset_id}`
-- `GET /customer/reports/{short_code}` and `.../{report_id}`
-- `GET /customer/recommendations/{short_code}` and `.../{recommendation_id}`
-
-Frontend helpers live in `frontend-customer/src/api/customer.ts`. Routes wired in `frontend-customer/src/App.tsx`.
-
-### Explicit non-goals already deferred
-
-- Customer **appliance detail** page (deferred from KB-030)
-- PDF / `report_file_path` download and raw **metrics** charts (deferred from KB-031)
-- Customer write workflows (acknowledge/close alerts, edit assets, accept recommendations, etc.)
-- Customer **notifications** history UI
-- Calling `/admin` from the customer portal — **forbidden forever**
+Dashboard v2; alerts/incidents/assets/appliances/reports/recommendations (list + detail); notifications; account hardening. **No `/admin` calls.**
 
 ---
 
-## 4. Admin / platform (brief)
+## 8. Customer data safety
 
-Admin UI exists (`frontend-admin/`). Backend includes auth/RBAC (KB-010/011), modular routes (KB-012+), tenant/user/appliance admin APIs, appliance registration/heartbeat, credential rotation, and related validation scripts. Customer modules must not casually edit admin frontend or admin-only APIs unless the KB is explicitly an admin module.
-
----
-
-## 5. Safety rules that must not be broken
-
-### Secrets and config
-
-- **No `.env`** edits, prints, or commits.
-- **No `docker-compose.yml`** changes unless the task explicitly approves them.
-- **No `postgres/init/`** schema/migration edits unless explicitly approved.
-- Never hardcode passwords, API keys, JWT secrets, tokens, or Wazuh credentials in source or docs.
-
-### Tenant isolation
-
-- Customer APIs: `get_current_user` → resolve tenant by `short_code` → `require_tenant_match`.
-- Wrong tenant / missing / draft / non-visible → **HTTP 404**, not 403.
-- Always filter by `tenant_id` on tenant-owned tables.
-
-### Customer data hygiene
-
-Do not expose forbidden fields to customers, including (non-exhaustive):
-
-- `password`, `password_hash`
-- `token`, `token_hash`, `api_key`, appliance API key hash/hint, activation token material
-- `raw_event`, `raw_json`, `details`, `metrics`, `health_snapshot`, `report_file_path`
-- IP fields (`ip_address`, `source_ip`, `destination_ip`, `local_ip`, `last_source_ip`)
-- `internal_notes`, `admin_notes`, stack traces, backend internals
-- Unapproved technical AI / MITRE internals
-
-Safe list/detail field sets are documented per KB (KB-022…KB-031). Prefer those approved shapes.
-
-### Frontend boundary
-
-- `frontend-customer` must contain **no `/admin`** API usage.
-- Prefer `/customer/*` only for customer data.
-
-### Git / delivery
-
-- Planning before implementation.
-- Inspect current files before planning.
-- Do not implement before planning is reviewed (unless implement scope already approved).
-- **Validation before commit.**
-- Do not stage/commit/tag unless the user asks.
-- Preferred delivery cadence after PASS: validation → commit → tag → Proxmox snapshot (each step user-driven).
+Customer portal must never expose: raw logs, raw Wazuh/Suricata/Zeek alerts, raw JSON, packet captures, credentials, hashes, tokens, API keys, internal/admin notes, stack traces, unfiltered SOC data.
 
 ---
 
-## 6. Safe KB workflow (checklist)
+## 9. Future KB roadmap (after KB-036)
 
-1. `git branch --show-current` and `git status --short` (expect clean unless you are mid-module).
-2. Read `CONTEXT.md`, `AGENTS.md`, ledger, and the prior KB doc for the area.
-3. Inspect the real files you will touch (routes, pages, schema columns).
-4. Produce a **planning-only** proposal; stop for approval.
-5. Implement only the approved file list.
-6. Run `./scripts/kb0NN_validate_....sh` until the exact PASS line prints.
-7. Show `git status --short`; wait.
-8. Only if asked: commit specific files → tag → snapshot.
+KB-037 through KB-060 — see `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`.
 
-KB-032 validation success line:
+Examples: KB-037 cluster/appliance registry planning, KB-038 deployment mode, KB-039 Ansible automation, KB-040–042 Wazuh, KB-043–046 Suricata/Zeek, KB-047–049 TheHive/Shuffle, KB-050–051 MISP, KB-052–053 Greenbone, KB-054–055 Velociraptor, KB-056–057 SOC ops + live integration, KB-058–060 on-prem/scale/ops.
 
-```text
-KB-032 AI CONTEXT DOC SYNC VALIDATION PASSED
-```
-
-KB-031 feature validation success line (regression reference):
-
-```text
-KB-031 CUSTOMER REPORT DETAIL UI VALIDATION PASSED
-```
+User must explicitly kick off each KB. **No tool installs until approved.**
 
 ---
 
-## 7. Next recommended feature KBs (after KB-032)
+## 10. Roadmap phases (summary)
 
-These are **candidates**, not started modules. The user must kick one off explicitly:
-
-1. **Customer notifications history** — product checklist still calls for notification history; table `notification_events` exists.
-2. **Customer appliance detail** — deferred from KB-030; assets page still shows appliances as plain text rows.
-3. **Account / profile hardening** — strengthen customer account page / session UX without leaking secrets.
-
-Do not start KB-033+ feature work until KB-032 docs sync is validated (and preferably committed/tagged) and a new planning prompt is approved.
-
----
-
-## 8. Key paths cheat sheet
-
-| Path | Why it matters |
+| Phase | Theme |
 |---|---|
-| `AGENTS.md` | Full agent rulebook |
-| `CLAUDE.md` | Short operating instructions |
-| `.cursor/rules/mssp-control-plane.mdc` | Always-applied Cursor rules |
-| `CONTEXT.md` | This snapshot |
-| `docs/AI_PROMPT_LEDGER.md` | AI change ledger |
-| `docs/KB021_…` … `docs/KB031_…` | Customer portal module docs |
-| `docs/KB032_AI_CONTEXT_DOC_SYNC.md` | This docs-sync module record |
-| `backend-api/app/api/routes/customer.py` | Customer API routes |
-| `frontend-customer/src/api/customer.ts` | Customer API client |
-| `frontend-customer/src/App.tsx` | Customer routes |
-| `scripts/kb031_validate_customer_report_detail_ui.sh` | Latest feature gate example |
-| `scripts/kb032_validate_ai_context_doc_sync.sh` | Docs-sync gate |
+| Phase 1 | Control plane foundation (KB-010–035) — mostly complete |
+| Phase 2 | Architecture roadmap (KB-036) — this docs module |
+| Phase 3–12 | Registry, automation, Wazuh, network sensors, case/SOAR, intel, vuln, DFIR, SOC ops, on-prem/scale/ops (KB-037–060) |
+
+Phase 12 covers on-prem appliance, multi-cluster placement, and operations runbooks (KB-058–060).
 
 ---
 
-## 9. What KB-032 changes (and what it must not)
+## 11. Safe KB workflow
 
-**Changes:** documentation/context files only — `AGENTS.md`, `CLAUDE.md`, `.cursor/rules/mssp-control-plane.mdc`, `CONTEXT.md`, `docs/AI_PROMPT_LEDGER.md`, `docs/KB032_AI_CONTEXT_DOC_SYNC.md`, `scripts/kb032_validate_ai_context_doc_sync.sh`.
+**Planning before implementation** · **no .env** · **no /admin** from customer UI · **validation before commit**
 
-**Must not change:** backend runtime code, frontend runtime code, database schema, `docker-compose.yml`, `.env`.
+KB-036 validation success line:
 
----
-
-## 10. Quick commands
-
-```bash
-cd /opt/mssp-control
-git branch --show-current
-git status --short
-git log --oneline --decorate -12
-git tag --sort=-creatordate | head -15
-curl -fsS http://localhost:8000/health | jq .
-./scripts/kb032_validate_ai_context_doc_sync.sh
+```text
+KB-036 MSSP PLATFORM ARCHITECTURE ROADMAP VALIDATION PASSED
 ```
 
-Remember: **no .env**, **no /admin** from customer UI, **planning before implementation**, **validation before commit**. Latest feature pointer remains KB-031 customer report detail (`d27bdea`, `kb031-customer-report-detail-validated`).
+---
+
+## 12. Key paths
+
+| Path | Purpose |
+|---|---|
+| `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` | Enterprise architecture roadmap |
+| `scripts/kb036_validate_mssp_platform_architecture_roadmap.sh` | KB-036 docs gate |
+| `AGENTS.md` | Full rulebook |
+| `docs/AI_PROMPT_LEDGER.md` | Change ledger |

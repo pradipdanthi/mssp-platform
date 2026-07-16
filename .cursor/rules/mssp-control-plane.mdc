@@ -6,82 +6,50 @@ alwaysApply: true
 
 # MSSP Control Plane — Always-Applied Project Rules
 
-This project is a private, multi-tenant, AI-assisted MSSP/SOC control plane. Full detail lives in `AGENTS.md`, `CLAUDE.md`, and `CONTEXT.md` at the repository root — read them.
+Full detail: `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`.
 
-**Source of truth:** Git tags/commits and validation-script PASS lines beat stale docs. Always inspect current files before planning. Do not implement before planning is reviewed/approved (unless the user already provided an approved implement scope).
+**Source of truth:** Git tags/commits and validation-script PASS lines beat stale docs.
 
 ## Project Summary
 
-- Branded web MSSP/SOC control plane — not a Wazuh UI, not Streamlit-as-product.
-- Architecture: FastAPI + PostgreSQL + Redis + Docker Compose; admin UI (`frontend-admin`, :3000) and customer UI (`frontend-customer`, :3001).
-- Wazuh/Suricata/etc. are backend adapters only.
-- Multi-tenant: admin/SOC sees cross-tenant tools; customers see only their tenant.
+- **Enterprise open-source MSSP / SOC / MDR / XDR platform** — not a Wazuh dashboard, not Streamlit-as-product.
+- **MSSP Control Plane** (FastAPI + PostgreSQL + Redis + admin/customer UIs on VM 100) is the product; engines are backend adapters only.
+- **Approved enterprise stack (KB-036 roadmap):** Wazuh (Manager, Indexer/OpenSearch, Dashboard, Agents), Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone/OpenVAS, Velociraptor; Ansible/Compose deployment; Prometheus/Grafana observability. **Not deployed yet** except control plane.
+- Deployment models: **cloud-hosted**, **on-prem appliance**, **hybrid**.
+- Multi-tenant; admin/SOC cross-tenant where role allows; customers tenant-isolated only.
 
-## Current State (synced KB-032; features through KB-031)
+## Current State (KB-036 docs; features through KB-035)
 
-- VM: `mssp-control`, path `/opt/mssp-control`.
-- Latest validated feature: **KB-031** commit `d27bdea`, tag `kb031-customer-report-detail-validated`.
-- Docs-sync branch: `kb032-ai-context-doc-sync` (documentation only).
-- Containers: `mssp-postgres`, `mssp-redis`, `mssp-backend-api`, `mssp-frontend-admin`, `mssp-frontend-customer`.
-- Backend: `main.py` is wiring only; routes under `backend-api/app/api/routes/` including rich `customer.py` (dashboard, incidents±detail, alerts±detail, assets±asset-detail, reports±detail, recommendations±detail).
-- Customer portal: login/dashboard v2 + list/detail for alerts, incidents, protected assets, reports, recommendations. **No appliance detail yet. No `/admin` calls from customer frontend.**
-- Auth: JWT + bcrypt; `get_current_user` / `require_roles` / `require_tenant_match`; customer mismatch → **404**.
-- Next feature candidates: customer notifications history; customer appliance detail; account/profile hardening.
+- VM 100: `mssp-control` at `192.168.0.201`, tag `kb035-customer-appliance-detail-validated` (`1ac1df3`).
+- Control plane deployed; full customer portal through KB-035; admin/SOC foundation built.
+- **SOC stack NOT deployed** — no Wazuh/Suricata/Zeek/TheHive/Shuffle/MISP/Greenbone/Velociraptor in lab yet.
+- Future VMs: 101 wazuh-stack through 111 monitoring — see KB-036 doc.
+- Future KBs: KB-037 through KB-060 (registry, automation, tool deploy, adapters, ops).
 
 ## Safe KB Workflow
 
-Short form: **planning before implementation**, **no .env**, customer frontend has **no /admin**, **validation before commit**.
+**Planning before implementation** · **no .env** · **no /admin** from customer UI · **validation before commit**
 
-1. Confirm branch + clean `git status`.
-2. Inspect live code/docs/tags (do not rely on memory).
-3. Plan → wait for approval → implement approved scope only.
-4. Run module validation script until PASS.
-5. Commit / tag / Proxmox snapshot **only when the user asks**, and **only after validation**.
-6. Never commit before validation.
+Do not install SOC tools or create VMs unless the KB explicitly allows it.
 
-## Security Rules (mandatory)
+## Security Rules
 
-- Never commit `.env`. Never print `.env` values. Never expose secrets.
-- Never hardcode passwords, API keys, JWT secrets, Wazuh credentials, or customer tokens.
-- Never return password hashes in API responses.
-- RBAC on protected endpoints; parameterized SQL only.
-- Never expose stack traces to customers.
+- Never commit/print `.env`; never hardcode secrets.
+- Customer APIs: tenant isolation; wrong tenant → **404**.
+- Customer portal: no raw logs, raw Wazuh/Suricata/Zeek alerts, raw JSON, packet captures, credentials, internal notes, unfiltered SOC data.
 
-## Tenant Isolation Rules (mandatory)
+## Protected Paths
 
-- Filter tenant-owned data by `tenant_id`.
-- Customer APIs: derive tenant from auth + short_code resolution + `require_tenant_match`.
-- Wrong tenant / hidden draft / non-visible rows → **404**, not 403.
-- Customer A never sees Customer B data.
-
-## Forbidden Customer Payload Fields (examples)
-
-Do not expose: `password`/`password_hash`, `token`/`token_hash`, `api_key`/appliance key hash/hint, activation tokens, `raw_event`/`raw_json`/`details`/`metrics`/`health_snapshot`/`report_file_path`, IPs, `internal_notes`/`admin_notes`, technical AI/MITRE internals not approved for customers, stack traces, backend internals.
-
-## Protected Paths (require explicit task permission)
-
-- `.env`
-- `docker-compose.yml`
-- `postgres/init/`
-- `frontend-admin/` (when working a customer module)
-- `backend-api/app/main.py` (unless the task names it)
-- Do not restart containers unless instructed.
-- Do not `git add` / `git commit` / tag unless instructed.
-- Customer frontend: **no `/admin`**.
+`.env`, `docker-compose.yml`, `postgres/init/`, `frontend-admin/` (customer modules), `backend-api/app/main.py` (unless named). No commit/tag unless user asks.
 
 ## Validation Commands
 
 ```bash
 cd /opt/mssp-control
-git branch --show-current
-git status --short
-docker compose ps
-curl -fsS http://localhost:8000/health | jq .
-./scripts/kb031_validate_customer_report_detail_ui.sh
-./scripts/kb032_validate_ai_context_doc_sync.sh
+./scripts/kb036_validate_mssp_platform_architecture_roadmap.sh
 ```
 
-## Communication Rules
+## Communication
 
-- Plain language; full file paths; complete edits; show `git status --short`; stop and wait — do not commit automatically.
-- Never make large architectural changes without plain-language approval.
+- Plain language; one step at a time for non-coder user when requested.
+- Show `git status --short` after doc/code changes; wait before commit.
