@@ -1,6 +1,7 @@
 # MSSP Platform — Ansible Deployment Automation
 
-Status: **Scaffolding only** (KB-039). No live installs until KB-040+.
+Status: KB-039 scaffolding plus KB-041 Wazuh automation preparation. No live
+infrastructure execution without separate approval.
 
 ## Purpose
 
@@ -13,9 +14,11 @@ ansible/
 ├── ansible.cfg
 ├── inventory/hosts.yml      # VM 100–111 placeholders
 ├── group_vars/all.yml       # placeholder vars — no secrets
-└── playbooks/
-    ├── bootstrap.yml        # KB-039 stub
-    └── (future KB playbooks)
+├── playbooks/
+│   ├── bootstrap.yml             # KB-039 stub
+│   └── wazuh-stack-install.yml   # KB-041; preflight-safe by default
+└── roles/
+    └── wazuh_stack/              # KB-041 install/validate role
 ```
 
 ## Prerequisites (future)
@@ -23,6 +26,24 @@ ansible/
 - Ansible 2.14+ on operator workstation or CI runner
 - SSH access to target VMs (keys via Vault — not in Git)
 - Approved KB module before running any playbook against live hosts
+
+## KB-041 safe Wazuh preparation
+
+The Wazuh role pins expected package version `4.14.6` and defaults to:
+
+```yaml
+wazuh_execution_mode: preflight
+wazuh_live_install_approved: false
+```
+
+Do not change both controls or supply an installer digest until the user
+separately approves live deployment to VM 101 and confirms a pre-install
+snapshot. Static validation does not contact inventory hosts:
+
+```bash
+cd /opt/mssp-control
+./scripts/kb041_validate_wazuh_stack_installation_validation.sh
+```
 
 ## Security
 
@@ -38,4 +59,5 @@ ansible/
 
 ## Deferred execution
 
-Do **not** run playbooks until the matching KB is validated and VMs exist.
+Do **not** run playbooks against live inventory until the target VM exists,
+rollback is ready, and that exact execution is explicitly approved.

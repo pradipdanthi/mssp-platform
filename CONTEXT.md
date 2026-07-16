@@ -18,8 +18,10 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Architecture / registry planning | **KB-036–KB-038** (docs) |
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
-| Aggregate tag | `kb039-kb060-roadmap-batch-complete` (points at HEAD after docs sync) |
-| Morning snapshot (user) | One Proxmox snapshot after review — e.g. `qm snapshot 100 kb060-ok` |
+| Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
+| Latest committed docs | `5d194d7` — full KB-056 live validation recorded |
+| Snapshot | **Done** — VM 100 snapshot `kb060-ok` confirmed by user |
+| Active preparation | KB-041 Wazuh automation role prepared and locally validated; not committed |
 
 ---
 
@@ -30,7 +32,7 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | KB | Summary |
 |---|---|
 | KB-039 | Ansible foundation (`ansible/` inventory VMs 100–111, stub playbooks) |
-| KB-040–042 | Wazuh VM plan, install playbook stubs, agent onboarding stubs |
+| KB-040–042 | Wazuh VM plan, KB-041 safe-default install role, agent onboarding stubs |
 | KB-043–046 | Suricata / Zeek plans + integration plans |
 | KB-047–049 | TheHive, Shuffle, Wazuh→Shuffle→TheHive workflow plans |
 | KB-050–051 | MISP + threat-intel enrichment plans |
@@ -48,6 +50,10 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
 
 **Still not done:** creating VMs 101–111, installing Wazuh/Suricata/etc., schema for `soc_clusters` / `deployment_mode`.
+
+**Next approval gate:** live infrastructure execution on VM 101. Do not create
+VM 101 or run the KB-041 playbook until the user separately approves the exact
+Proxmox target, networking, snapshot, installer digest, and execution command.
 
 ---
 

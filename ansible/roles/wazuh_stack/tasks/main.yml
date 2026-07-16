@@ -1,0 +1,187 @@
+---
+- name: Validate KB-041 execution controls
+  ansible.builtin.assert:
+    that:
+      - wazuh_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: >-
+      wazuh_execution_mode must be preflight, install, or validate.
+      The safe default is preflight.
+
+- name: Validate VM 101 inventory identity
+  ansible.builtin.assert:
+    that:
+      - (vm_id | int) == 101
+      - deployment_role == "wazuh_cluster"
+    fail_msg: "KB-041 may target only VM 101 with deployment_role=wazuh_cluster."
+
+- name: Validate supported operating system and architecture
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in wazuh_supported_distributions
+      - ansible_distribution_version in wazuh_supported_ubuntu_releases
+      - ansible_architecture in wazuh_supported_architectures
+      - (ansible_memtotal_mb | int) >= (wazuh_minimum_memory_mb | int)
+    fail_msg: >-
+      VM 101 must use an approved Ubuntu release/architecture and have at
+      least {{ wazuh_minimum_memory_mb }} MB RAM.
+
+- name: Resolve root filesystem size
+  ansible.builtin.set_fact:
+    wazuh_root_disk_bytes: >-
+      {{
+        (
+          ansible_mounts
+          | selectattr("mount", "equalto", "/")
+          | map(attribute="size_total")
+          | first
+        )
+        | int
+      }}
+
+- name: Validate minimum root filesystem size
+  ansible.builtin.assert:
+    that:
+      - (wazuh_root_disk_bytes | int) >= ((wazuh_minimum_root_disk_gb | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      VM 101 requires at least {{ wazuh_minimum_root_disk_gb }} GB on the
+      root filesystem for this lab installation.
+
+- name: Check current listening TCP ports
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -H
+      - -lnt
+  register: wazuh_listening_ports
+  changed_when: false
+  failed_when: false
+  when: wazuh_execution_mode == "preflight"
+
+- name: Explain the preflight-only result
+  ansible.builtin.debug:
+    msg: >-
+      KB-041 preflight passed for VM 101. No packages were installed.
+      A separate approval is required before setting
+      wazuh_execution_mode=install and wazuh_live_install_approved=true.
+  when: wazuh_execution_mode == "preflight"
+
+- name: Check installation marker
+  ansible.builtin.stat:
+    path: "{{ wazuh_install_marker }}"
+  register: wazuh_marker
+
+- name: Install Wazuh central components
+  when:
+    - wazuh_execution_mode == "install"
+    - not wazuh_marker.stat.exists
+  block:
+    - name: Enforce explicit live-install approval and installer integrity
+      ansible.builtin.assert:
+        that:
+          - wazuh_live_install_approved | bool
+          - wazuh_install_assistant_sha256 is match("^[A-Fa-f0-9]{64}$")
+        fail_msg: >-
+          Live installation is blocked. Explicitly approve the change and
+          provide the verified 64-character installer SHA-256 digest.
+
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - tar
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create restricted Wazuh installation directory
+      ansible.builtin.file:
+        path: "{{ wazuh_install_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Download the official Wazuh installation assistant
+      ansible.builtin.get_url:
+        url: "{{ wazuh_install_assistant_url }}"
+        dest: "{{ wazuh_install_directory }}/wazuh-install.sh"
+        owner: root
+        group: root
+        mode: "0700"
+        checksum: "sha256:{{ wazuh_install_assistant_sha256 }}"
+
+    - name: Run the Wazuh all-in-one installation assistant
+      ansible.builtin.command:
+        argv:
+          - bash
+          - ./wazuh-install.sh
+          - -a
+        chdir: "{{ wazuh_install_directory }}"
+      register: wazuh_install_result
+      changed_when: true
+      no_log: true
+
+    - name: Disable the Wazuh APT repository after installation
+      ansible.builtin.replace:
+        path: /etc/apt/sources.list.d/wazuh.list
+        regexp: '^deb '
+        replace: '#deb '
+      notify: Refresh APT cache
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  when: wazuh_execution_mode in ["install", "validate"]
+
+- name: Verify exact Wazuh package versions
+  ansible.builtin.assert:
+    that:
+      - "'wazuh-manager' in ansible_facts.packages"
+      - "'wazuh-indexer' in ansible_facts.packages"
+      - "'wazuh-dashboard' in ansible_facts.packages"
+      - ansible_facts.packages["wazuh-manager"][0].version is match("^" ~ wazuh_version ~ "([.-]|$)")
+      - ansible_facts.packages["wazuh-indexer"][0].version is match("^" ~ wazuh_version ~ "([.-]|$)")
+      - ansible_facts.packages["wazuh-dashboard"][0].version is match("^" ~ wazuh_version ~ "([.-]|$)")
+    fail_msg: "Installed Wazuh packages do not match pinned version {{ wazuh_version }}."
+  when: wazuh_execution_mode in ["install", "validate"]
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  when: wazuh_execution_mode in ["install", "validate"]
+
+- name: Verify expected Wazuh services are running
+  ansible.builtin.assert:
+    that:
+      - (item ~ ".service") in ansible_facts.services
+      - ansible_facts.services[item ~ ".service"].state == "running"
+    fail_msg: "Expected service {{ item }} is not installed and running."
+  loop: "{{ wazuh_expected_services }}"
+  when: wazuh_execution_mode in ["install", "validate"]
+
+- name: Verify expected Wazuh listeners locally
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ item }}"
+    state: started
+    timeout: 5
+  loop: "{{ wazuh_expected_tcp_ports }}"
+  when: wazuh_execution_mode in ["install", "validate"]
+
+- name: Create restricted MSSP state directory
+  ansible.builtin.file:
+    path: "{{ wazuh_state_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: wazuh_execution_mode == "install"
+
+- name: Record successful pinned-version installation
+  ansible.builtin.copy:
+    content: "Wazuh {{ wazuh_version }} validated by KB-041 automation.\n"
+    dest: "{{ wazuh_install_marker }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: wazuh_execution_mode == "install"

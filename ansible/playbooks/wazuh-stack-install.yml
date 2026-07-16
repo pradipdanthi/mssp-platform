@@ -1,37 +1,14 @@
 ---
-# KB-041 stub: Wazuh stack install — NOT for live execution yet.
-# Target: VM 101 (wazuh-stack) — see docs/KB040_WAZUH_STACK_VM_DEPLOYMENT_PLAN.md
-#
-# Deferred: run only after VM 101 is provisioned and secrets are in Ansible Vault.
-# Security: no secrets in this file. Use no_log on credential tasks in real install.
-# Customer safety: Wazuh is SOC backend only — raw logs never reach customer portal.
+# KB-041: VM 101 Wazuh automation preparation.
+# Safe default: preflight only. Live installation requires a separate approval,
+# an existing VM 101 snapshot, a verified installer SHA-256, and both explicit
+# execution controls documented in the KB-041 runbook.
+# No secrets belong in this file or elsewhere in Git.
 
-- name: Wazuh stack install (stub)
+- name: KB-041 Wazuh stack preflight, install, or validation
   hosts: wazuh_stack
-  gather_facts: false
-  vars:
-    wazuh_install_stub_mode: true
-  tasks:
-    - name: "Phase 1 — Pre-flight checks (stub)"
-      ansible.builtin.debug:
-        msg: "Deferred: OS version, disk space, port availability on VM 101."
-
-    - name: "Phase 2 — Wazuh Indexer install (stub)"
-      ansible.builtin.debug:
-        msg: "Deferred: Install and configure Wazuh Indexer / OpenSearch."
-
-    - name: "Phase 3 — Wazuh Manager install (stub)"
-      ansible.builtin.debug:
-        msg: "Deferred: Install Wazuh Manager and connect to Indexer."
-
-    - name: "Phase 4 — Wazuh Dashboard install (stub)"
-      ansible.builtin.debug:
-        msg: "Deferred: Install Dashboard for SOC analysts — not customer-facing."
-
-    - name: "Phase 5 — Service health validation (stub)"
-      ansible.builtin.debug:
-        msg: "Deferred: Verify manager API, indexer green, dashboard login."
-
-    - name: "Phase 6 — Cluster registry hook (stub)"
-      ansible.builtin.debug:
-        msg: "Deferred: Register soc_clusters record per KB-037 — admin API only."
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: wazuh_stack

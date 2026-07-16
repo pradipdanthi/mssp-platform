@@ -1,8 +1,8 @@
 # KB-041 — Wazuh Stack Installation and Validation
 
-Status: Implemented (pending validation/commit).  
+Status: Infrastructure automation prepared; live execution requires separate approval.
 Branch: `kb039-kb060-platform-roadmap-execution`  
-Module type: **Planning / Ansible playbook stub only** — **NOT** a live Wazuh install.
+Module type: **Infrastructure automation** — **NOT** a live Wazuh install.
 
 Builds on: `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`, `docs/KB037_CLUSTER_APPLIANCE_REGISTRY_PLANNING.md`, `docs/KB038_TENANT_DEPLOYMENT_MODE_PLANNING.md`, `docs/KB039_DEPLOYMENT_AUTOMATION_FOUNDATION.md`, and `docs/KB040_WAZUH_STACK_VM_DEPLOYMENT_PLAN.md`.
 
@@ -10,9 +10,14 @@ Builds on: `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`, `docs/KB037_CLUST
 
 ## 1. Purpose
 
-Provide an **Ansible playbook stub** (`ansible/playbooks/wazuh-stack-install.yml`) and validation plan for installing and validating the Wazuh stack on **VM 101 (`wazuh-stack`)**.
+Provide a safe, version-pinned Ansible role and playbook
+(`ansible/playbooks/wazuh-stack-install.yml`) for preflighting, installing, and
+validating the Wazuh stack on **VM 101 (`wazuh-stack`)**.
 
-This KB documents **what KB-041 will do when executed** — it does **not** run installs in the lab until explicitly approved and VM 101 exists.
+The automation defaults to **preflight only**. This preparation pass does
+**not** contact Proxmox, create VM 101, or install Wazuh. Live execution remains
+blocked until the user gives separate approval, VM 101 exists, a pre-install
+snapshot exists, and the official installer digest has been verified.
 
 ---
 
@@ -26,21 +31,41 @@ This KB documents **what KB-041 will do when executed** — it does **not** run 
 
 ---
 
-## 3. Playbook stub
+## 3. Prepared automation
 
 File: `ansible/playbooks/wazuh-stack-install.yml`
 
-The stub lists planned task phases with `ansible.builtin.debug` placeholders:
+Role: `ansible/roles/wazuh_stack/`
 
-1. Pre-flight (OS, disk, ports)
-2. Wazuh Indexer install
-3. Wazuh Manager install
-4. Wazuh Dashboard install
-5. Service health checks
-6. Post-install validation (API, indexer cluster green)
-7. Register cluster metadata hook (future `soc_clusters` API)
+The role provides three explicit modes:
 
-**Do not run this playbook until VM 101 is provisioned and secrets are in Vault.**
+| Mode | Behavior |
+|---|---|
+| `preflight` | Default. Checks VM identity, OS, architecture, RAM, disk, and current listeners. Makes no package changes. |
+| `install` | Runs only when `wazuh_live_install_approved=true` and a verified 64-character SHA-256 digest is supplied. |
+| `validate` | Verifies pinned package versions, services, and local listeners on an existing installation. |
+
+The pinned release for this preparation is **Wazuh 4.14.6** (official release,
+1 July 2026). The official 4.14 installation assistant performs the all-in-one
+deployment of Manager, Indexer, Dashboard, and Filebeat. The role disables the
+Wazuh APT repository afterward to prevent an accidental unreviewed upgrade.
+
+### 3.1 Safety interlocks
+
+- Safe defaults: `wazuh_execution_mode=preflight` and
+  `wazuh_live_install_approved=false`.
+- Installation is limited to inventory `vm_id=101` with
+  `deployment_role=wazuh_cluster`.
+- Installer SHA-256 must be verified out-of-band immediately before deployment.
+- Installer output uses `no_log: true` because the official assistant generates
+  credentials.
+- Generated credentials remain root-only on VM 101 and must be transferred to
+  the approved secrets system; **no secrets in Git**.
+- A successful installation marker is written only after package, service, and
+  listener validation passes.
+
+**Do not run this playbook against VM 101 until provisioning, Vault/secrets
+handling, and a pre-install snapshot are separately approved.**
 
 ---
 
@@ -88,13 +113,26 @@ The stub lists planned task phases with `ansible.builtin.debug` placeholders:
 
 | Item | Deferred to |
 |---|---|
-| `ansible-playbook wazuh-stack-install.yml` | After VM 101 exists + ops approval |
-| Wazuh version pinning and package URLs | Implementation pass in KB-041 execution |
-| Indexer certificate management | Vault + KB-060 runbook |
+| Proxmox VM 101 creation | Separate explicit infrastructure approval |
+| VM 101 pre-install snapshot | After OS provisioning, before Wazuh installation |
+| `ansible-playbook wazuh-stack-install.yml` | After VM 101 exists + separate live-deployment approval |
+| Installer SHA-256 verification | Immediately before the approved deployment |
+| Generated credential custody | Approved secrets system / Vault, never Git |
+| Indexer certificate management | VM 101 restricted files + KB-060 runbook |
 | Cluster registry write-back | Future schema/API KB |
 | Production hardening | KB-060 |
 
-**KB-041 stub validation passes without installing Wazuh.**
+### 8.1 Target and rollback
+
+- **Provisioning target:** Proxmox host creates VM 101.
+- **Installation target:** VM 101 (`wazuh-stack`, proposed `192.168.0.211`).
+- **Control plane:** VM 100 remains unchanged; Wazuh is never installed there.
+- **Rollback:** restore the VM 101 pre-install snapshot. If provisioning itself
+  fails, remove only the newly-created VM 101 after confirming VM ID and scope.
+- Existing VM 100 snapshot `kb060-ok` remains the control-plane safety baseline.
+
+**KB-041 preparation validation passes without contacting VM 101 or installing
+Wazuh.**
 
 ---
 
@@ -104,7 +142,11 @@ The stub lists planned task phases with `ansible.builtin.debug` placeholders:
 
 - `docs/KB041_WAZUH_STACK_INSTALLATION_VALIDATION.md` (this file)
 - `scripts/kb041_validate_wazuh_stack_installation_validation.sh`
-- `ansible/playbooks/wazuh-stack-install.yml` (stub)
+- `ansible/playbooks/wazuh-stack-install.yml`
+- `ansible/group_vars/all.yml`
+- `ansible/roles/wazuh_stack/defaults/main.yml`
+- `ansible/roles/wazuh_stack/tasks/main.yml`
+- `ansible/roles/wazuh_stack/handlers/main.yml`
 
 ### Must not change
 
@@ -120,6 +162,11 @@ cd /opt/mssp-control
 chmod +x scripts/kb041_validate_wazuh_stack_installation_validation.sh
 ./scripts/kb041_validate_wazuh_stack_installation_validation.sh
 ```
+
+The validator parses YAML, checks execution interlocks and the Wazuh version
+pin, scans for obvious secrets, confirms protected application paths are
+unchanged, and runs `ansible-playbook --syntax-check` when Ansible is available.
+It does **not** use the live inventory or connect to any host.
 
 Expected final line:
 

@@ -1,0 +1,42 @@
+---
+# KB-041: Safe defaults for the VM 101 Wazuh all-in-one role.
+# This role is preflight-only unless both execution controls are overridden.
+
+wazuh_version: "4.14.6"
+wazuh_repository_major_minor: "4.14"
+wazuh_install_assistant_url: >-
+  https://packages.wazuh.com/{{ wazuh_repository_major_minor }}/wazuh-install.sh
+
+# Obtain the SHA-256 digest out-of-band immediately before an approved
+# deployment. The role refuses installation until this is exactly 64
+# hexadecimal characters. It is integrity metadata, not a secret.
+wazuh_install_assistant_sha256: "<SET_VERIFIED_SHA256_BEFORE_DEPLOYMENT>"
+
+wazuh_execution_mode: "preflight"
+wazuh_live_install_approved: false
+wazuh_install_directory: "/root/wazuh-install"
+wazuh_state_directory: "/var/lib/mssp/wazuh"
+wazuh_install_marker: "{{ wazuh_state_directory }}/{{ wazuh_version }}.installed"
+
+wazuh_supported_distributions:
+  - Ubuntu
+wazuh_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+wazuh_supported_architectures:
+  - x86_64
+  - aarch64
+wazuh_minimum_memory_mb: 7800
+wazuh_minimum_root_disk_gb: 50
+
+wazuh_expected_services:
+  - wazuh-manager
+  - wazuh-indexer
+  - wazuh-dashboard
+  - filebeat
+wazuh_expected_tcp_ports:
+  - 443
+  - 1514
+  - 1515
+  - 55000
+  - 9200

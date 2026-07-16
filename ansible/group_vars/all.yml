@@ -7,7 +7,18 @@ mssp_control_plane_url: "http://192.168.0.201:8000"
 ansible_user_placeholder: "<SET_VIA_VAULT_OR_ENV>"
 ssh_private_key_path_placeholder: "<SET_VIA_VAULT_OR_ENV>"
 
-# Wazuh placeholders (KB-040/041) — admin-only URLs, never customer API
+# Wazuh KB-041 public configuration — no credentials
+wazuh_version: "4.14.6"
+wazuh_repository_major_minor: "4.14"
+wazuh_execution_mode: "preflight"
+wazuh_live_install_approved: false
+
+# Integrity value required only after a separate live-deployment approval.
+# Verify it out-of-band against the exact official installer immediately
+# before deployment; do not bypass the role's 64-hex-character assertion.
+wazuh_install_assistant_sha256: "<SET_VERIFIED_SHA256_BEFORE_DEPLOYMENT>"
+
+# Admin-only URLs, never customer API
 wazuh_manager_url_placeholder: "<SET_AT_DEPLOY_TIME>"
 wazuh_indexer_url_placeholder: "<SET_AT_DEPLOY_TIME>"
 wazuh_dashboard_url_placeholder: "<SET_AT_DEPLOY_TIME>"
