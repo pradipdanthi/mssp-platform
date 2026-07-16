@@ -1,9 +1,11 @@
 # CLAUDE.md — Claude / Cursor Operating Instructions
 
-Status: Permanent reference document. Created in KB-009A.
+Status: Permanent reference document. Created in KB-009A; refreshed in **KB-032** (AI context doc sync).
 Audience: Claude (in Cursor or Claude Code), and any other AI coding agent that reads a `CLAUDE.md` convention file.
 
-This file tells you, the AI agent, exactly how to operate in this repository. `AGENTS.md` is the full rulebook (project overview, architecture, security, tenant isolation, coding standards). This file is the shorter "how to behave right now" companion — read both.
+This file tells you how to operate in this repository. `AGENTS.md` is the full rulebook. `CONTEXT.md` is the short “where we are now” snapshot. Read them with this file.
+
+**Source of truth:** Live git tags/commits, validation-script output, and inspected source files beat stale documentation. If docs disagree with `git log` / `git tag`, say so and trust git.
 
 ---
 
@@ -11,59 +13,58 @@ This file tells you, the AI agent, exactly how to operate in this repository. `A
 
 Before doing anything in this repository, read, in this order:
 
-1. `/opt/mssp-control/AGENTS.md` — full project rules, architecture, security, tenant isolation, coding standards.
-2. `/opt/mssp-control/.cursor/rules/mssp-control-plane.mdc` — condensed always-applied rule set (Cursor will usually inject this automatically).
-3. `/opt/mssp-control/docs/KB009_AI_DEVELOPMENT_WORKFLOW.md` — how ChatGPT/Cursor/Claude are meant to work together on this project, and the branch/validation workflow.
-4. The specific files relevant to the current task (e.g. `backend-api/app/main.py`, `postgres/init/001_mssp_core_schema.sql`, `docker-compose.yml`) — always read a file before editing it.
-5. `docs/AI_PROMPT_LEDGER.md` — to see what previous AI-assisted changes were made, so you don't repeat or contradict them.
+1. `/opt/mssp-control/CONTEXT.md` — current validated state through KB-031+ and next candidates.
+2. `/opt/mssp-control/AGENTS.md` — full project rules, architecture, security, tenant isolation.
+3. `/opt/mssp-control/.cursor/rules/mssp-control-plane.mdc` — condensed always-applied Cursor rules.
+4. `/opt/mssp-control/docs/AI_PROMPT_LEDGER.md` — prior AI-assisted changes.
+5. The specific source files for the current task — **always inspect before planning or editing**.
 
-If any of these files are missing or seem out of date compared to the real state of the repository, say so before proceeding — do not silently assume.
+If any of these are missing or out of date versus git tags, say so before proceeding.
 
 ---
 
 ## 2. Behavior Rules
 
-- **Inspect before acting:** check the project tree, current Git branch, and `git status` before making any change.
-- **Plan before editing:** give a short, plain-language plan and the exact file list before touching files.
-- **Minimal, targeted changes:** only make the changes requested for the current KB module/task. Do not refactor, rename, or "clean up" unrelated code.
-- **Complete output only:** every file you write must be complete and production-ready. No `# TODO`, no `// implement later`, no `...rest of code...`, no placeholders of any kind.
-- **Respect the do-not-touch list** from `AGENTS.md` section 4 unless the current task explicitly names that file.
-- **Never restart Docker containers** unless explicitly instructed.
-- **Never commit.** Never run `git add .`. Never run `git commit` unless the user's message explicitly asks for a commit in that same request.
-- **Stop and ask** when instructions are ambiguous, contradict `AGENTS.md`, or would require a large architectural change (framework swap, database engine change, tenant isolation model change, etc.).
-- **Security first:** never print `.env` values, never hardcode secrets, never let tenant data leak across tenants, never return password hashes, always use parameterized SQL.
+Short form (must remain searchable): **planning before implementation**, **no .env**, **no /admin** from customer frontend, **validation before commit**.
+
+- **Inspect before acting:** branch, `git status`, tags, and relevant source files.
+- **Plan before implementing:** plain-language plan + exact file list; **do not implement until the plan is reviewed/approved** (unless the user already gave an implement-now approved scope).
+- **Minimal, targeted changes** for the current KB only.
+- **Complete output only** — no placeholders / TODOs in production files.
+- **Respect protected paths** unless the task explicitly allows them: `.env`, `docker-compose.yml`, `postgres/init/`, `frontend-admin/` (for customer work), and do-not-touch files in `AGENTS.md`.
+- **Never restart Docker** unless explicitly instructed.
+- **Never commit / stage / tag** unless the user explicitly asks in that same request.
+- **Never commit before validation passes.**
+- **Security first:** never print `.env`, never hardcode secrets, never leak tenant data, never return password hashes, parameterized SQL only.
+- Customer frontend must **never** call `/admin`.
 
 ---
 
 ## 3. Output Style (this user is not a programmer)
 
-- Explain what you're doing in plain English before and after doing it.
-- Always name the exact file being created/edited, with its full path from `/opt/mssp-control/`.
-- Give complete file contents or complete, unambiguous edits — never partial snippets requiring the user to fill anything in.
-- Give exact, copy-pasteable commands, including the working directory.
-- Show the expected output of each command so the user can tell success from failure at a glance.
-- After making changes, always show `git status --short` so the user can see exactly what changed.
-- Always end a change-making task with: a short summary, the exact file list touched, `git status --short` output, and validation commands to run — then stop and wait. Do not commit.
+- Explain in plain English; always give full paths under `/opt/mssp-control/`.
+- Complete edits only — never “add the rest yourself.”
+- Exact copy-pasteable commands + expected success signals.
+- After changes: summary, file list, `git status --short`, validation command — then **stop and wait**. Do not commit.
 
 ---
 
 ## 4. What to Avoid
 
-- Do not use pseudo-code in production files.
-- Do not say "add the rest yourself" or leave a function body empty/half-written.
-- Do not hide a failed command's output — always show it and explain what went wrong.
-- Do not touch `backend-api/app/main.py`, `docker-compose.yml`, or `postgres/init/001_mssp_core_schema.sql` unless the task explicitly instructs it.
-- Do not convert the product to Streamlit. Streamlit is prototype/demo-only, never the production dashboard.
-- Do not expose Wazuh directly to customers or assume Wazuh credentials/URLs that were not given to you.
-- Do not invent tenant data, customer data, or credentials — use clearly-fake placeholder values if an example is needed.
-- Do not run `docker compose down`, `docker compose restart`, or similar unless explicitly instructed.
-- Do not create frontend scaffolding before a frontend module is explicitly started.
+- Do not invent runtime code when the task is docs-only (KB-032).
+- Do not touch `docker-compose.yml`, `.env`, or `postgres/init/` without explicit approval.
+- Do not call `/admin` from `frontend-customer`.
+- Do not expose forbidden customer fields (secrets, IPs, raw JSON/metrics, `report_file_path`, internal notes, stack traces, appliance credentials, etc.).
+- Do not convert the product to Streamlit or expose Wazuh to customers.
+- Do not start the next feature KB until the user explicitly kicks it off.
 
 ---
 
 ## 5. Validation Discipline
 
-Every code change must come with a way to verify it worked. At minimum, these commands must still succeed after any backend/infra change:
+Every change needs a verification path. Docs-only modules use a docs validation script (e.g. `scripts/kb032_validate_ai_context_doc_sync.sh`). Feature modules need their `scripts/kb0NN_validate_*.sh` and must pass before commit/tag.
+
+Baseline health checks:
 
 ```bash
 cd /opt/mssp-control
@@ -71,43 +72,26 @@ git branch --show-current
 git status --short
 docker compose ps
 curl -fsS http://localhost:8000/health | jq .
-./scripts/kb008_validate_backend_api_foundation.sh
 ```
 
-For a new module (e.g. KB-010 auth), also provide a new validation script or explicit `curl`/`jq` commands specific to that module's new endpoints, following the pattern in `scripts/kb008_validate_backend_api_foundation.sh` (clear section headers, explicit pass/fail checks, non-zero exit on failure).
-
-Rules:
-- Never claim a change works without showing the command and its actual/expected output.
-- If a validation command fails, show the failure verbatim and propose a fix — do not paper over it.
-- Do not mark a KB module "done" until its validation script or command set passes.
+Safe delivery order: **validation script first → then commit → then tag → then Proxmox snapshot** (only when the user requests each step).
 
 ---
 
-## 6. Current Module: KB-012 (implemented and VALIDATED)
+## 6. Current Module Context (through KB-031; KB-032 = docs sync)
 
-**KB-010 Phase 1 — Authentication / Login + Role-Based Access Control foundation — validated, committed (`7fbb3d2`), tagged `kb010-auth-rbac-phase1-validated`:**
-- `platform_users.password_hash` column added (nullable, bcrypt hashes only).
-- The top admin role was renamed from `super_admin` to `platform_admin`.
-- Endpoints: `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`.
-- JWT (PyJWT) access tokens; `get_current_user` re-checks the live database on every request (not just the token payload).
-- `require_roles(*roles)` and `require_tenant_match(...)` dependencies in `backend-api/app/api/dependencies.py`.
-- Demo users: `soc.manager@example.local` (`soc_manager`), `customer.viewer@demo.local` (`customer_viewer`).
+**Latest validated feature:** **KB-031** Customer Report Detail UI — commit `d27bdea`, tag `kb031-customer-report-detail-validated`.
 
-**KB-011 — Protect existing `/admin/*` and `/customer/*` endpoints — validated, committed (`30ef305`), tagged `kb011-protected-apis-validated`:**
-- 5 `/admin/*` endpoints require `Depends(require_roles("platform_admin", "soc_manager", "soc_analyst"))`; both `/customer/*` endpoints require `Depends(get_current_user)` plus a `require_tenant_match(tenant["id"], current_user)` call. No changes to `dependencies.py` or `auth.py`.
-- Tenant-mismatch on `/customer/*` returns **404** (not 403) to avoid confirming another tenant's existence.
-- Fixture data: tenant `DEMO2`, and demo users `platform.admin@example.local` (`platform_admin`), `soc.analyst@example.local` (`soc_analyst`), `customer.admin@demo2.local` (`customer_admin`, tenant `DEMO2`).
-- Scripts: `scripts/kb011_seed_rbac_fixtures.sh`, `scripts/kb011_validate_protected_apis.sh` (full 401/403/404/200 coverage across all 5 roles and all 7 protected endpoints). Completion summary: `docs/KB011_PROTECTED_APIS_COMPLETION.md`.
+**Customer portal working (port 3001):** dashboard v2; alerts/incidents/assets/reports/recommendations **lists**; detail pages for alerts, incidents, protected assets, reports, and recommendations. Appliance **detail** is still deferred. Customer UI uses `/customer/*` only — **no `/admin`**.
 
-**KB-012 — Backend API Route Modularization Foundation — implemented and VALIDATED:**
-- Structure-only change, **no behavior change**. Moved the 5 `/admin/*` endpoints into `backend-api/app/api/routes/admin.py`, the 2 `/customer/*` endpoints into `backend-api/app/api/routes/customer.py`, and `GET /` / `GET /health` into `backend-api/app/api/routes/health.py` — all moved unchanged (same paths, methods, SQL, response shapes, `Depends(...)` signatures).
-- `backend-api/app/main.py` is now app wiring only: env/app metadata, the `FastAPI` object, and `app.include_router(...)` for `auth_router`, `health_router`, `admin_router`, `customer_router`. No route decorators or SQL helpers remain in it.
-- Added `redis_client()` to `backend-api/app/db/session.py`, moved unchanged from `main.py` — this consolidates all DB/Redis helper functions into one shared module (`db_conn`, `fetch_all`, `fetch_one`, `execute`, `redis_client`), removing the duplicate copies that used to live in `main.py`.
-- New script: `scripts/kb012_validate_route_modularization.sh` — checks the 3 new files exist, `main.py` has no route decorators, `main.py` includes all 4 routers, `/health` and `/auth/roles` remain public and working, `/openapi.json` still lists all 12 expected paths unchanged, and then reruns `scripts/kb011_validate_protected_apis.sh` **unmodified** as the full auth/RBAC/tenant-isolation behavior-regression gate.
-- Completion summary: `docs/KB012_ROUTE_MODULARIZATION_COMPLETION.md`.
+**Auth / isolation:** JWT + bcrypt; `get_current_user` + `require_tenant_match`; wrong tenant → **404**.
 
-**Status: implementation complete, validation PASSED.** Result: `KB-012 ROUTE MODULARIZATION VALIDATION PASSED`. **Not yet committed** — the user decides when to commit.
+**KB-032:** AI Context and Documentation Sync — updates `AGENTS.md`, `CLAUDE.md`, Cursor rules, `CONTEXT.md`, ledger, and validation script only. **No backend/frontend/schema/compose/.env runtime changes.**
 
-**Known, intentional side effect (unchanged from KB-011):** `scripts/kb008_validate_backend_api_foundation.sh` and `scripts/kb010_validate_auth_rbac.sh` still fail on their unauthenticated `/admin/*`/`/customer/*` checks, because those endpoints correctly require a token. Both scripts are left unmodified as historical records; `scripts/kb011_validate_protected_apis.sh` remains the must-pass gate for those endpoints, and `scripts/kb012_validate_route_modularization.sh` is the current must-pass gate for the file/route structure.
+**Next feature candidates after KB-032 is validated/committed:**
 
-Do not start a KB-013 module until the user explicitly kicks it off in a new prompt.
+1. Customer notifications history
+2. Customer appliance detail
+3. Account/profile hardening
+
+Do not implement those until planning is approved.

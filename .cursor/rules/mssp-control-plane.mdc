@@ -6,62 +6,70 @@ alwaysApply: true
 
 # MSSP Control Plane — Always-Applied Project Rules
 
-This project is a private, multi-tenant, AI-assisted MSSP/SOC control plane. Full detail lives in `AGENTS.md` and `CLAUDE.md` at the repository root — read them. This file is the condensed rule set Cursor injects into every request.
+This project is a private, multi-tenant, AI-assisted MSSP/SOC control plane. Full detail lives in `AGENTS.md`, `CLAUDE.md`, and `CONTEXT.md` at the repository root — read them.
+
+**Source of truth:** Git tags/commits and validation-script PASS lines beat stale docs. Always inspect current files before planning. Do not implement before planning is reviewed/approved (unless the user already provided an approved implement scope).
 
 ## Project Summary
 
-- We are building a branded, web-based MSSP/SOC control plane — not a Wazuh dashboard, not a Streamlit prototype.
-- Architecture: FastAPI backend + PostgreSQL + Redis + Docker Compose, with future separate admin and customer dashboard frontends.
-- Wazuh, Suricata, MISP, TheHive/Cortex, Shuffle/n8n, Prometheus/Grafana are backend detection engines/adapters only. Customers never log into them directly.
-- The platform is multi-tenant: SOC/admin dashboard manages all tenants; customer dashboard shows only that customer's own data.
+- Branded web MSSP/SOC control plane — not a Wazuh UI, not Streamlit-as-product.
+- Architecture: FastAPI + PostgreSQL + Redis + Docker Compose; admin UI (`frontend-admin`, :3000) and customer UI (`frontend-customer`, :3001).
+- Wazuh/Suricata/etc. are backend adapters only.
+- Multi-tenant: admin/SOC sees cross-tenant tools; customers see only their tenant.
 
-## Current State
+## Current State (synced KB-032; features through KB-031)
 
-- VM: `mssp-control`, project path `/opt/mssp-control`.
-- Active branch: `kb012-api-route-modularization`.
-- Known-good baseline tag: `kb008-validated-foundation` (commit `c52bca1`). AI rules tag: `kb009a-ai-development-rules`. KB-010 validated tag: `kb010-auth-rbac-phase1-validated` (commit `7fbb3d2`). KB-011 validated tag: `kb011-protected-apis-validated` (commit `30ef305`).
-- Running containers: `mssp-postgres`, `mssp-redis`, `mssp-backend-api`.
-- Backend: `backend-api/app/main.py` is now (KB-012) app wiring only — env/app metadata, the `FastAPI` object, and `include_router(...)` for `auth_router`, `health_router`, `admin_router`, `customer_router`. All route logic lives under `backend-api/app/api/routes/`: `auth.py` (KB-010), `health.py` (`GET /`, `GET /health` — public), `admin.py` (5 `/admin/*` endpoints, `Depends(require_roles("platform_admin","soc_manager","soc_analyst"))`), `customer.py` (2 `/customer/*` endpoints, `Depends(get_current_user)` + `require_tenant_match(...)`, 404 not 403 on tenant mismatch). **KB-012: implemented and VALIDATED** (`KB-012 ROUTE MODULARIZATION VALIDATION PASSED`), not yet committed. No auth/RBAC/tenant-isolation behavior changed — only file locations.
-- Auth: `backend-api/app/api/routes/auth.py` — `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, backed by JWT (PyJWT) + bcrypt, with `get_current_user`/`require_roles`/`require_tenant_match` dependencies in `backend-api/app/api/dependencies.py` (unchanged by KB-011 and KB-012).
-- Database schema: `postgres/init/001_mssp_core_schema.sql` (original) + `postgres/init/002_kb010_auth_rbac.sql` (adds `platform_users.password_hash`, renames role `super_admin` → `platform_admin`). No schema changes in KB-011 or KB-012 — only new fixture *rows* from KB-011 (tenant `DEMO2`; users `platform.admin@example.local`, `soc.analyst@example.local`, `customer.admin@demo2.local`) via `scripts/kb011_seed_rbac_fixtures.sh`. Tables: `tenants`, `platform_users`, `tenant_contacts`, `appliance_activation_tokens`, `appliances`, `protected_assets`, `appliance_heartbeats`, `security_alerts`, `incidents`, `incident_alerts`, `incident_timeline`, `incident_comments`, `notification_events`, `customer_recommendations`, `monthly_reports`, `audit_logs`.
-- `backend-api/app/db/session.py` now holds every shared DB/Redis helper (`db_conn`, `fetch_all`, `fetch_one`, `execute`, `redis_client`) — `redis_client()` was added here in KB-012, moved unchanged from `main.py`.
-- Completed: KB-001–KB-007 (infra/foundation), KB-008 (backend API foundation), KB-009A (AI rules module), KB-010 Phase 1 (auth/RBAC foundation, validated/committed), KB-011 (protect `/admin/*` and `/customer/*`, validated/committed, tag `kb011-protected-apis-validated`), KB-012 (route modularization, validated — see `docs/KB012_ROUTE_MODULARIZATION_COMPLETION.md`), not yet committed.
-- Next: KB-013 (or next real feature module), once KB-012 is committed and the user kicks off the next module.
+- VM: `mssp-control`, path `/opt/mssp-control`.
+- Latest validated feature: **KB-031** commit `d27bdea`, tag `kb031-customer-report-detail-validated`.
+- Docs-sync branch: `kb032-ai-context-doc-sync` (documentation only).
+- Containers: `mssp-postgres`, `mssp-redis`, `mssp-backend-api`, `mssp-frontend-admin`, `mssp-frontend-customer`.
+- Backend: `main.py` is wiring only; routes under `backend-api/app/api/routes/` including rich `customer.py` (dashboard, incidents±detail, alerts±detail, assets±asset-detail, reports±detail, recommendations±detail).
+- Customer portal: login/dashboard v2 + list/detail for alerts, incidents, protected assets, reports, recommendations. **No appliance detail yet. No `/admin` calls from customer frontend.**
+- Auth: JWT + bcrypt; `get_current_user` / `require_roles` / `require_tenant_match`; customer mismatch → **404**.
+- Next feature candidates: customer notifications history; customer appliance detail; account/profile hardening.
 
-## Security Rules (mandatory, no exceptions)
+## Safe KB Workflow
+
+Short form: **planning before implementation**, **no .env**, customer frontend has **no /admin**, **validation before commit**.
+
+1. Confirm branch + clean `git status`.
+2. Inspect live code/docs/tags (do not rely on memory).
+3. Plan → wait for approval → implement approved scope only.
+4. Run module validation script until PASS.
+5. Commit / tag / Proxmox snapshot **only when the user asks**, and **only after validation**.
+6. Never commit before validation.
+
+## Security Rules (mandatory)
 
 - Never commit `.env`. Never print `.env` values. Never expose secrets.
 - Never hardcode passwords, API keys, JWT secrets, Wazuh credentials, or customer tokens.
 - Never return password hashes in API responses.
-- Use secure password hashing (bcrypt/argon2) and JWT (or equivalent) for authentication.
-- Use role-based access control on every protected endpoint.
-- Handle Wazuh/API timeouts and malformed alerts safely — never crash ingestion on bad input.
-- Never expose stack traces to customers; log detailed errors server-side for SOC/admin troubleshooting.
-- Prefer safe, loud failure over silent failure.
+- RBAC on protected endpoints; parameterized SQL only.
+- Never expose stack traces to customers.
 
-## Tenant Isolation Rules (mandatory, no exceptions)
+## Tenant Isolation Rules (mandatory)
 
-- Every tenant-owned table has `tenant_id`; every query touching it must filter by `tenant_id`.
-- Customer-facing endpoints must derive `tenant_id` from the authenticated caller, never trust a client-supplied tenant identifier without cross-checking it against the caller's own tenant.
-- Customer A must never see Customer B's data under any circumstance.
-- SOC/admin cross-tenant endpoints must live under admin-only routes and require an admin/SOC role.
-- Any new tenant-owned table must include `tenant_id UUID NOT NULL REFERENCES tenants(id)` plus a supporting index, matching the existing schema style.
+- Filter tenant-owned data by `tenant_id`.
+- Customer APIs: derive tenant from auth + short_code resolution + `require_tenant_match`.
+- Wrong tenant / hidden draft / non-visible rows → **404**, not 403.
+- Customer A never sees Customer B data.
 
-## Do-Not-Touch Rules
+## Forbidden Customer Payload Fields (examples)
 
-Do not modify these unless the current user request explicitly names the file/action:
+Do not expose: `password`/`password_hash`, `token`/`token_hash`, `api_key`/appliance key hash/hint, activation tokens, `raw_event`/`raw_json`/`details`/`metrics`/`health_snapshot`/`report_file_path`, IPs, `internal_notes`/`admin_notes`, technical AI/MITRE internals not approved for customers, stack traces, backend internals.
 
-- `backend-api/app/main.py`
+## Protected Paths (require explicit task permission)
+
+- `.env`
 - `docker-compose.yml`
-- `postgres/init/001_mssp_core_schema.sql` (never delete/recreate/replace the schema)
-- `.env` (never read its values back, never edit blindly, never commit)
-- Do not restart, stop, or rebuild any Docker container unless explicitly instructed.
-- Do not run `git add .` or `git commit` unless explicitly instructed in that same request.
-- Do not convert the product to Streamlit; do not expose Wazuh directly to customers.
+- `postgres/init/`
+- `frontend-admin/` (when working a customer module)
+- `backend-api/app/main.py` (unless the task names it)
+- Do not restart containers unless instructed.
+- Do not `git add` / `git commit` / tag unless instructed.
+- Customer frontend: **no `/admin`**.
 
-(KB-010 was granted a one-time, explicit exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. KB-011 was separately granted a one-time, explicit exception to add `Depends()` auth/RBAC checks to the 7 existing `/admin/*`/`/customer/*` endpoints in `main.py` — no `docker-compose.yml` change was needed for KB-011. KB-012 was separately granted a one-time, explicit exception to remove all route logic from `main.py` (moved into `backend-api/app/api/routes/health.py`/`admin.py`/`customer.py`), leaving it as app wiring only — again no `docker-compose.yml` change. None of these creates a standing exception — future edits to these files still require explicit instruction.)
-
-## Validation Commands (must keep working)
+## Validation Commands
 
 ```bash
 cd /opt/mssp-control
@@ -69,35 +77,11 @@ git branch --show-current
 git status --short
 docker compose ps
 curl -fsS http://localhost:8000/health | jq .
-./scripts/kb008_validate_backend_api_foundation.sh
-./scripts/kb010_validate_auth_rbac.sh
-./scripts/kb011_validate_protected_apis.sh
-./scripts/kb012_validate_route_modularization.sh
+./scripts/kb031_validate_customer_report_detail_ui.sh
+./scripts/kb032_validate_ai_context_doc_sync.sh
 ```
 
-**KB-011 note:** `/admin/*` and `/customer/*` require a valid token, so the KB-008 script's (and KB-010 script's embedded call to it) unauthenticated checks against those endpoints are expected to fail — this is intentional, not a defect. Both scripts stay unmodified as historical records. **KB-012 note:** `scripts/kb011_validate_protected_apis.sh` remains the must-pass gate for those 7 endpoints; `scripts/kb012_validate_route_modularization.sh` is the current must-pass gate confirming the route-file reorganization (main.py → app/api/routes/health.py, admin.py, customer.py) introduced no behavior change — it reruns `kb011_validate_protected_apis.sh` unmodified as part of its own checks, and both have passed.
+## Communication Rules
 
-## Backend Structure Expectations
-
-Future backend code must be modular, not piled into `main.py`:
-
-```
-backend-api/app/main.py            # app wiring only
-backend-api/app/core/config.py     # settings/env loading
-backend-api/app/core/security.py   # password hashing, JWT, RBAC helpers
-backend-api/app/db/session.py      # database connection/session management
-backend-api/app/api/routes/        # one router module per feature area
-backend-api/app/schemas/           # Pydantic request/response models
-backend-api/app/services/          # business logic
-```
-
-Use parameterized SQL only (no string-formatted queries). Config comes from environment variables only, matching the existing `_env()` helper pattern.
-
-## Communication Rules (the user is not a programmer)
-
-- Explain changes in simple language, always naming the exact file and its full path.
-- Provide complete file content or complete edits — never partial snippets, never "add the rest yourself," never `TODO`/placeholder code in production files.
-- Provide exact commands and their expected output.
-- Never hide a failed command.
-- Never make a large architectural change without first explaining it in plain language and getting explicit approval.
-- Always show `git status --short` after changes, then stop and wait — do not commit automatically.
+- Plain language; full file paths; complete edits; show `git status --short`; stop and wait — do not commit automatically.
+- Never make large architectural changes without plain-language approval.

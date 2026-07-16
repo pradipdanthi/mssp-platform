@@ -77,8 +77,8 @@ The core product architecture is fixed as follows:
 - **PostgreSQL** — primary relational database
 - **Redis** — cache / queue for background work
 - **Docker Compose** — local/VM runtime orchestration
-- **Future admin dashboard frontend** — not yet built
-- **Future customer dashboard frontend** — not yet built
+- **Admin / SOC dashboard frontend** — `frontend-admin/` (port 3000; KB-018+)
+- **Customer dashboard frontend** — `frontend-customer/` (port 3001; KB-021–KB-031)
 - **Wazuh and other open-source tools** — backend detection engines/adapters only
 
 ### Hard architecture rules
@@ -92,15 +92,18 @@ The core product architecture is fixed as follows:
 
 ## 3. Current Validated Baseline
 
+**Source of truth:** Git commits, tags, and validation-script output beat stale prose in this file, `CLAUDE.md`, the Cursor rule, or the prompt ledger. Always `git log` / `git tag` / `git status` and inspect live files before planning.
+
 - **VM name:** mssp-control
 - **Project path:** `/opt/mssp-control`
-- **Active Git branch:** `kb012-api-route-modularization`
-- **Known-good baseline tag:** `kb008-validated-foundation`
-- **Known-good baseline commit:** `c52bca1`
+- **Latest validated customer-portal feature KB:** **KB-031** (Customer Report Detail UI)
+- **Latest validated feature commit:** `d27bdea`
+- **Latest validated feature tag:** `kb031-customer-report-detail-validated`
+- **Known-good early baseline tag:** `kb008-validated-foundation` (commit `c52bca1`)
 - **AI development rules tag:** `kb009a-ai-development-rules`
 - **KB-010 Phase 1 validated tag:** `kb010-auth-rbac-phase1-validated` (commit `7fbb3d2`)
 - **KB-011 validated tag:** `kb011-protected-apis-validated` (commit `30ef305`)
-- **KB-012 status:** implemented and **VALIDATED** (`KB-012 ROUTE MODULARIZATION VALIDATION PASSED`) — not yet committed.
+- **Active docs-sync branch (KB-032):** `kb032-ai-context-doc-sync` (documentation only; no runtime change)
 
 ### Current services (Docker Compose)
 
@@ -108,64 +111,74 @@ The core product architecture is fixed as follows:
 |---|---|
 | `mssp-postgres` | PostgreSQL database |
 | `mssp-redis` | Redis cache/queue |
-| `mssp-backend-api` | FastAPI backend |
+| `mssp-backend-api` | FastAPI backend (port 8000) |
+| `mssp-frontend-admin` | Admin/SOC UI (port 3000) |
+| `mssp-frontend-customer` | Customer portal UI (port 3001) |
 
 ### Current backend
 
 - FastAPI backend lives in `backend-api/`.
-- Current main backend file: `backend-api/app/main.py` — as of KB-012, this is app wiring only (env/app metadata, the `FastAPI` object, and 4 `include_router` calls). No route decorators or SQL helpers remain in it.
-- Route logic lives in `backend-api/app/api/routes/`: `auth.py` (KB-010), `health.py`, `admin.py`, `customer.py` (all three moved out of `main.py` in KB-012).
-- `/health` endpoint works and reports API, database, and Redis status.
-- PostgreSQL connectivity works.
-- Redis connectivity works — `redis_client()` now lives in `backend-api/app/db/session.py` (moved there from `main.py` in KB-012).
-- Admin/customer API endpoints exist and are protected (KB-011), validated by `scripts/kb011_validate_protected_apis.sh` and reconfirmed unchanged by `scripts/kb012_validate_route_modularization.sh`:
-  - `GET /admin/dashboard` — `platform_admin`, `soc_manager`, `soc_analyst` only
-  - `GET /admin/tenants` — `platform_admin`, `soc_manager`, `soc_analyst` only
-  - `GET /admin/appliances` — `platform_admin`, `soc_manager`, `soc_analyst` only
-  - `GET /admin/alerts` — `platform_admin`, `soc_manager`, `soc_analyst` only
-  - `GET /admin/incidents` — `platform_admin`, `soc_manager`, `soc_analyst` only
-  - `GET /customer/dashboard/{short_code}` — any authenticated role; `customer_admin`/`customer_viewer` limited to their own tenant (404 on mismatch)
-  - `GET /customer/incidents/{short_code}` — same as above
+- `backend-api/app/main.py` is app wiring only (KB-012+): metadata, `FastAPI` object, router includes.
+- Route logic lives under `backend-api/app/api/routes/` (auth, health, admin, customer, plus later admin/appliance modules).
+- `/health` reports API, database, and Redis status.
+- Customer tenant isolation: `get_current_user` + resolve tenant by `short_code` + `require_tenant_match` → **404** (not 403) on mismatch.
+- Customer APIs (non-exhaustive; see `customer.py` and OpenAPI): dashboard, incidents (+ detail), alerts (+ detail), assets (+ protected-asset detail), reports (+ detail), recommendations (+ detail).
+
+### Current customer portal (`frontend-customer/`, port 3001)
+
+Working through KB-031 (list + detail where noted):
+
+| Area | Routes / behavior |
+|---|---|
+| Auth / shell | Login, branded layout, account page (KB-021) |
+| Dashboard v2 | KPIs + recent lists + latest report (KB-028); no legacy-only dashboard dependency for v2 composition |
+| Alerts | List (KB-022) + detail `/alerts/:alertId` (KB-029) |
+| Incidents | List + detail `/incidents/:incidentNumber` (KB-025) |
+| Assets | Appliances + protected assets list (KB-023) + protected-asset detail `/assets/:assetId` (KB-030); **no appliance detail yet** |
+| Reports | List (KB-024) + detail `/reports/:reportId` (KB-031); published/archived only; no PDF/metrics |
+| Recommendations | List (KB-026) + detail `/recommendations/:recommendationId` (KB-027) |
+
+**Hard rule:** `frontend-customer` must **never** call `/admin` APIs.
 
 ### Current database
 
-- PostgreSQL schema already exists.
-- Schema file: `postgres/init/001_mssp_core_schema.sql`.
-- **Do not delete, recreate, or replace the schema** unless explicitly instructed later.
+- Schema file: `postgres/init/001_mssp_core_schema.sql` (+ later additive migrations such as KB-010/KB-016 under `postgres/init/`).
+- **Do not delete, recreate, or replace the schema** unless explicitly instructed.
+- Core tables include: `tenants`, `platform_users`, `appliances`, `protected_assets`, `security_alerts`, `incidents`, `customer_recommendations`, `monthly_reports`, `notification_events`, `audit_logs`, and related join/timeline tables.
 
-Existing product tables:
+### Completed KB modules (high level)
 
-```
-tenants
-platform_users
-tenant_contacts
-appliance_activation_tokens
-appliances
-protected_assets
-appliance_heartbeats
-security_alerts
-incidents
-incident_alerts
-incident_timeline
-incident_comments
-notification_events
-customer_recommendations
-monthly_reports
-audit_logs
-```
+- **KB-001–KB-009A:** Infra/foundation + AI agent rules docs.
+- **KB-010–KB-017:** Auth/RBAC, protected APIs, route modularization, admin tenant/user/appliance APIs, appliance registration/heartbeat, credential visibility/rotation.
+- **KB-018–KB-020:** Admin frontend foundation, activation-token UI, production bootstrap / demo separation.
+- **KB-021:** Customer frontend foundation.
+- **KB-022–KB-024:** Customer alerts / assets / reports list APIs + UI.
+- **KB-025–KB-027:** Incident detail; recommendations list + detail.
+- **KB-028:** Customer Dashboard v2.
+- **KB-029–KB-031:** Alert detail; protected-asset detail; report detail — tags `kb029-…` through `kb031-customer-report-detail-validated` (`d27bdea`).
+- **KB-032:** AI context / documentation sync (this update) — docs only.
 
-### Completed KB modules
+### Next module (after KB-032 docs sync is validated/committed)
 
-- **KB-001 to KB-007:** Proxmox host preparation, Ubuntu VM creation, Docker installation, PostgreSQL and Redis foundation, MSSP schema creation, demo tenant/appliance/alert/incident data, final foundation validation.
-- **KB-008:** FastAPI backend foundation, PostgreSQL connectivity, Redis connectivity, `/health` endpoint, read-only admin/customer preview endpoints, validation script passed.
-- **KB-009A:** AI development rules and prompt framework — documentation only, no runtime changes.
-- **KB-010 (Phase 1):** Authentication/Login + Role-Based Access Control foundation. Added `platform_users.password_hash`, renamed the top role from `super_admin` to `platform_admin`, added `POST /auth/login`, `GET /auth/me`, `GET /auth/roles`, JWT access tokens, and reusable `require_roles`/`require_tenant_match` RBAC/tenant-isolation dependencies. The existing `/admin/*` and `/customer/*` preview endpoints were intentionally left unauthenticated in this phase — KB-008 validation still passed unchanged at the time. Validated, committed (`7fbb3d2`), and tagged `kb010-auth-rbac-phase1-validated`.
-- **KB-011:** Protected the existing `/admin/*` and `/customer/*` preview endpoints using the KB-010 auth foundation (`require_roles`, `get_current_user`, `require_tenant_match` — no changes were needed to those dependencies themselves). `platform_admin`/`soc_manager`/`soc_analyst` can access all `/admin/*` endpoints and read any tenant's `/customer/*` data for support/troubleshooting; `customer_admin`/`customer_viewer` can only reach their own tenant's `/customer/*` data (404, not 403, on a tenant mismatch, to avoid confirming another tenant's existence). Added a permanent second demo tenant (`DEMO2`) and demo accounts for the 3 previously-missing roles (`platform_admin`, `soc_analyst`, `customer_admin`). Validated by `scripts/kb011_validate_protected_apis.sh` — result: `KB-011 PROTECTED APIS VALIDATION PASSED`. See `docs/KB011_PROTECTED_APIS_COMPLETION.md`. Validated, committed (`30ef305`), and tagged `kb011-protected-apis-validated`.
-- **KB-012:** Backend API Route Modularization Foundation — structure-only change, no behavior change. Moved the 5 `/admin/*` endpoints, the 2 `/customer/*` endpoints, and `GET /`/`GET /health` out of `backend-api/app/main.py` into new `backend-api/app/api/routes/admin.py`, `customer.py`, and `health.py` modules. `main.py` is now app wiring only (metadata, `FastAPI` object, 4 `include_router` calls) — no route decorators, no SQL helpers. Added `redis_client()` to `backend-api/app/db/session.py` (moved unchanged from `main.py`), consolidating all DB/Redis helpers into one shared module. Validated by `scripts/kb012_validate_route_modularization.sh` — result: `KB-012 ROUTE MODULARIZATION VALIDATION PASSED` (includes an unmodified rerun of `scripts/kb011_validate_protected_apis.sh` as the behavior-regression gate, plus an `/openapi.json` path check). See `docs/KB012_ROUTE_MODULARIZATION_COMPLETION.md` for the full completion summary. **Not yet committed.**
+Feature candidates (user must explicitly kick off one):
 
-### Next module
+1. Customer **notifications** history
+2. Customer **appliance detail** (deferred from KB-030)
+3. Customer **account/profile hardening**
 
-- **KB-013 (or next real feature module):** to be defined once KB-012 is committed.
+Do **not** implement a feature KB until a planning pass is reviewed and approved.
+
+### Safe KB workflow (mandatory)
+
+Remember the short form: **planning before implementation**, **no .env**, customer UI has **no /admin**, and **validation before commit**.
+
+1. Confirm branch + clean tree (`git branch`, `git status`).
+2. **Inspect** live files, git tags, and prior KB docs — do not trust memory or stale summaries alone.
+3. **Plan only** first; stop for approval before implementing.
+4. Implement only approved scope.
+5. Run the module **validation script** and fix until it passes.
+6. **Then** (only if the user asks): commit → tag → Proxmox snapshot.
+7. Never commit before validation. Never invent secrets. Never edit `.env` / `docker-compose.yml` / `postgres/init/` / `frontend-admin/` unless the task explicitly allows it.
 
 ---
 
@@ -189,11 +202,12 @@ Every AI agent (Cursor, Claude, ChatGPT-assisted edits, or any future agent) wor
 
 - `backend-api/app/main.py` (unless the current task explicitly says to edit it)
 - `docker-compose.yml` (unless the current task explicitly says to edit it)
-- `postgres/init/001_mssp_core_schema.sql` (schema must not be deleted/recreated/replaced without explicit instruction)
+- `postgres/init/` schema/migration files (must not be deleted/recreated/replaced without explicit instruction)
 - `.env` (never read its values back to the user, never edit blindly, never commit)
+- `frontend-admin/` (unless the task is explicitly an admin-frontend module)
 - Any running container (no restarts unless explicitly instructed)
 
-Note: KB-010 was granted a specific, explicit one-time exception to add a single `JWT_SECRET` line to `docker-compose.yml` and a 2-line router-registration edit to `main.py`. KB-011 was separately granted an explicit one-time exception to add `Depends()` authentication/RBAC checks to the 7 existing `/admin/*` and `/customer/*` endpoints in `main.py` — no `docker-compose.yml` change was needed for KB-011. KB-012 was separately granted an explicit one-time exception to remove all route logic from `main.py` (moving it into `backend-api/app/api/routes/health.py`, `admin.py`, `customer.py`) so that `main.py` became app wiring only — again, no `docker-compose.yml` change. None of these exceptions creates a standing exception — future edits to these files still require explicit instruction in that task.
+One-time historical exceptions (KB-010/011/012/`docker-compose` JWT line, etc.) do **not** create standing permission to edit those files.
 
 ---
 
@@ -218,6 +232,7 @@ This is a multi-tenant MSSP platform handling other companies' security data. Se
 - Do not expose stack traces or internal error detail to customers.
 - Log useful errors for admin/SOC troubleshooting (server-side logs may be detailed; customer-facing responses must not be).
 - Prefer safe failure behavior over silent failure — if something fails, it should fail loudly in logs/monitoring, not disappear silently.
+- Customer API responses must omit forbidden fields such as: `password` / `password_hash`, `token` / `token_hash`, `api_key` / appliance key hashes/hints, activation tokens, `raw_event` / `raw_json` / `details` / `metrics` / `health_snapshot` / `report_file_path`, IPs (`source_ip`, `destination_ip`, `local_ip`, `ip_address`, `last_source_ip`), `internal_notes` / `admin_notes`, `mitre_mapping`, technical AI internals not approved for customers, and stack traces.
 
 ---
 
@@ -259,10 +274,11 @@ Additional standards:
 
 ## 8. Frontend Direction
 
-- No frontend exists yet. It is planned as two separate frontends: an **admin/SOC dashboard** and a **customer dashboard**, both consuming the FastAPI backend over HTTP APIs.
+- **Admin frontend** exists at `frontend-admin/` (port 3000).
+- **Customer frontend** exists at `frontend-customer/` (port 3001) through KB-031 list/detail coverage above.
 - Streamlit may be used later purely for internal prototypes or SOC demo screens — never as the production customer-facing product.
-- The eventual production frontend technology choice has not been made yet and must be explicitly discussed and approved before implementation begins — this counts as a "large architectural change."
-- Until a frontend module is explicitly started, AI agents should not scaffold frontend frameworks, add frontend dependencies, or create frontend directories.
+- Customer UI must call only `/api/customer/...` (and auth) paths — **never** `/admin`.
+- Do not scaffold unrelated frontend frameworks or rewrite the existing portals without an explicit approved module.
 
 ---
 
@@ -296,15 +312,14 @@ git branch --show-current
 git status --short
 docker compose ps
 curl -fsS http://localhost:8000/health | jq .
-./scripts/kb008_validate_backend_api_foundation.sh
-./scripts/kb010_validate_auth_rbac.sh
 ./scripts/kb011_validate_protected_apis.sh
-./scripts/kb012_validate_route_modularization.sh
+./scripts/kb031_validate_customer_report_detail_ui.sh
+./scripts/kb032_validate_ai_context_doc_sync.sh
 ```
 
-**Important — KB-011 changed the meaning of the above list.** As of KB-011, `/admin/*` and `/customer/*` require a valid token, so `scripts/kb008_validate_backend_api_foundation.sh` (which calls those endpoints with no token and expects `200`) and `scripts/kb010_validate_auth_rbac.sh` (which internally re-runs the KB-008 script) are expected to **fail** on those specific checks if run after KB-011 ships. This is intentional and correct, not a defect. Both scripts are kept unmodified as historical records of pre-KB-011 behavior. `scripts/kb011_validate_protected_apis.sh` remains the must-pass gate for those 7 endpoints, and `scripts/kb012_validate_route_modularization.sh` is the current must-pass gate confirming the KB-012 file/route reorganization introduced no behavior change (it reruns `kb011_validate_protected_apis.sh` unmodified as part of its own checks).
+Older scripts (`kb008`, `kb010`, `kb012`, …) remain historical/regression tools. Prefer the newest module script for the area you changed. After KB-011, unauthenticated `/admin`/`/customer` checks in older scripts may fail by design.
 
-Any AI agent making backend changes should re-run (or ask the user to re-run) the currently-relevant commands and report the result before considering a task complete.
+**Important:** Git tags and validation-script PASS lines are the source of truth for “what is validated.” If `AGENTS.md` or the ledger disagrees with `git tag` / `git log`, trust git and update the docs (as KB-032 does).
 
 ---
 
