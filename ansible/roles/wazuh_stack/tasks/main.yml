@@ -20,10 +20,12 @@
       - ansible_distribution in wazuh_supported_distributions
       - ansible_distribution_version in wazuh_supported_ubuntu_releases
       - ansible_architecture in wazuh_supported_architectures
+      - (ansible_processor_vcpus | int) >= (wazuh_minimum_vcpus | int)
       - (ansible_memtotal_mb | int) >= (wazuh_minimum_memory_mb | int)
     fail_msg: >-
       VM 101 must use an approved Ubuntu release/architecture and have at
-      least {{ wazuh_minimum_memory_mb }} MB RAM.
+      least {{ wazuh_minimum_vcpus }} vCPUs and
+      {{ wazuh_minimum_memory_mb }} MB RAM.
 
 - name: Resolve root filesystem size
   ansible.builtin.set_fact:
@@ -37,6 +39,16 @@
         )
         | int
       }}
+    wazuh_root_available_bytes: >-
+      {{
+        (
+          ansible_mounts
+          | selectattr("mount", "equalto", "/")
+          | map(attribute="size_available")
+          | first
+        )
+        | int
+      }}
 
 - name: Validate minimum root filesystem size
   ansible.builtin.assert:
@@ -45,6 +57,58 @@
     fail_msg: >-
       VM 101 requires at least {{ wazuh_minimum_root_disk_gb }} GB on the
       root filesystem for this lab installation.
+
+- name: Validate minimum available root filesystem space
+  ansible.builtin.assert:
+    that:
+      - >-
+        (wazuh_root_available_bytes | int) >=
+        ((wazuh_minimum_root_available_gb | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      VM 101 requires at least {{ wazuh_minimum_root_available_gb }} GB free
+      on the root filesystem before Wazuh installation.
+  when: wazuh_execution_mode == "preflight"
+
+- name: Check whether VM 101 requires a reboot
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: wazuh_reboot_required
+  when: wazuh_execution_mode == "preflight"
+
+- name: Require a reboot-clean VM before installation
+  ansible.builtin.assert:
+    that:
+      - not wazuh_reboot_required.stat.exists
+    fail_msg: >-
+      VM 101 has a pending reboot. Reboot and rerun preflight before
+      installation.
+  when: wazuh_execution_mode == "preflight"
+
+- name: Download official installer bytes for integrity preflight
+  ansible.builtin.uri:
+    url: "{{ wazuh_install_assistant_url }}"
+    method: GET
+    return_content: true
+    status_code: 200
+    timeout: 30
+    validate_certs: true
+  register: wazuh_installer_preflight
+  changed_when: false
+  check_mode: false
+  no_log: true
+  when: wazuh_execution_mode == "preflight"
+
+- name: Verify official installer checksum from VM 101
+  ansible.builtin.assert:
+    that:
+      - >-
+        (wazuh_installer_preflight.content | hash("sha256")) ==
+        wazuh_install_assistant_sha256
+    fail_msg: >-
+      The official installer bytes no longer match the approved SHA-256.
+      Stop and review the upstream change before installation.
+  no_log: true
+  when: wazuh_execution_mode == "preflight"
 
 - name: Check current listening TCP ports
   ansible.builtin.command:
@@ -55,6 +119,20 @@
   register: wazuh_listening_ports
   changed_when: false
   failed_when: false
+  check_mode: false
+  when: wazuh_execution_mode == "preflight"
+
+- name: Verify Wazuh TCP ports are available
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          wazuh_listening_ports.stdout
+          | regex_search(':(443|1514|1515|55000|9200)(\\s|$)')
+        ) is none
+    fail_msg: >-
+      One or more required Wazuh TCP ports are already listening on VM 101.
+      Resolve the conflict before approving installation.
   when: wazuh_execution_mode == "preflight"
 
 - name: Explain the preflight-only result
@@ -120,6 +198,32 @@
         chdir: "{{ wazuh_install_directory }}"
       register: wazuh_install_result
       changed_when: true
+      no_log: true
+
+    - name: Verify the generated credential archive exists
+      ansible.builtin.stat:
+        path: "{{ wazuh_install_credentials_archive }}"
+      register: wazuh_credentials_archive
+      no_log: true
+
+    - name: Require generated credentials to remain on VM 101
+      ansible.builtin.assert:
+        that:
+          - wazuh_credentials_archive.stat.exists
+          - wazuh_credentials_archive.stat.isreg
+        fail_msg: >-
+          The Wazuh credential archive was not created at the expected
+          root-only path. Stop and investigate without exposing installer
+          output.
+      no_log: true
+
+    - name: Restrict the generated credential archive
+      ansible.builtin.file:
+        path: "{{ wazuh_install_credentials_archive }}"
+        state: file
+        owner: root
+        group: root
+        mode: "0600"
       no_log: true
 
     - name: Disable the Wazuh APT repository after installation

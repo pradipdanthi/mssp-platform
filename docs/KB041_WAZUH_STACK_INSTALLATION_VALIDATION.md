@@ -1,6 +1,6 @@
 # KB-041 — Wazuh Stack Installation and Validation
 
-Status: Infrastructure automation prepared; live execution requires separate approval.
+Status: Live preflight passed; Wazuh installation requires separate approval.
 Branch: `kb039-kb060-platform-roadmap-execution`  
 Module type: **Infrastructure automation** — **NOT** a live Wazuh install.
 
@@ -16,9 +16,9 @@ validating the Wazuh stack on **VM 101 (`wazuh-stack`)**.
 
 The automation defaults to **preflight only**. VM 101 now exists with updated
 Ubuntu 24.04.4 and snapshot `kb041-os-updated`; **Wazuh is not installed**.
-Live execution remains blocked until the user gives separate approval, the
-Ansible controller can authenticate safely, and the official installer digest
-has been verified.
+Ansible access and the live preflight are verified. Installation remains
+blocked until the user gives separate approval and the official installer
+digest has been verified.
 
 ---
 
@@ -44,7 +44,7 @@ The role provides three explicit modes:
 
 | Mode | Behavior |
 |---|---|
-| `preflight` | Default. Checks VM identity, OS, architecture, RAM, disk, and current listeners. Makes no package changes. |
+| `preflight` | Default. Checks VM identity, OS, architecture, CPU, RAM, total/free disk, reboot state, installer TLS/checksum, and current listeners. Makes no package changes. |
 | `install` | Runs only when `wazuh_live_install_approved=true` and a verified 64-character SHA-256 digest is supplied. |
 | `validate` | Verifies pinned package versions, services, and local listeners on an existing installation. |
 
@@ -60,15 +60,22 @@ Wazuh APT repository afterward to prevent an accidental unreviewed upgrade.
 - Installation is limited to inventory `vm_id=101` with
   `deployment_role=wazuh_cluster`.
 - Installer SHA-256 must be verified out-of-band immediately before deployment.
+- Two independent downloads on 2026-07-17 matched SHA-256
+  `cb7f4ca737a798e4ed98c73579a6105b4dab45aa967bc1c0154f85ab2951b209`
+  (208288 bytes). The byte-identical script pins Wazuh components to 4.14.6
+  and Filebeat to 7.10.2; the checksum must be reverified before installation.
 - Installer output uses `no_log: true` because the official assistant generates
   credentials.
-- Generated credentials remain root-only on VM 101 and must be transferred to
-  the approved secrets system; **no secrets in Git**.
+- Generated credentials remain in
+  `/root/wazuh-install/wazuh-install-files.tar` on VM 101 with owner
+  `root:root` and mode `0600`. They must later be transferred through an
+  approved secrets workflow; **never print, copy to Git, or place in docs**.
 - A successful installation marker is written only after package, service, and
   listener validation passes.
 
-**Do not run this playbook against VM 101 until provisioning, Vault/secrets
-handling, and a pre-install snapshot are separately approved.**
+**Do not run this playbook in `install` mode against VM 101 until
+Vault/secrets handling and the exact deployment command are separately
+approved.**
 
 ---
 
@@ -119,10 +126,11 @@ handling, and a pre-install snapshot are separately approved.**
 | Proxmox VM 101 creation | **Complete** |
 | VM 101 pre-install snapshot | **Complete** — `kb041-os-updated` |
 | VM 112 controller baseline | **Complete** — `kb112-ansible-ready` |
-| Controlled automation sync to VM 112 | Approved preparation step |
-| `ansible-playbook wazuh-stack-install.yml` | After VM 101 exists + separate live-deployment approval |
-| Installer SHA-256 verification | Immediately before the approved deployment |
-| Generated credential custody | Approved secrets system / Vault, never Git |
+| Controlled automation sync to VM 112 | **Complete** |
+| Preflight-only playbook execution | **Passed** — `changed=0`, `failed=0`, required Wazuh ports available |
+| `ansible-playbook wazuh-stack-install.yml` in `install` mode | Separate live-deployment approval |
+| Installer SHA-256 verification | Verified 2026-07-17; reverify immediately before deployment |
+| Generated credential custody | Root-only archive enforced on VM 101; approved secrets workflow later, never Git |
 | Indexer certificate management | VM 101 restricted files + KB-060 runbook |
 | Cluster registry write-back | Future schema/API KB |
 | Production hardening | KB-060 |
@@ -137,8 +145,16 @@ handling, and a pre-install snapshot are separately approved.**
   fails, remove only the newly-created VM 101 after confirming VM ID and scope.
 - Existing VM 100 snapshot `kb060-ok` remains the control-plane safety baseline.
 
-**KB-041 preparation validation passes without contacting VM 101 or installing
-Wazuh.**
+**KB-041 source validation passes locally. The separately approved live
+preflight contacted VM 101 read-only and completed with `changed=0`; Wazuh
+remains uninstalled.**
+
+The final expanded preflight recap was `ok=15 changed=0 failed=0 skipped=16`.
+VM 101 passed with 4 vCPUs, 15925 MB RAM, approximately 193 GiB total and
+178 GiB free root storage, no pending reboot, verified outbound TLS and
+installer checksum, and no conflicts on TCP ports 443, 1514, 1515, 55000, or
+9200. Proxmox snapshots `kb041-os-clean` and `kb041-os-updated` were also
+confirmed read-only before installation.
 
 ---
 
@@ -173,6 +189,24 @@ The validator parses YAML, checks execution interlocks and the Wazuh version
 pin, scans for obvious secrets, confirms protected application paths are
 unchanged, and runs `ansible-playbook --syntax-check` when Ansible is available.
 It does **not** use the live inventory or connect to any host.
+
+### 10.1 Exact future install command — do not run without approval
+
+After re-verifying the official installer checksum, the approved command must
+be run from VM 112:
+
+```bash
+cd /home/secadmin/mssp-automation/ansible
+ansible-playbook playbooks/wazuh-stack-install.yml \
+  --limit wazuh-stack \
+  -e wazuh_execution_mode=install \
+  -e wazuh_live_install_approved=true
+```
+
+This command is intentionally documented but remains blocked by the separate
+live-install approval gate. Do not add `--check`: installation requires real
+package and service changes, followed by the role's package, service, listener,
+and credential-archive validation.
 
 Expected final line:
 

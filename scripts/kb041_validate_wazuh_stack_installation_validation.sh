@@ -126,7 +126,9 @@ for source in (group_vars, defaults):
     assert source["wazuh_repository_major_minor"] == "4.14"
     assert source["wazuh_execution_mode"] == "preflight"
     assert source["wazuh_live_install_approved"] is False
-    assert source["wazuh_install_assistant_sha256"].startswith("<SET_")
+    assert source["wazuh_install_assistant_sha256"] == (
+        "cb7f4ca737a798e4ed98c73579a6105b4dab45aa967bc1c0154f85ab2951b209"
+    )
 
 playbook = Path("ansible/playbooks/wazuh-stack-install.yml").read_text()
 tasks = Path("ansible/roles/wazuh_stack/tasks/main.yml").read_text()
@@ -144,6 +146,16 @@ required_tasks = [
     "service_facts:",
     "wait_for:",
     "wazuh_install_marker",
+    "check_mode: false",
+    "Verify Wazuh TCP ports are available",
+    "443|1514|1515|55000|9200",
+    "wazuh_install_credentials_archive",
+    'mode: "0600"',
+    "ansible_processor_vcpus",
+    "wazuh_root_available_bytes",
+    "/var/run/reboot-required",
+    "validate_certs: true",
+    'hash("sha256")',
 ]
 
 for needle in required_playbook:

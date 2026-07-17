@@ -23,7 +23,7 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Deployed** — Ubuntu 24.04.4, `192.168.0.211`, snapshot `kb041-os-updated`; Wazuh not installed |
 | VM 112 | **Deployed** — Ansible controller, `192.168.0.222`, snapshot `kb112-ansible-ready` |
-| Active preparation | Ansible SSH VM 112→101 verified (`ping` → pong); next is preflight-only; no Wazuh install |
+| Active preparation | KB-041 preflight passed; official installer digest/version availability verified; no Wazuh installed |
 
 ---
 
@@ -54,10 +54,10 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 **Still not done:** installing Wazuh/Suricata/etc., creating remaining VMs
 102–111, or implementing schema for `soc_clusters` / `deployment_mode`.
 
-**Next approval gate:** establish a dedicated Ansible service identity from VM
-112 to VM 101 and run **preflight only**. Do not run KB-041 install mode until
-the user separately approves the verified installer digest and exact execution
-command.
+**Next approval gate:** live KB-041 installation on VM 101. Preflight, exact
+installer SHA-256, package availability, rollback snapshot, exact command, and
+root-only credential custody are prepared. Do not run install mode until the
+user separately approves that infrastructure change.
 
 ---
 

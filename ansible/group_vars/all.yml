@@ -13,10 +13,10 @@ wazuh_repository_major_minor: "4.14"
 wazuh_execution_mode: "preflight"
 wazuh_live_install_approved: false
 
-# Integrity value required only after a separate live-deployment approval.
-# Verify it out-of-band against the exact official installer immediately
-# before deployment; do not bypass the role's 64-hex-character assertion.
-wazuh_install_assistant_sha256: "<SET_VERIFIED_SHA256_BEFORE_DEPLOYMENT>"
+# Public integrity metadata verified from two identical official downloads on
+# 2026-07-17. Reverify immediately before an approved deployment; checksum
+# mismatch must stop installation.
+wazuh_install_assistant_sha256: "cb7f4ca737a798e4ed98c73579a6105b4dab45aa967bc1c0154f85ab2951b209"
 
 # Admin-only URLs, never customer API
 wazuh_manager_url_placeholder: "<SET_AT_DEPLOY_TIME>"

@@ -7,14 +7,15 @@ wazuh_repository_major_minor: "4.14"
 wazuh_install_assistant_url: >-
   https://packages.wazuh.com/{{ wazuh_repository_major_minor }}/wazuh-install.sh
 
-# Obtain the SHA-256 digest out-of-band immediately before an approved
-# deployment. The role refuses installation until this is exactly 64
-# hexadecimal characters. It is integrity metadata, not a secret.
-wazuh_install_assistant_sha256: "<SET_VERIFIED_SHA256_BEFORE_DEPLOYMENT>"
+# Verified independently from two identical official downloads on 2026-07-17.
+# This is public integrity metadata, not a secret. Reverify immediately before
+# an approved deployment; a changed upstream script must fail closed.
+wazuh_install_assistant_sha256: "cb7f4ca737a798e4ed98c73579a6105b4dab45aa967bc1c0154f85ab2951b209"
 
 wazuh_execution_mode: "preflight"
 wazuh_live_install_approved: false
 wazuh_install_directory: "/root/wazuh-install"
+wazuh_install_credentials_archive: "{{ wazuh_install_directory }}/wazuh-install-files.tar"
 wazuh_state_directory: "/var/lib/mssp/wazuh"
 wazuh_install_marker: "{{ wazuh_state_directory }}/{{ wazuh_version }}.installed"
 
@@ -26,8 +27,10 @@ wazuh_supported_ubuntu_releases:
 wazuh_supported_architectures:
   - x86_64
   - aarch64
+wazuh_minimum_vcpus: 4
 wazuh_minimum_memory_mb: 7800
 wazuh_minimum_root_disk_gb: 50
+wazuh_minimum_root_available_gb: 50
 
 wazuh_expected_services:
   - wazuh-manager
