@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# KB-042: Validate Wazuh Agent Onboarding (docs + playbook stubs).
+# KB-042: Validate Wazuh Agent Onboarding (docs + safe-default automation).
 set -euo pipefail
 
 PROJECT_DIR="/opt/mssp-control"
@@ -39,6 +39,8 @@ REQUIRED=(
   "scripts/kb042_validate_wazuh_agent_onboarding.sh"
   "ansible/playbooks/wazuh-agent-linux.yml"
   "ansible/playbooks/wazuh-agent-windows.yml"
+  "ansible/roles/wazuh_agent/defaults/main.yml"
+  "ansible/roles/wazuh_agent/tasks/main.yml"
 )
 
 for f in "${REQUIRED[@]}"; do
@@ -77,25 +79,44 @@ file_mentions docs/KB042_WAZUH_AGENT_ONBOARDING.md \
   "raw logs" \
   "never" \
   "Deferred" \
-  "deferred"
+  "deferred" \
+  "preflight" \
+  "192.168.0.211"
 echo "OK: KB042 doc mentions agent onboarding, VMs, links, and safety."
 
-section "4. Playbook stubs required mentions"
+section "4. Linux role safe defaults and Windows stub"
 
-file_mentions ansible/playbooks/wazuh-agent-linux.yml \
-  "stub" \
-  "linux-endpoint-lab" \
-  "Deferred" \
-  "Vault" \
-  "no secrets"
+python3 - <<'PY'
+from pathlib import Path
+import yaml
 
-file_mentions ansible/playbooks/wazuh-agent-windows.yml \
-  "stub" \
-  "windows-endpoint-lab" \
-  "Deferred" \
-  "Vault" \
-  "no secrets"
-echo "OK: agent playbooks are deferred stubs."
+defaults = yaml.safe_load(Path("ansible/roles/wazuh_agent/defaults/main.yml").read_text())
+assert defaults["wazuh_agent_version"] == "4.14.6"
+assert defaults["wazuh_agent_execution_mode"] == "preflight"
+assert defaults["wazuh_agent_live_enroll_approved"] is False
+assert defaults["wazuh_manager_address"] == "192.168.0.211"
+assert defaults["wazuh_agent_enrollment_password"].startswith("<SET_")
+
+tasks = Path("ansible/roles/wazuh_agent/tasks/main.yml").read_text()
+for needle in (
+    'wazuh_agent_execution_mode == "preflight"',
+    'wazuh_agent_execution_mode == "enroll"',
+    "(vm_id | int) == 105",
+    'deployment_role == "wazuh_agent_linux"',
+    "wazuh_agent_live_enroll_approved | bool",
+    "no_log: true",
+):
+    assert needle in tasks, f"role tasks missing: {needle}"
+
+linux_pb = Path("ansible/playbooks/wazuh-agent-linux.yml").read_text()
+assert "hosts: linux-endpoint-lab" in linux_pb
+assert "role: wazuh_agent" in linux_pb
+
+windows_pb = Path("ansible/playbooks/wazuh-agent-windows.yml").read_text()
+for needle in ("stub", "windows-endpoint-lab", "Deferred", "Vault", "no secrets"):
+    assert needle.lower() in windows_pb.lower(), f"windows playbook missing: {needle}"
+print("OK: Linux role defaults/gates and Windows stub verified.")
+PY
 
 section "5. No obvious secrets in KB-042 files"
 
@@ -103,6 +124,8 @@ SCAN_FILES=(
   docs/KB042_WAZUH_AGENT_ONBOARDING.md
   ansible/playbooks/wazuh-agent-linux.yml
   ansible/playbooks/wazuh-agent-windows.yml
+  ansible/roles/wazuh_agent/defaults/main.yml
+  ansible/roles/wazuh_agent/tasks/main.yml
 )
 
 SECRET_HIT="$(grep -REn \

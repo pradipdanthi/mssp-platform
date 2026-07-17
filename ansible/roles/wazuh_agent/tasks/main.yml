@@ -1,0 +1,101 @@
+---
+- name: Validate KB-042 execution controls
+  ansible.builtin.assert:
+    that:
+      - wazuh_agent_execution_mode in ["preflight", "enroll", "validate"]
+    fail_msg: >-
+      wazuh_agent_execution_mode must be preflight, enroll, or validate.
+      The safe default is preflight.
+
+- name: Validate Linux endpoint inventory identity
+  ansible.builtin.assert:
+    that:
+      - (vm_id | int) == 105
+      - deployment_role == "wazuh_agent_linux"
+    fail_msg: "KB-042 Linux agent role may target only VM 105 (linux-endpoint-lab)."
+
+- name: Validate supported Linux OS and resources
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in wazuh_agent_supported_linux_distributions
+      - ansible_distribution_version in wazuh_agent_supported_ubuntu_releases
+      - (ansible_memtotal_mb | int) >= (wazuh_agent_minimum_memory_mb | int)
+    fail_msg: >-
+      VM 105 must use an approved Ubuntu release with at least
+      {{ wazuh_agent_minimum_memory_mb }} MB RAM.
+
+- name: Resolve root filesystem size
+  ansible.builtin.set_fact:
+    wazuh_agent_root_disk_bytes: >-
+      {{
+        (
+          ansible_mounts
+          | selectattr("mount", "equalto", "/")
+          | map(attribute="size_total")
+          | first
+        )
+        | int
+      }}
+
+- name: Validate minimum root filesystem size
+  ansible.builtin.assert:
+    that:
+      - >-
+        (wazuh_agent_root_disk_bytes | int) >=
+        ((wazuh_agent_minimum_root_disk_gb | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      VM 105 requires at least {{ wazuh_agent_minimum_root_disk_gb }} GB on
+      the root filesystem.
+
+- name: Check TCP reachability to Wazuh Manager agent ports
+  ansible.builtin.wait_for:
+    host: "{{ wazuh_manager_address }}"
+    port: "{{ item }}"
+    timeout: 5
+    state: started
+  loop:
+    - "{{ wazuh_manager_port }}"
+    - "{{ wazuh_manager_enrollment_port }}"
+  when: wazuh_agent_execution_mode == "preflight"
+  register: wazuh_agent_manager_ports
+  failed_when: false
+  changed_when: false
+
+- name: Require Manager agent ports reachable from the endpoint
+  ansible.builtin.assert:
+    that:
+      - wazuh_agent_manager_ports.results | map(attribute='failed') | select | list | length == 0
+    fail_msg: >-
+      VM 105 cannot reach Wazuh Manager {{ wazuh_manager_address }} on ports
+      {{ wazuh_manager_port }}/{{ wazuh_manager_enrollment_port }}.
+  when: wazuh_agent_execution_mode == "preflight"
+
+- name: Explain the preflight-only result
+  ansible.builtin.debug:
+    msg: >-
+      KB-042 Linux agent preflight passed for VM 105. No packages were
+      installed. A separate approval plus Vault enrollment secret is required
+      before wazuh_agent_execution_mode=enroll and
+      wazuh_agent_live_enroll_approved=true.
+  when: wazuh_agent_execution_mode == "preflight"
+
+- name: Block live enrollment until explicitly approved with a Vault secret
+  ansible.builtin.assert:
+    that:
+      - wazuh_agent_live_enroll_approved | bool
+      - wazuh_agent_enrollment_password is string
+      - wazuh_agent_enrollment_password | length >= 8
+      - not (wazuh_agent_enrollment_password | regex_search('^<SET_'))
+    fail_msg: >-
+      Live agent enrollment is blocked. Approve the change and supply the
+      enrollment password from Vault or a runtime -e override — never Git.
+  when: wazuh_agent_execution_mode == "enroll"
+  no_log: true
+
+- name: Enroll Wazuh Linux agent (deferred implementation gate)
+  ansible.builtin.debug:
+    msg: >-
+      Enrollment package install/register steps are prepared for a future
+      approved run after VM 105 exists. This task intentionally does not
+      install packages yet.
+  when: wazuh_agent_execution_mode == "enroll"

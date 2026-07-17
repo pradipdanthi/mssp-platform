@@ -1,31 +1,35 @@
 # KB-042 — Wazuh Agent Onboarding (Windows / Linux)
 
-Status: Implemented (pending validation/commit).  
+Status: Automation prepared for Linux preflight; Windows remains a deferred stub.
 Branch: `kb039-kb060-platform-roadmap-execution`  
-Module type: **Planning / Ansible playbook stubs only** — **NOT** live agent enrollment.
+Module type: **Planning / safe-default Ansible** — **NOT** live agent enrollment until
+endpoint VMs exist and enrollment is separately approved.
 
-Builds on: **KB-036** (`docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`), **KB-037**, **KB-038**, **KB-039**, **KB-040**, and **KB-041**.
+Builds on: **KB-036**, **KB-037**, **KB-038**, **KB-039**, **KB-040**, and **KB-041**
+(Wazuh Manager on VM 101 is now live).
 
 ---
 
 ## 1. Purpose
 
-Define **Wazuh agent onboarding** for lab endpoint VMs and document Ansible playbook stubs for:
+Define **Wazuh agent onboarding** for lab endpoint VMs and provide Ansible
+automation for:
 
-- **Linux agents** — `ansible/playbooks/wazuh-agent-linux.yml`
-- **Windows agents** — `ansible/playbooks/wazuh-agent-windows.yml`
+- **Linux agents** — `ansible/playbooks/wazuh-agent-linux.yml` + role `wazuh_agent`
+- **Windows agents** — `ansible/playbooks/wazuh-agent-windows.yml` (stub)
 
-Agents register with the Wazuh Manager on **VM 101** (when deployed). Enrollment keys and manager addresses come from **Vault** — never Git.
+Agents register with the Wazuh Manager on **VM 101** (`192.168.0.211`). Enrollment
+keys come from **Vault** — **no secrets** in Git.
 
 ---
 
 ## 2. VM references
 
-| VM | Hostname | OS | Role |
-|---|---|---|---|
-| **VM 104** | `windows-endpoint-lab` | Windows | Wazuh agent — Windows onboarding test |
-| **VM 105** | `linux-endpoint-lab` | Linux | Wazuh agent — Linux onboarding test |
-| **VM 101** | `wazuh-stack` | Linux | Wazuh Manager — enrollment target |
+| VM | Hostname | OS | Role | Status |
+|---|---|---|---|---|
+| **VM 104** | `windows-endpoint-lab` | Windows | Wazuh agent — Windows onboarding test | Not provisioned (`192.168.0.214`) |
+| **VM 105** | `linux-endpoint-lab` | Linux | Wazuh agent — Linux onboarding test | Not provisioned (`192.168.0.215`) |
+| **VM 101** | `wazuh-stack` | Linux | Wazuh Manager — enrollment target | **Live** — Wazuh 4.14.6 |
 
 Ansible groups: `endpoint_lab` (hosts), `wazuh_stack` (manager).
 
@@ -39,7 +43,7 @@ Ansible groups: `endpoint_lab` (hosts), `wazuh_stack` (manager).
 Endpoint (VM 104/105 or customer host)
   → Wazuh agent installed
   → Registers with Manager on VM 101 (or tenant-assigned cluster)
-  → Agent appears in manager + appliance registry (KB-037 deployment_role = cloud_collector)
+  → Agent appears in manager + appliance registry (KB-037 deployment_role)
   → Alerts normalized via MSSP adapter → control plane → customer-safe summary
 ```
 
@@ -50,14 +54,23 @@ Endpoint (VM 104/105 or customer host)
 
 ---
 
-## 4. Playbook stubs
+## 4. Prepared automation
 
 | File | Target hosts | Purpose |
 |---|---|---|
-| `wazuh-agent-linux.yml` | `linux-endpoint-lab` | Install agent package, configure manager address, start service |
-| `wazuh-agent-windows.yml` | `windows-endpoint-lab` | Install MSI, configure manager, register agent |
+| `wazuh-agent-linux.yml` | `linux-endpoint-lab` | Role-driven preflight / enroll / validate |
+| `roles/wazuh_agent/` | VM 105 only | Identity, OS, disk, Manager port reachability, enrollment gate |
+| `wazuh-agent-windows.yml` | `windows-endpoint-lab` | Deferred stub until VM 104 exists |
 
-Both stubs use `debug` tasks only — no package installs until VMs exist.
+### 4.1 Safety interlocks (Linux)
+
+- Defaults: `wazuh_agent_execution_mode=preflight` and
+  `wazuh_agent_live_enroll_approved=false`
+- Enrollment requires a non-placeholder Vault/runtime enrollment password
+- Role refuses any host except `vm_id=105` / `deployment_role=wazuh_agent_linux`
+- Manager address is the public lab IP `192.168.0.211` (not a secret)
+
+Windows playbook remains a **stub** with deferred install steps.
 
 ---
 
@@ -65,7 +78,7 @@ Both stubs use `debug` tasks only — no package installs until VMs exist.
 
 | KB | Relevance |
 |---|---|
-| **KB-036** | VM 104/105 endpoint lab layout; Wazuh agents as collection layer in cloud data flow |
+| **KB-036** | VM 104/105 endpoint lab layout; Wazuh agents as collection layer |
 | **KB-037** | Agent host maps to appliance registry (`deployment_role`, `source_platform`) |
 | **KB-038** | Cloud/hybrid agents enroll to shared cluster; on-prem agents stay local |
 
@@ -74,7 +87,7 @@ Both stubs use `debug` tasks only — no package installs until VMs exist.
 ## 6. Security and no secrets
 
 - Wazuh enrollment password / auth key: **Vault only**
-- Manager URL placeholder in group_vars — real value at deploy time
+- Manager address for lab is documented; credentials never are
 - Never expose agent keys in customer APIs or portal
 - Appliance registration tokens (KB-016) remain separate from Wazuh enrollment
 
@@ -92,13 +105,15 @@ Both stubs use `debug` tasks only — no package installs until VMs exist.
 
 | Item | Deferred to |
 |---|---|
-| VM 104/105 provisioning | Lab ops / future KB |
-| Wazuh Manager on VM 101 | KB-041 live execution |
-| `ansible-playbook wazuh-agent-*.yml` | After manager + endpoints exist |
+| VM 104/105 provisioning | Next lab ops step (Linux first) |
+| Wazuh Manager on VM 101 | **Complete** — KB-041 live install |
+| Manager API / Dashboard reachability | Confirmed from VM 112 (API HTTP 401 auth challenge; Dashboard HTTP 302) |
+| `ansible-playbook wazuh-agent-linux.yml` enroll mode | After VM 105 exists + Vault secret + separate approval |
+| Windows stub → full role | After VM 104 exists |
 | Appliance ↔ agent linkage in DB | Future implementation KB |
 | Production GPO / MDM deployment | Out of scope — document only |
 
-**KB-042 does not enroll live agents.**
+**KB-042 does not enroll live agents yet.** Package install remains deferred.
 
 ---
 
@@ -108,7 +123,10 @@ Both stubs use `debug` tasks only — no package installs until VMs exist.
 
 - `docs/KB042_WAZUH_AGENT_ONBOARDING.md` (this file)
 - `scripts/kb042_validate_wazuh_agent_onboarding.sh`
-- `ansible/playbooks/wazuh-agent-linux.yml`, `ansible/playbooks/wazuh-agent-windows.yml`
+- `ansible/playbooks/wazuh-agent-linux.yml`
+- `ansible/playbooks/wazuh-agent-windows.yml`
+- `ansible/roles/wazuh_agent/defaults/main.yml`
+- `ansible/roles/wazuh_agent/tasks/main.yml`
 
 ### Must not change
 
