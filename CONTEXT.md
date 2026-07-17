@@ -19,9 +19,11 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
 | Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest committed docs | `5d194d7` — full KB-056 live validation recorded |
-| Snapshot | **Done** — VM 100 snapshot `kb060-ok` confirmed by user |
-| Active preparation | KB-041 Wazuh automation role prepared and locally validated; not committed |
+| Latest automation commit | `27bebec` — KB-041 safe Wazuh automation prepared and tagged |
+| VM 100 snapshots | `kb060-ok`, `kb041-ok` |
+| VM 101 | **Deployed** — Ubuntu 24.04.4, `192.168.0.211`, snapshot `kb041-os-updated`; Wazuh not installed |
+| VM 112 | **Deployed** — Ansible controller, `192.168.0.222`, snapshot `kb112-ansible-ready` |
+| Active preparation | Automation subset synced and syntax-checked on VM 112; no live playbook run |
 
 ---
 
@@ -49,11 +51,13 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | KB-057 | `POST /appliance/alerts` — customer-safe normalized ingest (appliance API key auth) |
 | KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
 
-**Still not done:** creating VMs 101–111, installing Wazuh/Suricata/etc., schema for `soc_clusters` / `deployment_mode`.
+**Still not done:** installing Wazuh/Suricata/etc., creating remaining VMs
+102–111, or implementing schema for `soc_clusters` / `deployment_mode`.
 
-**Next approval gate:** live infrastructure execution on VM 101. Do not create
-VM 101 or run the KB-041 playbook until the user separately approves the exact
-Proxmox target, networking, snapshot, installer digest, and execution command.
+**Next approval gate:** establish a dedicated Ansible service identity from VM
+112 to VM 101 and run **preflight only**. Do not run KB-041 install mode until
+the user separately approves the verified installer digest and exact execution
+command.
 
 ---
 
@@ -66,6 +70,13 @@ Proxmox target, networking, snapshot, installer digest, and execution command.
 | `mssp-backend-api` | FastAPI port **8000** (rebuilt for KB-056–058) |
 | `mssp-frontend-admin` | Admin/SOC UI port **3000** (rebuilt) |
 | `mssp-frontend-customer` | Customer portal port **3001** |
+
+### Infrastructure hosts
+
+| VM | Host | Purpose | State |
+|---|---|---|---|
+| 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh target | OS ready; no Wazuh |
+| 112 | `automation` (`192.168.0.222`) | Ansible controller | Ansible Core 2.16.3 ready |
 
 ---
 

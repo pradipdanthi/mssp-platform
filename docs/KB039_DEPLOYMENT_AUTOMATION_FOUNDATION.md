@@ -26,7 +26,7 @@ This KB produces **scaffolding and documentation only**. Proxmox VM creation, pa
 | VM | Hostname placeholder | Role | Status |
 |---|---|---|---|
 | **VM 100** | `mssp-control` | MSSP Control Plane (`192.168.0.201`) | **Deployed** |
-| **VM 101** | `wazuh-stack` | Wazuh Manager, Indexer/OpenSearch, Dashboard | Future (KB-040/041) |
+| **VM 101** | `wazuh-stack` | Wazuh Manager, Indexer/OpenSearch, Dashboard | **OS deployed** (`192.168.0.211`); Wazuh not installed |
 | **VM 102** | `thehive` | TheHive (+ Cortex if needed) | Future |
 | **VM 103** | `shuffle` | SOAR playbooks | Future |
 | **VM 104** | `windows-endpoint-lab` | Windows + Wazuh Agent | Future (KB-042) |
@@ -37,8 +37,10 @@ This KB produces **scaffolding and documentation only**. Proxmox VM creation, pa
 | **VM 109** | `greenbone` | Greenbone/OpenVAS | Future |
 | **VM 110** | `velociraptor` | Velociraptor DFIR server | Future |
 | **VM 111** | `monitoring` | Prometheus/Grafana | Future |
+| **VM 112** | `automation` | Dedicated Ansible controller (`192.168.0.222`) | **Deployed** — Ansible Core 2.16.3 |
 
-Inventory file: `ansible/inventory/hosts.yml` — uses placeholder IPs and hostnames only.
+Inventory file: `ansible/inventory/hosts.yml` — real lab metadata for VMs
+100/101/112 and placeholders for future VMs 102–111. It contains no secrets.
 
 ---
 
@@ -92,7 +94,7 @@ Deployment automation operates on **SOC infrastructure VMs** and **endpoint lab 
 
 | Item | Deferred to |
 |---|---|
-| Proxmox VM creation (101–111) | Matching deployment KB (KB-040+) |
+| Remaining Proxmox VM creation (102–111) | Matching deployment KB |
 | `ansible-playbook` against live hosts | KB-040+ after VM approval |
 | Ansible Vault / secret injection wiring | Ops runbook KB-060 |
 | Cluster registry → inventory sync | Future implementation KB |

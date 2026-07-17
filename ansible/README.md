@@ -12,7 +12,7 @@ Ansible layout for deploying and validating the enterprise SOC stack defined in 
 ```text
 ansible/
 ├── ansible.cfg
-├── inventory/hosts.yml      # VM 100–111 placeholders
+├── inventory/hosts.yml      # Deployed VMs 100/101/112 + VM 102–111 placeholders
 ├── group_vars/all.yml       # placeholder vars — no secrets
 ├── playbooks/
 │   ├── bootstrap.yml             # KB-039 stub
@@ -21,9 +21,22 @@ ansible/
     └── wazuh_stack/              # KB-041 install/validate role
 ```
 
-## Prerequisites (future)
+## Controller
 
-- Ansible 2.14+ on operator workstation or CI runner
+The dedicated controller is **VM 112 `automation`** (`192.168.0.222`):
+
+- Ubuntu 24.04.4 LTS
+- Ansible Core 2.16.3
+- Git and rsync
+- Snapshot `kb112-ansible-ready`
+- Working copy: `/home/secadmin/mssp-automation/`
+
+The controller is outside the original VM 100–111 SOC layout and exists only
+to manage approved automation runs. It is not a customer-facing service.
+
+## Prerequisites
+
+- Ansible 2.14+ (VM 112 currently has 2.16.3)
 - SSH access to target VMs (keys via Vault — not in Git)
 - Approved KB module before running any playbook against live hosts
 

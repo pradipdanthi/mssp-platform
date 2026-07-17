@@ -14,10 +14,11 @@ Provide a safe, version-pinned Ansible role and playbook
 (`ansible/playbooks/wazuh-stack-install.yml`) for preflighting, installing, and
 validating the Wazuh stack on **VM 101 (`wazuh-stack`)**.
 
-The automation defaults to **preflight only**. This preparation pass does
-**not** contact Proxmox, create VM 101, or install Wazuh. Live execution remains
-blocked until the user gives separate approval, VM 101 exists, a pre-install
-snapshot exists, and the official installer digest has been verified.
+The automation defaults to **preflight only**. VM 101 now exists with updated
+Ubuntu 24.04.4 and snapshot `kb041-os-updated`; **Wazuh is not installed**.
+Live execution remains blocked until the user gives separate approval, the
+Ansible controller can authenticate safely, and the official installer digest
+has been verified.
 
 ---
 
@@ -26,7 +27,9 @@ snapshot exists, and the official installer digest has been verified.
 | Field | Value |
 |---|---|
 | **VM** | 101 — `wazuh-stack` |
+| **Address** | `192.168.0.211` |
 | **Target group** | `wazuh_stack` in `ansible/inventory/hosts.yml` |
+| **Controller** | VM 112 `automation` (`192.168.0.222`), Ansible Core 2.16.3 |
 | **Components** | Wazuh Manager, Indexer/OpenSearch, Dashboard |
 
 ---
@@ -113,8 +116,10 @@ handling, and a pre-install snapshot are separately approved.**
 
 | Item | Deferred to |
 |---|---|
-| Proxmox VM 101 creation | Separate explicit infrastructure approval |
-| VM 101 pre-install snapshot | After OS provisioning, before Wazuh installation |
+| Proxmox VM 101 creation | **Complete** |
+| VM 101 pre-install snapshot | **Complete** — `kb041-os-updated` |
+| VM 112 controller baseline | **Complete** — `kb112-ansible-ready` |
+| Controlled automation sync to VM 112 | Approved preparation step |
 | `ansible-playbook wazuh-stack-install.yml` | After VM 101 exists + separate live-deployment approval |
 | Installer SHA-256 verification | Immediately before the approved deployment |
 | Generated credential custody | Approved secrets system / Vault, never Git |
@@ -124,8 +129,9 @@ handling, and a pre-install snapshot are separately approved.**
 
 ### 8.1 Target and rollback
 
-- **Provisioning target:** Proxmox host creates VM 101.
-- **Installation target:** VM 101 (`wazuh-stack`, proposed `192.168.0.211`).
+- **Provisioning target:** VM 101 is deployed on Proxmox host `Labhyp`.
+- **Installation target:** VM 101 (`wazuh-stack`, `192.168.0.211`).
+- **Automation controller:** VM 112 (`automation`, `192.168.0.222`).
 - **Control plane:** VM 100 remains unchanged; Wazuh is never installed there.
 - **Rollback:** restore the VM 101 pre-install snapshot. If provisioning itself
   fails, remove only the newly-created VM 101 after confirming VM ID and scope.
