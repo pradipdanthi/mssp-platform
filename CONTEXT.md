@@ -23,7 +23,7 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211`; packages/services/ports validated; rollback snapshots `kb041-os-clean` / `kb041-os-updated` |
 | VM 112 | **Deployed** — Ansible controller, `192.168.0.222`, snapshot `kb112-ansible-ready` |
-| Active preparation | KB-041 live; KB-042 Linux agent safe-default role prepared; next is provision VM 105 |
+| Active preparation | VM 105 agent 001 `linux-endpoint-lab` Active on Manager 4.14.6; SSH brute-force detection proof (rules 5710/5712) |
 
 ---
 

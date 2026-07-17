@@ -56,10 +56,11 @@
   loop:
     - "{{ wazuh_manager_port }}"
     - "{{ wazuh_manager_enrollment_port }}"
-  when: wazuh_agent_execution_mode == "preflight"
+  when: wazuh_agent_execution_mode in ["preflight", "enroll"]
   register: wazuh_agent_manager_ports
   failed_when: false
   changed_when: false
+  check_mode: false
 
 - name: Require Manager agent ports reachable from the endpoint
   ansible.builtin.assert:
@@ -68,34 +69,176 @@
     fail_msg: >-
       VM 105 cannot reach Wazuh Manager {{ wazuh_manager_address }} on ports
       {{ wazuh_manager_port }}/{{ wazuh_manager_enrollment_port }}.
-  when: wazuh_agent_execution_mode == "preflight"
+  when: wazuh_agent_execution_mode in ["preflight", "enroll"]
 
 - name: Explain the preflight-only result
   ansible.builtin.debug:
     msg: >-
       KB-042 Linux agent preflight passed for VM 105. No packages were
-      installed. A separate approval plus Vault enrollment secret is required
-      before wazuh_agent_execution_mode=enroll and
+      installed. A separate approval is required before
+      wazuh_agent_execution_mode=enroll and
       wazuh_agent_live_enroll_approved=true.
   when: wazuh_agent_execution_mode == "preflight"
 
-- name: Block live enrollment until explicitly approved with a Vault secret
+- name: Check enrollment marker
+  ansible.builtin.stat:
+    path: "{{ wazuh_agent_install_marker }}"
+  register: wazuh_agent_marker
+
+- name: Install and enroll the Wazuh Linux agent
+  when:
+    - wazuh_agent_execution_mode == "enroll"
+    - not wazuh_agent_marker.stat.exists
+  block:
+    - name: Enforce explicit live-enroll approval and enrollment secret policy
+      ansible.builtin.assert:
+        that:
+          - wazuh_agent_live_enroll_approved | bool
+          - >-
+            (wazuh_agent_authd_passwordless | bool)
+            or
+            (
+              wazuh_agent_enrollment_password is string
+              and (wazuh_agent_enrollment_password | length) >= 8
+              and not (wazuh_agent_enrollment_password | regex_search('^<SET_'))
+            )
+        fail_msg: >-
+          Live agent enrollment is blocked. Approve the change and either
+          use passwordless authd or supply a Vault/runtime enrollment
+          password — never Git.
+      no_log: true
+
+    - name: Install prerequisite packages for the Wazuh APT repository
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Download the official Wazuh repository GPG key
+      ansible.builtin.get_url:
+        url: "{{ wazuh_agent_gpg_key_url }}"
+        dest: /tmp/GPG-KEY-WAZUH
+        mode: "0644"
+        validate_certs: true
+
+    - name: Install the Wazuh repository GPG keyring
+      ansible.builtin.command:
+        argv:
+          - gpg
+          - --dearmor
+          - --yes
+          - -o
+          - "{{ wazuh_agent_apt_keyring }}"
+          - /tmp/GPG-KEY-WAZUH
+      args:
+        creates: "{{ wazuh_agent_apt_keyring }}"
+
+    - name: Restrict the Wazuh repository keyring permissions
+      ansible.builtin.file:
+        path: "{{ wazuh_agent_apt_keyring }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Add the official Wazuh APT repository
+      ansible.builtin.copy:
+        dest: "{{ wazuh_agent_apt_list }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          deb [signed-by={{ wazuh_agent_apt_keyring }}] {{ wazuh_agent_repo_url }} stable main
+
+    - name: Install the pinned Wazuh agent package
+      ansible.builtin.apt:
+        name: "wazuh-agent={{ wazuh_agent_package_version }}"
+        state: present
+        update_cache: true
+        allow_downgrade: true
+
+    - name: Configure the Wazuh Manager address in the agent config
+      ansible.builtin.replace:
+        path: /var/ossec/etc/ossec.conf
+        regexp: '<address>.*</address>'
+        replace: '<address>{{ wazuh_manager_address }}</address>'
+        after: '<client>'
+        before: '</client>'
+
+    - name: Enroll the agent with the Manager via authd
+      ansible.builtin.command:
+        argv: "{{ wazuh_agent_auth_argv }}"
+      vars:
+        wazuh_agent_auth_argv: >-
+          {{
+            ['/var/ossec/bin/agent-auth', '-m', wazuh_manager_address, '-A', wazuh_agent_name]
+            + (
+              []
+              if (wazuh_agent_authd_passwordless | bool)
+              else ['-P', wazuh_agent_enrollment_password]
+            )
+          }}
+      args:
+        creates: /var/ossec/etc/client.keys
+      no_log: true
+      register: wazuh_agent_auth_result
+
+    - name: Enable and start the Wazuh agent service
+      ansible.builtin.systemd:
+        name: wazuh-agent
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Disable the Wazuh APT repository after enrollment
+      ansible.builtin.replace:
+        path: "{{ wazuh_agent_apt_list }}"
+        regexp: '^deb '
+        replace: '#deb '
+
+    - name: Create the restricted agent state directory
+      ansible.builtin.file:
+        path: "{{ wazuh_agent_state_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Record successful pinned-version enrollment
+      ansible.builtin.copy:
+        content: >-
+          Wazuh agent {{ wazuh_agent_version }} enrolled to
+          {{ wazuh_manager_address }} as {{ wazuh_agent_name }}.
+        dest: "{{ wazuh_agent_install_marker }}"
+        owner: root
+        group: root
+        mode: "0600"
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  when: wazuh_agent_execution_mode in ["enroll", "validate"]
+
+- name: Verify the pinned Wazuh agent package version
   ansible.builtin.assert:
     that:
-      - wazuh_agent_live_enroll_approved | bool
-      - wazuh_agent_enrollment_password is string
-      - wazuh_agent_enrollment_password | length >= 8
-      - not (wazuh_agent_enrollment_password | regex_search('^<SET_'))
-    fail_msg: >-
-      Live agent enrollment is blocked. Approve the change and supply the
-      enrollment password from Vault or a runtime -e override — never Git.
-  when: wazuh_agent_execution_mode == "enroll"
-  no_log: true
+      - "'wazuh-agent' in ansible_facts.packages"
+      - ansible_facts.packages["wazuh-agent"][0].version is match("^" ~ wazuh_agent_version ~ "([.-]|$)")
+    fail_msg: "Installed wazuh-agent does not match pinned version {{ wazuh_agent_version }}."
+  when: wazuh_agent_execution_mode in ["enroll", "validate"]
 
-- name: Enroll Wazuh Linux agent (deferred implementation gate)
-  ansible.builtin.debug:
-    msg: >-
-      Enrollment package install/register steps are prepared for a future
-      approved run after VM 105 exists. This task intentionally does not
-      install packages yet.
-  when: wazuh_agent_execution_mode == "enroll"
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  when: wazuh_agent_execution_mode in ["enroll", "validate"]
+
+- name: Verify the Wazuh agent service is running
+  ansible.builtin.assert:
+    that:
+      - "'wazuh-agent.service' in ansible_facts.services"
+      - ansible_facts.services['wazuh-agent.service'].state == "running"
+    fail_msg: "wazuh-agent.service is not installed and running."
+  when: wazuh_agent_execution_mode in ["enroll", "validate"]

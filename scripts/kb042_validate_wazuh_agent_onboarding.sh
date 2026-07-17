@@ -92,9 +92,11 @@ import yaml
 
 defaults = yaml.safe_load(Path("ansible/roles/wazuh_agent/defaults/main.yml").read_text())
 assert defaults["wazuh_agent_version"] == "4.14.6"
+assert defaults["wazuh_agent_package_version"] == "4.14.6-1"
 assert defaults["wazuh_agent_execution_mode"] == "preflight"
 assert defaults["wazuh_agent_live_enroll_approved"] is False
 assert defaults["wazuh_manager_address"] == "192.168.0.211"
+assert defaults["wazuh_agent_authd_passwordless"] is True
 assert defaults["wazuh_agent_enrollment_password"].startswith("<SET_")
 
 tasks = Path("ansible/roles/wazuh_agent/tasks/main.yml").read_text()
@@ -105,6 +107,10 @@ for needle in (
     'deployment_role == "wazuh_agent_linux"',
     "wazuh_agent_live_enroll_approved | bool",
     "no_log: true",
+    "check_mode: false",
+    "wazuh-agent={{ wazuh_agent_package_version }}",
+    "/var/ossec/bin/agent-auth",
+    "Disable the Wazuh APT repository after enrollment",
 ):
     assert needle in tasks, f"role tasks missing: {needle}"
 
