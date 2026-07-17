@@ -23,7 +23,7 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Deployed** — Ubuntu 24.04.4, `192.168.0.211`, snapshot `kb041-os-updated`; Wazuh not installed |
 | VM 112 | **Deployed** — Ansible controller, `192.168.0.222`, snapshot `kb112-ansible-ready` |
-| Active preparation | Automation subset synced and syntax-checked on VM 112; no live playbook run |
+| Active preparation | Ansible SSH VM 112→101 verified (`ping` → pong); next is preflight-only; no Wazuh install |
 
 ---
 
