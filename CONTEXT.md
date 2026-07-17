@@ -19,11 +19,13 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
 | Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest automation commit | `f8f0c57` — KB-041 preflight/integrity gates; live install executed |
+| Latest automation commit | `9df18e4` / `180b6b6` — KB-042 live Linux agent enrollment + detection proof |
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211`; packages/services/ports validated; rollback snapshots `kb041-os-clean` / `kb041-os-updated` |
+| VM 105 | **Wazuh agent 001** `linux-endpoint-lab` Active; SSH brute-force proof (rules 5710/5712) |
+| VM 106 | **Suricata 7.0.3 passive IDS** — `192.168.0.216`; dual-NIC + VM105 `tc` mirror; local alert SID 2100498 |
 | VM 112 | **Deployed** — Ansible controller, `192.168.0.222`, snapshot `kb112-ansible-ready` |
-| Active preparation | VM 105 agent 001 `linux-endpoint-lab` Active on Manager 4.14.6; SSH brute-force detection proof (rules 5710/5712) |
+| Active preparation | KB-044 Suricata → Wazuh integration (next) |
 
 ---
 
@@ -51,17 +53,21 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | KB-057 | `POST /appliance/alerts` — customer-safe normalized ingest (appliance API key auth) |
 | KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
 
-**Still not done:** creating remaining VMs 102–111, installing Suricata/Zeek/
-TheHive/etc., agent enrollment (KB-042), or schema for `soc_clusters` /
+**Still not done:** creating remaining VMs 102–104 / 107–111, installing Zeek/
+TheHive/etc., Suricata→Wazuh forwarding (KB-044), or schema for `soc_clusters` /
 `deployment_mode`.
 
 **Wazuh status:** VM 101 has Wazuh Manager, Indexer, Dashboard, and Filebeat
 **4.14.6-1** installed and validated. Credentials remain root-only on VM 101
 (`/root/wazuh-install/wazuh-install-files.tar`, mode `600`). Never print them
-into Git or docs.
+into Git or docs. VM 105 agent **001** is Active with detection proof.
 
-**Next safe action:** execute KB-042 Wazuh agent onboarding preparation
-(docs/automation only until a separate agent enrollment target is approved).
+**Suricata status:** VM 106 has Suricata **7.0.3** passive IDS with reversible
+VM 105 traffic mirror. Local EVE alert proof recorded. Wazuh forwarding is
+**KB-044**.
+
+**Next safe action:** KB-044 Suricata → Wazuh integration (agent on VM 106 /
+`eve.json` forward) after planning confirmation.
 
 ---
 
@@ -79,8 +85,10 @@ into Git or docs.
 
 | VM | Host | Purpose | State |
 |---|---|---|---|
-| 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh target | OS ready; no Wazuh |
-| 112 | `automation` (`192.168.0.222`) | Ansible controller | Ansible Core 2.16.3 ready |
+| 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh Manager/Indexer/Dashboard | Wazuh 4.14.6 live |
+| 105 | `linux-endpoint-lab` (`192.168.0.215`) | Linux agent lab | Agent 001 Active |
+| 106 | `suricata-sensor` (`192.168.0.216`) | Suricata passive IDS | Suricata 7.0.3 live |
+| 112 | `automation` (`192.168.0.222`) | Ansible controller | Ansible Core ready |
 
 ---
 

@@ -1,0 +1,12 @@
+---
+# KB-043: Suricata sensor install — VM 106 (suricata-sensor).
+# Safe default is preflight only. Live install requires separate approval.
+# Passive IDS only. No secrets in Git. Wazuh forwarding is deferred to KB-044.
+
+- name: KB-043 Suricata sensor preflight or install
+  hosts: suricata-sensor
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: suricata_sensor

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# KB-043: Validate Suricata Sensor Deployment Plan (docs only).
+# KB-043: Validate Suricata Sensor Deployment Plan + safe-default automation.
 set -euo pipefail
 
 PROJECT_DIR="/opt/mssp-control"
@@ -32,12 +32,16 @@ file_mentions() {
   done
 }
 
-section "1. Required documentation files exist"
+section "1. Required documentation and automation files exist"
 
 REQUIRED=(
   "docs/KB043_SURICATA_SENSOR_DEPLOYMENT_PLAN.md"
   "scripts/kb043_validate_suricata_sensor_deployment_plan.sh"
   "docs/KB039_DEPLOYMENT_AUTOMATION_FOUNDATION.md"
+  "ansible/playbooks/suricata-sensor.yml"
+  "ansible/roles/suricata_sensor/defaults/main.yml"
+  "ansible/roles/suricata_sensor/tasks/main.yml"
+  "ansible/roles/suricata_sensor/handlers/main.yml"
 )
 
 for f in "${REQUIRED[@]}"; do
@@ -75,14 +79,55 @@ file_mentions docs/KB043_SURICATA_SENSOR_DEPLOYMENT_PLAN.md \
   "customer portal" \
   "raw" \
   "never" \
-  "Deferred" \
-  "deferred"
+  "passive" \
+  "preflight" \
+  "192.168.0.216"
 echo "OK: KB043 doc mentions VM 106 plan, links, and safety boundaries."
 
-section "4. No obvious secrets in KB-043 docs"
+section "4. Suricata role safe defaults and identity guards"
+
+python3 - <<'PY'
+from pathlib import Path
+import yaml
+
+defaults = yaml.safe_load(Path("ansible/roles/suricata_sensor/defaults/main.yml").read_text())
+assert defaults["suricata_execution_mode"] == "preflight"
+assert defaults["suricata_live_install_approved"] is False
+assert defaults["suricata_management_address"] == "192.168.0.216"
+assert defaults["suricata_capture_interface"]
+assert defaults["suricata_package_name"] == "suricata"
+
+tasks = Path("ansible/roles/suricata_sensor/tasks/main.yml").read_text()
+for needle in (
+    'suricata_execution_mode == "preflight"',
+    'suricata_execution_mode == "install"',
+    "(vm_id | int) == 106",
+    'deployment_role == "suricata_sensor"',
+    "suricata_live_install_approved | bool",
+    "check_mode: false",
+    "must have no IPv4",
+    "suricata-update",
+):
+    assert needle in tasks, f"role tasks missing: {needle}"
+
+pb = Path("ansible/playbooks/suricata-sensor.yml").read_text()
+assert "hosts: suricata-sensor" in pb
+assert "role: suricata_sensor" in pb
+
+inv = Path("ansible/inventory/hosts.yml").read_text()
+assert "suricata-sensor:" in inv
+assert "192.168.0.216" in inv
+assert "vm_id: 106" in inv
+print("OK: Suricata role safe defaults and inventory placeholders verified.")
+PY
+
+section "5. No obvious secrets in KB-043 docs/automation"
 
 DOC_SCAN_FILES=(
   docs/KB043_SURICATA_SENSOR_DEPLOYMENT_PLAN.md
+  ansible/roles/suricata_sensor/defaults/main.yml
+  ansible/roles/suricata_sensor/tasks/main.yml
+  ansible/playbooks/suricata-sensor.yml
 )
 
 SECRET_HIT="$(grep -REn \
@@ -95,11 +140,11 @@ SECRET_HIT="$(grep -REn \
 
 if [ -n "$SECRET_HIT" ]; then
   echo "$SECRET_HIT" >&2
-  fail "Possible secret material found in KB-043 documentation files"
+  fail "Possible secret material found in KB-043 files"
 fi
-echo "OK: no obvious secret assignments in KB-043 docs."
+echo "OK: no obvious secret assignments in KB-043 files."
 
-section "5. Final verdict"
+section "6. Final verdict"
 
 echo "======================================================================"
 echo "KB-043 SURICATA SENSOR DEPLOYMENT PLAN VALIDATION PASSED"

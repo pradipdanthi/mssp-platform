@@ -1,0 +1,35 @@
+---
+# KB-043: Safe defaults for Suricata sensor on VM 106.
+# Defaults are preflight-only. Live install requires explicit approval.
+# Never place secrets in Git. Passive IDS only — never inline IPS.
+
+suricata_execution_mode: "preflight"
+suricata_live_install_approved: false
+
+# Package install path: Ubuntu packages (pinned by distro apt).
+# Version is asserted after install; leave empty to accept distro package.
+suricata_package_name: "suricata"
+suricata_minimum_version: "7.0"
+
+suricata_supported_linux_distributions:
+  - Ubuntu
+suricata_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+
+suricata_minimum_memory_mb: 4096
+suricata_minimum_root_disk_gb: 40
+suricata_minimum_vcpus: 2
+
+# Management NIC holds the static lab IP. Capture NIC must have no IP.
+suricata_management_address: "192.168.0.216"
+suricata_capture_interface: "enp6s19"
+suricata_home_net: "[192.168.0.0/24]"
+
+# EVE JSON alert output (SOC-only; never customer portal).
+suricata_eve_log_path: /var/log/suricata/eve.json
+suricata_state_directory: /var/lib/mssp/suricata
+suricata_install_marker: "{{ suricata_state_directory }}/installed"
+
+# Rule feed: distro/default Emerging Threats open rules via suricata-update.
+suricata_enable_suricata_update: true

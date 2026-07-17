@@ -1,0 +1,290 @@
+---
+# KB-043: Suricata sensor role — preflight / install / validate.
+# Targets only VM 106 (suricata-sensor). Passive IDS only.
+
+- name: Validate KB-043 execution controls
+  ansible.builtin.assert:
+    that:
+      - suricata_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: >-
+      suricata_execution_mode must be preflight, install, or validate.
+      The safe default is preflight.
+
+- name: Validate Suricata sensor inventory identity
+  ansible.builtin.assert:
+    that:
+      - (vm_id | int) == 106
+      - deployment_role == "suricata_sensor"
+    fail_msg: "KB-043 Suricata role may target only VM 106 (suricata-sensor)."
+
+- name: Validate supported OS and resources
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in suricata_supported_linux_distributions
+      - ansible_distribution_version in suricata_supported_ubuntu_releases
+      - (ansible_memtotal_mb | int) >= (suricata_minimum_memory_mb | int)
+      - (ansible_processor_vcpus | int) >= (suricata_minimum_vcpus | int)
+    fail_msg: >-
+      VM 106 must use an approved Ubuntu release with at least
+      {{ suricata_minimum_memory_mb }} MB RAM and
+      {{ suricata_minimum_vcpus }} vCPUs.
+
+- name: Resolve root filesystem size
+  ansible.builtin.set_fact:
+    suricata_root_disk_bytes: >-
+      {{
+        (
+          ansible_mounts
+          | selectattr("mount", "equalto", "/")
+          | map(attribute="size_total")
+          | first
+        )
+        | int
+      }}
+
+- name: Validate minimum root filesystem size
+  ansible.builtin.assert:
+    that:
+      - >-
+        (suricata_root_disk_bytes | int) >=
+        ((suricata_minimum_root_disk_gb | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      VM 106 requires at least {{ suricata_minimum_root_disk_gb }} GB on
+      the root filesystem.
+
+- name: Require the capture interface to exist
+  ansible.builtin.assert:
+    that:
+      - suricata_capture_interface in ansible_interfaces
+    fail_msg: >-
+      Capture interface {{ suricata_capture_interface }} was not found on
+      VM 106. Expected a dual-NIC layout (mgmt + no-IP capture).
+
+- name: Inspect capture interface addressing
+  ansible.builtin.command:
+    argv:
+      - ip
+      - -4
+      - -o
+      - addr
+      - show
+      - "{{ suricata_capture_interface }}"
+  register: suricata_capture_addrs
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Require capture interface to have no IPv4 address
+  ansible.builtin.assert:
+    that:
+      - (suricata_capture_addrs.stdout | trim | length) == 0
+    fail_msg: >-
+      Capture interface {{ suricata_capture_interface }} must have no IPv4
+      address (passive IDS mirror only).
+
+- name: Check default route is not via the capture interface
+  ansible.builtin.command:
+    argv:
+      - ip
+      - route
+      - show
+      - default
+  register: suricata_default_route
+  changed_when: false
+  check_mode: false
+
+- name: Assert default route does not use the capture interface
+  ansible.builtin.assert:
+    that:
+      - suricata_capture_interface not in (suricata_default_route.stdout | default(''))
+    fail_msg: >-
+      Default route must not use capture interface
+      {{ suricata_capture_interface }}.
+
+- name: Explain the preflight-only result
+  ansible.builtin.debug:
+    msg: >-
+      KB-043 Suricata preflight passed for VM 106. No packages were
+      installed. A separate approval is required before
+      suricata_execution_mode=install and
+      suricata_live_install_approved=true.
+  when: suricata_execution_mode == "preflight"
+
+- name: Check install marker
+  ansible.builtin.stat:
+    path: "{{ suricata_install_marker }}"
+  register: suricata_marker
+
+- name: Install and configure Suricata (passive IDS)
+  when:
+    - suricata_execution_mode == "install"
+    - not suricata_marker.stat.exists
+  block:
+    - name: Enforce explicit live-install approval
+      ansible.builtin.assert:
+        that:
+          - suricata_live_install_approved | bool
+        fail_msg: >-
+          Live Suricata install is blocked. Set
+          suricata_live_install_approved=true only after explicit approval.
+
+    - name: Install Suricata and helper packages
+      ansible.builtin.apt:
+        name:
+          - "{{ suricata_package_name }}"
+          - suricata-update
+          - jq
+          - tcpdump
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure capture interface is up without an address
+      ansible.builtin.command:
+        argv:
+          - ip
+          - link
+          - set
+          - "{{ suricata_capture_interface }}"
+          - up
+      changed_when: true
+
+    - name: Persist capture interface as link-up only (netplan stub)
+      ansible.builtin.copy:
+        dest: /etc/netplan/60-suricata-capture.yaml
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          network:
+            version: 2
+            ethernets:
+              {{ suricata_capture_interface }}:
+                dhcp4: false
+                dhcp6: false
+                optional: true
+                accept-ra: false
+
+    - name: Apply netplan for capture interface
+      ansible.builtin.command:
+        argv:
+          - netplan
+          - apply
+      changed_when: true
+
+    - name: Set Suricata HOME_NET for the lab
+      ansible.builtin.replace:
+        path: /etc/suricata/suricata.yaml
+        regexp: '^( *)HOME_NET:.*$'
+        replace: '\1HOME_NET: "{{ suricata_home_net }}"'
+
+    - name: Set Suricata AF_PACKET interface to the capture NIC
+      ansible.builtin.replace:
+        path: /etc/suricata/suricata.yaml
+        regexp: '^( +- interface: ).*$'
+        replace: '\1{{ suricata_capture_interface }}'
+        after: 'af-packet:'
+
+    - name: Point Suricata defaults at the capture interface
+      ansible.builtin.lineinfile:
+        path: /etc/default/suricata
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        create: true
+      loop:
+        - regexp: '^IFACE='
+          line: 'IFACE={{ suricata_capture_interface }}'
+        - regexp: '^LISTENMODE='
+          line: 'LISTENMODE=af-packet'
+
+    - name: Update Suricata ruleset
+      ansible.builtin.command:
+        argv:
+          - suricata-update
+      when: suricata_enable_suricata_update | bool
+      register: suricata_update_result
+      changed_when: true
+
+    - name: Enable and start Suricata
+      ansible.builtin.systemd:
+        name: suricata
+        enabled: true
+        state: restarted
+        daemon_reload: true
+
+    - name: Create the restricted Suricata state directory
+      ansible.builtin.file:
+        path: "{{ suricata_state_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Record successful Suricata install
+      ansible.builtin.copy:
+        content: >-
+          Suricata installed on VM 106 in passive IDS mode on
+          {{ suricata_capture_interface }}.
+        dest: "{{ suricata_install_marker }}"
+        owner: root
+        group: root
+        mode: "0600"
+
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: auto
+  when: suricata_execution_mode in ["install", "validate"]
+
+- name: Verify Suricata package is installed
+  ansible.builtin.assert:
+    that:
+      - "'suricata' in ansible_facts.packages"
+    fail_msg: "suricata package is not installed."
+  when: suricata_execution_mode in ["install", "validate"]
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+  when: suricata_execution_mode in ["install", "validate"]
+
+- name: Verify Suricata service is running
+  ansible.builtin.assert:
+    that:
+      - "'suricata.service' in ansible_facts.services"
+      - ansible_facts.services['suricata.service'].state == "running"
+    fail_msg: "suricata.service is not installed and running."
+  when: suricata_execution_mode in ["install", "validate"]
+
+- name: Verify EVE JSON log path exists
+  ansible.builtin.stat:
+    path: "{{ suricata_eve_log_path }}"
+  register: suricata_eve_stat
+  when: suricata_execution_mode in ["install", "validate"]
+
+- name: Require EVE JSON log file
+  ansible.builtin.assert:
+    that:
+      - suricata_eve_stat.stat.exists
+    fail_msg: "Expected EVE JSON at {{ suricata_eve_log_path }}."
+  when: suricata_execution_mode in ["install", "validate"]
+
+- name: Re-check capture interface has no IPv4 after install
+  ansible.builtin.command:
+    argv:
+      - ip
+      - -4
+      - -o
+      - addr
+      - show
+      - "{{ suricata_capture_interface }}"
+  register: suricata_capture_addrs_post
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: suricata_execution_mode in ["install", "validate"]
+
+- name: Assert capture interface remains address-less
+  ansible.builtin.assert:
+    that:
+      - (suricata_capture_addrs_post.stdout | trim | length) == 0
+    fail_msg: "Capture interface gained an IPv4 address — abort."
+  when: suricata_execution_mode in ["install", "validate"]

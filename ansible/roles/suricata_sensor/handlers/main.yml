@@ -1,0 +1,3 @@
+---
+# KB-043: Suricata sensor — no handlers required for initial install.
+# Restart is performed explicitly in the install block.
