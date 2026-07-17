@@ -1,8 +1,8 @@
 # KB-041 — Wazuh Stack Installation and Validation
 
-Status: Live preflight passed; Wazuh installation requires separate approval.
+Status: **Live install completed and validated** on VM 101 (Wazuh 4.14.6).
 Branch: `kb039-kb060-platform-roadmap-execution`  
-Module type: **Infrastructure automation** — **NOT** a live Wazuh install.
+Module type: **Infrastructure automation** — live all-in-one install executed with explicit approval.
 
 Builds on: `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`, `docs/KB037_CLUSTER_APPLIANCE_REGISTRY_PLANNING.md`, `docs/KB038_TENANT_DEPLOYMENT_MODE_PLANNING.md`, `docs/KB039_DEPLOYMENT_AUTOMATION_FOUNDATION.md`, and `docs/KB040_WAZUH_STACK_VM_DEPLOYMENT_PLAN.md`.
 
@@ -14,11 +14,10 @@ Provide a safe, version-pinned Ansible role and playbook
 (`ansible/playbooks/wazuh-stack-install.yml`) for preflighting, installing, and
 validating the Wazuh stack on **VM 101 (`wazuh-stack`)**.
 
-The automation defaults to **preflight only**. VM 101 now exists with updated
-Ubuntu 24.04.4 and snapshot `kb041-os-updated`; **Wazuh is not installed**.
-Ansible access and the live preflight are verified. Installation remains
-blocked until the user gives separate approval and the official installer
-digest has been verified.
+The automation defaults to **preflight only**. With explicit approval on
+2026-07-17, VM 101 received the all-in-one Wazuh **4.14.6** install from
+VM 112. A follow-up `validate` run confirmed packages, services, and listeners.
+Credentials remain in the root-only archive on VM 101 and must never enter Git.
 
 ---
 
@@ -128,12 +127,14 @@ approved.**
 | VM 112 controller baseline | **Complete** — `kb112-ansible-ready` |
 | Controlled automation sync to VM 112 | **Complete** |
 | Preflight-only playbook execution | **Passed** — `changed=0`, `failed=0`, required Wazuh ports available |
-| `ansible-playbook wazuh-stack-install.yml` in `install` mode | Separate live-deployment approval |
-| Installer SHA-256 verification | Verified 2026-07-17; reverify immediately before deployment |
-| Generated credential custody | Root-only archive enforced on VM 101; approved secrets workflow later, never Git |
+| `ansible-playbook wazuh-stack-install.yml` in `install` mode | **Complete** — 2026-07-17; `ok=24 changed=7 failed=0` |
+| Follow-up `validate` mode | **Passed** — `ok=12 changed=0 failed=0` |
+| Installer SHA-256 verification | Verified 2026-07-17 (`cb7f4ca737a798e4ed98c73579a6105b4dab45aa967bc1c0154f85ab2951b209`) |
+| Generated credential custody | Root-only archive on VM 101 (`/root/wazuh-install/wazuh-install-files.tar`, mode `600`); approved secrets workflow later, never Git |
 | Indexer certificate management | VM 101 restricted files + KB-060 runbook |
 | Cluster registry write-back | Future schema/API KB |
 | Production hardening | KB-060 |
+| Post-install Proxmox snapshot | Deferred to end-of-batch snapshot per operator request |
 
 ### 8.1 Target and rollback
 
@@ -141,20 +142,24 @@ approved.**
 - **Installation target:** VM 101 (`wazuh-stack`, `192.168.0.211`).
 - **Automation controller:** VM 112 (`automation`, `192.168.0.222`).
 - **Control plane:** VM 100 remains unchanged; Wazuh is never installed there.
-- **Rollback:** restore the VM 101 pre-install snapshot. If provisioning itself
-  fails, remove only the newly-created VM 101 after confirming VM ID and scope.
+- **Rollback:** restore the VM 101 pre-install snapshot `kb041-os-updated`.
 - Existing VM 100 snapshot `kb060-ok` remains the control-plane safety baseline.
 
-**KB-041 source validation passes locally. The separately approved live
-preflight contacted VM 101 read-only and completed with `changed=0`; Wazuh
-remains uninstalled.**
+### 8.2 Live install result (2026-07-17)
 
-The final expanded preflight recap was `ok=15 changed=0 failed=0 skipped=16`.
-VM 101 passed with 4 vCPUs, 15925 MB RAM, approximately 193 GiB total and
-178 GiB free root storage, no pending reboot, verified outbound TLS and
-installer checksum, and no conflicts on TCP ports 443, 1514, 1515, 55000, or
-9200. Proxmox snapshots `kb041-os-clean` and `kb041-os-updated` were also
-confirmed read-only before installation.
+| Check | Result |
+|---|---|
+| Install recap | `ok=24 changed=7 failed=0` |
+| Validate recap | `ok=12 changed=0 failed=0` |
+| Packages | `wazuh-manager` / `wazuh-indexer` / `wazuh-dashboard` **4.14.6-1**; `filebeat` **7.10.2-2** |
+| Services | All four expected units `active` |
+| Listeners | Local TCP **443**, **1514**, **1515**, **55000**, **9200** |
+| Install marker | `/var/lib/mssp/wazuh/4.14.6.installed` present |
+| Credentials | Archive present, `root:root` mode `600` — **no secrets in Git** |
+
+The earlier expanded preflight recap was `ok=15 changed=0 failed=0 skipped=16`
+(4 vCPUs, ~16 GB RAM, ~193 GiB total / ~178 GiB free root, reboot-clean,
+installer TLS/checksum verified, required ports free).
 
 ---
 
@@ -190,10 +195,7 @@ pin, scans for obvious secrets, confirms protected application paths are
 unchanged, and runs `ansible-playbook --syntax-check` when Ansible is available.
 It does **not** use the live inventory or connect to any host.
 
-### 10.1 Exact future install command — do not run without approval
-
-After re-verifying the official installer checksum, the approved command must
-be run from VM 112:
+### 10.1 Live install command (executed 2026-07-17 with separate approval)
 
 ```bash
 cd /home/secadmin/mssp-automation/ansible
@@ -203,12 +205,20 @@ ansible-playbook playbooks/wazuh-stack-install.yml \
   -e wazuh_live_install_approved=true
 ```
 
-This command is intentionally documented but remains blocked by the separate
-live-install approval gate. Do not add `--check`: installation requires real
-package and service changes, followed by the role's package, service, listener,
-and credential-archive validation.
+Do not add `--check`: installation requires real package and service changes,
+followed by the role's package, service, listener, and credential-archive
+validation. Defaults remain `preflight` / `wazuh_live_install_approved=false`
+so a future accidental run without explicit `-e` overrides stays safe.
 
-Expected final line:
+Re-run validation only with:
+
+```bash
+ansible-playbook playbooks/wazuh-stack-install.yml \
+  --limit wazuh-stack \
+  -e wazuh_execution_mode=validate
+```
+
+Expected local source-validator final line:
 
 ```text
 KB-041 WAZUH STACK INSTALLATION VALIDATION PASSED

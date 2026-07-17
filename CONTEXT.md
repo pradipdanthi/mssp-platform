@@ -19,11 +19,11 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
 | Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest automation commit | `27bebec` — KB-041 safe Wazuh automation prepared and tagged |
+| Latest automation commit | `f8f0c57` — KB-041 preflight/integrity gates; live install executed |
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
-| VM 101 | **Deployed** — Ubuntu 24.04.4, `192.168.0.211`, snapshot `kb041-os-updated`; Wazuh not installed |
+| VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211`; packages/services/ports validated; rollback snapshots `kb041-os-clean` / `kb041-os-updated` |
 | VM 112 | **Deployed** — Ansible controller, `192.168.0.222`, snapshot `kb112-ansible-ready` |
-| Active preparation | KB-041 preflight passed; official installer digest/version availability verified; no Wazuh installed |
+| Active preparation | KB-041 live install + validate passed; next is KB-042 agent onboarding preparation |
 
 ---
 
@@ -51,13 +51,17 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | KB-057 | `POST /appliance/alerts` — customer-safe normalized ingest (appliance API key auth) |
 | KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
 
-**Still not done:** installing Wazuh/Suricata/etc., creating remaining VMs
-102–111, or implementing schema for `soc_clusters` / `deployment_mode`.
+**Still not done:** creating remaining VMs 102–111, installing Suricata/Zeek/
+TheHive/etc., agent enrollment (KB-042), or schema for `soc_clusters` /
+`deployment_mode`.
 
-**Next approval gate:** live KB-041 installation on VM 101. Preflight, exact
-installer SHA-256, package availability, rollback snapshot, exact command, and
-root-only credential custody are prepared. Do not run install mode until the
-user separately approves that infrastructure change.
+**Wazuh status:** VM 101 has Wazuh Manager, Indexer, Dashboard, and Filebeat
+**4.14.6-1** installed and validated. Credentials remain root-only on VM 101
+(`/root/wazuh-install/wazuh-install-files.tar`, mode `600`). Never print them
+into Git or docs.
+
+**Next safe action:** execute KB-042 Wazuh agent onboarding preparation
+(docs/automation only until a separate agent enrollment target is approved).
 
 ---
 
