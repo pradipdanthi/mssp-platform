@@ -1,0 +1,6 @@
+---
+# KB-044: restart Wazuh agent after Suricata localfile config changes.
+- name: Restart wazuh-agent
+  ansible.builtin.systemd:
+    name: wazuh-agent
+    state: restarted

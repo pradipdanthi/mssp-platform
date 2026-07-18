@@ -1,0 +1,33 @@
+---
+# KB-044: Suricata → Wazuh integration (Option A).
+# Safe default is preflight only. Live enroll requires explicit approval.
+# Never place enrollment secrets in Git.
+
+suricata_wazuh_execution_mode: "preflight"
+suricata_wazuh_live_enroll_approved: false
+
+wazuh_agent_version: "4.14.6"
+wazuh_agent_package_version: "4.14.6-1"
+wazuh_manager_address: "192.168.0.211"
+wazuh_manager_port: 1514
+wazuh_manager_enrollment_port: 1515
+wazuh_agent_name: "suricata-sensor"
+wazuh_agent_authd_passwordless: true
+wazuh_agent_enrollment_password: "<SET_VIA_VAULT_OR_ENV>"
+
+wazuh_agent_apt_keyring: /usr/share/keyrings/wazuh.gpg
+wazuh_agent_apt_list: /etc/apt/sources.list.d/wazuh.list
+wazuh_agent_gpg_key_url: https://packages.wazuh.com/key/GPG-KEY-WAZUH
+wazuh_agent_repo_url: "https://packages.wazuh.com/4.x/apt/"
+
+suricata_eve_log_path: /var/log/suricata/eve.json
+suricata_wazuh_supported_linux_distributions:
+  - Ubuntu
+suricata_wazuh_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+suricata_wazuh_minimum_memory_mb: 2048
+suricata_wazuh_minimum_root_disk_gb: 20
+
+suricata_wazuh_state_directory: /var/lib/mssp/suricata-wazuh
+suricata_wazuh_install_marker: "{{ suricata_wazuh_state_directory }}/{{ wazuh_agent_version }}.enrolled"

@@ -19,13 +19,13 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
 | Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest automation commit | `9df18e4` / `180b6b6` — KB-042 live Linux agent enrollment + detection proof |
+| Latest automation commit | `e7df02a` / `adc099b` — KB-043 Suricata live; KB-044 in progress |
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211`; packages/services/ports validated; rollback snapshots `kb041-os-clean` / `kb041-os-updated` |
 | VM 105 | **Wazuh agent 001** `linux-endpoint-lab` Active; SSH brute-force proof (rules 5710/5712) |
-| VM 106 | **Suricata 7.0.3 passive IDS** — `192.168.0.216`; dual-NIC + VM105 `tc` mirror; local alert SID 2100498 |
+| VM 106 | **Suricata 7.0.3 + Wazuh agent 002** `suricata-sensor` Active; `eve.json` → Manager (rule 86601 proof) |
 | VM 112 | **Deployed** — Ansible controller, `192.168.0.222`, snapshot `kb112-ansible-ready` |
-| Active preparation | KB-044 Suricata → Wazuh integration (next) |
+| Active preparation | KB-045 Zeek sensor plan (next after KB-044 commit) |
 
 ---
 
@@ -63,11 +63,11 @@ TheHive/etc., Suricata→Wazuh forwarding (KB-044), or schema for `soc_clusters`
 into Git or docs. VM 105 agent **001** is Active with detection proof.
 
 **Suricata status:** VM 106 has Suricata **7.0.3** passive IDS with reversible
-VM 105 traffic mirror. Local EVE alert proof recorded. Wazuh forwarding is
-**KB-044**.
+VM 105 traffic mirror. Wazuh agent **002** (`suricata-sensor`) tails
+`/var/log/suricata/eve.json` into Manager; proof alert rule **86601**.
 
-**Next safe action:** KB-044 Suricata → Wazuh integration (agent on VM 106 /
-`eve.json` forward) after planning confirmation.
+**Next safe action:** KB-045 Zeek Sensor Deployment Plan (planning first;
+no VM create until approved).
 
 ---
 
@@ -87,7 +87,7 @@ VM 105 traffic mirror. Local EVE alert proof recorded. Wazuh forwarding is
 |---|---|---|---|
 | 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh Manager/Indexer/Dashboard | Wazuh 4.14.6 live |
 | 105 | `linux-endpoint-lab` (`192.168.0.215`) | Linux agent lab | Agent 001 Active |
-| 106 | `suricata-sensor` (`192.168.0.216`) | Suricata passive IDS | Suricata 7.0.3 live |
+| 106 | `suricata-sensor` (`192.168.0.216`) | Suricata passive IDS + Wazuh agent | Suricata 7.0.3 live; Wazuh agent 002 Active |
 | 112 | `automation` (`192.168.0.222`) | Ansible controller | Ansible Core ready |
 
 ---

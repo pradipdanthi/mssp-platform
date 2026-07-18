@@ -1,0 +1,13 @@
+---
+# KB-044: Suricata → Wazuh integration — VM 106 (suricata-sensor).
+# Safe default is preflight only. Live enrollment requires separate approval.
+# Option A: Wazuh agent on sensor tails eve.json → Manager VM 101.
+# No secrets in Git. Customer portal never receives raw Suricata logs.
+
+- name: KB-044 Suricata to Wazuh preflight or enrollment
+  hosts: suricata-sensor
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: suricata_wazuh
