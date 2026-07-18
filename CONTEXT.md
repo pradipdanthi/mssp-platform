@@ -19,7 +19,7 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
 | Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest automation commit | KB-044 `95be9fd` / `6b7e26d`; case-soar VM 102 live (pending commit) |
+| Latest automation commit | KB-047/048 `fe662ec` (TheHive+Shuffle VM 102); prior KB-044 `95be9fd` / `6b7e26d` |
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211` |
 | VM 102 | **TheHive + Shuffle co-located** — `thehive_shuffle` / `192.168.0.212` / **16 GB**; UI :9000 / :3001 |
