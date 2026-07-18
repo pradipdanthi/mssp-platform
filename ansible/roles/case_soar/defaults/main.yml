@@ -1,0 +1,41 @@
+---
+# KB-047/048/049 lab: TheHive + Shuffle co-located on VM 102.
+# Safe default is preflight only. Live install requires explicit approval.
+# Secrets never belong in Git.
+
+case_soar_execution_mode: "preflight"
+case_soar_live_install_approved: false
+
+case_soar_hostname: "thehive_shuffle"
+case_soar_management_address: "192.168.0.212"
+
+case_soar_supported_linux_distributions:
+  - Ubuntu
+case_soar_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+case_soar_minimum_memory_mb: 15360
+case_soar_minimum_root_disk_gb: 60
+case_soar_minimum_vcpus: 2
+
+# Lab heaps sized for 16 GB co-located TheHive + Shuffle.
+case_soar_es_java_opts: "-Xms1g -Xmx1g"
+case_soar_shuffle_opensearch_java_opts: "-Xms1g -Xmx1g"
+
+case_soar_install_root: /opt/mssp-case-soar
+case_soar_thehive_dir: "{{ case_soar_install_root }}/thehive"
+case_soar_shuffle_dir: "{{ case_soar_install_root }}/shuffle"
+case_soar_state_directory: /var/lib/mssp/case-soar
+case_soar_install_marker: "{{ case_soar_state_directory }}/installed"
+
+# Published ports (SOC network only — not customer-facing).
+case_soar_thehive_port: 9000
+case_soar_shuffle_port: 3001
+
+# Upstream Shuffle repo default branch is main (not master).
+case_soar_shuffle_git_repo: https://github.com/Shuffle/Shuffle.git
+case_soar_shuffle_git_version: main
+
+# TheHive 4.1.x image (entrypoint: Cassandra + Lucene; no ES CLI flags).
+case_soar_thehive_image: thehiveproject/thehive4:4.1.24
+

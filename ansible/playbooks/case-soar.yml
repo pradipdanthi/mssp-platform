@@ -1,0 +1,13 @@
+---
+# KB-047/048: TheHive + Shuffle co-located on VM 102 (thehive_shuffle).
+# Safe default is preflight only. Live install requires separate approval.
+# Auto-ticket wiring (Wazuh → Shuffle → TheHive) follows in KB-049 after install.
+# No secrets in Git. Customer portal never receives raw case/playbook data.
+
+- name: KB-047/048 case-soar preflight or install
+  hosts: thehive_shuffle
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: case_soar

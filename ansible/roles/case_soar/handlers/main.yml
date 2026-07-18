@@ -1,0 +1,6 @@
+---
+# KB-047/048: handlers for case-soar stack.
+- name: Restart docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
