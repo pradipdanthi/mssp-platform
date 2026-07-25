@@ -1,7 +1,7 @@
 # KB-047/048 — TheHive + Shuffle Co-located Deploy (VM 102)
 
 Status: **Live install completed** — TheHive + Shuffle on VM 102 (`thehive_shuffle` / `192.168.0.212`, **16 GB**).  
-Auto-ticket wiring (Wazuh → Shuffle → TheHive) is **ready for first-login configuration** (KB-049).  
+Auto-ticket wiring (Wazuh → Shuffle → TheHive) is **live-validated** (KB-049, 2026-07-25).  
 Branch: `kb039-kb060-platform-roadmap-execution`
 
 ---
@@ -65,11 +65,11 @@ Safe default: `preflight`. Live install requires explicit approval flag.
 
 ---
 
-## 6. First-login (required before auto-tickets)
+## 6. First-login / auto-ticket (completed in lab)
 
-1. Open TheHive → create admin account  
-2. Open Shuffle → create admin account  
-3. Then configure KB-049: Shuffle workflow + TheHive API key + Wazuh integration webhook  
+1. TheHive admin + org **MSSP-Lab** + API key (browser; secrets not in Git)  
+2. Shuffle admin + webhook workflow → TheHive create alert  
+3. KB-049: Wazuh shuffle integration level ≥ 10 → proof alert in TheHive **MSSP-Lab**  
 
 ---
 

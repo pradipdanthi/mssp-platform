@@ -19,14 +19,14 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
 | Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest automation commit | KB-047/048 `fe662ec` (TheHive+Shuffle VM 102); prior KB-044 `95be9fd` / `6b7e26d` |
+| Latest automation commit | KB-049 live wiring; prior KB-047/048 `fe662ec`; KB-044 `95be9fd` |
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211` |
 | VM 102 | **TheHive + Shuffle co-located** — `thehive_shuffle` / `192.168.0.212` / **16 GB**; UI :9000 / :3001 |
 | VM 105 | **Wazuh agent 001** Active |
 | VM 106 | **Suricata + Wazuh agent 002** Active; rule 86601 proof |
 | VM 112 | **Ansible controller** `192.168.0.222` |
-| Active preparation | Create TheHive/Shuffle admin logins in browser; then KB-049 auto-ticket wiring |
+| Active preparation | **KB-049 live validated:** Wazuh level≥10 → Shuffle webhook → TheHive **MSSP-Lab** alerts (proof rule 100049). |
 
 ---
 
@@ -55,9 +55,9 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
 
 **Still not done:** creating remaining VMs 103–104 / 107–111; installing Zeek
-(deferred), MISP, Greenbone, Velociraptor, etc.; KB-049 auto-ticket wiring
-(after TheHive/Shuffle UI admin setup); or schema for `soc_clusters` /
-`deployment_mode`. VM 102 TheHive+Shuffle and Suricata→Wazuh (KB-044) are done.
+(deferred), MISP, Greenbone, Velociraptor, etc.; or schema for `soc_clusters` /
+`deployment_mode`. VM 102 TheHive+Shuffle, Suricata→Wazuh (KB-044), and
+KB-049 auto-ticket wiring are done.
 
 **Wazuh status:** VM 101 has Wazuh Manager, Indexer, Dashboard, and Filebeat
 **4.14.6-1** installed and validated. Credentials remain root-only on VM 101
@@ -68,8 +68,9 @@ into Git or docs. VM 105 agent **001** is Active with detection proof.
 VM 105 traffic mirror. Wazuh agent **002** (`suricata-sensor`) tails
 `/var/log/suricata/eve.json` into Manager; proof alert rule **86601**.
 
-**Next safe action:** Create TheHive + Shuffle admin accounts in the browser,
-then wire KB-049 auto-ticket (Wazuh → Shuffle → TheHive). Zeek remains deferred.
+**Next safe action:** Continue roadmap after KB-049 (e.g. deferred Zeek, MISP,
+Greenbone, Velociraptor, or control-plane TheHive→incident sync). Do not commit
+webhook URLs or TheHive/Shuffle API keys. Zeek still deferred.
 
 ---
 
@@ -88,7 +89,7 @@ then wire KB-049 auto-ticket (Wazuh → Shuffle → TheHive). Zeek remains defer
 | VM | Host | Purpose | State |
 |---|---|---|---|
 | 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh Manager/Indexer/Dashboard | Wazuh 4.14.6 live |
-| 102 | `thehive_shuffle` (`192.168.0.212`) | TheHive + Shuffle (co-located) | Live :9000 / :3001; admin UI setup pending |
+| 102 | `thehive_shuffle` (`192.168.0.212`) | TheHive + Shuffle (co-located) | Live :9000 / :3001; KB-049 auto-ticket validated |
 | 105 | `linux-endpoint-lab` (`192.168.0.215`) | Linux agent lab | Agent 001 Active |
 | 106 | `suricata-sensor` (`192.168.0.216`) | Suricata passive IDS + Wazuh agent | Suricata 7.0.3 live; Wazuh agent 002 Active |
 | 112 | `automation` (`192.168.0.222`) | Ansible controller | Ansible Core ready |

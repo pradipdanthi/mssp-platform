@@ -37,6 +37,7 @@ section "1. Required documentation files exist"
 REQUIRED=(
   "docs/KB049_WAZUH_SHUFFLE_THEHIVE_WORKFLOW.md"
   "scripts/kb049_validate_wazuh_shuffle_thehive_workflow.sh"
+  "scripts/kb049_configure_wazuh_shuffle_integration.sh"
   "docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md"
   "docs/KB047_THEHIVE_DEPLOYMENT_PLAN.md"
   "docs/KB048_SHUFFLE_SOAR_DEPLOYMENT_PLAN.md"
@@ -84,6 +85,16 @@ file_mentions docs/KB049_WAZUH_SHUFFLE_THEHIVE_WORKFLOW.md \
   "KB-057" \
   "deferred"
 echo "OK: KB049 doc mentions workflow architecture and safety boundaries."
+
+
+section "3b. Helper script safety"
+
+grep -q 'replace("</ossec_config>", block + "\\n</ossec_config>", 1)' \
+  scripts/kb049_configure_wazuh_shuffle_integration.sh \
+  || fail "configure helper must insert before first </ossec_config> only (count=1)"
+grep -q 'SHUFFLE_WEBHOOK_URL' scripts/kb049_configure_wazuh_shuffle_integration.sh \
+  || fail "configure helper missing SHUFFLE_WEBHOOK_URL env gate"
+echo "OK: configure helper uses env webhook URL and single ossec_config insert."
 
 section "4. No obvious secrets in KB-049 docs"
 
