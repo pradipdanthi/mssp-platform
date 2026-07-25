@@ -58,5 +58,6 @@ class RecommendationDetail(BaseModel):
     completed_at: Optional[str] = None
     related_alert_id: Optional[str] = None
     related_incident_id: Optional[str] = None
+    related_vulnerability_id: Optional[str] = None
     created_at: str
     updated_at: str

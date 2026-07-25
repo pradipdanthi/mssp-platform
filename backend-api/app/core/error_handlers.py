@@ -60,6 +60,9 @@ SENSITIVE_KEYS = {
     # KB-061 SOC sync integration key names
     "soc_sync_api_key",
     "x-soc-sync-key",
+    # KB-069 Greenbone vulnerability sync key names
+    "vuln_sync_api_key",
+    "x-vuln-sync-key",
 }
 
 

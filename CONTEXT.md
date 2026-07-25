@@ -26,7 +26,8 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | VM 105 | **Wazuh agent 001** Active |
 | VM 106 | **Suricata + Wazuh agent 002** Active; rule 86601 proof |
 | VM 112 | **Ansible controller** `192.168.0.222` |
-| Active preparation | **KB-067 enterprise monthly reports** (on-screen + PDF + Excel) live. Full E2E/MSSP readiness still paused. |
+| VM 109 | **Greenbone Community Edition live** — `greenbone` / `192.168.0.219` / **9 GB**; GSA `https://192.168.0.219` (KB-068) |
+| Active preparation | **KB-068 Greenbone live** + **KB-069 control-plane vuln adapter** (Admin Vulnerabilities + promote). |
 
 ---
 
@@ -54,10 +55,15 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | KB-057 | `POST /appliance/alerts` — customer-safe normalized ingest (appliance API key auth) |
 | KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
 
-**Still not done:** creating remaining VMs 103–104 / 107–111; installing Zeek
-(deferred), MISP, Greenbone, Velociraptor, etc.; or schema for `soc_clusters` /
+**Still not done:** creating remaining VMs 103–104 / 107–108 / 110–111; installing Zeek
+(deferred), MISP, Velociraptor, etc.; or schema for `soc_clusters` /
 `deployment_mode`. KB-049 auto-ticket and KB-061 TheHive→control-plane sync API
 are live in lab (customer visibility still SOC-approved via KB-056).
+
+**Greenbone status:** VM 109 Community Edition live (`https://192.168.0.219`).
+KB-069 adapter + **KB-070 instant Task-Done hook** on VM 109 (`:9271`) plus
+on-demand puller. Admin can promote to recommendations. Customer portal never
+receives raw Greenbone data.
 
 **Wazuh status:** VM 101 has Wazuh Manager, Indexer, Dashboard, and Filebeat
 **4.14.6-1** installed and validated. Credentials remain root-only on VM 101
@@ -68,9 +74,8 @@ into Git or docs. VM 105 agent **001** is Active with detection proof.
 VM 105 traffic mirror. Wazuh agent **002** (`suricata-sensor`) tails
 `/var/log/suricata/eve.json` into Manager; proof alert rule **86601**.
 
-**Next safe action:** Drive **KB-064 E2E milestone** — either Phase A Linux
-rehearsal now, or onboard a **Windows Wazuh agent** first for full dual-endpoint
-scope. Keep customer_visible SOC-gated. Do not commit sync keys. Zeek deferred.
+**Next safe action:** Resume KB-064 Phase A / Windows agent / MISP / Velociraptor,
+or next SOC tool KB. Keep customer_visible SOC-gated.
 
 **E2E milestone doc:** `docs/KB064_E2E_SIMULATION_INTEGRATION_TEST_MILESTONE.md`
 

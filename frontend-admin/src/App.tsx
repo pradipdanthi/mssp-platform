@@ -12,6 +12,7 @@ import IncidentsPage from "./pages/IncidentsPage";
 import AlertDetailPage from "./pages/AlertDetailPage";
 import IncidentDetailPage from "./pages/IncidentDetailPage";
 import RecommendationsPage from "./pages/RecommendationsPage";
+import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import ReportsPage from "./pages/ReportsPage";
 import AssetsPage from "./pages/AssetsPage";
@@ -92,6 +93,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <IncidentDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vulnerabilities"
+        element={
+          <ProtectedRoute>
+            <VulnerabilitiesPage />
           </ProtectedRoute>
         }
       />

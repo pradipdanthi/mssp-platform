@@ -733,3 +733,58 @@ export interface AuditLogsListResponse {
 export function getAuditLogs(): Promise<AuditLogsListResponse> {
   return request<AuditLogsListResponse>("/admin/audit-logs");
 }
+
+/** KB-069: Admin vulnerability findings (Greenbone normalized). */
+export interface AdminVulnerability {
+  id: string;
+  tenant_id: string;
+  tenant_name: string;
+  short_code: string;
+  protected_asset_id: string | null;
+  asset_hostname: string | null;
+  source_platform: string;
+  external_finding_id: string | null;
+  cve_id: string | null;
+  title: string;
+  severity: string;
+  status: string;
+  recommendation_id: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  created_at: string;
+  nvt_oid?: string | null;
+  customer_safe_summary?: string | null;
+  remediation_summary?: string | null;
+  internal_notes?: string | null;
+  updated_at?: string;
+}
+
+export interface VulnerabilitiesListResponse {
+  vulnerabilities: AdminVulnerability[];
+}
+
+export function getVulnerabilities(): Promise<VulnerabilitiesListResponse> {
+  return request<VulnerabilitiesListResponse>("/admin/vulnerabilities");
+}
+
+export function getVulnerabilityDetail(id: string): Promise<AdminVulnerability> {
+  return request<AdminVulnerability>(`/admin/vulnerabilities/${encodeURIComponent(id)}`);
+}
+
+export interface VulnerabilityPromoteResponse {
+  vulnerability_id: string;
+  recommendation_id: string;
+  created: boolean;
+  customer_visible: boolean;
+}
+
+export function promoteVulnerabilityRecommendation(
+  id: string,
+  payload: { customer_visible?: boolean; title?: string; description?: string } = {}
+): Promise<VulnerabilityPromoteResponse> {
+  return request<VulnerabilityPromoteResponse>(
+    `/admin/vulnerabilities/${encodeURIComponent(id)}/promote-recommendation`,
+    { method: "POST", body: payload }
+  );
+}
+

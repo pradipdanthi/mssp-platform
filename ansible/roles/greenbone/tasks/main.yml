@@ -1,0 +1,326 @@
+---
+# KB-068: Greenbone Community Edition on VM 109 (greenbone).
+# Targets only deployment_role greenbone. No secrets in Git.
+
+- name: Validate greenbone execution controls
+  ansible.builtin.assert:
+    that:
+      - greenbone_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: >-
+      greenbone_execution_mode must be preflight, install, or validate.
+      The safe default is preflight.
+
+- name: Validate inventory identity
+  ansible.builtin.assert:
+    that:
+      - (vm_id | int) == 109
+      - deployment_role == "greenbone"
+    fail_msg: "greenbone role may target only VM 109 (greenbone)."
+
+- name: Validate supported OS and resources
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in greenbone_supported_linux_distributions
+      - ansible_distribution_version in greenbone_supported_ubuntu_releases
+      - (ansible_memtotal_mb | int) >= (greenbone_minimum_memory_mb | int)
+      - (ansible_processor_vcpus | int) >= (greenbone_minimum_vcpus | int)
+    fail_msg: >-
+      VM 109 must use approved Ubuntu with at least
+      {{ greenbone_minimum_memory_mb }} MB RAM and
+      {{ greenbone_minimum_vcpus }} vCPUs.
+
+- name: Resolve root filesystem size
+  ansible.builtin.set_fact:
+    greenbone_root_disk_bytes: >-
+      {{
+        (
+          ansible_mounts
+          | selectattr("mount", "equalto", "/")
+          | map(attribute="size_total")
+          | first
+        )
+        | int
+      }}
+
+- name: Validate minimum root filesystem size
+  ansible.builtin.assert:
+    that:
+      - >-
+        (greenbone_root_disk_bytes | int) >=
+        ((greenbone_minimum_root_disk_gb | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      VM 109 requires at least {{ greenbone_minimum_root_disk_gb }} GB on
+      the root filesystem.
+
+- name: Explain the preflight-only result
+  ansible.builtin.debug:
+    msg: >-
+      Greenbone preflight passed for VM 109 (greenbone). No packages were
+      installed. Approve live install with greenbone_execution_mode=install
+      and greenbone_live_install_approved=true.
+  when: greenbone_execution_mode == "preflight"
+
+- name: Check install marker
+  ansible.builtin.stat:
+    path: "{{ greenbone_install_marker }}"
+  register: greenbone_marker
+
+- name: Install Docker and deploy Greenbone Community Edition
+  when:
+    - greenbone_execution_mode == "install"
+    - not greenbone_marker.stat.exists
+  block:
+    - name: Enforce explicit live-install approval
+      ansible.builtin.assert:
+        that:
+          - greenbone_live_install_approved | bool
+        fail_msg: >-
+          Live Greenbone install is blocked until
+          greenbone_live_install_approved=true.
+
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - jq
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure Docker APT keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: "0755"
+
+    - name: Download Docker GPG key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: "0644"
+        validate_certs: true
+
+    - name: Add Docker APT repository
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/docker.list
+        mode: "0644"
+        content: >
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu
+          {{ ansible_distribution_release }} stable
+
+    - name: Install Docker Engine and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Enable Docker service
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Create install directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ greenbone_install_root }}"
+        - "{{ greenbone_compose_dir }}"
+        - "{{ greenbone_state_directory }}"
+
+    - name: Download official Greenbone Community compose file
+      ansible.builtin.get_url:
+        url: "{{ greenbone_compose_url }}"
+        dest: "{{ greenbone_compose_dir }}/compose.yaml"
+        mode: "0640"
+        force: true
+        validate_certs: true
+
+    - name: Bind GSA nginx to all interfaces for lab SOC access
+      ansible.builtin.replace:
+        path: "{{ greenbone_compose_dir }}/compose.yaml"
+        regexp: '127\.0\.0\.1:{{ item }}:{{ item }}'
+        replace: '{{ item }}:{{ item }}'
+      loop:
+        - "{{ greenbone_gsa_https_port }}"
+        - "{{ greenbone_gsa_http_port }}"
+      when: greenbone_bind_remote | bool
+
+    - name: Pull Greenbone Community container images
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_compose_dir }}/compose.yaml"
+          - -p
+          - "{{ greenbone_compose_project }}"
+          - pull
+      register: greenbone_pull
+      changed_when: true
+
+    - name: Start Greenbone Community stack
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_compose_dir }}/compose.yaml"
+          - -p
+          - "{{ greenbone_compose_project }}"
+          - up
+          - -d
+      register: greenbone_up
+      changed_when: true
+
+    - name: Wait for GSA HTTPS port
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ greenbone_gsa_https_port }}"
+        timeout: "{{ greenbone_port_wait_timeout_sec }}"
+        delay: 20
+
+    - name: Wait for GSA HTTP convenience port
+      ansible.builtin.wait_for:
+        host: "127.0.0.1"
+        port: "{{ greenbone_gsa_http_port }}"
+        timeout: 120
+        delay: 5
+      failed_when: false
+
+    - name: Check for existing admin secret file
+      ansible.builtin.stat:
+        path: "{{ greenbone_admin_secret_file }}"
+      register: greenbone_admin_secret_stat
+
+    - name: Generate Greenbone admin password (once, host-local only)
+      ansible.builtin.copy:
+        dest: "{{ greenbone_admin_secret_file }}"
+        mode: "0600"
+        owner: root
+        group: root
+        content: |
+          # Host-local only — never commit. Default Greenbone user is admin.
+          GREENBONE_ADMIN_USER=admin
+          GREENBONE_ADMIN_PASSWORD={{ lookup('password', '/dev/null length=24 chars=ascii_letters,digits') }}
+      when: not greenbone_admin_secret_stat.stat.exists
+      no_log: true
+
+    - name: Load admin password from host-local secret file
+      ansible.builtin.slurp:
+        src: "{{ greenbone_admin_secret_file }}"
+      register: greenbone_admin_secret_slurp
+      no_log: true
+
+    - name: Parse admin password
+      ansible.builtin.set_fact:
+        greenbone_admin_password: >-
+          {{
+            (greenbone_admin_secret_slurp.content | b64decode).splitlines()
+            | select('match', '^GREENBONE_ADMIN_PASSWORD=')
+            | map('regex_replace', '^GREENBONE_ADMIN_PASSWORD=', '')
+            | first
+          }}
+      no_log: true
+
+    - name: Wait for gvmd container to become ready
+      ansible.builtin.shell: |
+        set -e
+        for i in $(seq 1 60); do
+          if docker compose -f "{{ greenbone_compose_dir }}/compose.yaml" \
+            -p "{{ greenbone_compose_project }}" \
+            exec -T gvmd true 2>/dev/null; then
+            exit 0
+          fi
+          sleep 10
+        done
+        exit 1
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Set Greenbone admin password (replace insecure default)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose -f "{{ greenbone_compose_dir }}/compose.yaml" \
+          -p "{{ greenbone_compose_project }}" \
+          exec -T -u gvmd gvmd \
+          gvmd --user=admin --new-password='{{ greenbone_admin_password }}'
+      args:
+        executable: /bin/bash
+      no_log: true
+      changed_when: true
+
+    - name: Record successful install marker
+      ansible.builtin.copy:
+        dest: "{{ greenbone_install_marker }}"
+        mode: "0600"
+        owner: root
+        group: root
+        content: >-
+          Greenbone Community Edition on VM 109 (greenbone)
+          at {{ greenbone_management_address }}.
+          GSA https://{{ greenbone_management_address }}:{{ greenbone_gsa_https_port }}
+          (also :{{ greenbone_gsa_http_port }}).
+          Admin password: host-local {{ greenbone_admin_secret_file }}.
+          Feed sync may continue in background after this marker.
+
+- name: Validate Docker is present
+  ansible.builtin.command:
+    argv: [docker, --version]
+  register: greenbone_docker_ver
+  changed_when: false
+  when: greenbone_execution_mode in ["install", "validate"]
+
+- name: Validate GSA HTTPS port is listening
+  ansible.builtin.wait_for:
+    host: "127.0.0.1"
+    port: "{{ greenbone_gsa_https_port }}"
+    timeout: 60
+  when: greenbone_execution_mode in ["install", "validate"]
+
+- name: Require install marker on validate
+  ansible.builtin.stat:
+    path: "{{ greenbone_install_marker }}"
+  register: greenbone_marker_validate
+  when: greenbone_execution_mode == "validate"
+
+- name: Assert install marker exists
+  ansible.builtin.assert:
+    that:
+      - greenbone_marker_validate.stat.exists
+    fail_msg: "Greenbone install marker missing — run install first."
+  when: greenbone_execution_mode == "validate"
+
+- name: Show stack status summary
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greenbone_compose_dir }}/compose.yaml"
+      - -p
+      - "{{ greenbone_compose_project }}"
+      - ps
+  register: greenbone_ps
+  changed_when: false
+  when: greenbone_execution_mode in ["install", "validate"]
+
+- name: Report Greenbone validate result
+  ansible.builtin.debug:
+    msg: >-
+      Greenbone validate OK on VM 109. GSA expected at
+      https://{{ greenbone_management_address }}:{{ greenbone_gsa_https_port }}.
+      Feed sync may still be running — first scan after feeds complete.
+  when: greenbone_execution_mode in ["install", "validate"]

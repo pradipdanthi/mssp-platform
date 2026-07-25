@@ -42,6 +42,7 @@ def _fetch_recommendation_detail(recommendation_id: UUID) -> Optional[Dict[str, 
             cr.completed_at::text,
             cr.related_alert_id::text,
             cr.related_incident_id::text,
+            cr.related_vulnerability_id::text,
             cr.created_at::text,
             cr.updated_at::text
         FROM customer_recommendations cr

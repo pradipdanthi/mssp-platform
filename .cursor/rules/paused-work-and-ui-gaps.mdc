@@ -7,16 +7,14 @@ alwaysApply: true
 
 ## Paused (come back later — do not resume unless user asks)
 
-- Full MSSP commercial readiness review (Zeek/MISP/Greenbone/Velociraptor, ops VMs, Windows agent, KB-064 full E2E).
+- Full MSSP commercial readiness review (Zeek/MISP/Velociraptor, ops VMs, Windows agent, KB-064 full E2E) — **except Greenbone**, which is active below.
 - E2E simulation milestone Phase B–D until Admin onboarding UI gaps are sorted.
-- Commit of uncommitted KB-061–064 batch until user explicitly asks.
+- Commit of uncommitted work until user explicitly asks.
 
-## Current user priority (2026-07-25)
+## Current user priority (2026-07-25+)
 
-MSSP Admin must onboard customers from the **frontend** — no backend/SQL for every new customer.
+**Active:** Greenbone stack delivered (KB-068 VM, KB-069 adapter, KB-070 instant sync).
 
-**Phase A done:** Admin UI wired to existing KB-013/014 APIs — Add/Edit Customer, Add/Edit User, Set password (`platform_admin`). Nav label **Customers**.
+Admin onboarding/ops UI (KB-065–067) delivered. Reports PDF/Excel delivered.
 
-**Phase B done (KB-066):** Recommendations create/edit + visibility; Reports draft/publish; Protected Assets; Audit log viewer.
-
-**Still optional later:** Notification send worker, AI workers, richer appliance detail, broader audit write coverage.
+**Still optional later:** Notification send worker, AI workers, MISP/Velociraptor/Zeek, Windows agent.

@@ -1,0 +1,24 @@
+# KB-070: Map Greenbone scan hosts → MSSP tenant short codes.
+# No secrets. Used by scripts/kb070_pull_greenbone_findings.sh
+#
+# Matching order per finding host IP/hostname:
+#   1) exact hosts[] key
+#   2) default_tenant_short_code
+#
+# asset_hostname is optional hint for protected_assets hostname match.
+
+default_tenant_short_code: DEMO
+
+hosts:
+  "192.168.0.215":
+    tenant_short_code: DEMO
+    asset_hostname: linux-endpoint-lab
+  "192.168.0.216":
+    tenant_short_code: DEMO
+    asset_hostname: suricata-sensor
+  "192.168.0.219":
+    tenant_short_code: DEMO
+    asset_hostname: greenbone
+  "127.0.0.1":
+    tenant_short_code: DEMO
+    asset_hostname: greenbone

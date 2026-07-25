@@ -1,0 +1,40 @@
+---
+# KB-068: Greenbone Community Edition on VM 109 (greenbone).
+# Safe default is preflight only. Live install requires explicit approval.
+# Secrets never belong in Git.
+
+greenbone_execution_mode: "preflight"
+greenbone_live_install_approved: false
+
+greenbone_hostname: "greenbone"
+greenbone_management_address: "192.168.0.219"
+
+greenbone_supported_linux_distributions:
+  - Ubuntu
+greenbone_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+# Proxmox 8–9 GB class; guest memtotal is slightly under allocated MiB.
+greenbone_minimum_memory_mb: 7800
+greenbone_minimum_root_disk_gb: 60
+greenbone_minimum_vcpus: 2
+
+greenbone_install_root: /opt/mssp-greenbone
+greenbone_compose_dir: "{{ greenbone_install_root }}/community"
+greenbone_state_directory: /var/lib/mssp/greenbone
+greenbone_install_marker: "{{ greenbone_state_directory }}/installed"
+greenbone_admin_secret_file: "{{ greenbone_install_root }}/admin.secret.env"
+
+# Official Greenbone Community compose (always pull latest at install time).
+greenbone_compose_url: >-
+  https://greenbone.github.io/docs/latest/_static/compose.yaml
+greenbone_compose_project: greenbone-community-edition
+
+# Lab SOC access — bind to all interfaces on the scanner VM (not customer-facing).
+# Official compose defaults to 127.0.0.1 only.
+greenbone_gsa_https_port: 443
+greenbone_gsa_http_port: 9392
+greenbone_bind_remote: true
+
+# First-boot feed sync can take a long time; wait only for nginx listener.
+greenbone_port_wait_timeout_sec: 900

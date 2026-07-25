@@ -54,6 +54,7 @@ services:
       SOC_SYNC_API_KEY_FILE: /run/secrets/soc_sync_api_key
       WAZUH_INGRESS_TOKEN_FILE: /run/secrets/wazuh_ingress_token
       SHUFFLE_WEBHOOK_URL_FILE: /run/secrets/shuffle_webhook_url
+      VULN_SYNC_API_KEY_FILE: /run/secrets/vuln_sync_api_key
       TZ: ${TZ}
     depends_on:
       postgres:
@@ -66,6 +67,7 @@ services:
       - ./.secrets/soc_sync_api_key:/run/secrets/soc_sync_api_key:ro
       - ./.secrets/wazuh_ingress_token:/run/secrets/wazuh_ingress_token:ro
       - ./.secrets/shuffle_webhook_url:/run/secrets/shuffle_webhook_url:ro
+      - ./.secrets/vuln_sync_api_key:/run/secrets/vuln_sync_api_key:ro
     networks:
       - mssp-backend
 

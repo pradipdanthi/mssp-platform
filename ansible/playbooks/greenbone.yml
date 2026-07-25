@@ -1,0 +1,12 @@
+---
+# KB-068: Greenbone Community Edition on VM 109 (greenbone).
+# Safe default is preflight only. Live install requires separate approval.
+# No secrets in Git. Customer portal never receives raw scan output.
+
+- name: KB-068 Greenbone preflight or install
+  hosts: greenbone
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: greenbone
