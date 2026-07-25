@@ -58,6 +58,17 @@ Safe delivery: **validation → commit → tag → snapshot** (user-driven each 
 
 ---
 
+
+## E2E simulation milestone (KB-064)
+
+Standing objective: after core integrations/dashboards are ready, run controlled
+end-to-end tests (Linux+Windows agents, attack simulation, Wazuh→Shuffle→TheHive,
+Admin+Customer dashboards). See `docs/KB064_E2E_SIMULATION_INTEGRATION_TEST_MILESTONE.md`.
+
+**Agent duty:** when gates in that doc are met (or only Windows is missing),
+proactively prompt the user to start Phase A (Linux rehearsal) or Windows
+onboarding — do not silently skip after major integration work.
+
 ## 6. Current Module Context
 
 **Latest validated feature:** KB-035 Customer Appliance Detail UI — `1ac1df3`, tag `kb035-customer-appliance-detail-validated`.

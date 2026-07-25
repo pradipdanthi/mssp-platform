@@ -378,6 +378,21 @@ a {
   margin: 28px 0 14px;
 }
 
+.page-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.confirm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
 .state-message {
   padding: 14px 16px;
   border-radius: var(--radius);
@@ -661,4 +676,24 @@ a {
 
 .state-success {
   color: var(--success);
+}
+
+
+/* KB-061 polish: clickable dashboard KPI cards */
+a.stat-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  cursor: pointer;
+}
+
+a.stat-card-link:hover {
+  border-color: var(--accent, #3b82f6);
+  transform: translateY(-1px);
+}
+
+a.stat-card-link:focus-visible {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 2px;
 }

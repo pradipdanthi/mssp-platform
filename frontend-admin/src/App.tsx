@@ -11,6 +11,11 @@ import AlertsPage from "./pages/AlertsPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import AlertDetailPage from "./pages/AlertDetailPage";
 import IncidentDetailPage from "./pages/IncidentDetailPage";
+import RecommendationsPage from "./pages/RecommendationsPage";
+import NotificationsPage from "./pages/NotificationsPage";
+import ReportsPage from "./pages/ReportsPage";
+import AssetsPage from "./pages/AssetsPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -87,6 +92,46 @@ export default function App() {
         element={
           <ProtectedRoute>
             <IncidentDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/recommendations"
+        element={
+          <ProtectedRoute>
+            <RecommendationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/notifications"
+        element={
+          <ProtectedRoute>
+            <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reports"
+        element={
+          <ProtectedRoute>
+            <ReportsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/assets"
+        element={
+          <ProtectedRoute>
+            <AssetsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit"
+        element={
+          <ProtectedRoute>
+            <AuditLogsPage />
           </ProtectedRoute>
         }
       />

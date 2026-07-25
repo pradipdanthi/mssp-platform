@@ -6,11 +6,16 @@ import BrandMark from "./BrandMark";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
-  { to: "/tenants", label: "Tenants" },
+  { to: "/tenants", label: "Customers" },
   { to: "/users", label: "Users" },
   { to: "/appliances", label: "Appliances" },
+  { to: "/assets", label: "Assets" },
   { to: "/alerts", label: "Alerts" },
   { to: "/incidents", label: "Incidents" },
+  { to: "/recommendations", label: "Recommendations" },
+  { to: "/reports", label: "Reports" },
+  { to: "/notifications", label: "Notifications" },
+  { to: "/audit", label: "Audit" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {

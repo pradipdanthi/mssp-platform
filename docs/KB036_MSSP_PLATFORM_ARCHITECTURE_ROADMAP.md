@@ -343,6 +343,7 @@ Admin/SOC may have deeper operational views; secrets never in Git or documentati
 | KB-058 | On-Prem Appliance Template and Registration |
 | KB-059 | Multi-Cluster Capacity and Customer Placement |
 | KB-060 | Backup, Monitoring, Upgrade, and Operations Runbook |
+| KB-064 | End-to-End Simulation & Integration Testing Milestone |
 
 ### Phase grouping
 
@@ -360,6 +361,7 @@ Admin/SOC may have deeper operational views; secrets never in Git or documentati
 | Phase 10 | DFIR (KB-054–055) |
 | Phase 11 | SOC ops + live integration (KB-056–057) |
 | Phase 12 | On-prem/hybrid + scale + ops (KB-058–060) |
+| Phase 13 | E2E simulation & integration test (KB-064) — Linux+Windows agents, attack sims, dashboard proof |
 
 ---
 

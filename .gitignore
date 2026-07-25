@@ -9,3 +9,6 @@ build/
 .vscode/
 .DS_Store
 docker-compose.yml.backup-*
+
+# KB-061 local runtime secrets (never commit)
+.secrets/

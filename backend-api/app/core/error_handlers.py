@@ -57,6 +57,9 @@ SENSITIVE_KEYS = {
     "activation_token",
     "appliance_api_key",
     "api_key",
+    # KB-061 SOC sync integration key names
+    "soc_sync_api_key",
+    "x-soc-sync-key",
 }
 
 

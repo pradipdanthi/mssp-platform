@@ -1,4 +1,4 @@
-import { request } from "./client";
+import { downloadAuthenticated, request } from "./client";
 
 // Customer portal API helpers — ONLY /customer/* paths. Never platform-admin routes.
 
@@ -241,6 +241,7 @@ export interface CustomerReport {
   summary: string | null;
   created_at: string | null;
   published_at: string | null;
+  sections?: Record<string, unknown> | null;
 }
 
 export interface CustomerReportsResponse {
@@ -263,6 +264,20 @@ export function getCustomerReportDetail(
 ): Promise<CustomerReportDetailResponse> {
   return request<CustomerReportDetailResponse>(
     `/customer/reports/${encodeURIComponent(shortCode)}/${encodeURIComponent(reportId)}`
+  );
+}
+
+export function downloadCustomerReportPdf(shortCode: string, reportId: string): Promise<void> {
+  return downloadAuthenticated(
+    `/customer/reports/${encodeURIComponent(shortCode)}/${encodeURIComponent(reportId)}/download.pdf`,
+    `report-${reportId}.pdf`
+  );
+}
+
+export function downloadCustomerReportXlsx(shortCode: string, reportId: string): Promise<void> {
+  return downloadAuthenticated(
+    `/customer/reports/${encodeURIComponent(shortCode)}/${encodeURIComponent(reportId)}/download.xlsx`,
+    `report-${reportId}.xlsx`
   );
 }
 

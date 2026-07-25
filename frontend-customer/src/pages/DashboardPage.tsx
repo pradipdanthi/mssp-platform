@@ -56,14 +56,23 @@ export default function DashboardPage() {
           </section>
 
           <div className="card-grid dashboard-kpi-grid">
-            <StatCard label="Open incidents" value={data.kpis.open_incidents} />
-            <StatCard label="High/critical alerts" value={data.kpis.high_critical_alerts} />
-            <StatCard label="Open recommendations" value={data.kpis.open_recommendations} />
-            <StatCard label="Assets monitored" value={data.kpis.assets_monitored} />
+            <StatCard label="Open incidents" value={data.kpis.open_incidents} to="/incidents" />
+            <StatCard
+              label="High/critical alerts"
+              value={data.kpis.high_critical_alerts}
+              to="/alerts"
+            />
+            <StatCard
+              label="Open recommendations"
+              value={data.kpis.open_recommendations}
+              to="/recommendations"
+            />
+            <StatCard label="Assets monitored" value={data.kpis.assets_monitored} to="/assets" />
             <StatCard
               label="Appliances online"
               value={data.kpis.appliances_online}
               hint={`${data.kpis.appliances_other} other`}
+              to="/assets"
             />
             <StatCard
               label="Latest report"
@@ -72,6 +81,7 @@ export default function DashboardPage() {
                   ? String(data.latest_report.report_month)
                   : "None"
               }
+              to="/reports"
             />
           </div>
 
@@ -288,17 +298,27 @@ function StatCard({
   value,
   valueLabel,
   hint,
+  to,
 }: {
   label: string;
   value?: number;
   valueLabel?: string;
   hint?: string;
+  to?: string;
 }) {
-  return (
-    <div className="stat-card">
+  const body = (
+    <>
       <div className="stat-card-value">{valueLabel ?? value}</div>
       <div className="stat-card-label">{label}</div>
       {hint ? <div className="stat-card-hint">{hint}</div> : null}
-    </div>
+    </>
   );
+  if (to) {
+    return (
+      <Link className="stat-card stat-card-link" to={to} aria-label={`Open ${label}`}>
+        {body}
+      </Link>
+    );
+  }
+  return <div className="stat-card">{body}</div>;
 }

@@ -262,3 +262,72 @@ def admin_incidents(
         tuple(params),
     )
     return {"incidents": rows}
+
+
+@router.get("/recommendations")
+def admin_recommendations(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """KB-062: cross-tenant recommendations list for Admin/SOC (latest 100)."""
+    rows = fetch_all(
+        """
+        SELECT
+            cr.id::text,
+            t.name AS tenant_name,
+            t.short_code,
+            cr.title,
+            cr.priority,
+            cr.category,
+            cr.status,
+            cr.customer_visible,
+            cr.due_at,
+            cr.completed_at,
+            cr.created_at
+        FROM customer_recommendations cr
+        JOIN tenants t ON t.id = cr.tenant_id
+        ORDER BY
+            CASE cr.status
+                WHEN 'open' THEN 1
+                WHEN 'in_progress' THEN 2
+                ELSE 3
+            END,
+            CASE cr.priority
+                WHEN 'critical' THEN 1
+                WHEN 'high' THEN 2
+                WHEN 'medium' THEN 3
+                WHEN 'low' THEN 4
+                ELSE 5
+            END,
+            cr.created_at DESC
+        LIMIT 100;
+        """
+    )
+    return {"recommendations": rows}
+
+
+@router.get("/notifications")
+def admin_notifications(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """KB-062: cross-tenant notification events for Admin/SOC (latest 100)."""
+    rows = fetch_all(
+        """
+        SELECT
+            ne.id::text,
+            t.name AS tenant_name,
+            t.short_code,
+            ne.notification_type,
+            ne.status,
+            ne.provider,
+            left(ne.message_body, 240) AS message_preview,
+            ne.sent_at,
+            ne.delivered_at,
+            ne.created_at
+        FROM notification_events ne
+        JOIN tenants t ON t.id = ne.tenant_id
+        ORDER BY ne.created_at DESC
+        LIMIT 100;
+        """
+    )
+    return {"notifications": rows}
+

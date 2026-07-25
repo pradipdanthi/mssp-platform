@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 
 from app.api.routes.admin import router as admin_router
+from app.api.routes.admin_ops import router as admin_ops_router
 from app.api.routes.alert_incident_triage import router as alert_incident_triage_router
 from app.api.routes.appliance_agent import router as appliance_agent_router
 from app.api.routes.appliance_alert_ingest import router as appliance_alert_ingest_router
@@ -18,6 +19,8 @@ from app.api.routes.auth import router as auth_router
 from app.api.routes.customer import router as customer_router
 from app.api.routes.health import router as health_router
 from app.api.routes.on_prem_template import router as on_prem_template_router
+from app.api.routes.recommendation_management import router as recommendation_management_router
+from app.api.routes.soc_sync import router as soc_sync_router
 from app.api.routes.tenant_management import router as tenant_management_router
 from app.api.routes.user_management import router as user_management_router
 from app.core.error_handlers import validation_exception_handler
@@ -54,6 +57,8 @@ app.include_router(health_router)
 # main.py; it did not change any auth/RBAC/tenant-isolation behavior.
 app.include_router(admin_router)
 app.include_router(alert_incident_triage_router)
+app.include_router(recommendation_management_router)
+app.include_router(admin_ops_router)
 app.include_router(customer_router)
 
 # KB-013: admin tenant management (GET one, POST, PATCH) - adds alongside
@@ -79,3 +84,6 @@ app.include_router(appliance_agent_router)
 
 # KB-057: authenticated appliance alert ingestion with normalized safe fields.
 app.include_router(appliance_alert_ingest_router)
+
+# KB-061: Shuffle/TheHive → control plane normalized sync (X-SOC-Sync-Key).
+app.include_router(soc_sync_router)

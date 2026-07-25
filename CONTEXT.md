@@ -19,14 +19,14 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 | Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
 | Roadmap execution | **KB-039 through KB-060** committed on that branch |
 | Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest automation commit | KB-049 `8297db6`; prior KB-047/048 `fe662ec`; KB-044 `95be9fd` |
+| Latest automation commit | KB-061 SOC sync (uncommitted); prior KB-049 `8297db6` |
 | VM 100 snapshots | `kb060-ok`, `kb041-ok` |
 | VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211` |
 | VM 102 | **TheHive + Shuffle co-located** — `thehive_shuffle` / `192.168.0.212` / **16 GB**; UI :9000 / :3001 |
 | VM 105 | **Wazuh agent 001** Active |
 | VM 106 | **Suricata + Wazuh agent 002** Active; rule 86601 proof |
 | VM 112 | **Ansible controller** `192.168.0.222` |
-| Active preparation | **KB-049 live validated:** Wazuh level≥10 → Shuffle webhook → TheHive **MSSP-Lab** alerts (proof rule 100049). |
+| Active preparation | **KB-067 enterprise monthly reports** (on-screen + PDF + Excel) live. Full E2E/MSSP readiness still paused. |
 
 ---
 
@@ -56,8 +56,8 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 
 **Still not done:** creating remaining VMs 103–104 / 107–111; installing Zeek
 (deferred), MISP, Greenbone, Velociraptor, etc.; or schema for `soc_clusters` /
-`deployment_mode`. VM 102 TheHive+Shuffle, Suricata→Wazuh (KB-044), and
-KB-049 auto-ticket wiring are done.
+`deployment_mode`. KB-049 auto-ticket and KB-061 TheHive→control-plane sync API
+are live in lab (customer visibility still SOC-approved via KB-056).
 
 **Wazuh status:** VM 101 has Wazuh Manager, Indexer, Dashboard, and Filebeat
 **4.14.6-1** installed and validated. Credentials remain root-only on VM 101
@@ -68,9 +68,11 @@ into Git or docs. VM 105 agent **001** is Active with detection proof.
 VM 105 traffic mirror. Wazuh agent **002** (`suricata-sensor`) tails
 `/var/log/suricata/eve.json` into Manager; proof alert rule **86601**.
 
-**Next safe action:** Continue roadmap after KB-049 (e.g. deferred Zeek, MISP,
-Greenbone, Velociraptor, or control-plane TheHive→incident sync). Do not commit
-webhook URLs or TheHive/Shuffle API keys. Zeek still deferred.
+**Next safe action:** Drive **KB-064 E2E milestone** — either Phase A Linux
+rehearsal now, or onboard a **Windows Wazuh agent** first for full dual-endpoint
+scope. Keep customer_visible SOC-gated. Do not commit sync keys. Zeek deferred.
+
+**E2E milestone doc:** `docs/KB064_E2E_SIMULATION_INTEGRATION_TEST_MILESTONE.md`
 
 ---
 

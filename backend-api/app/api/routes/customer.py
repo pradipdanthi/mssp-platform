@@ -681,12 +681,16 @@ def customer_report_detail(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
-    KB-031: Tenant-scoped, read-only customer monthly report detail.
+    KB-031/067: Tenant-scoped, read-only customer monthly report detail.
 
-    Looks up by report_id (UUID). Returns only customer-safe fields.
+    Looks up by report_id (UUID). Returns only customer-safe fields + projected sections.
     Filters status IN ('published', 'archived'). Draft/missing/wrong-tenant → 404.
-    Does not expose metrics JSON, report_file_path, updated_at, or secrets.
+    Does not expose raw metrics JSON, report_file_path, or secrets.
     """
+    from uuid import UUID as _UUID
+
+    from app.services.report_snapshot_service import get_safe_sections_for_report
+
     tenant = fetch_one(
         "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
         (short_code.upper(),),
@@ -719,7 +723,99 @@ def customer_report_detail(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    try:
+        rid = _UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    report["sections"] = get_safe_sections_for_report(rid)
     return {"tenant": tenant, "report": report}
+
+
+def _customer_report_download(short_code: str, report_id: str, current_user: Dict[str, Any], fmt: str):
+    from uuid import UUID as _UUID
+
+    from fastapi.responses import Response
+
+    from app.services.report_export_service import build_pdf_bytes, build_xlsx_bytes, export_filename
+    from app.services.report_snapshot_service import get_safe_sections_for_report
+
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    require_tenant_match(tenant["id"], current_user)
+
+    report = fetch_one(
+        """
+        SELECT
+            id::text AS report_id,
+            report_month::text,
+            ('Monthly Security Report — ' || to_char(report_month, 'Mon YYYY')) AS title,
+            executive_summary,
+            published_at::text
+        FROM monthly_reports
+        WHERE tenant_id = %s
+          AND id = %s
+          AND status IN ('published', 'archived');
+        """,
+        (tenant["id"], report_id),
+    )
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    try:
+        rid = _UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    sections = get_safe_sections_for_report(rid)
+    if fmt == "pdf":
+        content = build_pdf_bytes(
+            title=report["title"],
+            executive_summary=report.get("executive_summary"),
+            published_at=report.get("published_at"),
+            sections=sections,
+        )
+        media = "application/pdf"
+        filename = export_filename(tenant["short_code"], report["report_month"], "pdf")
+    else:
+        content = build_xlsx_bytes(
+            title=report["title"],
+            executive_summary=report.get("executive_summary"),
+            published_at=report.get("published_at"),
+            sections=sections,
+        )
+        media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        filename = export_filename(tenant["short_code"], report["report_month"], "xlsx")
+
+    return Response(
+        content=content,
+        media_type=media,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/reports/{short_code}/{report_id}/download.pdf")
+def customer_report_download_pdf(
+    short_code: str,
+    report_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """KB-067: Customer PDF download for published/archived reports only."""
+    return _customer_report_download(short_code, report_id, current_user, "pdf")
+
+
+@router.get("/reports/{short_code}/{report_id}/download.xlsx")
+def customer_report_download_xlsx(
+    short_code: str,
+    report_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """KB-067: Customer Excel download for published/archived reports only."""
+    return _customer_report_download(short_code, report_id, current_user, "xlsx")
 
 
 @router.get("/recommendations/{short_code}")

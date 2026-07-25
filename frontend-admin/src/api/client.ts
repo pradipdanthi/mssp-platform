@@ -85,3 +85,38 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
 
   return data as T;
 }
+
+/** KB-067: authenticated binary download (PDF/Excel). */
+export async function downloadAuthenticated(path: string, fallbackFilename: string): Promise<void> {
+  const headers: Record<string, string> = { Accept: "*/*" };
+  if (authToken) {
+    headers.Authorization = `Bearer ${authToken}`;
+  }
+  let response: Response;
+  try {
+    response = await fetch(`${API_PREFIX}${path}`, { method: "GET", headers });
+  } catch {
+    throw new ApiError(0, null, "Unable to reach the server. Please check your connection.");
+  }
+  if (!response.ok) {
+    let detail: unknown = null;
+    try {
+      detail = extractDetail(await response.json());
+    } catch {
+      detail = null;
+    }
+    throw new ApiError(response.status, detail);
+  }
+  const blob = await response.blob();
+  const disposition = response.headers.get("Content-Disposition") || "";
+  const match = /filename=\"([^\"]+)\"/.exec(disposition);
+  const filename = match?.[1] || fallbackFilename;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
