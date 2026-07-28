@@ -16,6 +16,8 @@ import TimelineChart, {
   buildStackedHourlyBuckets,
 } from "../components/TimelineChart";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import EdrMetricsStrip from "../components/edr/EdrMetricsStrip";
+import { getEdrMetrics, type EdrMetricsSummary } from "../api/edr";
 
 const LIVE_FEED_KEY = "kestrel-live-feed";
 const LIVE_FEED_EVENT = "kestrel-live-feed-change";
@@ -62,6 +64,7 @@ function toDrawer(inc: Incident): DrawerIncident {
     severity: inc.severity,
     status: inc.status,
     tenant_name: inc.tenant_name,
+    short_code: inc.short_code,
     assigned_to: inc.assigned_to,
     summary: inc.customer_visible_summary,
     opened_at: inc.opened_at,
@@ -84,6 +87,16 @@ export default function DashboardPage() {
   const [liveTick, setLiveTick] = useState(0);
   const [tenantFilter, setTenantFilter] = useState(getStoredTenantFilter);
   const [tenantCodeById, setTenantCodeById] = useState<Record<string, string>>({});
+  const [edrMetrics, setEdrMetrics] = useState<EdrMetricsSummary | null>(null);
+  const [edrLoading, setEdrLoading] = useState(true);
+
+  useEffect(() => {
+    setEdrLoading(true);
+    getEdrMetrics(tenantFilter || undefined)
+      .then(setEdrMetrics)
+      .catch(() => setEdrMetrics(null))
+      .finally(() => setEdrLoading(false));
+  }, [tenantFilter]);
 
   useEffect(() => {
     publishLiveFeed(liveFeed);
@@ -358,6 +371,8 @@ export default function DashboardPage() {
               </div>
             </Link>
           </div>
+
+          <EdrMetricsStrip metrics={edrMetrics} loading={edrLoading} />
 
           <SocEfficiencyStrip
             openIncidents={overview.open_incidents}

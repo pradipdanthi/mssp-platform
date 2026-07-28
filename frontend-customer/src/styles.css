@@ -1148,6 +1148,34 @@ a.stat-card-link:focus-visible {
 @media (max-width: 640px) {
   .kpi-row-4 { grid-template-columns: 1fr; }
 }
+.kpi-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin: 12px 0;
+}
+@media (max-width: 900px) {
+  .kpi-row-3 { grid-template-columns: 1fr; }
+}
+.edr-metrics-strip {
+  margin: 18px 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
+}
+.edr-control-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.edr-mitre-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
 .kpi-card {
   background: #151c28;
   border: 1px solid #222f43;

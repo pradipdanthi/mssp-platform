@@ -1,7 +1,12 @@
 import { Link, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 import { getCustomerIncidentDetail } from "../api/customer";
+import { getEdrDeepDive, type EdrDeepDive } from "../api/edr";
 import { useAuth } from "../auth/AuthContext";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
+import EdrControlPanel from "../components/edr/EdrControlPanel";
+import MitreBadges from "../components/edr/MitreBadges";
+import ProcessTreeWidget from "../components/edr/ProcessTreeWidget";
 
 export default function IncidentDetailPage() {
   const { user } = useAuth();
@@ -12,6 +17,15 @@ export default function IncidentDetailPage() {
     Boolean(shortCode && incidentNumber),
     [shortCode, incidentNumber]
   );
+  const [edr, setEdr] = useState<EdrDeepDive | null>(null);
+  const canExecute = user?.role === "customer_admin";
+
+  useEffect(() => {
+    if (!shortCode || !incidentNumber || status !== "success") return;
+    getEdrDeepDive(incidentNumber, shortCode)
+      .then(setEdr)
+      .catch(() => setEdr(null));
+  }, [shortCode, incidentNumber, status]);
 
   if (!shortCode) {
     return (
@@ -173,6 +187,47 @@ export default function IncidentDetailPage() {
               </tbody>
             </table>
           )}
+
+          {edr ? (
+            <>
+              <h2 className="page-subtitle" style={{ marginTop: "2rem" }}>
+                Endpoint context
+              </h2>
+              <table className="data-table">
+                <tbody>
+                  <tr>
+                    <th>Hostname</th>
+                    <td>{String(edr.endpoint.hostname ?? "—")}</td>
+                  </tr>
+                  <tr>
+                    <th>OS</th>
+                    <td>{String(edr.endpoint.os_version ?? "—")}</td>
+                  </tr>
+                  <tr>
+                    <th>Logged-in user</th>
+                    <td>{String(edr.endpoint.logged_in_user ?? "—")}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <h2 className="page-subtitle" style={{ marginTop: "1.5rem" }}>
+                MITRE ATT&amp;CK
+              </h2>
+              <MitreBadges tactics={edr.mitre.tactics} techniques={edr.mitre.techniques} />
+              <h2 className="page-subtitle" style={{ marginTop: "1.5rem" }}>
+                Process execution tree
+              </h2>
+              <ProcessTreeWidget
+                root={edr.process_tree.root}
+                message={edr.process_tree.message}
+              />
+              <EdrControlPanel
+                tenantShortCode={shortCode}
+                incidentNumber={incidentNumber}
+                agentId={edr.endpoint.agent_id as string | undefined}
+                canExecute={canExecute}
+              />
+            </>
+          ) : null}
         </>
       )}
     </div>

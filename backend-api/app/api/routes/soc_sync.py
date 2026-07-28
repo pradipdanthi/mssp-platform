@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
 from app.schemas.soc_sync import SocSyncRequest, SocSyncResponse
+from app.db.session import fetch_one
 from app.services.soc_sync_service import TenantNotFoundError, sync_soc_alert
 
 logger = logging.getLogger(__name__)
@@ -273,6 +274,18 @@ async def wazuh_instant_ingress(token: str, request: Request) -> Dict[str, Any]:
     try:
         payload = _normalize_wazuh_alert(raw)
         result, duplicate = sync_soc_alert(payload)
+        tenant_row = fetch_one(
+            "SELECT id::text AS id FROM tenants WHERE short_code = %s;",
+            (payload.tenant_short_code.upper(),),
+        )
+        if tenant_row and result.get("alert_id"):
+            from app.services.edr_ingress import persist_wazuh_alert_enrichment
+
+            persist_wazuh_alert_enrichment(
+                result["alert_id"],
+                tenant_row["id"],
+                raw,
+            )
     except ValueError as exc:
         logger.warning("Wazuh ingress rejected: %s", exc)
         raise HTTPException(

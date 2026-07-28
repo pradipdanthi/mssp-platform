@@ -9,6 +9,7 @@ export type DrawerIncident = {
   severity: string;
   status: string;
   tenant_name?: string;
+  short_code?: string;
   assigned_to?: string | null;
   summary?: string | null;
   business_impact?: string | null;

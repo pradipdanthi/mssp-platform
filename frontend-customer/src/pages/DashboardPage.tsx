@@ -16,6 +16,8 @@ import TimelineChart, {
   buildStackedHourlyBuckets,
 } from "../components/TimelineChart";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
+import EdrMetricsStrip from "../components/edr/EdrMetricsStrip";
+import { getEdrMetrics, type EdrMetricsSummary } from "../api/edr";
 
 const LIVE_FEED_KEY = "kestrel-live-feed";
 const LIVE_FEED_EVENT = "kestrel-live-feed-change";
@@ -47,6 +49,22 @@ function matchesSeverity(sev: string, filter: string | null): boolean {
 export default function DashboardPage() {
   const { user } = useAuth();
   const shortCode = user?.tenant_short_code ?? null;
+  const [edrMetrics, setEdrMetrics] = useState<EdrMetricsSummary | null>(null);
+  const [edrLoading, setEdrLoading] = useState(true);
+
+  useEffect(() => {
+    if (!shortCode) {
+      setEdrMetrics(null);
+      setEdrLoading(false);
+      return;
+    }
+    setEdrLoading(true);
+    getEdrMetrics(shortCode)
+      .then(setEdrMetrics)
+      .catch(() => setEdrMetrics(null))
+      .finally(() => setEdrLoading(false));
+  }, [shortCode]);
+
   const { status, data, errorMessage, refetch } = useCustomerQuery(
     () => getCustomerDashboardV2(shortCode as string),
     Boolean(shortCode),
@@ -249,6 +267,8 @@ export default function DashboardPage() {
               <div className="kpi-foot">Click → recommendations</div>
             </Link>
           </div>
+
+          <EdrMetricsStrip metrics={edrMetrics} loading={edrLoading} />
 
           <SocEfficiencyStrip
             openIncidents={data.kpis.open_incidents}

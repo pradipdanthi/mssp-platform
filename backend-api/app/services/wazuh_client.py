@@ -151,3 +151,35 @@ def credentials_configured() -> bool:
         return True
     except WazuhClientError:
         return False
+
+
+def run_active_response(
+    *,
+    agent_id: str,
+    command: str,
+    arguments: Optional[list[str]] = None,
+) -> Dict[str, Any]:
+    """
+    Dispatch Wazuh active response to one agent. Command must exist in manager AR config.
+    """
+    aid = (agent_id or "").strip()
+    if not aid:
+        raise WazuhClientError("agent_id is required for active response")
+    token = authenticate()
+    body: Dict[str, Any] = {
+        "command": command,
+        "custom": False,
+        "arguments": arguments or [],
+    }
+    path = f"/active-response?agents_list={urllib.parse.quote(aid)}"
+    return _request("PUT", path, token=token, body=body)
+
+
+def run_custom_active_response(
+    *,
+    agent_id: str,
+    command_line: str,
+) -> Dict[str, Any]:
+    """Custom active response (manager-defined script name or custom command)."""
+    return run_active_response(agent_id=agent_id, command=command_line, arguments=[])
+

@@ -1,7 +1,13 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
 import type { DrawerIncident } from "./IncidentDrawer";
 import InvestigationGraph from "./InvestigationGraph";
 import SeverityPill from "./SeverityPill";
+import { getEdrDeepDive, type EdrDeepDive } from "../api/edr";
+import { useAuth } from "../auth/AuthContext";
+import EdrControlPanel from "./edr/EdrControlPanel";
+import MitreBadges from "./edr/MitreBadges";
+import ProcessTreeWidget from "./edr/ProcessTreeWidget";
 
 type Props = {
   incident: DrawerIncident | null;
@@ -18,6 +24,21 @@ export default function IncidentDetailPanel({
   mode = "admin",
   onRunPlaybook,
 }: Props) {
+  const { user } = useAuth();
+  const [edr, setEdr] = useState<EdrDeepDive | null>(null);
+  const canExecute =
+    user?.role === "platform_admin" || user?.role === "soc_manager";
+
+  useEffect(() => {
+    if (!incident?.incident_number || !incident.short_code || mode !== "admin") {
+      setEdr(null);
+      return;
+    }
+    getEdrDeepDive(incident.incident_number, incident.short_code)
+      .then(setEdr)
+      .catch(() => setEdr(null));
+  }, [incident?.incident_number, incident?.short_code, mode]);
+
   if (!incident) {
     return (
       <aside className="incident-detail-panel card-surface">
@@ -86,6 +107,21 @@ export default function IncidentDetailPanel({
           { id: "ip", label: mode === "admin" ? "IP" : "Net", kind: "network" },
         ]}
       />
+
+      {mode === "admin" && edr ? (
+        <>
+          <MitreBadges tactics={edr.mitre.tactics} techniques={edr.mitre.techniques} />
+          <ProcessTreeWidget root={edr.process_tree.root} message={edr.process_tree.message} />
+          {incident.short_code ? (
+            <EdrControlPanel
+              tenantShortCode={incident.short_code}
+              incidentNumber={incident.incident_number}
+              agentId={edr.endpoint.agent_id as string | undefined}
+              canExecute={canExecute}
+            />
+          ) : null}
+        </>
+      ) : null}
 
       <div className="incident-detail-actions">
         {mode === "admin" ? (
