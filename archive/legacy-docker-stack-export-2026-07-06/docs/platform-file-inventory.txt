@@ -1,0 +1,5 @@
+/home/secadmin/mssp-stack/docker-compose.yml
+/home/secadmin/mssp-stack/filebeat/filebeat.yml
+/home/secadmin/mssp-stack/mapping.json
+/home/secadmin/mssp-stack/nginx/nginx.conf
+/home/secadmin/mssp-stack/wazuh-alerts/alerts.json

@@ -1,0 +1,9 @@
+export_run: "20260706-130627"
+stack_dir: "/home/secadmin/mssp-stack"
+repo_dir: "/home/secadmin/mssp-platform"
+snapshot_dir: "exports/source-snapshot/20260706-130627"
+inventory_dir: "exports/inventory/20260706-130627"
+notes:
+  - "Secrets in .env are redacted into deployment/env/.env.example"
+  - "Databases, Docker volumes, and runtime logs are intentionally excluded"
+  - "This repository is the source of truth for future VPS deployment"

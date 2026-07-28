@@ -1,0 +1,26 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /var/ossec/logs/alerts/alerts.json
+    json.keys_under_root: true
+    json.overwrite_keys: true
+    json.add_error_key: true
+    fields:
+      event.module: wazuh
+      event.dataset: wazuh.alerts
+    fields_under_root: true
+
+processors:
+  - drop_fields:
+      fields: ["host"]
+      ignore_missing: true
+
+output.elasticsearch:
+  hosts: ["http://opensearch-db:9200"]
+  index: "wazuh-alerts-%{+yyyy.MM.dd}"
+
+setup.template.enabled: false
+setup.template.name: "wazuh-alerts"
+setup.template.pattern: "wazuh-alerts-*"
+setup.ilm.enabled: false

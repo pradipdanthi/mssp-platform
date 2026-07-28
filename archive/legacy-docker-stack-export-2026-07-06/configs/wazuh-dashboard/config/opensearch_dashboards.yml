@@ -1,0 +1,6 @@
+server.host: "0.0.0.0"
+opensearch.hosts: ["http://opensearch-db:9200"]
+
+opensearch_security.enabled: false
+opensearch_security.multitenancy.enabled: false
+opensearch_security.readonly_mode.roles: []
