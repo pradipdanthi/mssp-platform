@@ -1,0 +1,7 @@
+---
+zeek_wazuh_execution_mode: "preflight"
+zeek_wazuh_live_apply_approved: false
+
+zeek_notice_log_glob: /opt/zeek-logs/current/notice.log
+zeek_wazuh_state_directory: /var/lib/mssp/zeek-wazuh
+zeek_wazuh_marker: "{{ zeek_wazuh_state_directory }}/localfile.applied"

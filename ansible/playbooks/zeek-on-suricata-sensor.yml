@@ -1,0 +1,12 @@
+---
+# KB-047: Zeek NSM co-located on VM 106 with Suricata (shared SPAN).
+# Wazuh forwarding extends the existing suricata-sensor agent (KB-044).
+
+- name: KB-047 Zeek on Suricata sensor
+  hosts: suricata-sensor
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: zeek_sensor
+    - role: zeek_wazuh

@@ -55,6 +55,16 @@ services:
       WAZUH_INGRESS_TOKEN_FILE: /run/secrets/wazuh_ingress_token
       SHUFFLE_WEBHOOK_URL_FILE: /run/secrets/shuffle_webhook_url
       VULN_SYNC_API_KEY_FILE: /run/secrets/vuln_sync_api_key
+      THEHIVE_URL: ${THEHIVE_URL:-http://192.168.0.212:9000}
+      THEHIVE_USER: ${THEHIVE_USER:-admin@thehive.local}
+      THEHIVE_PASSWORD_FILE: /run/secrets/thehive_password
+      THEHIVE_DEFAULT_ORG: ${THEHIVE_DEFAULT_ORG:-MSSP}
+      WAZUH_API_URL: ${WAZUH_API_URL:-https://192.168.0.211:55000}
+      WAZUH_API_USER_FILE: /run/secrets/wazuh_api_user
+      WAZUH_API_PASSWORD_FILE: /run/secrets/wazuh_api_password
+      WAZUH_API_VERIFY_TLS: ${WAZUH_API_VERIFY_TLS:-false}
+      # Empty = fail-closed (require agent group → tenant binding). Set only for emergency override.
+      WAZUH_DEFAULT_TENANT_SHORT_CODE: ${WAZUH_DEFAULT_TENANT_SHORT_CODE:-}
       TZ: ${TZ}
     depends_on:
       postgres:
@@ -68,14 +78,13 @@ services:
       - ./.secrets/wazuh_ingress_token:/run/secrets/wazuh_ingress_token:ro
       - ./.secrets/shuffle_webhook_url:/run/secrets/shuffle_webhook_url:ro
       - ./.secrets/vuln_sync_api_key:/run/secrets/vuln_sync_api_key:ro
+      - ./.secrets/thehive_password:/run/secrets/thehive_password:ro
+      - ./.secrets/wazuh_api_user:/run/secrets/wazuh_api_user:ro
+      - ./.secrets/wazuh_api_password:/run/secrets/wazuh_api_password:ro
     networks:
       - mssp-backend
 
-  # KB-018: admin frontend foundation. Vite dev server only in this
-  # module (no nginx/static production build yet) - see
-  # frontend-admin/Dockerfile. Reaches backend-api only through Vite's
-  # own dev-server proxy (frontend-admin/vite.config.ts), so no CORS
-  # changes were needed on backend-api.
+  # Production Admin / SOC portal (nginx static build; /api → backend-api).
   frontend-admin:
     build:
       context: ./frontend-admin
@@ -84,15 +93,11 @@ services:
     depends_on:
       - backend-api
     ports:
-      - "3000:5173"
-    volumes:
-      - ./frontend-admin:/app
-      - /app/node_modules
+      - "3000:80"
     networks:
       - mssp-backend
 
-  # KB-021: customer portal foundation. Separate from frontend-admin.
-  # Vite dev server; proxies /api to backend-api (no CORS changes).
+  # Production Customer portal (nginx static build; /api → backend-api).
   frontend-customer:
     build:
       context: ./frontend-customer
@@ -101,10 +106,7 @@ services:
     depends_on:
       - backend-api
     ports:
-      - "3001:5173"
-    volumes:
-      - ./frontend-customer:/app
-      - /app/node_modules
+      - "3001:80"
     networks:
       - mssp-backend
 

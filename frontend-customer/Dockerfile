@@ -1,11 +1,6 @@
-# KB-021: Customer frontend foundation.
-#
-# Node/npm only inside this image. Vite dev server (not nginx production
-# static build). Bind-mount + anonymous node_modules volume in
-# docker-compose.yml enables host-side edits without host Node.
-#
-# package-lock.json is committed; use npm ci for reproducible installs.
-FROM node:20-alpine
+# Production Customer portal — static Vite build served by nginx.
+# /api/* is reverse-proxied to backend-api on the Compose network.
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -13,7 +8,12 @@ COPY package*.json ./
 RUN npm ci
 
 COPY . .
+RUN npm run build
 
-EXPOSE 5173
+FROM nginx:1.27-alpine
 
-CMD ["npm", "run", "dev"]
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]

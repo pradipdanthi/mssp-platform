@@ -53,6 +53,16 @@ export interface Tenant {
   sla_level: string;
   business_criticality: string;
   timezone: string;
+  deployment_mode: TenantDeploymentMode;
+  cloud_provider: TenantCloudProvider | null;
+  primary_contact_name?: string | null;
+  primary_contact_email?: string | null;
+  primary_contact_phone?: string | null;
+  country?: string | null;
+  city?: string | null;
+  industry?: string | null;
+  contract_reference?: string | null;
+  licensed_endpoints?: number | null;
   created_at: string;
   appliances: number;
   protected_assets: number;
@@ -118,11 +128,25 @@ export interface Alert {
   source_ip: string | null;
   destination_ip: string | null;
   destination_host: string | null;
+  source_user?: string | null;
   ai_plain_summary: string | null;
   ai_likely_attack_type: string | null;
   customer_visible: boolean;
   status: string;
   created_at: string;
+  /** KB-082 derived taxonomy (additive). */
+  asset_category?: string;
+  device_type?: string;
+  asset_category_label?: string;
+  contextual?: Record<string, unknown>;
+}
+
+export type AlertTaxonomyCounts = Record<string, number>;
+
+export interface AlertTaxonomySummaryResponse {
+  counts: AlertTaxonomyCounts;
+  tree: unknown[];
+  labels: Record<string, string>;
 }
 
 export interface AlertsListResponse {
@@ -233,6 +257,7 @@ export interface TriageListFilters {
   status?: string;
   severity?: string;
   tenant_id?: string;
+  asset_category?: string;
 }
 
 function withFilters(path: string, filters?: TriageListFilters): string {
@@ -240,6 +265,7 @@ function withFilters(path: string, filters?: TriageListFilters): string {
   if (filters?.status) params.set("status", filters.status);
   if (filters?.severity) params.set("severity", filters.severity);
   if (filters?.tenant_id) params.set("tenant_id", filters.tenant_id);
+  if (filters?.asset_category) params.set("asset_category", filters.asset_category);
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -252,15 +278,89 @@ export function getTenants(): Promise<TenantsListResponse> {
   return request<TenantsListResponse>("/admin/tenants");
 }
 
-/** KB-065: full tenant detail (includes notes). */
+/** KB-072: Wazuh/TheHive engine binding for a tenant. */
+export interface TenantEngineBinding {
+  tenant_id: string;
+  wazuh_agent_group: string;
+  wazuh_group_status: string;
+  wazuh_last_error: string | null;
+  wazuh_provisioned_at: string | null;
+  thehive_org_name: string;
+  thehive_tenant_tag: string;
+  thehive_org_status: string;
+  thehive_last_error: string | null;
+  thehive_provisioned_at: string | null;
+  last_provision_attempt_at: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+/** KB-065/KB-074/KB-075: full tenant detail (notes + profile + contract). */
+export interface TenantOnboardResult {
+  entitlements_saved: boolean;
+  portal_user_created: boolean;
+  portal_user_email: string | null;
+  portal_user_error: string | null;
+  service_readiness: Record<string, string>;
+  next_steps: string[];
+}
+
 export interface TenantDetail extends Tenant {
   notes: string | null;
   updated_at: string;
+  secondary_contact_name?: string | null;
+  secondary_contact_email?: string | null;
+  secondary_contact_phone?: string | null;
+  billing_email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  state_region?: string | null;
+  postal_code?: string | null;
+  website?: string | null;
+  legal_name?: string | null;
+  tax_id?: string | null;
+  contract_reference?: string | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  licensed_endpoints?: number | null;
+  data_residency?: string | null;
+  preferred_language?: string | null;
+  company_size?: string | null;
+  engine_binding?: TenantEngineBinding | null;
+  entitlements?: TenantEntitlements | null;
+  onboard_result?: TenantOnboardResult | null;
 }
 
 export type TenantStatus = "onboarding" | "active" | "inactive" | "suspended";
 export type TenantSlaLevel = "standard" | "business" | "premium" | "24x7";
 export type TenantCriticality = "low" | "medium" | "high" | "critical";
+export type TenantDeploymentMode =
+  | "cloud"
+  | "cloud_appliance"
+  | "on_prem_direct"
+  | "on_prem_appliance"
+  | "hybrid";
+export type TenantCloudProvider = "aws" | "azure" | "gcp" | "other";
+
+export interface TenantEntitlementsOnCreate {
+  wazuh_siem: boolean;
+  wazuh_retention_days: number;
+  thehive_mode: string;
+  greenbone_enabled: boolean;
+  greenbone_cadence: string;
+  shuffle_mode: string;
+  zeek_enabled: boolean;
+  misp_enabled: boolean;
+  velociraptor_enabled: boolean;
+  roadmap_notes?: string | null;
+}
+
+export interface PortalAdminOnCreate {
+  email: string;
+  full_name: string;
+  password: string;
+  phone?: string | null;
+}
 
 export interface TenantCreateRequest {
   name: string;
@@ -270,6 +370,35 @@ export interface TenantCreateRequest {
   business_criticality?: TenantCriticality;
   timezone?: string;
   notes?: string | null;
+  deployment_mode?: TenantDeploymentMode;
+  cloud_provider?: TenantCloudProvider | null;
+  primary_contact_name: string;
+  primary_contact_email: string;
+  primary_contact_phone?: string | null;
+  secondary_contact_name?: string | null;
+  secondary_contact_email?: string | null;
+  secondary_contact_phone?: string | null;
+  billing_email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state_region?: string | null;
+  postal_code?: string | null;
+  country: string;
+  website?: string | null;
+  industry?: string | null;
+  legal_name?: string | null;
+  tax_id?: string | null;
+  contract_reference?: string | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  licensed_endpoints?: number | null;
+  data_residency?: string | null;
+  preferred_language?: string | null;
+  company_size?: string | null;
+  entitlements?: TenantEntitlementsOnCreate;
+  /** Required for every new customer onboard. */
+  portal_admin: PortalAdminOnCreate;
 }
 
 export interface TenantUpdateRequest {
@@ -279,6 +408,32 @@ export interface TenantUpdateRequest {
   business_criticality?: TenantCriticality;
   timezone?: string;
   notes?: string | null;
+  deployment_mode?: TenantDeploymentMode;
+  cloud_provider?: TenantCloudProvider | null;
+  primary_contact_name?: string | null;
+  primary_contact_email?: string | null;
+  primary_contact_phone?: string | null;
+  secondary_contact_name?: string | null;
+  secondary_contact_email?: string | null;
+  secondary_contact_phone?: string | null;
+  billing_email?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state_region?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  website?: string | null;
+  industry?: string | null;
+  legal_name?: string | null;
+  tax_id?: string | null;
+  contract_reference?: string | null;
+  contract_start_date?: string | null;
+  contract_end_date?: string | null;
+  licensed_endpoints?: number | null;
+  data_residency?: string | null;
+  preferred_language?: string | null;
+  company_size?: string | null;
 }
 
 export function getTenantDetail(tenantId: string): Promise<TenantDetail> {
@@ -296,6 +451,25 @@ export function updateTenant(
   return request<TenantDetail>(`/admin/tenants/${encodeURIComponent(tenantId)}`, {
     method: "PATCH",
     body: payload,
+  });
+}
+
+export function getTenantEngineBinding(tenantId: string): Promise<TenantEngineBinding> {
+  return request<TenantEngineBinding>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/engine-binding`
+  );
+}
+
+export function provisionTenantEngines(tenantId: string): Promise<TenantEngineBinding> {
+  return request<TenantEngineBinding>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/engine-provision`,
+    { method: "POST" }
+  );
+}
+
+export function backfillTenantEngineBindings(): Promise<{ count: number; message: string }> {
+  return request<{ count: number; message: string }>("/admin/tenants/engine-provision/backfill", {
+    method: "POST",
   });
 }
 
@@ -359,6 +533,14 @@ export function getAppliances(): Promise<AppliancesListResponse> {
 
 export function getAlerts(filters?: TriageListFilters): Promise<AlertsListResponse> {
   return request<AlertsListResponse>(withFilters("/admin/alerts", filters));
+}
+
+export function getAlertTaxonomySummary(
+  filters?: Pick<TriageListFilters, "status" | "severity" | "tenant_id">
+): Promise<AlertTaxonomySummaryResponse> {
+  return request<AlertTaxonomySummaryResponse>(
+    withFilters("/admin/alerts/taxonomy-summary", filters)
+  );
 }
 
 export function getAlertDetail(alertId: string): Promise<AlertDetailResponse> {
@@ -723,6 +905,7 @@ export interface AuditLog {
   entity_type: string;
   entity_id: string | null;
   source_ip: string | null;
+  details: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -732,6 +915,80 @@ export interface AuditLogsListResponse {
 
 export function getAuditLogs(): Promise<AuditLogsListResponse> {
   return request<AuditLogsListResponse>("/admin/audit-logs");
+}
+
+export interface AuditEventCreateRequest {
+  action: string;
+  entity_type: string;
+  entity_id?: string | null;
+  tenant_id?: string | null;
+  details?: Record<string, unknown>;
+}
+
+export function postAuditEvent(payload: AuditEventCreateRequest): Promise<{ audit_event: unknown }> {
+  return request<{ audit_event: unknown }>("/admin/audit-events", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+/** KB-071: per-tenant service entitlement matrix. */
+export interface TenantEntitlements {
+  tenant_id: string;
+  wazuh_siem: boolean;
+  wazuh_retention_days: number;
+  thehive_mode: string;
+  greenbone_enabled: boolean;
+  greenbone_cadence: string;
+  shuffle_mode: string;
+  zeek_enabled: boolean;
+  misp_enabled: boolean;
+  velociraptor_enabled: boolean;
+  roadmap_notes: string | null;
+  updated_at: string | null;
+}
+
+export type TenantEntitlementsUpdate = Partial<
+  Omit<TenantEntitlements, "tenant_id" | "updated_at">
+>;
+
+export function getTenantEntitlements(tenantId: string): Promise<TenantEntitlements> {
+  return request<TenantEntitlements>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/entitlements`
+  );
+}
+
+export function putTenantEntitlements(
+  tenantId: string,
+  payload: TenantEntitlementsUpdate
+): Promise<TenantEntitlements> {
+  return request<TenantEntitlements>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/entitlements`,
+    { method: "PUT", body: payload }
+  );
+}
+
+export type ApplianceStatus =
+  | "registered"
+  | "online"
+  | "offline"
+  | "maintenance"
+  | "retired";
+
+export interface ApplianceUpdateRequest {
+  appliance_name?: string;
+  site_name?: string;
+  status?: ApplianceStatus;
+}
+
+export function updateAppliance(
+  applianceId: string,
+  payload: ApplianceUpdateRequest
+): Promise<Appliance> {
+  return request<Appliance>(`/admin/appliances/${encodeURIComponent(applianceId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
 }
 
 /** KB-069: Admin vulnerability findings (Greenbone normalized). */
@@ -763,8 +1020,17 @@ export interface VulnerabilitiesListResponse {
   vulnerabilities: AdminVulnerability[];
 }
 
-export function getVulnerabilities(): Promise<VulnerabilitiesListResponse> {
-  return request<VulnerabilitiesListResponse>("/admin/vulnerabilities");
+export function getVulnerabilities(params?: {
+  source_platform?: string;
+  tenant_short_code?: string;
+}): Promise<VulnerabilitiesListResponse> {
+  const qs = new URLSearchParams();
+  if (params?.source_platform) qs.set("source_platform", params.source_platform);
+  if (params?.tenant_short_code) qs.set("tenant_short_code", params.tenant_short_code);
+  const q = qs.toString();
+  return request<VulnerabilitiesListResponse>(
+    `/admin/vulnerabilities${q ? `?${q}` : ""}`
+  );
 }
 
 export function getVulnerabilityDetail(id: string): Promise<AdminVulnerability> {
@@ -785,6 +1051,64 @@ export function promoteVulnerabilityRecommendation(
   return request<VulnerabilityPromoteResponse>(
     `/admin/vulnerabilities/${encodeURIComponent(id)}/promote-recommendation`,
     { method: "POST", body: payload }
+  );
+}
+
+/** KB-076: customer service upgrade / interest requests. */
+export interface ServiceUpgradeRequestRow {
+  id: string;
+  tenant_id: string;
+  tenant_name?: string | null;
+  short_code?: string | null;
+  requested_by_name?: string | null;
+  service_key: string;
+  preferred_cadence: string;
+  scan_scope: string[];
+  approximate_assets: number | null;
+  environments: string[];
+  urgency: string;
+  compliance_drivers: string[];
+  requirements_summary: string;
+  preferred_contact: string;
+  contact_phone: string | null;
+  status: string;
+  admin_notes?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
+export interface ApproveServiceUpgradeResponse {
+  message: string;
+  entitlements_updated: boolean;
+  next_steps: string[];
+  request: ServiceUpgradeRequestRow;
+}
+
+export function getServiceUpgradeRequests(): Promise<{ requests: ServiceUpgradeRequestRow[] }> {
+  return request<{ requests: ServiceUpgradeRequestRow[] }>("/admin/service-upgrade-requests");
+}
+
+export function patchServiceUpgradeRequest(
+  id: string,
+  body: { status?: string; admin_notes?: string | null }
+): Promise<ServiceUpgradeRequestRow> {
+  return request<ServiceUpgradeRequestRow>(`/admin/service-upgrade-requests/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export function approveServiceUpgradeRequest(id: string): Promise<ApproveServiceUpgradeResponse> {
+  return request<ApproveServiceUpgradeResponse>(
+    `/admin/service-upgrade-requests/${encodeURIComponent(id)}/approve-enable`,
+    { method: "POST" }
+  );
+}
+
+export function declineServiceUpgradeRequest(id: string): Promise<ServiceUpgradeRequestRow> {
+  return request<ServiceUpgradeRequestRow>(
+    `/admin/service-upgrade-requests/${encodeURIComponent(id)}/decline`,
+    { method: "POST" }
   );
 }
 

@@ -1,0 +1,18 @@
+---
+# KB-047: Zeek on VM 106 (co-located with Suricata). Passive NSM on SPAN interface.
+zeek_execution_mode: "preflight"
+zeek_live_install_approved: false
+
+zeek_apt_key_url: "https://download.zeek.org/deb/zeek-archive-keyring.gpg"
+zeek_apt_repo: "deb [signed-by=/usr/share/keyrings/zeek-archive-keyring.gpg] https://download.zeek.org/deb stable main"
+zeek_package_name: zeek
+
+zeek_capture_interface: "enp6s20"
+zeek_home_net: "192.168.0.0/24"
+zeek_log_directory: /opt/zeek/logs
+zeek_state_directory: /var/lib/mssp/zeek
+zeek_install_marker: "{{ zeek_state_directory }}/installed"
+
+zeek_minimum_memory_mb: 4096
+zeek_minimum_root_disk_gb: 40
+zeek_minimum_vcpus: 2

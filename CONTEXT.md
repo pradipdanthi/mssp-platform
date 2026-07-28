@@ -1,8 +1,8 @@
 # CONTEXT.md — MSSP Control Plane Current Snapshot
 
-Status: Living context file for AI agents and humans. Refreshed after **KB-039–KB-060** overnight batch.  
+Status: Living context file for AI agents and humans.  
 Project path: `/opt/mssp-control`  
-VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
+Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control plane** (same design migrates to cloud later).
 
 **How to use:** Read with `AGENTS.md`, `CLAUDE.md`, and `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` at session start.
 
@@ -10,74 +10,45 @@ VM: **VM 100 — `mssp-control`** (`192.168.0.201`)
 
 ---
 
-## 1. Latest validated baseline
+## 1. Production posture (enterprise-ready mandate)
 
 | Item | Value |
 |---|---|
-| Latest feature baseline | **KB-035** — Customer Appliance Detail UI (`1ac1df3`, `kb035-customer-appliance-detail-validated`) |
-| Architecture / registry planning | **KB-036–KB-038** (docs) |
-| Active overnight branch | `kb039-kb060-platform-roadmap-execution` |
-| Roadmap execution | **KB-039 through KB-060** committed on that branch |
-| Aggregate tag | `kb039-kb060-roadmap-batch-complete` (`f7ff691`) |
-| Latest automation commit | KB-061 SOC sync (uncommitted); prior KB-049 `8297db6` |
-| VM 100 snapshots | `kb060-ok`, `kb041-ok` |
-| VM 101 | **Wazuh 4.14.6 installed** — `192.168.0.211` |
-| VM 102 | **TheHive + Shuffle co-located** — `thehive_shuffle` / `192.168.0.212` / **16 GB**; UI :9000 / :3001 |
-| VM 105 | **Wazuh agent 001** Active |
-| VM 106 | **Suricata + Wazuh agent 002** Active; rule 86601 proof |
-| VM 112 | **Ansible controller** `192.168.0.222` |
-| VM 109 | **Greenbone Community Edition live** — `greenbone` / `192.168.0.219` / **9 GB**; GSA `https://192.168.0.219` (KB-068) |
-| Active preparation | **KB-068 Greenbone live** + **KB-069 control-plane vuln adapter** (Admin Vulnerabilities + promote). |
+| Product | **Kestrel Cyber MSSP Control Plane** — Admin/SOC + Customer portals |
+| Deployment reality | **On-prem local servers now** = production path for a complete end-to-end MSSP; **not** a disposable lab |
+| Quality bar | Every backend tool, adapter wiring, configuration, and security control must be **enterprise-ready** (or an explicit, dated gap with upgrade path) |
+| Runtime | Docker Compose on VM 100; frontends are **nginx production builds** (`:3000` / `:3001`) |
+| Backend | FastAPI `:8000` — system of record; engines are adapters only |
+| Tenant isolation | Customer wrong-tenant → **404**; no raw engine data in customer UI |
+| Alert tenant mapping | Fail-closed — Wazuh agent group / binding required (no DEMO default) |
+| Shared TheHive org | `THEHIVE_DEFAULT_ORG` default **`MSSP`** (override in `.env` if existing org name differs) |
+| Cloud | Same architecture; migrate later — do not invent a second product |
+
+**Do not** treat this platform as a lab prototype in planning, user-facing copy, dashboards, or runtime defaults. Lab shortcuts need explicit user acceptance + upgrade plan.
+
+### Vulnerability scanning note (KB-078)
+
+| Item | Value |
+|---|---|
+| **Primary free stack ($0)** | **Nuclei + Vuls** on **VM 109** `/opt/mssp-vuln-free` (with Greenbone CE) — see KB-078 |
+| Greenbone Community (VM 109) | Optional classic NVT backup — co-located; no customer UI |
+| Control plane (VM 100) | **No** scanner engines — adapters/API only |
+| Greenbone Enterprise | **Deferred** until ~5–10 customers (KB-077) — no paid license yet |
+| Product path | Scan → normalize (`nuclei`/`vuls`/`greenbone`) → Admin triage/promote → customer-safe recommendations |
 
 ---
 
-## 2. What KB-039–KB-060 delivered
+## 2. Latest validated feature baseline
 
-### Docs / planning / Ansible (no live SOC tool installs)
-
-| KB | Summary |
+| Item | Value |
 |---|---|
-| KB-039 | Ansible foundation (`ansible/` inventory VMs 100–111, stub playbooks) |
-| KB-040–042 | Wazuh VM plan, KB-041 safe-default install role, agent onboarding stubs |
-| KB-043–046 | Suricata / Zeek plans + integration plans |
-| KB-047–049 | TheHive, Shuffle, Wazuh→Shuffle→TheHive workflow plans |
-| KB-050–051 | MISP + threat-intel enrichment plans |
-| KB-052–053 | Greenbone + vulnerability→recommendation plans |
-| KB-054–055 | Velociraptor + DFIR evidence safety plans |
-| KB-059 | Multi-cluster capacity / customer placement plan |
-| KB-060 | Backup, monitoring (VM 111), upgrade, ops runbook |
-
-### Control-plane code (runtime)
-
-| KB | Summary |
-|---|---|
-| KB-056 | Admin SOC triage: alert/incident detail, PATCH triage, comments, list filters, admin UI detail pages |
-| KB-057 | `POST /appliance/alerts` — customer-safe normalized ingest (appliance API key auth) |
-| KB-058 | On-prem appliance template (`templates/on-prem-appliance/`) + admin download API/UI |
-
-**Still not done:** creating remaining VMs 103–104 / 107–108 / 110–111; installing Zeek
-(deferred), MISP, Velociraptor, etc.; or schema for `soc_clusters` /
-`deployment_mode`. KB-049 auto-ticket and KB-061 TheHive→control-plane sync API
-are live in lab (customer visibility still SOC-approved via KB-056).
-
-**Greenbone status:** VM 109 Community Edition live (`https://192.168.0.219`).
-KB-069 adapter + **KB-070 instant Task-Done hook** on VM 109 (`:9271`) plus
-on-demand puller. Admin can promote to recommendations. Customer portal never
-receives raw Greenbone data.
-
-**Wazuh status:** VM 101 has Wazuh Manager, Indexer, Dashboard, and Filebeat
-**4.14.6-1** installed and validated. Credentials remain root-only on VM 101
-(`/root/wazuh-install/wazuh-install-files.tar`, mode `600`). Never print them
-into Git or docs. VM 105 agent **001** is Active with detection proof.
-
-**Suricata status:** VM 106 has Suricata **7.0.3** passive IDS with reversible
-VM 105 traffic mirror. Wazuh agent **002** (`suricata-sensor`) tails
-`/var/log/suricata/eve.json` into Manager; proof alert rule **86601**.
-
-**Next safe action:** Resume KB-064 Phase A / Windows agent / MISP / Velociraptor,
-or next SOC tool KB. Keep customer_visible SOC-gated.
-
-**E2E milestone doc:** `docs/KB064_E2E_SIMULATION_INTEGRATION_TEST_MILESTONE.md`
+| Latest feature tag | **KB-035** — Customer Appliance Detail (`1ac1df3`, `kb035-customer-appliance-detail-validated`) |
+| Roadmap docs | **KB-036–KB-060** (+ later ops/integration KBs) |
+| Active branch (typical) | `kb039-kb060-platform-roadmap-execution` |
+| Engine provisioning | **KB-072** Tenant Engine Provisioning (Wazuh group + TheHive org/tag) |
+| Tenant deployment mode | **KB-073** — cloud with/without appliance, on-prem with/without appliance, hybrid |
+| Contract-ready onboard | **KB-075** — entitlements + engines + required portal admin on create |
+| Vuln path | **KB-078** Nuclei+Vuls free stack (primary); **KB-068–070** Greenbone CE optional; **KB-076** upgrade requests; **KB-077** Enterprise deferred |
 
 ---
 
@@ -87,19 +58,20 @@ or next SOC tool KB. Keep customer_visible SOC-gated.
 |---|---|
 | `mssp-postgres` | PostgreSQL |
 | `mssp-redis` | Redis |
-| `mssp-backend-api` | FastAPI port **8000** (rebuilt for KB-056–058) |
-| `mssp-frontend-admin` | Admin/SOC UI port **3000** (rebuilt) |
-| `mssp-frontend-customer` | Customer portal port **3001** |
+| `mssp-backend-api` | FastAPI port **8000** |
+| `mssp-frontend-admin` | Admin/SOC UI port **3000** (nginx) |
+| `mssp-frontend-customer` | Customer portal port **3001** (nginx) |
 
-### Infrastructure hosts
+### Connected security engines
 
 | VM | Host | Purpose | State |
 |---|---|---|---|
-| 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh Manager/Indexer/Dashboard | Wazuh 4.14.6 live |
-| 102 | `thehive_shuffle` (`192.168.0.212`) | TheHive + Shuffle (co-located) | Live :9000 / :3001; KB-049 auto-ticket validated |
-| 105 | `linux-endpoint-lab` (`192.168.0.215`) | Linux agent lab | Agent 001 Active |
-| 106 | `suricata-sensor` (`192.168.0.216`) | Suricata passive IDS + Wazuh agent | Suricata 7.0.3 live; Wazuh agent 002 Active |
-| 112 | `automation` (`192.168.0.222`) | Ansible controller | Ansible Core ready |
+| 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh Manager/Indexer/Dashboard | Live 4.14.6 |
+| 102 | `thehive_shuffle` (`192.168.0.212`) | TheHive + Shuffle | Live |
+| 105 | Linux endpoint (`192.168.0.215`) | Wazuh agent | Active |
+| 106 | `suricata-sensor` (`192.168.0.216`) | Suricata IDS + Wazuh agent | Live |
+| 109 | `greenbone` (`192.168.0.219`) | Greenbone CE + **Nuclei + Vuls** (`/opt/mssp-vuln-free`) | Live — scanners co-located; Enterprise deferred (KB-077) |
+| 112 | `automation` (`192.168.0.222`) | Ansible controller | Ready |
 
 ---
 
@@ -109,25 +81,13 @@ Customer portal must never expose raw logs, raw engine alerts, raw JSON, packet 
 
 ---
 
-## 5. Morning checklist (for the human)
-
-1. Review branch: `git log --oneline kb038-tenant-deployment-mode-planning-validated..HEAD`
-2. KB-056 live triage validation — **PASSED**
-3. Confirm health: `curl -fsS http://localhost:8000/health | jq .`
-4. **One Proxmox snapshot** (on Proxmox host, not inside VM):
-   ```bash
-   qm snapshot 100 kb060-ok
-   ```
-
----
-
-## 6. Key paths
+## 5. Key paths
 
 | Path | Purpose |
 |---|---|
 | `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` | Enterprise roadmap |
-| `ansible/` | Deployment automation stubs |
-| `templates/on-prem-appliance/` | On-prem template placeholders |
-| `scripts/kb039_kb060_validate_all.sh` | Master docs+module runner |
+| `docs/KB072_TENANT_ENGINE_PROVISIONING.md` | Tenant → engine binding |
+| `docs/KB077_GREENBONE_ENTERPRISE_READINESS_PLAN.md` | Vuln scanner enterprise gaps + phases |
 | `AGENTS.md` | Full rulebook |
 | `docs/AI_PROMPT_LEDGER.md` | Change ledger |
+| `docker-compose.yml` | Production Compose stack |

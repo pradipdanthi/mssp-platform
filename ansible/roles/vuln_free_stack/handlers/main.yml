@@ -1,0 +1,6 @@
+---
+# KB-078: Nuclei + Vuls free stack handlers.
+
+- name: noop
+  ansible.builtin.debug:
+    msg: "vuln_free_stack has no restart handlers yet"

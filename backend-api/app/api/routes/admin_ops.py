@@ -432,12 +432,13 @@ def list_audit_logs(
             al.entity_type,
             al.entity_id::text,
             host(al.source_ip) AS source_ip,
+            al.details,
             al.created_at::text
         FROM audit_logs al
         LEFT JOIN tenants t ON t.id = al.tenant_id
         LEFT JOIN platform_users pu ON pu.id = al.actor_user_id
         ORDER BY al.created_at DESC
-        LIMIT 100;
+        LIMIT 200;
         """
     )
     return {"audit_logs": rows}

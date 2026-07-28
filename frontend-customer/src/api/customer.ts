@@ -416,3 +416,100 @@ export async function getCustomerDashboardV2(
     recent_appliances: assetsRes.appliances.slice(0, 5),
   };
 }
+
+/** KB-071: customer-facing service entitlements (never /admin). */
+export interface CustomerEntitlements {
+  tenant_id: string;
+  log_monitoring_enabled: boolean;
+  log_retention_days: number;
+  incident_response: string;
+  vulnerability_management_enabled: boolean;
+  vulnerability_scan_cadence: string;
+  security_automation: string;
+  network_traffic_analysis_enabled?: boolean;
+  threat_intelligence_enabled?: boolean;
+  endpoint_forensics_enabled?: boolean;
+  updated_at?: string | null;
+}
+
+export function getCustomerEntitlements(shortCode: string): Promise<CustomerEntitlements> {
+  return request<CustomerEntitlements>(
+    `/customer/entitlements/${encodeURIComponent(shortCode)}`
+  );
+}
+
+/** KB-079: customer-safe vulnerability service summary (no raw scanner output). */
+export interface VulnerabilityServiceSummary {
+  tenant: { short_code: string; name: string };
+  service_active: boolean;
+  cadence: string;
+  published_open_recommendations: number;
+  last_scan_activity_at: string | null;
+}
+
+export function getVulnerabilityServiceSummary(
+  shortCode: string
+): Promise<VulnerabilityServiceSummary> {
+  return request<VulnerabilityServiceSummary>(
+    `/customer/vulnerabilities/${encodeURIComponent(shortCode)}/summary`
+  );
+}
+
+/** KB-076: customer service upgrade / interest request. */
+export type ServiceUpgradeServiceKey =
+  | "vulnerability_management"
+  | "network_traffic_analysis"
+  | "threat_intelligence"
+  | "endpoint_forensics"
+  | "other";
+
+export interface ServiceUpgradeRequestPayload {
+  service_key?: ServiceUpgradeServiceKey;
+  preferred_cadence: "weekly" | "monthly" | "quarterly" | "unsure";
+  scan_scope: string[];
+  approximate_assets?: number | null;
+  environments: string[];
+  urgency: "exploring" | "planning" | "needed_soon" | "urgent";
+  compliance_drivers: string[];
+  requirements_summary: string;
+  preferred_contact: "email" | "phone" | "either";
+  contact_phone?: string | null;
+}
+
+export interface ServiceUpgradeRequest {
+  id: string;
+  tenant_id: string;
+  tenant_name?: string | null;
+  short_code?: string | null;
+  service_key: string;
+  preferred_cadence: string;
+  scan_scope: string[];
+  approximate_assets: number | null;
+  environments: string[];
+  urgency: string;
+  compliance_drivers: string[];
+  requirements_summary: string;
+  preferred_contact: string;
+  contact_phone: string | null;
+  status: string;
+  created_at: string;
+  requested_by_name?: string | null;
+}
+
+export function createServiceUpgradeRequest(
+  shortCode: string,
+  payload: ServiceUpgradeRequestPayload
+): Promise<ServiceUpgradeRequest> {
+  return request<ServiceUpgradeRequest>(
+    `/customer/service-upgrade-requests/${encodeURIComponent(shortCode)}`,
+    { method: "POST", body: payload }
+  );
+}
+
+export function listServiceUpgradeRequests(
+  shortCode: string
+): Promise<{ requests: ServiceUpgradeRequest[] }> {
+  return request<{ requests: ServiceUpgradeRequest[] }>(
+    `/customer/service-upgrade-requests/${encodeURIComponent(shortCode)}`
+  );
+}

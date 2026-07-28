@@ -89,6 +89,8 @@ export default function AlertDetailPage() {
               <tr><th>Severity</th><td><span className={`badge badge-${data.alert.severity}`}>{data.alert.severity}</span></td></tr>
               <tr><th>Status</th><td>{data.alert.status}</td></tr>
               <tr><th>Source</th><td>{data.alert.source_tool} / {data.alert.external_alert_id ?? "—"}</td></tr>
+              <tr><th>Asset category</th><td>{data.alert.asset_category_label ?? data.alert.asset_category ?? "—"}</td></tr>
+              <tr><th>Device type</th><td>{data.alert.device_type ?? "—"}</td></tr>
               <tr><th>Event time</th><td>{data.alert.event_time ?? "—"}</td></tr>
               <tr><th>Asset</th><td>{data.alert.asset_hostname ?? "—"}</td></tr>
               <tr><th>Appliance</th><td>{data.alert.appliance_name ?? "—"}</td></tr>
@@ -104,6 +106,11 @@ export default function AlertDetailPage() {
               <tr><th>False-positive score</th><td>{data.alert.ai_false_positive_score ?? "—"}</td></tr>
             </tbody>
           </table>
+
+          <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
+            High-severity Wazuh alerts are forwarded to Shuffle for TheHive case creation automatically
+            via the control-plane ingress path. Use incident records for playbook triggers and TheHive links.
+          </p>
 
           <h2 className="section-title">Triage</h2>
           <form className="credential-panel" onSubmit={handleSave}>

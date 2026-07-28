@@ -1,0 +1,38 @@
+---
+# KB-078: Nuclei + Vuls free vulnerability stack.
+# Safe default is preflight only. Live install requires explicit approval.
+# Secrets never belong in Git.
+
+vuln_free_execution_mode: "preflight"
+vuln_free_live_install_approved: false
+
+vuln_free_install_root: /opt/mssp-vuln-free
+vuln_free_state_directory: /var/lib/mssp/vuln-free
+vuln_free_install_marker: "{{ vuln_free_state_directory }}/installed"
+
+vuln_free_nuclei_version: "3.11.0"
+vuln_free_nuclei_arch: "linux_amd64"
+vuln_free_nuclei_zip: >-
+  nuclei_{{ vuln_free_nuclei_version }}_{{ vuln_free_nuclei_arch }}.zip
+vuln_free_nuclei_url: >-
+  https://github.com/projectdiscovery/nuclei/releases/download/v{{ vuln_free_nuclei_version }}/{{ vuln_free_nuclei_zip }}
+
+vuln_free_supported_linux_distributions:
+  - Ubuntu
+vuln_free_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+vuln_free_minimum_memory_mb: 3500
+vuln_free_minimum_root_disk_gb: 20
+vuln_free_minimum_vcpus: 2
+
+# Docker images for Vuls (no secrets).
+vuln_free_vuls_images:
+  - vuls/vuls:latest
+  - vuls/go-cve-dictionary:latest
+  - vuls/goval-dictionary:latest
+  - vuls/gost:latest
+  - vuls/go-kev:latest
+
+# First-time DB fetch can be long; install can skip with this flag.
+vuln_free_fetch_vuln_dbs: true

@@ -13,6 +13,7 @@ import {
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
 const TYPES: AssetType[] = [
@@ -369,9 +370,30 @@ export default function AssetsPage() {
                   <td>{row.last_seen_at ?? "—"}</td>
                   {canWrite && (
                     <td>
-                      <button className="btn btn-small" type="button" onClick={() => openEdit(row)}>
-                        Edit
-                      </button>
+                      <RowActionsMenu
+                        actions={[
+                          {
+                            id: "edit",
+                            label: "Edit asset",
+                            onClick: () => openEdit(row),
+                          },
+                          {
+                            id: "deactivate",
+                            label: "Set inactive",
+                            danger: true,
+                            disabled: row.status === "inactive",
+                            onClick: async () => {
+                              try {
+                                await updateAsset(row.id, { status: "inactive" });
+                                setSuccess(`Asset ${row.hostname ?? row.id} set inactive.`);
+                                refetch();
+                              } catch (err) {
+                                setCreateError(apiErrorMessage(err, "Could not update asset."));
+                              }
+                            },
+                          },
+                        ]}
+                      />
                     </td>
                   )}
                 </tr>

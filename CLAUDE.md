@@ -24,11 +24,13 @@ This file tells you how to operate in this repository. `AGENTS.md` is the full r
 
 Short form: **planning before implementation**, **no .env**, **no /admin** from customer frontend, **validation before commit**.
 
+- Treat local servers as the **production MSSP path** (enterprise-ready), not a disposable lab. Same design migrates to cloud later.
 - Plan before implementing; stop for approval unless implement scope already approved.
-- **Do not install Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, or create VMs 101–111** unless the current KB explicitly approves it.
+- **Do not install or upgrade** Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone (including Enterprise Feed/appliance), Velociraptor, or create VMs 101–111 unless the current KB explicitly approves it. **KB-078** (Nuclei + Vuls) is an approved free-stack install.
+- Greenbone Enterprise remains deferred: `docs/KB077_GREENBONE_ENTERPRISE_READINESS_PLAN.md`. Free primary stack: `docs/KB078_NUCLEI_VULS_FREE_STACK.md`.
 - Customer frontend must **never** call `/admin`.
 - Never commit before validation passes.
-- Guide the non-coder user **one step at a time** when they ask for lab workflow.
+- Guide the non-coder user **one step at a time** when they ask for operational workflow.
 
 ---
 
@@ -73,10 +75,12 @@ onboarding — do not silently skip after major integration work.
 
 **Latest validated feature:** KB-035 Customer Appliance Detail UI — `1ac1df3`, tag `kb035-customer-appliance-detail-validated`.
 
-**Control plane (VM 100):** Admin/SOC foundation + full customer portal through KB-035. **No live SOC ingestion yet.**
+**Control plane (VM 100):** **Production** Admin/SOC + Customer portals (nginx builds). Live SOC ingestion via adapters (Wazuh ingress, TheHive/Shuffle, Nuclei+Vuls, optional Greenbone). Same product design migrates to cloud later. **Enterprise-ready** mandate: no lab shortcuts without documented upgrade path.
 
-**KB-036:** Enterprise MSSP/SOC/MDR/XDR architecture and deployment model roadmap — docs only. Covers cloud/on-prem/hybrid models, full capability stack (Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, etc.), VM 100–111, KB-037–060 sequence.
+**KB-036:** Enterprise MSSP/SOC/MDR/XDR architecture and deployment model roadmap. Covers cloud/on-prem/hybrid models, full capability stack, VM layout, KB sequence.
+
+**KB-078:** Nuclei + Vuls free vulnerability stack on **VM 109** (not control plane). **KB-077:** Greenbone Enterprise deferred until customer volume; Community CE co-located backup.
 
 **Normalization rule:** Control plane consumes tenant-scoped records (`tenant`, `source_platform`, `asset`, `alert`, `incident`/`case`, `recommendation`, `vulnerability`, `report`, `visibility_status`, `sync_health_status`) regardless of source engine.
 
-**Next:** KB-037+ only when user explicitly approves — see KB-036 roadmap doc.
+**Production copy rule:** No lab/demo wording in dashboards or fail-open DEMO tenant defaults.

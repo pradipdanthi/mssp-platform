@@ -13,6 +13,7 @@ import {
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
 const PRIORITIES: RecommendationPriority[] = ["low", "medium", "high", "critical"];
@@ -480,12 +481,12 @@ export default function RecommendationsPage() {
                     {row.tenant_name} ({row.short_code})
                   </td>
                   <td>
-                    <span className={`badge badge-${row.priority}`}>{row.priority}</span>
+                    <SeverityPill value={row.priority} kind="priority" />
                   </td>
                   <td>{row.title}</td>
                   <td>{row.category}</td>
                   <td>
-                    <span className={`badge badge-${row.status}`}>{row.status}</span>
+                    <SeverityPill value={row.status} kind="status" />
                   </td>
                   <td>{row.customer_visible ? "yes" : "no"}</td>
                   <td>{row.due_at ?? "—"}</td>

@@ -1,0 +1,17 @@
+[Unit]
+Description=MSSP Nuclei vulnerability scan agent (KB-079)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Environment=CONTROL_PLANE_URL=http://192.168.0.201:8000
+Environment=NUCLEI_BIN=/opt/mssp-vuln-free/bin/nuclei
+Environment=NUCLEI_TEMPLATES=/opt/mssp-vuln-free/nuclei-templates
+Environment=VULN_SYNC_API_KEY_FILE=/opt/mssp-vuln-free/secrets/vuln_sync_api_key
+ExecStart=/usr/bin/python3 /opt/mssp-vuln-free/bin/kb079_vuln_scan_agent.py
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

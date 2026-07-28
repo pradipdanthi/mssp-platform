@@ -23,6 +23,7 @@ from app.api.routes.recommendation_management import router as recommendation_ma
 from app.api.routes.soc_sync import router as soc_sync_router
 from app.api.routes.tenant_management import router as tenant_management_router
 from app.api.routes.user_management import router as user_management_router
+from app.api.routes.entitlements import router as entitlements_router
 from app.api.routes.vuln_sync import router as vuln_sync_router
 from app.api.routes.vulnerability_management import router as vulnerability_management_router
 from app.core.error_handlers import validation_exception_handler
@@ -93,3 +94,6 @@ app.include_router(soc_sync_router)
 # KB-069: Greenbone → control plane vulnerability ingest + admin management.
 app.include_router(vuln_sync_router)
 app.include_router(vulnerability_management_router)
+
+# KB-071: tenant entitlements + audit event write.
+app.include_router(entitlements_router)

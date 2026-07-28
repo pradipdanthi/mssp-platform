@@ -20,12 +20,19 @@ This **is**:
 - A multi-tenant Managed Security Service Provider (MSSP) platform.
 - A product where the SOC/admin team and paying customers each get their own branded dashboard.
 - A platform that uses an **enterprise open-source SOC stack** (Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, etc. — see KB-036 roadmap) as **backend adapters and data sources**, never as the customer-facing UI.
+- Deployed on **local servers as the production path now**, with the same architecture intended to **migrate to cloud** when customer volume justifies it — **not** a disposable lab prototype.
+
+### Enterprise readiness posture
+
+- Every backend tool, adapter wiring step, configuration, and security control must be **enterprise-ready**, or carry an **explicit, documented gap** with an approved upgrade path (example: free Nuclei+Vuls primary stack until paid Greenbone Enterprise — `docs/KB078_NUCLEI_VULS_FREE_STACK.md`, `docs/KB077_GREENBONE_ENTERPRISE_READINESS_PLAN.md`).
+- Do not silently accept “lab-only” shortcuts (fail-open tenant mapping, demo-only defaults in runtime, unfinished secret handling).
+- Purchasing commercial licenses or replacing Community engines with Enterprise appliances requires **explicit user approval** and a named KB.
 
 ### Product goal
 
 Deliver a full MSSP platform where:
 - Our own backend (FastAPI) is the system of record and the only thing customers and SOC staff interact with directly.
-- Detection tools like Wazuh feed alerts into our backend through adapters (future KB modules — **not deployed yet**).
+- Detection and scanning tools (Wazuh, Suricata, Greenbone, etc.) feed the control plane through **adapters**.
 - AI is used to translate raw technical alerts into plain-English summaries, business impact statements, and recommended actions for customers.
 - SOC staff triage, investigate, and manage incidents through our own dashboard, not through third-party tool UIs.
 
@@ -85,7 +92,8 @@ The core product architecture is fixed as follows:
 
 - Do **not** convert the main product into Streamlit. Streamlit may only be used later for quick internal prototypes or SOC demo screens — it is never the customer-facing production platform.
 - Wazuh is a detection engine/adapter source, not the customer-facing product UI. Customers must never be given direct Wazuh logins. SOC/admin users work through our own platform dashboard; Wazuh data is normalized into our backend database.
-- **KB-036 approved enterprise SOC stack (roadmap):** Wazuh (Manager, Indexer/OpenSearch, Dashboard, Agents), Suricata, Zeek, TheHive (+ Cortex if needed), Shuffle, MISP, Greenbone/OpenVAS, Velociraptor (+ optional osquery), Ansible/Compose deployment automation, Prometheus/Grafana observability. OpenCTI and Kubernetes are **future optional** — not immediate scope. Tools are **not deployed yet** until their KB modules run.
+- **KB-036 approved enterprise SOC stack (roadmap):** Wazuh (Manager, Indexer/OpenSearch, Dashboard, Agents), Suricata, Zeek, TheHive (+ Cortex if needed), Shuffle, MISP, Greenbone/OpenVAS, Velociraptor (+ optional osquery), Ansible/Compose deployment automation, Prometheus/Grafana observability. OpenCTI and Kubernetes are **future optional** — not immediate scope. Additional tool installs still require an explicit approved KB.
+- **Vulnerability scanning:** **Nuclei + Vuls** on **VM 109** (co-located with Greenbone CE) are the approved **$0 primary** stack (`docs/KB078_NUCLEI_VULS_FREE_STACK.md`). Do **not** install scanners on the control plane (VM 100). **Greenbone Enterprise** is deferred until customer volume (`docs/KB077_GREENBONE_ENTERPRISE_READINESS_PLAN.md`).
 - All tools follow the same adapter pattern: external engine → normalize → PostgreSQL → admin API vs customer-safe API.
 - Any AI agent proposing to change this architecture (e.g. "let's just use Streamlit for everything" or "let's expose Wazuh directly to customers") must stop and explain the proposed change in plain language and get explicit user approval before making it. This counts as a "large architectural change" under section 8.
 
@@ -95,17 +103,20 @@ The core product architecture is fixed as follows:
 
 **Source of truth:** Git commits, tags, and validation-script output beat stale prose in this file, `CLAUDE.md`, the Cursor rule, or the prompt ledger. Always `git log` / `git tag` / `git status` and inspect live files before planning.
 
-- **VM name:** mssp-control (VM 100, `192.168.0.201`)
+- **VM name:** mssp-control (VM 100, `192.168.0.201`) — **production control plane** (same product migrates to cloud later)
 - **Project path:** `/opt/mssp-control`
 - **Latest validated feature KB:** **KB-035** (Customer Appliance Detail UI)
 - **Latest validated feature commit:** `1ac1df3`
 - **Latest validated feature tag:** `kb035-customer-appliance-detail-validated`
-- **Architecture roadmap doc:** `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` (KB-036 — enterprise MSSP/SOC/MDR/XDR roadmap, documentation only)
+- **Architecture roadmap doc:** `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`
+- **Production UI:** Admin (`:3000`) and Customer (`:3001`) are **nginx static builds**; dashboards must not use lab/demo wording
+- **Tenant alert mapping:** fail-closed (Wazuh group/binding required; no DEMO default)
+- **TheHive shared org default:** `THEHIVE_DEFAULT_ORG` → **`MSSP`** (override in `.env` if the live org name differs)
+- **Connected engines (adapters):** Wazuh (VM 101), TheHive/Shuffle (VM 102), Suricata (VM 106), Nuclei+Vuls + Greenbone CE (VM 109) — never exposed as customer UIs; control plane stays adapter-only
 - **Known-good early baseline tag:** `kb008-validated-foundation` (commit `c52bca1`)
 - **AI development rules tag:** `kb009a-ai-development-rules`
 - **KB-010 Phase 1 validated tag:** `kb010-auth-rbac-phase1-validated` (commit `7fbb3d2`)
 - **KB-011 validated tag:** `kb011-protected-apis-validated` (commit `30ef305`)
-- **Critical limitation:** Enterprise SOC stack (Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone, Velociraptor, etc.) **not deployed yet** — no live ingestion adapters
 
 ### Current services (Docker Compose)
 
@@ -114,8 +125,8 @@ The core product architecture is fixed as follows:
 | `mssp-postgres` | PostgreSQL database |
 | `mssp-redis` | Redis cache/queue |
 | `mssp-backend-api` | FastAPI backend (port 8000) |
-| `mssp-frontend-admin` | Admin/SOC UI (port 3000) |
-| `mssp-frontend-customer` | Customer portal UI (port 3001) |
+| `mssp-frontend-admin` | Admin/SOC UI (port 3000, nginx) |
+| `mssp-frontend-customer` | Customer portal UI (port 3001, nginx) |
 
 ### Current backend
 

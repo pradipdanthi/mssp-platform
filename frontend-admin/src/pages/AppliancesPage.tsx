@@ -1,5 +1,13 @@
-import React, { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Appliance, Tenant, getAppliances, getTenants } from "../api/admin";
+import React, { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  Appliance,
+  Tenant,
+  getAppliances,
+  getTenants,
+  postAuditEvent,
+  updateAppliance,
+} from "../api/admin";
 import {
   ActivationTokenMetadata,
   ApplianceCredentialMetadata,
@@ -12,6 +20,9 @@ import {
 } from "../api/appliances";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import ConfirmDangerModal from "../components/ConfirmDangerModal";
+import RowActionsMenu from "../components/RowActionsMenu";
+import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
 function apiErrorMessage(err: unknown, fallback: string): string {
@@ -25,7 +36,14 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function AppliancesPage() {
-  const { status, data, errorMessage } = useAdminQuery(() => getAppliances(), []);
+  const [params] = useSearchParams();
+  const statusFilter = params.get("status");
+  const { status, data, errorMessage, refetch } = useAdminQuery(() => getAppliances(), []);
+  const appliances = useMemo(() => {
+    const rows = data?.appliances ?? [];
+    if (!statusFilter) return rows;
+    return rows.filter((a) => a.status.toLowerCase() === statusFilter.toLowerCase());
+  }, [data, statusFilter]);
 
   return (
     <div>
@@ -33,6 +51,14 @@ export default function AppliancesPage() {
       <p className="page-subtitle">
         Appliance list with credential visibility/rotation, plus tenant activation-token
         management.
+        {statusFilter ? (
+          <>
+            {" "}
+            Filtered by status: <strong>{statusFilter}</strong>
+            {" · "}
+            <Link to="/appliances">Clear filter</Link>
+          </>
+        ) : null}
       </p>
 
       {status === "loading" && <div className="state-message">Loading appliances...</div>}
@@ -44,10 +70,12 @@ export default function AppliancesPage() {
       {status === "error" && <div className="state-message state-error">{errorMessage}</div>}
 
       {status === "success" && data && (
-        data.appliances.length === 0 ? (
-          <div className="state-message">No appliances yet.</div>
+        appliances.length === 0 ? (
+          <div className="state-message">
+            No appliances{statusFilter ? ` matching “${statusFilter}”` : ""} yet.
+          </div>
         ) : (
-          <table className="data-table">
+          <table className="data-table data-table--readable">
             <thead>
               <tr>
                 <th>Tenant</th>
@@ -57,11 +85,12 @@ export default function AppliancesPage() {
                 <th>Last Seen</th>
                 <th>Health</th>
                 <th>Credential</th>
+                <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {data.appliances.map((appliance) => (
-                <ApplianceRow key={appliance.id} appliance={appliance} />
+              {appliances.map((appliance) => (
+                <ApplianceRow key={appliance.id} appliance={appliance} onChanged={refetch} />
               ))}
             </tbody>
           </table>
@@ -73,7 +102,15 @@ export default function AppliancesPage() {
   );
 }
 
-function ApplianceRow({ appliance }: { appliance: Appliance }) {
+function ApplianceRow({
+  appliance,
+  onChanged,
+}: {
+  appliance: Appliance;
+  onChanged: () => void;
+}) {
+  const { user } = useAuth();
+  const canWrite = user?.role === "platform_admin";
   const [expanded, setExpanded] = useState(false);
   const [credential, setCredential] = useState<ApplianceCredentialMetadata | null>(null);
   const [credentialError, setCredentialError] = useState<string | null>(null);
@@ -89,6 +126,10 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
   const [newRawKey, setNewRawKey] = useState<string | null>(null);
   const [newKeyHint, setNewKeyHint] = useState<string | null>(null);
   const [copyConfirmed, setCopyConfirmed] = useState(false);
+
+  const [retireOpen, setRetireOpen] = useState(false);
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
 
   async function loadCredential() {
     setCredentialLoading(true);
@@ -143,6 +184,44 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
     }
   }
 
+  async function setStatusMode(next: "maintenance" | "online" | "retired") {
+    if (!canWrite || actionBusy) return;
+    setActionBusy(true);
+    setActionMsg(null);
+    try {
+      const updated = await updateAppliance(appliance.id, { status: next });
+      const action =
+        next === "maintenance"
+          ? "appliance.maintenance_enabled"
+          : next === "retired"
+            ? "appliance.deregistered"
+            : "appliance.maintenance_cleared";
+      void postAuditEvent({
+        action,
+        entity_type: "appliance",
+        entity_id: appliance.id,
+        details: {
+          before: { status: appliance.status },
+          after: { status: updated.status },
+          appliance_name: appliance.appliance_name,
+        },
+      }).catch(() => undefined);
+      setRetireOpen(false);
+      setActionMsg(
+        next === "maintenance"
+          ? "Maintenance mode enabled (offline alerts suppressed)."
+          : next === "retired"
+            ? "Appliance deregistered (retired)."
+            : "Appliance returned to online."
+      );
+      onChanged();
+    } catch (err) {
+      setActionMsg(apiErrorMessage(err, "Could not update appliance status."));
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   return (
     <React.Fragment>
       <tr>
@@ -150,7 +229,7 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
         <td>{appliance.appliance_name}</td>
         <td>{appliance.site_name}</td>
         <td>
-          <span className={`badge badge-${appliance.status}`}>{appliance.status}</span>
+          <SeverityPill value={appliance.status} kind="status" filterBase="/appliances" />
         </td>
         <td>{appliance.last_seen_at ?? "Never"}</td>
         <td>{appliance.health_status ?? "Unknown"}</td>
@@ -159,11 +238,65 @@ function ApplianceRow({ appliance }: { appliance: Appliance }) {
             {expanded ? "Hide" : "View"}
           </button>
         </td>
+        <td>
+          {canWrite ? (
+            <RowActionsMenu
+              actions={[
+                {
+                  id: "credentials",
+                  label: "Edit / View Credentials",
+                  onClick: () => {
+                    if (!expanded) handleExpandToggle();
+                  },
+                },
+                {
+                  id: "maintenance",
+                  label:
+                    appliance.status === "maintenance"
+                      ? "Exit Maintenance Mode"
+                      : "Maintenance Mode",
+                  disabled: actionBusy || appliance.status === "retired",
+                  onClick: () =>
+                    void setStatusMode(
+                      appliance.status === "maintenance" ? "online" : "maintenance"
+                    ),
+                },
+                {
+                  id: "retire",
+                  label: "Deregister / Delete",
+                  danger: true,
+                  disabled: actionBusy || appliance.status === "retired",
+                  onClick: () => setRetireOpen(true),
+                },
+              ]}
+            />
+          ) : (
+            "—"
+          )}
+        </td>
       </tr>
+
+      {actionMsg && (
+        <tr>
+          <td colSpan={8}>
+            <div className="state-message">{actionMsg}</div>
+          </td>
+        </tr>
+      )}
+
+      <ConfirmDangerModal
+        open={retireOpen}
+        title="Deregister appliance"
+        body={`Retire ${appliance.appliance_name} at ${appliance.site_name}? It will leave active monitoring scope.`}
+        confirmPhrase={`DELETE ${appliance.appliance_name}`}
+        confirmLabel="Deregister"
+        onCancel={() => setRetireOpen(false)}
+        onConfirm={() => setStatusMode("retired")}
+      />
 
       {expanded && (
         <tr className="credential-row">
-          <td colSpan={7}>
+          <td colSpan={8}>
             {credentialLoading && <div className="state-message">Loading credential metadata...</div>}
             {credentialError && <div className="state-message state-error">{credentialError}</div>}
 

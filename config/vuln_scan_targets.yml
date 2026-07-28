@@ -1,0 +1,22 @@
+# KB-079: Tenant-scoped vulnerability scan targets (Nuclei / Vuls).
+# No secrets. Only add targets with written customer scope approval.
+#
+# Nuclei: IPs, hostnames, or URLs (http/https).
+# Vuls: SSH targets (optional) — require scan SSH key on VM 109 only (never Git).
+
+tenants:
+  DEMO:
+    asset_hostname: linux-endpoint-lab
+    nuclei_targets:
+      - "192.168.0.215"
+    vuls_servers: []
+  # Example (disabled until Melvik is entitled and scoped):
+  # MELVIK-4B9W:
+  #   asset_hostname: melvik-linux-01
+  #   nuclei_targets:
+  #     - "10.0.0.50"
+  #   vuls_servers:
+  #     - name: melvik-linux-01
+  #       host: "10.0.0.50"
+  #       port: "22"
+  #       user: scanuser

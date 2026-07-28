@@ -1,11 +1,19 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { getCustomerIncidents } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
+import SeverityPill from "../components/SeverityPill";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
+
+function isOpenStatus(status: string): boolean {
+  const s = status.toLowerCase();
+  return s === "open" || s === "investigating" || s === "in_progress" || s === "new";
+}
 
 export default function IncidentsPage() {
   const { user } = useAuth();
   const shortCode = user?.tenant_short_code ?? null;
+  const [params] = useSearchParams();
+  const statusFilter = params.get("status");
   const { status, data, errorMessage } = useCustomerQuery(
     () => getCustomerIncidents(shortCode as string),
     Boolean(shortCode),
@@ -23,10 +31,29 @@ export default function IncidentsPage() {
     );
   }
 
+  const incidents =
+    status === "success" && data
+      ? data.incidents.filter((i) => {
+          if (!statusFilter) return true;
+          if (statusFilter === "open") return isOpenStatus(i.status);
+          return i.status.toLowerCase() === statusFilter.toLowerCase();
+        })
+      : [];
+
   return (
     <div>
       <h1 className="page-title">Incidents</h1>
-      <p className="page-subtitle">Read-only customer-visible incidents for your organization.</p>
+      <p className="page-subtitle">
+        Read-only customer-visible incidents for your organization.
+        {statusFilter ? (
+          <>
+            {" "}
+            Filtered by status: <strong>{statusFilter}</strong>
+            {" · "}
+            <Link to="/incidents">Clear filter</Link>
+          </>
+        ) : null}
+      </p>
 
       {status === "loading" && <div className="state-message">Loading incidents...</div>}
       {status === "forbidden" && (
@@ -37,8 +64,10 @@ export default function IncidentsPage() {
       )}
 
       {status === "success" && data && (
-        data.incidents.length === 0 ? (
-          <div className="state-message">No incidents yet.</div>
+        incidents.length === 0 ? (
+          <div className="state-message">
+            No incidents{statusFilter ? ` matching “${statusFilter}”` : ""} yet.
+          </div>
         ) : (
           <table className="data-table">
             <thead>
@@ -52,9 +81,9 @@ export default function IncidentsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.incidents.map((inc) => (
+              {incidents.map((inc) => (
                 <tr key={inc.incident_number}>
-                  <td>
+                  <td className="cell-mono">
                     <Link to={`/incidents/${encodeURIComponent(inc.incident_number)}`}>
                       {inc.incident_number}
                     </Link>
@@ -65,11 +94,13 @@ export default function IncidentsPage() {
                     </Link>
                   </td>
                   <td>
-                    <span className={`badge badge-${inc.severity}`}>{inc.severity}</span>
+                    <SeverityPill value={inc.severity} />
                   </td>
-                  <td>{inc.status}</td>
+                  <td>
+                    <SeverityPill value={inc.status} kind="status" />
+                  </td>
                   <td>{inc.customer_visible_summary ?? "—"}</td>
-                  <td>{inc.opened_at ?? "—"}</td>
+                  <td className="cell-mono">{inc.opened_at ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

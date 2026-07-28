@@ -1,8 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   AdminVulnerability,
+  ServiceUpgradeRequestRow,
+  approveServiceUpgradeRequest,
+  declineServiceUpgradeRequest,
+  getServiceUpgradeRequests,
   getVulnerabilities,
   getVulnerabilityDetail,
+  patchServiceUpgradeRequest,
   promoteVulnerabilityRecommendation,
 } from "../api/admin";
 import { ApiError } from "../api/client";
@@ -22,7 +28,11 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 export default function VulnerabilitiesPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
-  const { status, data, errorMessage, refetch } = useAdminQuery(() => getVulnerabilities(), []);
+  const [sourceFilter, setSourceFilter] = useState<string>("");
+  const { status, data, errorMessage, refetch } = useAdminQuery(
+    () => getVulnerabilities(sourceFilter ? { source_platform: sourceFilter } : undefined),
+    [sourceFilter]
+  );
 
   const [selected, setSelected] = useState<AdminVulnerability | null>(null);
   const [detailNotes, setDetailNotes] = useState<string | null>(null);
@@ -30,6 +40,90 @@ export default function VulnerabilitiesPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [makeVisible, setMakeVisible] = useState(false);
+  const [upgradeRequests, setUpgradeRequests] = useState<ServiceUpgradeRequestRow[]>([]);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+  const [selectedUpgrade, setSelectedUpgrade] = useState<ServiceUpgradeRequestRow | null>(null);
+  const [upgradeActionBusy, setUpgradeActionBusy] = useState(false);
+  const [upgradeNextSteps, setUpgradeNextSteps] = useState<string[] | null>(null);
+
+  function loadUpgradeRequests() {
+    getServiceUpgradeRequests()
+      .then((res) => setUpgradeRequests(res.requests || []))
+      .catch((err) => setUpgradeError(apiErrorMessage(err, "Could not load upgrade requests.")));
+  }
+
+  useEffect(() => {
+    loadUpgradeRequests();
+  }, []);
+
+  async function handleMarkReviewing(row: ServiceUpgradeRequestRow) {
+    if (!canWrite) return;
+    setUpgradeActionBusy(true);
+    setUpgradeError(null);
+    setUpgradeNextSteps(null);
+    try {
+      const updated = await patchServiceUpgradeRequest(row.id, { status: "reviewing" });
+      setSelectedUpgrade(updated);
+      loadUpgradeRequests();
+    } catch (err) {
+      setUpgradeError(apiErrorMessage(err, "Could not update request."));
+    } finally {
+      setUpgradeActionBusy(false);
+    }
+  }
+
+  async function handleApproveEnable(row: ServiceUpgradeRequestRow) {
+    if (!canWrite) return;
+    const ok = window.confirm(
+      `Enable Vulnerability Management for ${row.tenant_name} (${row.short_code}) with ` +
+        `${row.preferred_cadence} scans? The customer portal will show the active service.`
+    );
+    if (!ok) return;
+    setUpgradeActionBusy(true);
+    setUpgradeError(null);
+    setSuccessMessage(null);
+    setUpgradeNextSteps(null);
+    try {
+      const result = await approveServiceUpgradeRequest(row.id);
+      setSuccessMessage(result.message);
+      setUpgradeNextSteps(result.next_steps || []);
+      setSelectedUpgrade(result.request);
+      loadUpgradeRequests();
+    } catch (err) {
+      setUpgradeError(apiErrorMessage(err, "Could not approve request."));
+    } finally {
+      setUpgradeActionBusy(false);
+    }
+  }
+
+  async function handleDecline(row: ServiceUpgradeRequestRow) {
+    if (!canWrite) return;
+    const ok = window.confirm(`Decline this upgrade request for ${row.tenant_name}?`);
+    if (!ok) return;
+    setUpgradeActionBusy(true);
+    setUpgradeError(null);
+    try {
+      await declineServiceUpgradeRequest(row.id);
+      setSelectedUpgrade(null);
+      setUpgradeNextSteps(null);
+      loadUpgradeRequests();
+    } catch (err) {
+      setUpgradeError(apiErrorMessage(err, "Could not decline request."));
+    } finally {
+      setUpgradeActionBusy(false);
+    }
+  }
+
+  function formatScopeList(values: string[]): string {
+    const labels: Record<string, string> = {
+      external_perimeter: "External perimeter",
+      internal_network: "Internal network",
+      authenticated_hosts: "Authenticated hosts",
+      cloud_workloads: "Cloud workloads",
+      web_applications: "Web applications",
+    };
+    return values.map((v) => labels[v] || v.replace(/_/g, " ")).join(", ");
+  }
 
   async function openDetail(row: AdminVulnerability) {
     setActionError(null);
@@ -78,6 +172,9 @@ export default function VulnerabilitiesPage() {
   }
 
   const rows = data?.vulnerabilities ?? [];
+  const openUpgrades = upgradeRequests.filter((r) =>
+    ["submitted", "reviewing", "quoted"].includes(r.status)
+  );
 
   return (
     <div className="page">
@@ -85,13 +182,196 @@ export default function VulnerabilitiesPage() {
         <div>
           <h1>Vulnerabilities</h1>
           <p className="page-subtitle">
-            Greenbone findings normalized into the control plane. Customers never see raw scan
-            output — promote high/critical items to recommendations when ready.
+            Findings from Nuclei, Vuls, and optional Greenbone — normalized in the control plane.
+            Customers never see raw scan output. Promote items to recommendations when ready.
+            Customer upgrade requests appear below.
           </p>
         </div>
-        <button className="btn btn-ghost" type="button" onClick={() => refetch()}>
-          Refresh
-        </button>
+        <div className="page-header-actions" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <select
+            className="form-input"
+            value={sourceFilter}
+            onChange={(e) => setSourceFilter(e.target.value)}
+            aria-label="Filter by scanner source"
+          >
+            <option value="">All sources</option>
+            <option value="nuclei">Nuclei</option>
+            <option value="vuls">Vuls</option>
+            <option value="greenbone">Greenbone</option>
+          </select>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => {
+              refetch();
+              loadUpgradeRequests();
+            }}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <div className="management-panel" style={{ marginBottom: "1.25rem" }}>
+        <h2 className="section-title" style={{ marginTop: 0 }}>
+          Customer upgrade requests
+        </h2>
+        <p className="page-subtitle" style={{ marginTop: 0 }}>
+          Submitted from the customer portal when Vulnerability Management (or other optional
+          services) is not yet entitled. Use <strong>Approve &amp; enable</strong> to turn on
+          scanning for the customer (cadence from their request), then add protected assets under{" "}
+          <Link to="/assets">Assets</Link> if needed.
+        </p>
+        {!canWrite && (
+          <p className="muted">You have read-only access. platform_admin or soc_manager can approve requests.</p>
+        )}
+        {upgradeError && <p className="form-error">{upgradeError}</p>}
+        {openUpgrades.length === 0 ? (
+          <p className="muted">No open customer upgrade requests.</p>
+        ) : (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Customer</th>
+                  <th>Service</th>
+                  <th>Urgency</th>
+                  <th>Cadence</th>
+                  <th>Assets</th>
+                  <th>Status</th>
+                  <th>Requested</th>
+                  <th>Summary</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {openUpgrades.map((r) => (
+                  <tr
+                    key={r.id}
+                    className={selectedUpgrade?.id === r.id ? "row-selected" : undefined}
+                  >
+                    <td>
+                      {r.tenant_name} ({r.short_code})
+                      {r.requested_by_name ? (
+                        <div className="muted-text">{r.requested_by_name}</div>
+                      ) : null}
+                    </td>
+                    <td>{r.service_key.replace(/_/g, " ")}</td>
+                    <td>{r.urgency.replace(/_/g, " ")}</td>
+                    <td>{r.preferred_cadence}</td>
+                    <td>{r.approximate_assets ?? "—"}</td>
+                    <td>
+                      <span className="badge">{r.status}</span>
+                    </td>
+                    <td>{new Date(r.created_at).toLocaleString()}</td>
+                    <td style={{ maxWidth: 280 }}>{r.requirements_summary}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      {canWrite ? (
+                        <>
+                          <button
+                            className="btn btn-ghost"
+                            type="button"
+                            disabled={upgradeActionBusy}
+                            onClick={() => {
+                              setSelectedUpgrade(r);
+                              setUpgradeNextSteps(null);
+                            }}
+                          >
+                            Details
+                          </button>
+                          {r.status === "submitted" ? (
+                            <button
+                              className="btn btn-ghost"
+                              type="button"
+                              disabled={upgradeActionBusy}
+                              onClick={() => handleMarkReviewing(r)}
+                            >
+                              Reviewing
+                            </button>
+                          ) : null}
+                          <button
+                            className="btn btn-primary"
+                            type="button"
+                            disabled={upgradeActionBusy}
+                            onClick={() => handleApproveEnable(r)}
+                          >
+                            Approve &amp; enable
+                          </button>
+                          <button
+                            className="btn btn-ghost"
+                            type="button"
+                            disabled={upgradeActionBusy}
+                            onClick={() => handleDecline(r)}
+                          >
+                            Decline
+                          </button>
+                        </>
+                      ) : (
+                        <span className="muted-text" title="Your account role cannot approve requests">
+                          SOC manager or platform admin
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {selectedUpgrade && (
+          <div className="panel" style={{ marginTop: "1rem" }}>
+            <h3 className="section-title" style={{ marginTop: 0 }}>
+              Request detail — {selectedUpgrade.tenant_name} ({selectedUpgrade.short_code})
+            </h3>
+            <p className="muted">
+              {selectedUpgrade.service_key.replace(/_/g, " ")} · {selectedUpgrade.status} · cadence{" "}
+              {selectedUpgrade.preferred_cadence} · urgency{" "}
+              {selectedUpgrade.urgency.replace(/_/g, " ")}
+            </p>
+            <p>
+              <strong>Scope:</strong> {formatScopeList(selectedUpgrade.scan_scope)}
+            </p>
+            <p>
+              <strong>Environments:</strong>{" "}
+              {selectedUpgrade.environments.map((e) => e.replace(/_/g, " ")).join(", ")}
+            </p>
+            {selectedUpgrade.compliance_drivers.length > 0 ? (
+              <p>
+                <strong>Compliance:</strong>{" "}
+                {selectedUpgrade.compliance_drivers.map((c) => c.replace(/_/g, " ")).join(", ")}
+              </p>
+            ) : null}
+            <p className="upgrade-request-quote">{selectedUpgrade.requirements_summary}</p>
+            {selectedUpgrade.short_code ? (
+              <p>
+                <Link to="/assets">Open Assets</Link> — add IP/hostname protected assets for{" "}
+                <strong>{selectedUpgrade.short_code}</strong> so automated scans have targets.
+              </p>
+            ) : null}
+            {upgradeNextSteps && upgradeNextSteps.length > 0 ? (
+              <div className="state-message state-success">
+                <p>
+                  <strong>Next steps for your team:</strong>
+                </p>
+                <ul>
+                  {upgradeNextSteps.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => {
+                setSelectedUpgrade(null);
+                setUpgradeNextSteps(null);
+              }}
+            >
+              Close detail
+            </button>
+          </div>
+        )}
       </div>
 
       {status === "loading" && <p className="muted">Loading vulnerabilities…</p>}
@@ -99,15 +379,24 @@ export default function VulnerabilitiesPage() {
       {successMessage && <p className="form-success">{successMessage}</p>}
       {actionError && <p className="form-error">{actionError}</p>}
 
-      {status === "ready" && rows.length === 0 && (
-        <p className="muted">No vulnerability findings yet. Ingest via Greenbone sync when ready.</p>
+        <p className="muted" style={{ marginBottom: "0.75rem" }}>
+          Scans run <strong>automatically</strong> on VM 109 for customers with Vulnerability
+          Management entitled and active <strong>protected assets</strong> (IP or hostname). SOC
+          can queue an on-demand scan from the customer record when needed — no shell scripts.
+        </p>
+      {status === "success" && rows.length === 0 && (
+        <p className="muted">
+          No vulnerability findings yet. Run Nuclei/Vuls sync from VM 109 or ingest via Greenbone
+          when ready.
+        </p>
       )}
 
-      {status === "ready" && rows.length > 0 && (
+      {status === "success" && rows.length > 0 && (
         <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
+                <th>Source</th>
                 <th>Severity</th>
                 <th>Title</th>
                 <th>CVE</th>
@@ -121,6 +410,7 @@ export default function VulnerabilitiesPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
+                  <td>{row.source_platform}</td>
                   <td>
                     <span className={`badge severity-${row.severity}`}>{row.severity}</span>
                   </td>

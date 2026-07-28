@@ -1,15 +1,16 @@
-"""KB-069: Greenbone/OpenVAS → control plane vulnerability ingest."""
+"""KB-069/KB-079: vulnerability engine ingest (Greenbone, Nuclei, Vuls)."""
 
 from __future__ import annotations
 
 import hmac
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
 
 from app.schemas.vulnerabilities import VulnSyncRequest, VulnSyncResponse
+from app.services.vuln_scan_plan_service import build_scan_plan, mark_tenant_scanned
 from app.services.vuln_sync_service import (
     AssetTenantMismatchError,
     TenantNotFoundError,
@@ -80,3 +81,29 @@ def sync_vuln_findings(
             detail=str(exc),
         ) from None
     return VulnSyncResponse(**result)
+
+
+@router.get("/scan-plan")
+def get_vuln_scan_plan(
+    x_vuln_sync_key: Optional[str] = Header(default=None, alias="X-Vuln-Sync-Key"),
+    force: bool = False,
+) -> Dict[str, Any]:
+    """
+    KB-079: Scanner agent on VM 109 pulls entitled tenants + protected-asset targets.
+    No secrets in response. Requires same key as vuln sync.
+    """
+    _require_sync_key(x_vuln_sync_key)
+    return build_scan_plan(force_all=force)
+
+
+@router.post("/scan-complete/{tenant_short_code}")
+def complete_vuln_scan(
+    tenant_short_code: str,
+    x_vuln_sync_key: Optional[str] = Header(default=None, alias="X-Vuln-Sync-Key"),
+) -> Dict[str, Any]:
+    """Mark tenant cadence satisfied after automated scan finished."""
+    _require_sync_key(x_vuln_sync_key)
+    ok = mark_tenant_scanned(tenant_short_code)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    return {"short_code": tenant_short_code.upper(), "marked": True}

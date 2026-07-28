@@ -70,7 +70,7 @@ export default function AlertDetailPage() {
               <td>{data.alert.status}</td>
             </tr>
             <tr>
-              <th>Source</th>
+              <th>Detection</th>
               <td>{data.alert.source}</td>
             </tr>
             <tr>

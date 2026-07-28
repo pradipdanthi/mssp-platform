@@ -1,0 +1,26 @@
+[Unit]
+Description=MSSP Zeek sensor (Docker, dedicated capture NIC)
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=15
+Environment=ZEEK_CAPTURE_IF=enp6s20
+Environment=ZEEK_IMAGE=zeek/zeek:7.0.7
+Environment=ZEEK_LOG_DIR=/opt/zeek-logs
+ExecStartPre=-/usr/bin/docker rm -f mssp-zeek
+ExecStartPre=/usr/bin/docker pull ${ZEEK_IMAGE}
+ExecStart=/usr/bin/docker run --name mssp-zeek --rm \
+  --net=host \
+  --cap-add=NET_ADMIN \
+  --cap-add=NET_RAW \
+  -v ${ZEEK_LOG_DIR}:/usr/local/zeek/spool/zeek \
+  ${ZEEK_IMAGE} \
+  zeek -i ${ZEEK_CAPTURE_IF} local
+ExecStop=/usr/bin/docker stop mssp-zeek
+
+[Install]
+WantedBy=multi-user.target

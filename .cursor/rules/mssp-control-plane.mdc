@@ -13,24 +13,35 @@ Full detail: `AGENTS.md`, `CLAUDE.md`, `CONTEXT.md`, `docs/KB036_MSSP_PLATFORM_A
 ## Project Summary
 
 - **Enterprise open-source MSSP / SOC / MDR / XDR platform** — not a Wazuh dashboard, not Streamlit-as-product.
-- **MSSP Control Plane** (FastAPI + PostgreSQL + Redis + admin/customer UIs on VM 100) is the product; engines are backend adapters only.
-- **Approved enterprise stack (KB-036 roadmap):** Wazuh (Manager, Indexer/OpenSearch, Dashboard, Agents), Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone/OpenVAS, Velociraptor; Ansible/Compose deployment; Prometheus/Grafana observability. **Not deployed yet** except control plane.
+- **MSSP Control Plane** (FastAPI + PostgreSQL + Redis + admin/customer UIs on VM 100) is the **production product**; engines are backend adapters only. Same design migrates to cloud later.
+- **On-prem local servers now = production path** (complete end-to-end MSSP). Not a disposable lab. Every backend tool, wiring, config, and security control must be **enterprise-ready** (or an explicit dated gap + upgrade path).
+- **Approved enterprise stack (KB-036 roadmap):** Wazuh, Suricata, Zeek, TheHive, Shuffle, MISP, Greenbone/OpenVAS, Velociraptor; Ansible/Compose; Prometheus/Grafana.
+- **Vuln scanners:** **Nuclei + Vuls** on VM 109 with Greenbone CE (KB-078); never on control plane; Greenbone Enterprise deferred (KB-077).
 - Deployment models: **cloud-hosted**, **on-prem appliance**, **hybrid**.
 - Multi-tenant; admin/SOC cross-tenant where role allows; customers tenant-isolated only.
+- **No lab/demo wording** in dashboards or runtime defaults (fail-closed tenant mapping; `THEHIVE_DEFAULT_ORG` default `MSSP`).
 
-## Current State (KB-036 docs; features through KB-035)
+## Current State
 
-- VM 100: `mssp-control` at `192.168.0.201`, tag `kb035-customer-appliance-detail-validated` (`1ac1df3`).
-- Control plane deployed; full customer portal through KB-035; admin/SOC foundation built.
-- **SOC stack NOT deployed** — no Wazuh/Suricata/Zeek/TheHive/Shuffle/MISP/Greenbone/Velociraptor in lab yet.
-- Future VMs: 101 wazuh-stack through 111 monitoring — see KB-036 doc.
-- Future KBs: KB-037 through KB-060 (registry, automation, tool deploy, adapters, ops).
+- VM 100: `mssp-control` at `192.168.0.201` — production control plane; feature baseline through KB-035 (`kb035-customer-appliance-detail-validated`).
+- Admin/Customer portals: **nginx production builds** on `:3000` / `:3001`.
+- Engines live as adapters: Wazuh (101), TheHive/Shuffle (102), Suricata (106), Nuclei+Vuls + Greenbone CE (109). Zeek/MISP/Velociraptor still pending their KBs.
+- Do not install additional SOC tools or create VMs unless the current KB explicitly allows it.
 
 ## Safe KB Workflow
 
 **Planning before implementation** · **no .env** · **no /admin** from customer UI · **validation before commit**
 
-Do not install SOC tools or create VMs unless the KB explicitly allows it.
+## Change impact (mandatory after any code/config deploy)
+
+When implementing or fixing anything, **do not stop at “files edited”** — treat the running stack as part of the deliverable:
+
+1. **Blast radius** — Before editing, note what shares the change (auth, nginx `/api` proxy, entitlements, both portals, Docker service names, migrations).
+2. **Rebuild/restart what changed** — If `backend-api` is recreated, also recreate **both** `frontend-admin` and `frontend-customer` (stale nginx upstream IPs caused customer login 502). Prefer nginx configs that re-resolve Docker DNS (`resolver 127.0.0.11`).
+3. **Smoke checks after deploy** — At minimum: `curl` `/health`; `POST` login via **:3000** and **:3001** `/api/auth/login` (expect 401 with bad password, not 502/405); hit the feature path you changed.
+4. **Regression scripts** — Run the module validator plus `kb011_validate_protected_apis.sh` when auth/API/nginx touched; fix failures before telling the user to test.
+5. **If something breaks** — Diagnose and fix in the same session; do not leave the user to discover cross-module breakage.
+6. **Customer portal copy/API** — No third-party engine or scanner product names in `frontend-customer/` or customer API responses; use capability labels (see `customer_safe_labels.py`).
 
 ## Security Rules
 
@@ -40,13 +51,14 @@ Do not install SOC tools or create VMs unless the KB explicitly allows it.
 
 ## Protected Paths
 
-`.env`, `docker-compose.yml`, `postgres/init/`, `frontend-admin/` (customer modules), `backend-api/app/main.py` (unless named). No commit/tag unless user asks.
+`.env`, `docker-compose.yml`, `postgres/init/`, `frontend-admin/` (unless admin module), `backend-api/app/main.py` (unless named). No commit/tag unless user asks.
 
 ## Validation Commands
 
 ```bash
 cd /opt/mssp-control
 ./scripts/kb036_validate_mssp_platform_architecture_roadmap.sh
+./scripts/kb077_validate_greenbone_enterprise_readiness_plan.sh
 ```
 
 ## Communication

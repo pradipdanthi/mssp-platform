@@ -2,7 +2,7 @@
   "name": "mssp-frontend-admin",
   "private": true,
   "version": "0.1.0",
-  "description": "KB-018: Kestrel Cyber Control Plane admin dashboard foundation (React + TypeScript + Vite).",
+  "description": "Kestrel Cyber Control Plane — Admin / SOC portal (React + TypeScript).",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",

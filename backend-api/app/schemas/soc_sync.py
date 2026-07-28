@@ -20,7 +20,7 @@ class SocSyncRequest(BaseModel):
     alert_description: Optional[str] = Field(default=None, max_length=4000)
     event_time: Optional[datetime] = None
     destination_host: Optional[str] = Field(default=None, max_length=255)
-    tenant_short_code: str = Field(default="DEMO", min_length=2, max_length=32)
+    tenant_short_code: str = Field(min_length=2, max_length=32)
     # If None: create incident automatically for high/critical.
     create_incident: Optional[bool] = None
     customer_visible_summary: Optional[str] = Field(default=None, max_length=4000)

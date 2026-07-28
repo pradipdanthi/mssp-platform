@@ -81,7 +81,7 @@ def read_secret(path: Path) -> str:
 
 
 def load_map(text: str) -> dict:
-    default = "DEMO"
+    default = ""
     hosts: dict = {}
     mode = None
     current = None
@@ -237,7 +237,10 @@ def parse_results(xml_text: str, mapping: dict) -> dict[str, list]:
         ).strip()[:500]
         host = host_key(result)
         meta = host_map.get(host) or {}
-        tenant = (meta.get("tenant_short_code") or default_tenant).upper()
+        tenant = (meta.get("tenant_short_code") or default_tenant or "").strip().upper()
+        if not tenant:
+            # Fail-closed: never attach findings to a demo/default tenant.
+            continue
         asset_hostname = meta.get("asset_hostname") or None
         desc = (result.findtext("description") or "").strip()
         summary = desc[:1200] if desc else f"Vulnerability finding on {host or 'unknown host'}."

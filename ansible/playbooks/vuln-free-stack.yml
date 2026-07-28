@@ -1,0 +1,12 @@
+---
+# KB-078: Nuclei + Vuls free vulnerability stack.
+# Safe default is preflight only. Live install requires separate approval.
+# No secrets in Git. Customer portal never receives raw scan output.
+
+- name: KB-078 Nuclei + Vuls free stack preflight or install
+  hosts: vuln_free_stack
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: vuln_free_stack

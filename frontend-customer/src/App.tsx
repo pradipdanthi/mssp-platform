@@ -17,6 +17,7 @@ import RecommendationsPage from "./pages/RecommendationsPage";
 import RecommendationDetailPage from "./pages/RecommendationDetailPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import AccountPage from "./pages/AccountPage";
+import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -125,6 +126,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <RecommendationDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vulnerabilities"
+        element={
+          <ProtectedRoute>
+            <VulnerabilitiesPage />
           </ProtectedRoute>
         }
       />

@@ -17,6 +17,14 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import require_roles
 from app.db.session import fetch_all, fetch_one
+from app.services.soc_alert_taxonomy import (
+    TAXONOMY_LABELS,
+    TAXONOMY_SLUGS,
+    TAXONOMY_TREE,
+    enrich_alert_row,
+    filter_by_asset_category,
+    taxonomy_counts,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -110,6 +118,16 @@ def admin_tenants(
             t.sla_level,
             t.business_criticality,
             t.timezone,
+            t.deployment_mode,
+            t.cloud_provider,
+            t.primary_contact_name,
+            t.primary_contact_email,
+            t.primary_contact_phone,
+            t.country,
+            t.city,
+            t.industry,
+            t.contract_reference,
+            t.licensed_endpoints,
             t.created_at,
             count(DISTINCT a.id) AS appliances,
             count(DISTINCT pa.id) AS protected_assets,
@@ -164,8 +182,8 @@ def admin_appliances(
     return {"appliances": rows}
 
 
-@router.get("/alerts")
-def admin_alerts(
+@router.get("/alerts/taxonomy-summary")
+def admin_alerts_taxonomy_summary(
     alert_status: Optional[
         Literal["new", "triaged", "incident_created", "false_positive", "closed"]
     ] = Query(default=None, alias="status"),
@@ -173,6 +191,56 @@ def admin_alerts(
     tenant_id: Optional[UUID] = None,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
+    """KB-082: Category counts for alert filter badges (derived, no DB migration)."""
+    where = []
+    params = []
+    if alert_status is not None:
+        where.append("sa.status = %s")
+        params.append(alert_status)
+    if severity is not None:
+        where.append("sa.severity = %s")
+        params.append(severity)
+    if tenant_id is not None:
+        where.append("sa.tenant_id = %s")
+        params.append(tenant_id)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    rows = fetch_all(
+        f"""
+        SELECT
+            sa.source_tool,
+            sa.alert_title,
+            sa.alert_description,
+            sa.destination_host,
+            sa.source_user,
+            sa.raw_event
+        FROM security_alerts sa
+        {where_sql}
+        ORDER BY sa.created_at DESC
+        LIMIT 500;
+        """,
+        tuple(params),
+    )
+    enriched = [enrich_alert_row(r) for r in rows]
+    return {
+        "counts": taxonomy_counts(enriched),
+        "tree": TAXONOMY_TREE,
+        "labels": TAXONOMY_LABELS,
+    }
+
+
+@router.get("/alerts")
+def admin_alerts(
+    alert_status: Optional[
+        Literal["new", "triaged", "incident_created", "false_positive", "closed"]
+    ] = Query(default=None, alias="status"),
+    severity: Optional[Literal["low", "medium", "high", "critical"]] = None,
+    tenant_id: Optional[UUID] = None,
+    asset_category: Optional[str] = Query(default=None, description="KB-082 taxonomy slug"),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    if asset_category and asset_category not in TAXONOMY_SLUGS:
+        asset_category = "uncategorized"
     where = []
     params = []
     if alert_status is not None:
@@ -196,11 +264,15 @@ def admin_alerts(
             sa.source_tool,
             sa.severity,
             sa.alert_title,
+            sa.alert_description,
             sa.source_ip::text,
             sa.destination_ip::text,
             sa.destination_host,
+            sa.source_user,
+            sa.raw_event,
             sa.ai_plain_summary,
             sa.ai_likely_attack_type,
+            sa.ai_recommended_action,
             sa.customer_visible,
             sa.status,
             sa.created_at
@@ -208,11 +280,16 @@ def admin_alerts(
         JOIN tenants t ON t.id = sa.tenant_id
         {where_sql}
         ORDER BY sa.created_at DESC
-        LIMIT 100;
+        LIMIT 200;
         """,
         tuple(params),
     )
-    return {"alerts": rows}
+    enriched = [enrich_alert_row(r) for r in rows]
+    if asset_category and asset_category != "all":
+        enriched = filter_by_asset_category(enriched, asset_category)
+    # Preserve prior list cap for default view
+    enriched = enriched[:100]
+    return {"alerts": enriched}
 
 
 @router.get("/incidents")

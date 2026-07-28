@@ -106,6 +106,8 @@ def _level_to_severity(level: int) -> str:
 
 
 def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
+    from app.services.tenant_engine_provisioner import resolve_short_code_by_wazuh_group
+
     rule = raw.get("rule") if isinstance(raw.get("rule"), dict) else {}
     agent = raw.get("agent") if isinstance(raw.get("agent"), dict) else {}
     try:
@@ -123,6 +125,49 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
         f"agent={agent.get('name', 'n/a')}",
     ]
     description = "; ".join(desc_parts)[:4000]
+
+    # Resolve tenant from Wazuh agent group binding (KB-072).
+    # Fail-closed: no DEMO fallback. Optional env override only when explicitly set.
+    # Shuffle/Wazuh hook payloads often omit agent.group — look up via Manager API.
+    env_default = (os.getenv("WAZUH_DEFAULT_TENANT_SHORT_CODE") or "").strip().upper()
+    tenant_code: Optional[str] = env_default or None
+    groups = agent.get("groups") or agent.get("group") or []
+    if isinstance(groups, str):
+        groups = [groups]
+    labels = agent.get("labels") if isinstance(agent.get("labels"), dict) else {}
+    candidates = [str(g) for g in groups if g]
+    for key, val in labels.items():
+        if str(key).lower() in ("group", "tenant_group", "wazuh_group"):
+            candidates.append(str(val))
+        if str(val).startswith("tenant_"):
+            candidates.append(str(val))
+    if not any(str(g).startswith("tenant_") for g in candidates):
+        agent_id = str(agent.get("id") or "").strip()
+        if agent_id:
+            try:
+                from app.services import wazuh_client
+
+                if wazuh_client.credentials_configured():
+                    candidates.extend(wazuh_client.get_agent_groups(agent_id))
+            except Exception:
+                logger.exception(
+                    "Wazuh agent group lookup failed for agent_id=%s", agent_id
+                )
+    for g in candidates:
+        mapped = resolve_short_code_by_wazuh_group(g)
+        if mapped:
+            tenant_code = mapped
+            break
+        if g.startswith("tenant_"):
+            # Convention fallback: tenant_ACME → ACME
+            tenant_code = g[len("tenant_") :].upper()
+            break
+
+    if not tenant_code:
+        raise ValueError(
+            "Unmapped Wazuh agent: no tenant group binding and no WAZUH_DEFAULT_TENANT_SHORT_CODE"
+        )
+
     return SocSyncRequest(
         source_tool="wazuh",
         external_alert_id=external_id[:255],
@@ -130,7 +175,7 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
         alert_title=title,
         alert_description=description,
         destination_host=host,
-        tenant_short_code="DEMO",
+        tenant_short_code=tenant_code,
         create_incident=level >= 10,
         customer_visible_summary=f"SOC is reviewing: {title}"[:4000],
         business_impact=(
@@ -225,9 +270,15 @@ async def wazuh_instant_ingress(token: str, request: Request) -> Dict[str, Any]:
     if not isinstance(raw, dict):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid alert payload")
 
-    payload = _normalize_wazuh_alert(raw)
     try:
+        payload = _normalize_wazuh_alert(raw)
         result, duplicate = sync_soc_alert(payload)
+    except ValueError as exc:
+        logger.warning("Wazuh ingress rejected: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Alert tenant could not be resolved",
+        )
     except TenantNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
     except Exception:

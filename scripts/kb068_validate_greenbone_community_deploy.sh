@@ -54,7 +54,7 @@ inv = Path("ansible/inventory/hosts.yml").read_text()
 assert "greenbone:" in inv
 assert "192.168.0.219" in inv
 assert "deployment_role: greenbone" in inv
-assert "id_ed25519_ansible_greenbone" in inv
+assert "id_ed25519_greenbone" in inv
 print("OK: safe defaults")
 PY
 

@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field
 
 SeverityLiteral = Literal["low", "medium", "high", "critical"]
 VulnStatusLiteral = Literal["open", "fixed", "accepted_risk", "false_positive", "closed"]
-SourcePlatformLiteral = Literal["greenbone", "openvas", "manual", "other"]
+SourcePlatformLiteral = Literal[
+    "greenbone",
+    "openvas",
+    "nuclei",
+    "vuls",
+    "manual",
+    "other",
+]
 
 
 class VulnFindingIngest(BaseModel):

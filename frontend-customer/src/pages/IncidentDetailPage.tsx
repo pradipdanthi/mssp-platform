@@ -150,7 +150,7 @@ export default function IncidentDetailPage() {
                   <th>Title</th>
                   <th>Severity</th>
                   <th>Status</th>
-                  <th>Source</th>
+                  <th>Detection</th>
                   <th>Summary</th>
                   <th>Hostname</th>
                   <th>Detected</th>

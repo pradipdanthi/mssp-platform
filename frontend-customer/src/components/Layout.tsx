@@ -2,13 +2,17 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useBrand } from "../config/BrandContext";
-import BrandMark from "./BrandMark";
+import KestrelFalconShieldLogo from "./brand/KestrelFalconShieldLogo";
+import KestrelSecurityWatermark from "./brand/KestrelSecurityWatermark";
+import EngineStatusRibbon from "./EngineStatusRibbon";
+import GlobalSearch from "./GlobalSearch";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
   { to: "/alerts", label: "Alerts" },
   { to: "/incidents", label: "Incidents" },
   { to: "/assets", label: "Assets" },
+  { to: "/vulnerabilities", label: "Vulnerabilities" },
   { to: "/recommendations", label: "Recommendations" },
   { to: "/reports", label: "Reports" },
   { to: "/notifications", label: "Notifications" },
@@ -21,9 +25,14 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
+      <KestrelSecurityWatermark />
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <BrandMark variant="mark" className="brand-mark sidebar-brand-logo" />
+          <KestrelFalconShieldLogo
+            size={118}
+            className="sidebar-brand-logo"
+            title={brand.productName}
+          />
           <div className="sidebar-brand-copy">
             <span className="sidebar-brand-product">{brand.productName}</span>
             <span className="sidebar-brand-text">Customer Portal</span>
@@ -49,9 +58,15 @@ export default function Layout({ children }: { children: ReactNode }) {
         </footer>
       </aside>
       <div className="app-main">
-        <header className="app-header">
-          <div className="app-header-title">
-            {user?.tenant_name ? user.tenant_name : brand.portalName}
+        <header className="app-header sentinel-header">
+          <div className="app-header-left">
+            <div className="app-header-title">
+              {user?.tenant_name ? user.tenant_name : brand.portalName}
+            </div>
+            <div className="app-header-widgets">
+              <GlobalSearch />
+              <EngineStatusRibbon />
+            </div>
           </div>
           <div className="app-header-user">
             {user && (
@@ -60,6 +75,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <span className="app-header-user-meta">
                   {user.email}
                   {user.tenant_short_code ? ` · ${user.tenant_short_code}` : ""}
+                  {user.role ? ` · ${user.role}` : ""}
                 </span>
               </span>
             )}

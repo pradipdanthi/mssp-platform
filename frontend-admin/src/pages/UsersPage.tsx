@@ -7,11 +7,14 @@ import {
   createUser,
   getTenants,
   getUsers,
+  postAuditEvent,
   updateUser,
   updateUserPassword,
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import ConfirmDangerModal from "../components/ConfirmDangerModal";
+import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
 const ROLE_OPTIONS: PlatformRole[] = [
@@ -85,6 +88,9 @@ export default function UsersPage() {
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null);
 
+  const [disableUser, setDisableUser] = useState<AdminUser | null>(null);
+  const [actionBusy, setActionBusy] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
     getTenants()
@@ -150,6 +156,13 @@ export default function UsersPage() {
         phone: createForm.phone.trim() || null,
         status: createForm.status,
       });
+      void postAuditEvent({
+        action: "user.created",
+        entity_type: "user",
+        entity_id: created.id,
+        tenant_id: created.tenant_id,
+        details: { after: { email: created.email, role: created.role, status: created.status } },
+      }).catch(() => undefined);
       setCreateSuccess(
         `User ${created.full_name} (${created.email}) created as ${created.role}. Give them their password securely — it is not stored in plain text.`
       );
@@ -175,6 +188,16 @@ export default function UsersPage() {
         phone: editForm.phone.trim() || null,
         status: editForm.status,
       });
+      void postAuditEvent({
+        action: "user.updated",
+        entity_type: "user",
+        entity_id: updated.id,
+        tenant_id: updated.tenant_id,
+        details: {
+          before: { full_name: editing.full_name, status: editing.status },
+          after: { full_name: updated.full_name, status: updated.status },
+        },
+      }).catch(() => undefined);
       setEditSuccess(`Saved changes for ${updated.email}.`);
       setEditing(null);
       setEditForm(null);
@@ -194,6 +217,13 @@ export default function UsersPage() {
     setPasswordSuccess(null);
     try {
       await updateUserPassword(passwordUser.id, { new_password: newPassword });
+      void postAuditEvent({
+        action: "user.password_reset",
+        entity_type: "user",
+        entity_id: passwordUser.id,
+        tenant_id: passwordUser.tenant_id,
+        details: { email: passwordUser.email },
+      }).catch(() => undefined);
       setPasswordSuccess(`Password updated for ${passwordUser.email}. Share the new password securely.`);
       setPasswordUser(null);
       setNewPassword("");
@@ -201,6 +231,32 @@ export default function UsersPage() {
       setPasswordError(apiErrorMessage(err, "Could not set password."));
     } finally {
       setPasswordSaving(false);
+    }
+  }
+
+  async function confirmDisableUser() {
+    if (!canWrite || !disableUser) return;
+    setActionBusy(true);
+    try {
+      const updated = await updateUser(disableUser.id, { status: "inactive" });
+      void postAuditEvent({
+        action: "user.disabled",
+        entity_type: "user",
+        entity_id: disableUser.id,
+        tenant_id: disableUser.tenant_id,
+        details: {
+          before: { status: disableUser.status },
+          after: { status: updated.status },
+          email: disableUser.email,
+        },
+      }).catch(() => undefined);
+      setDisableUser(null);
+      setEditSuccess(`Access revoked for ${updated.email}.`);
+      refetch();
+    } catch (err) {
+      setEditError(apiErrorMessage(err, "Could not disable user."));
+    } finally {
+      setActionBusy(false);
     }
   }
 
@@ -237,6 +293,20 @@ export default function UsersPage() {
       {createSuccess && <div className="state-message state-success">{createSuccess}</div>}
       {editSuccess && <div className="state-message state-success">{editSuccess}</div>}
       {passwordSuccess && <div className="state-message state-success">{passwordSuccess}</div>}
+
+      <ConfirmDangerModal
+        open={!!disableUser}
+        title="Revoke access"
+        body={
+          disableUser
+            ? `Disable ${disableUser.full_name} (${disableUser.email})? They will not be able to sign in until reactivated.`
+            : ""
+        }
+        confirmPhrase={disableUser ? `DISABLE ${disableUser.email}` : ""}
+        confirmLabel="Disable account"
+        onCancel={() => setDisableUser(null)}
+        onConfirm={confirmDisableUser}
+      />
 
       {showCreate && canWrite && (
         <form className="management-panel" onSubmit={handleCreate}>
@@ -503,18 +573,27 @@ export default function UsersPage() {
                   <td>{u.last_login_at ?? "Never"}</td>
                   {canWrite && (
                     <td>
-                      <div className="confirm-actions" style={{ marginTop: 0 }}>
-                        <button className="btn btn-small" type="button" onClick={() => openEdit(u)}>
-                          Edit
-                        </button>
-                        <button
-                          className="btn btn-small"
-                          type="button"
-                          onClick={() => openPassword(u)}
-                        >
-                          Set password
-                        </button>
-                      </div>
+                      <RowActionsMenu
+                        actions={[
+                          {
+                            id: "edit",
+                            label: "Edit Details",
+                            onClick: () => openEdit(u),
+                          },
+                          {
+                            id: "password",
+                            label: "Reset Password",
+                            onClick: () => openPassword(u),
+                          },
+                          {
+                            id: "disable",
+                            label: "Revoke Access / Disable",
+                            danger: true,
+                            disabled: u.status === "inactive" || actionBusy,
+                            onClick: () => setDisableUser(u),
+                          },
+                        ]}
+                      />
                     </td>
                   )}
                 </tr>

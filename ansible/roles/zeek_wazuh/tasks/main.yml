@@ -1,0 +1,62 @@
+---
+# KB-047: Tail Zeek notice.log via existing Wazuh agent on VM 106.
+
+- name: Validate zeek_wazuh_execution_mode
+  ansible.builtin.assert:
+    that:
+      - zeek_wazuh_execution_mode in ["preflight", "apply", "validate"]
+    fail_msg: zeek_wazuh_execution_mode must be preflight, apply, or validate.
+
+- name: Guard VM 106
+  ansible.builtin.assert:
+    that:
+      - (vm_id | int) == 106
+    fail_msg: Zeek→Wazuh integration applies only on VM 106.
+
+- name: Require Wazuh agent
+  ansible.builtin.stat:
+    path: /var/ossec/bin/wazuh-control
+  register: wazuh_agent_bin
+- name: Assert Wazuh agent present
+  ansible.builtin.assert:
+    that:
+      - wazuh_agent_bin.stat.exists
+    fail_msg: Wazuh agent missing — complete KB-044 first.
+
+- name: Zeek Wazuh preflight passed
+  ansible.builtin.debug:
+    msg: >-
+      KB-047 Zeek→Wazuh preflight OK. Set zeek_wazuh_execution_mode=apply and
+      zeek_wazuh_live_apply_approved=true to add localfile monitors.
+  when: zeek_wazuh_execution_mode == "preflight"
+
+- name: Add Zeek notice.log localfile to Wazuh agent
+  when:
+    - zeek_wazuh_execution_mode == "apply"
+    - zeek_wazuh_live_apply_approved | bool
+  block:
+    - name: Ensure Zeek notice localfile block
+      ansible.builtin.blockinfile:
+        path: /var/ossec/etc/ossec.conf
+        marker: "<!-- {mark} MSSP KB-047 Zeek notice.log -->"
+        insertbefore: "</ossec_config>"
+        block: |
+          <localfile>
+            <log_format>syslog</log_format>
+            <location>{{ zeek_notice_log_glob }}</location>
+          </localfile>
+
+    - name: Restart Wazuh agent
+      ansible.builtin.systemd:
+        name: wazuh-agent
+        state: restarted
+
+    - name: Write zeek wazuh marker
+      ansible.builtin.file:
+        path: "{{ zeek_wazuh_state_directory }}"
+        state: directory
+        mode: "0750"
+    - name: Marker file
+      ansible.builtin.copy:
+        dest: "{{ zeek_wazuh_marker }}"
+        content: "applied\n"

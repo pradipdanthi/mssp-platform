@@ -1,0 +1,293 @@
+---
+# KB-078: Nuclei + Vuls free vulnerability stack.
+# Targets only deployment_role vuln_free_stack. No secrets in Git.
+
+- name: Validate vuln_free execution controls
+  ansible.builtin.assert:
+    that:
+      - vuln_free_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: >-
+      vuln_free_execution_mode must be preflight, install, or validate.
+      The safe default is preflight.
+
+- name: Validate inventory identity
+  ansible.builtin.assert:
+    that:
+      - deployment_role == "vuln_free_stack"
+      - (vm_id | int) == 109
+    fail_msg: >-
+      vuln_free_stack role may target only VM 109 (co-located with Greenbone).
+      Do not install scanners on the control plane (VM 100).
+
+- name: Validate supported OS and resources
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in vuln_free_supported_linux_distributions
+      - ansible_distribution_version in vuln_free_supported_ubuntu_releases
+      - (ansible_memtotal_mb | int) >= (vuln_free_minimum_memory_mb | int)
+      - (ansible_processor_vcpus | int) >= (vuln_free_minimum_vcpus | int)
+    fail_msg: >-
+      Target host must use approved Ubuntu with at least
+      {{ vuln_free_minimum_memory_mb }} MB RAM and
+      {{ vuln_free_minimum_vcpus }} vCPUs.
+
+- name: Resolve root filesystem size
+  ansible.builtin.set_fact:
+    vuln_free_root_disk_bytes: >-
+      {{
+        (
+          ansible_mounts
+          | selectattr("mount", "equalto", "/")
+          | map(attribute="size_total")
+          | first
+        )
+        | int
+      }}
+
+- name: Validate minimum root filesystem size
+  ansible.builtin.assert:
+    that:
+      - >-
+        (vuln_free_root_disk_bytes | int) >=
+        ((vuln_free_minimum_root_disk_gb | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      Host requires at least {{ vuln_free_minimum_root_disk_gb }} GB on
+      the root filesystem.
+
+- name: Explain the preflight-only result
+  ansible.builtin.debug:
+    msg: >-
+      Nuclei+Vuls preflight passed for {{ inventory_hostname }}.
+      No packages were installed. Approve live install with
+      vuln_free_execution_mode=install and
+      vuln_free_live_install_approved=true.
+  when: vuln_free_execution_mode == "preflight"
+
+- name: Check install marker
+  ansible.builtin.stat:
+    path: "{{ vuln_free_install_marker }}"
+  register: vuln_free_marker
+
+- name: Install Nuclei binary and Vuls Docker images
+  when:
+    - vuln_free_execution_mode == "install"
+    - not vuln_free_marker.stat.exists
+  block:
+    - name: Enforce explicit live-install approval
+      ansible.builtin.assert:
+        that:
+          - vuln_free_live_install_approved | bool
+        fail_msg: >-
+          Live Nuclei+Vuls install is blocked until
+          vuln_free_live_install_approved=true.
+
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - unzip
+          - jq
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure Docker is present
+      ansible.builtin.command:
+        argv: [docker, --version]
+      register: vuln_free_docker_version
+      changed_when: false
+
+    - name: Create install directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ vuln_free_install_root }}"
+        - "{{ vuln_free_install_root }}/bin"
+        - "{{ vuln_free_install_root }}/nuclei-templates"
+        - "{{ vuln_free_install_root }}/vuls"
+        - "{{ vuln_free_install_root }}/vuls/results"
+        - "{{ vuln_free_state_directory }}"
+
+    - name: Download Nuclei release zip
+      ansible.builtin.get_url:
+        url: "{{ vuln_free_nuclei_url }}"
+        dest: "/tmp/{{ vuln_free_nuclei_zip }}"
+        mode: "0644"
+        force: true
+        validate_certs: true
+
+    - name: Unpack Nuclei binary
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ vuln_free_nuclei_zip }}"
+        dest: "{{ vuln_free_install_root }}/bin"
+        remote_src: true
+        include:
+          - nuclei
+        mode: "0755"
+
+    - name: Symlink Nuclei into /usr/local/bin
+      ansible.builtin.file:
+        src: "{{ vuln_free_install_root }}/bin/nuclei"
+        dest: /usr/local/bin/nuclei
+        state: link
+        force: true
+
+    - name: Update Nuclei templates
+      ansible.builtin.command:
+        argv:
+          - "{{ vuln_free_install_root }}/bin/nuclei"
+          - -update-templates
+          - -ud
+          - "{{ vuln_free_install_root }}/nuclei-templates"
+      register: vuln_free_nuclei_templates
+      changed_when: true
+
+    - name: Pull Vuls Docker images
+      ansible.builtin.command:
+        argv: [docker, pull, "{{ item }}"]
+      loop: "{{ vuln_free_vuls_images }}"
+      register: vuln_free_pulls
+      changed_when: true
+
+    - name: Install host-local Vuls config stub
+      ansible.builtin.copy:
+        dest: "{{ vuln_free_install_root }}/vuls/config.toml"
+        mode: "0640"
+        owner: root
+        group: root
+        content: |
+          # Host-local Vuls config stub — no secrets in Git.
+          # Add per-tenant scan targets only with written scope approval.
+
+          [cveDict]
+          type = "sqlite3"
+          SQLite3Path = "{{ vuln_free_install_root }}/vuls/cve.sqlite3"
+
+          [ovalDict]
+          type = "sqlite3"
+          SQLite3Path = "{{ vuln_free_install_root }}/vuls/oval.sqlite3"
+
+          [gost]
+          type = "sqlite3"
+          SQLite3Path = "{{ vuln_free_install_root }}/vuls/gost.sqlite3"
+
+          [kevuln]
+          type = "sqlite3"
+          SQLite3Path = "{{ vuln_free_install_root }}/vuls/go-kev.sqlite3"
+
+          [servers]
+          # Example (disabled): uncomment and set host/user/key for approved targets only.
+          # [servers.example]
+          # host = "192.0.2.10"
+          # port = "22"
+          # user = "scanuser"
+          # keyPath = "/root/.ssh/id_scan"
+
+    - name: Fetch essential Vuls vulnerability databases
+      when: vuln_free_fetch_vuln_dbs | bool
+      block:
+        - name: Fetch NVD via go-cve-dictionary
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --rm
+              - -v
+              - "{{ vuln_free_install_root }}/vuls:/go-cve-dictionary"
+              - vuls/go-cve-dictionary:latest
+              - fetch
+              - nvd
+          register: vuln_free_fetch_nvd
+          changed_when: true
+
+        - name: Fetch Ubuntu OVAL
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --rm
+              - -v
+              - "{{ vuln_free_install_root }}/vuls:/goval-dictionary"
+              - vuls/goval-dictionary:latest
+              - fetch
+              - ubuntu
+              - "20.04"
+              - "22.04"
+              - "24.04"
+          register: vuln_free_fetch_oval
+          changed_when: true
+
+        - name: Fetch gost Ubuntu tracker
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --rm
+              - -v
+              - "{{ vuln_free_install_root }}/vuls:/gost"
+              - vuls/gost:latest
+              - fetch
+              - ubuntu
+          register: vuln_free_fetch_gost
+          changed_when: true
+
+        - name: Fetch KEV catalog
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --rm
+              - -v
+              - "{{ vuln_free_install_root }}/vuls:/go-kev"
+              - vuls/go-kev:latest
+              - fetch
+              - kevuln
+          register: vuln_free_fetch_kev
+          changed_when: true
+
+    - name: Write install marker
+      ansible.builtin.copy:
+        dest: "{{ vuln_free_install_marker }}"
+        mode: "0640"
+        content: |
+          installed_at={{ ansible_date_time.iso8601 }}
+          nuclei_version={{ vuln_free_nuclei_version }}
+          host={{ inventory_hostname }}
+          kb=078
+
+- name: Validate Nuclei + Vuls install
+  when: vuln_free_execution_mode == "validate"
+  block:
+    - name: Require install marker
+      ansible.builtin.stat:
+        path: "{{ vuln_free_install_marker }}"
+      register: vuln_free_marker_validate
+
+    - name: Assert marker exists
+      ansible.builtin.assert:
+        that:
+          - vuln_free_marker_validate.stat.exists
+        fail_msg: "Install marker missing — run install first."
+
+    - name: Check Nuclei binary
+      ansible.builtin.command:
+        argv: ["{{ vuln_free_install_root }}/bin/nuclei", "-version"]
+      register: vuln_free_nuclei_version_out
+      changed_when: false
+
+    - name: Check Vuls image
+      ansible.builtin.command:
+        argv: [docker, image, inspect, vuls/vuls:latest]
+      register: vuln_free_vuls_image
+      changed_when: false
+
+    - name: Report validate success
+      ansible.builtin.debug:
+        msg: >-
+          Nuclei+Vuls validate OK on {{ inventory_hostname }}.
+          {{ vuln_free_nuclei_version_out.stdout | default(vuln_free_nuclei_version_out.stderr) }}

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies import require_roles
 from app.db.session import fetch_all, fetch_one, fetch_one_write
+from app.services.soc_alert_taxonomy import enrich_alert_row
 from app.schemas.triage import (
     AlertTriageUpdateRequest,
     IncidentCommentCreateRequest,
@@ -63,7 +64,7 @@ def _alert_detail(alert_id: UUID) -> Dict[str, Any]:
     )
     if not alert:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-    return alert
+    return enrich_alert_row(alert)
 
 
 def _incident_detail(incident_id: UUID) -> Dict[str, Any]:

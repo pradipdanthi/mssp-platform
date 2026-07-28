@@ -19,8 +19,16 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from app.api.dependencies import get_current_user, require_tenant_match
 from app.db.session import fetch_all, fetch_one
+from app.services.customer_safe_labels import customer_safe_alert_source
 
 router = APIRouter(prefix="/customer", tags=["customer"])
+
+
+def _customer_safe_alert_rows(rows: list) -> list:
+    for row in rows:
+        if "source" in row:
+            row["source"] = customer_safe_alert_source(row.get("source"))
+    return rows
 
 
 @router.get("/dashboard/{short_code}")
@@ -284,6 +292,7 @@ def customer_incident_detail(
         """,
         (tenant_id, incident_number, tenant_id),
     )
+    related_alerts = _customer_safe_alert_rows(related_alerts)
 
     return {
         "tenant": tenant,
@@ -337,7 +346,7 @@ def customer_alerts(
         (tenant["id"],),
     )
 
-    return {"tenant": tenant, "alerts": rows}
+    return {"tenant": tenant, "alerts": _customer_safe_alert_rows(rows)}
 
 
 @router.get("/alerts/{short_code}/{alert_id}")
@@ -387,6 +396,7 @@ def customer_alert_detail(
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
 
+    alert["source"] = customer_safe_alert_source(alert.get("source"))
     return {"tenant": tenant, "alert": alert}
 
 
@@ -922,6 +932,74 @@ def customer_recommendation_detail(
         raise HTTPException(status_code=404, detail="Recommendation not found")
 
     return {"tenant": tenant, "recommendation": recommendation}
+
+
+@router.get("/vulnerabilities/{short_code}/summary")
+def customer_vulnerability_summary(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    KB-079: Customer-safe vulnerability *service* summary (not raw findings).
+    Entitlement uses vulnerability_management flag (greenbone_enabled column).
+    """
+    tenant = fetch_one(
+        """
+        SELECT id::text, name, short_code, status
+        FROM tenants
+        WHERE short_code = %s;
+        """,
+        (short_code.upper(),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    require_tenant_match(tenant["id"], current_user)
+
+    ent = fetch_one(
+        """
+        SELECT greenbone_enabled, greenbone_cadence
+        FROM tenant_entitlements
+        WHERE tenant_id = %s::uuid;
+        """,
+        (tenant["id"],),
+    )
+    enabled = bool(ent and ent.get("greenbone_enabled"))
+    cadence = (ent.get("greenbone_cadence") if ent else None) or "monthly"
+
+    rec_row = fetch_one(
+        """
+        SELECT count(*)::int AS n
+        FROM customer_recommendations
+        WHERE tenant_id = %s::uuid
+          AND customer_visible = true
+          AND status = 'open'
+          AND category = 'vulnerability';
+        """,
+        (tenant["id"],),
+    )
+    published_open = int(rec_row["n"]) if rec_row else 0
+
+    activity = fetch_one(
+        """
+        SELECT max(last_seen_at)::text AS last_scan_activity_at
+        FROM vulnerabilities
+        WHERE tenant_id = %s::uuid
+          AND status = 'open';
+        """,
+        (tenant["id"],),
+    )
+    last_activity = activity.get("last_scan_activity_at") if activity else None
+
+    return {
+        "tenant": {
+            "short_code": tenant["short_code"],
+            "name": tenant["name"],
+        },
+        "service_active": enabled,
+        "cadence": cadence if enabled else "off",
+        "published_open_recommendations": published_open,
+        "last_scan_activity_at": last_activity if enabled else None,
+    }
 
 
 @router.get("/notifications/{short_code}")

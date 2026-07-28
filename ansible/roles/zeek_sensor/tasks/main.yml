@@ -1,0 +1,130 @@
+---
+# KB-047: Install Zeek on VM 106 (same SPAN as Suricata). Passive only.
+
+- name: Validate zeek_execution_mode
+  ansible.builtin.assert:
+    that:
+      - zeek_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: zeek_execution_mode must be preflight, install, or validate.
+
+- name: Guard VM identity (co-located network sensor)
+  ansible.builtin.assert:
+    that:
+      - (vm_id | int) == 106
+      - deployment_role == "suricata_sensor"
+    fail_msg: "Zeek co-install targets only VM 106 suricata-sensor."
+
+- name: Guard OS resources
+  ansible.builtin.assert:
+    that:
+      - (ansible_memtotal_mb | int) >= (zeek_minimum_memory_mb | int)
+      - (ansible_processor_vcpus | int) >= (zeek_minimum_vcpus | int)
+    fail_msg: "VM 106 needs at least {{ zeek_minimum_memory_mb }} MB RAM and {{ zeek_minimum_vcpus }} vCPUs for Suricata+Zeek."
+
+- name: Ensure capture interface exists
+  ansible.builtin.assert:
+    that:
+      - zeek_capture_interface in ansible_interfaces
+    fail_msg: "Capture interface {{ zeek_capture_interface }} not found."
+
+- name: Zeek preflight summary
+  ansible.builtin.debug:
+    msg: >-
+      KB-047 Zeek preflight passed on VM 106 (interface {{ zeek_capture_interface }}).
+      Set zeek_execution_mode=install and zeek_live_install_approved=true to install.
+  when: zeek_execution_mode == "preflight"
+
+- name: Install Zeek packages
+  when:
+    - zeek_execution_mode == "install"
+    - zeek_live_install_approved | bool
+  block:
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - gnupg
+        state: present
+        update_cache: true
+
+    - name: Install Zeek archive keyring
+      ansible.builtin.get_url:
+        url: "{{ zeek_apt_key_url }}"
+        dest: /usr/share/keyrings/zeek-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Add Zeek APT repository
+      ansible.builtin.apt_repository:
+        repo: "{{ zeek_apt_repo }}"
+        filename: zeek
+        state: present
+
+    - name: Install Zeek
+      ansible.builtin.apt:
+        name: "{{ zeek_package_name }}"
+        state: present
+        update_cache: true
+
+    - name: Deploy Zeek node.cfg for standalone capture
+      ansible.builtin.copy:
+        dest: /opt/zeek/etc/node.cfg
+        mode: "0644"
+        content: |
+          [zeek]
+          type=standalone
+          host=localhost
+          interface={{ zeek_capture_interface }}
+
+    - name: Deploy Zeek networks.cfg
+      ansible.builtin.copy:
+        dest: /opt/zeek/etc/networks.cfg
+        mode: "0644"
+        content: |
+          {{ zeek_home_net }}
+
+    - name: Deploy Zeek local.zeek (notice framework on)
+      ansible.builtin.copy:
+        dest: /opt/zeek/share/zeek/site/local.zeek
+        mode: "0644"
+        content: |
+          @load frameworks/software
+          @load misc/loaded-protocols
+
+    - name: Enable and start Zeek service
+      ansible.builtin.systemd:
+        name: zeek
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Record install marker
+      ansible.builtin.file:
+        path: "{{ zeek_state_directory }}"
+        state: directory
+        mode: "0750"
+    - name: Write install marker
+      ansible.builtin.copy:
+        dest: "{{ zeek_install_marker }}"
+        mode: "0644"
+        content: "Zeek co-installed with Suricata on {{ zeek_capture_interface }}\n"
+
+- name: Validate Zeek service
+  when: zeek_execution_mode in ["install", "validate"]
+  block:
+    - name: Check zeek package
+      ansible.builtin.assert:
+        that:
+          - "'zeek' in ansible_facts.packages"
+        fail_msg: zeek package is not installed.
+      when: ansible_facts.packages is defined
+
+    - name: Check zeek service active
+      ansible.builtin.systemd:
+        name: zeek
+      register: zeek_svc
+    - name: Assert zeek running
+      ansible.builtin.assert:
+        that:
+          - zeek_svc.status.ActiveState == "active"
+        fail_msg: zeek.service is not active.

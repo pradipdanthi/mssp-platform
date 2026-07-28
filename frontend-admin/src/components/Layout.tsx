@@ -2,7 +2,11 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useBrand } from "../config/BrandContext";
-import BrandMark from "./BrandMark";
+import KestrelFalconShieldLogo from "./brand/KestrelFalconShieldLogo";
+import KestrelSecurityWatermark from "./brand/KestrelSecurityWatermark";
+import EngineStatusRibbon from "./EngineStatusRibbon";
+import GlobalSearch from "./GlobalSearch";
+import TenantSwitcher from "./TenantSwitcher";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
@@ -25,9 +29,14 @@ export default function Layout({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
+      <KestrelSecurityWatermark />
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <BrandMark variant="mark" className="brand-mark sidebar-brand-logo" />
+          <KestrelFalconShieldLogo
+            size={118}
+            className="sidebar-brand-logo"
+            title={brand.productName}
+          />
           <div className="sidebar-brand-copy">
             <span className="sidebar-brand-product">{brand.productName}</span>
             <span className="sidebar-brand-text">Control Plane</span>
@@ -53,8 +62,15 @@ export default function Layout({ children }: { children: ReactNode }) {
         </footer>
       </aside>
       <div className="app-main">
-        <header className="app-header">
-          <div className="app-header-title">{brand.portalName}</div>
+        <header className="app-header sentinel-header">
+          <div className="app-header-left">
+            <div className="app-header-title">{brand.portalName}</div>
+            <div className="app-header-widgets">
+              <TenantSwitcher />
+              <GlobalSearch />
+              <EngineStatusRibbon />
+            </div>
+          </div>
           <div className="app-header-user">
             {user && (
               <span className="app-header-user-info">
@@ -69,7 +85,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
-        <main className="app-content">{children}</main>
+        <main className="app-content sentinel-canvas">{children}</main>
       </div>
     </div>
   );
