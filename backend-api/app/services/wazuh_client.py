@@ -160,26 +160,49 @@ def run_active_response(
     arguments: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
     """
-    Dispatch Wazuh active response to one agent. Command must exist in manager AR config.
+    Dispatch Wazuh active response to one agent (Wazuh 4.14 API).
+
+    Manager expects API-triggered commands with a leading ``!``
+    (e.g. ``!mssp-isolate-host``). ``custom`` is not accepted by this API version.
     """
     aid = (agent_id or "").strip()
     if not aid:
         raise WazuhClientError("agent_id is required for active response")
+    cmd = (command or "").strip()
+    if not cmd:
+        raise WazuhClientError("active response command is required")
+    if not cmd.startswith("!"):
+        cmd = f"!{cmd}"
     token = authenticate()
     body: Dict[str, Any] = {
-        "command": command,
-        "custom": False,
-        "arguments": arguments or [],
+        "command": cmd,
+        "arguments": [str(a) for a in (arguments or [])],
     }
     path = f"/active-response?agents_list={urllib.parse.quote(aid)}"
-    return _request("PUT", path, token=token, body=body)
+    result = _request("PUT", path, token=token, body=body)
+    data = result.get("data") or {}
+    if int(data.get("total_failed_items") or 0) > 0 or int(result.get("error") or 0) != 0:
+        failed = data.get("failed_items") or []
+        detail = ""
+        if failed and isinstance(failed[0], dict):
+            err = (failed[0].get("error") or {})
+            detail = str(err.get("message") or failed[0])[:300]
+        raise WazuhClientError(
+            detail or f"Active response failed for agent {aid} command {cmd}",
+            status=400,
+        )
+    return result
 
 
 def run_custom_active_response(
     *,
     agent_id: str,
     command_line: str,
+    arguments: Optional[list[str]] = None,
 ) -> Dict[str, Any]:
-    """Custom active response (manager-defined script name or custom command)."""
-    return run_active_response(agent_id=agent_id, command=command_line, arguments=[])
-
+    """Dispatch a named AR executable (same as run_active_response)."""
+    return run_active_response(
+        agent_id=agent_id,
+        command=command_line,
+        arguments=arguments,
+    )

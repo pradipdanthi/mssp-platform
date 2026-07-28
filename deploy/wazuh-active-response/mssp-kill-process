@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""MSSP AR: kill process by PID. Reads Wazuh execd JSON from stdin."""
+import json
+import os
+import signal
+import sys
+from datetime import datetime
+
+LOG = "/var/ossec/logs/active-responses.log"
+
+
+def log(msg: str) -> None:
+    try:
+        with open(LOG, "a", encoding="utf-8") as fh:
+            fh.write(f"{datetime.utcnow().strftime('%Y/%m/%d %H:%M:%S')} mssp-kill-process: {msg}\n")
+    except OSError:
+        pass
+
+
+def read_payload() -> dict:
+    raw = sys.stdin.readline()
+    if not raw.strip() and len(sys.argv) > 1:
+        raw = sys.argv[1]
+    try:
+        return json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def main() -> int:
+    data = read_payload()
+    args = (data.get("parameters") or {}).get("extra_args") or data.get("arguments") or []
+    pid_s = str(args[0]) if args else ""
+    if not pid_s.isdigit():
+        log(f"invalid pid={pid_s!r}")
+        return 1
+    pid = int(pid_s)
+    if pid <= 1:
+        log(f"refusing pid={pid}")
+        return 1
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        log(f"pid not running={pid}")
+        return 0
+    try:
+        os.kill(pid, signal.SIGKILL)
+        log(f"killed pid={pid}")
+    except OSError as exc:
+        log(f"kill failed pid={pid} err={exc}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

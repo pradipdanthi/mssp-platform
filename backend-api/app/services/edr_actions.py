@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 from typing import Any, Dict, Optional, Tuple
 
@@ -16,9 +17,11 @@ SOC_WRITE_ROLES = frozenset({"platform_admin", "soc_manager"})
 CUSTOMER_ACTION_ROLES = frozenset({"customer_admin"})
 READ_ONLY_CUSTOMER = frozenset({"customer_viewer"})
 
-ISOLATE_AR_COMMAND = "firewall-drop"
-KILL_AR_COMMAND_LINUX = "restart-wazuh"
-BLOCK_HASH_LIST_KEY = "edr_blocked_hashes"
+# Env-overridable AR command names (must exist in Manager ossec.conf).
+ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND") or "mssp-isolate-host").strip()
+KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND") or "mssp-kill-process").strip()
+BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND") or "mssp-block-hash").strip()
+ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "120").strip()
 
 
 def assert_can_execute_action(
@@ -213,7 +216,11 @@ def execute_edr_action(
                 return execution_id, "failed", "Confirmation required for host isolation"
             if not agent_id:
                 raise ValueError("Could not resolve Wazuh agent for isolation")
-            wazuh_client.run_active_response(agent_id=agent_id, command=ISOLATE_AR_COMMAND)
+            wazuh_client.run_active_response(
+                agent_id=agent_id,
+                command=ISOLATE_AR_COMMAND,
+                arguments=[ISOLATE_SECONDS],
+            )
             with db_transaction() as cur:
                 cur.execute(
                     """
@@ -224,7 +231,19 @@ def execute_edr_action(
                     """,
                     (tenant_id, agent_id, user.get("id")),
                 )
-            msg = f"Isolation active response sent to agent {agent_id}"
+            shuffle_edr_client.post_edr_workflow(
+                {
+                    "action": "ISOLATE_HOST",
+                    "agent_id": agent_id,
+                    "tenant_short_code": body.tenant_short_code,
+                    "isolate_seconds": ISOLATE_SECONDS,
+                    "status": "executed",
+                }
+            )
+            msg = (
+                f"Isolation AR '{ISOLATE_AR_COMMAND}' sent to agent {agent_id} "
+                f"(auto-release ~{ISOLATE_SECONDS}s)"
+            )
             _update_execution(execution_id, "executed", msg)
             return execution_id, "executed", msg
 
@@ -233,25 +252,23 @@ def execute_edr_action(
                 raise ValueError("pid is required for KILL_PROCESS")
             if not agent_id:
                 raise ValueError("Could not resolve Wazuh agent for kill")
-            ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(
+            wazuh_client.run_active_response(
+                agent_id=agent_id,
+                command=KILL_AR_COMMAND,
+                arguments=[str(body.pid)],
+            )
+            shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "KILL_PROCESS",
                     "agent_id": agent_id,
                     "pid": body.pid,
                     "tenant_short_code": body.tenant_short_code,
+                    "status": "executed",
                 }
             )
-            if ok:
-                try:
-                    wazuh_client.run_custom_active_response(
-                        agent_id=agent_id,
-                        command_line=f"kill-process-{body.pid}",
-                    )
-                except wazuh_client.WazuhClientError as exc:
-                    logger.warning("Wazuh AR kill fallback: %s", exc)
-            status = "executed" if ok else "failed"
-            _update_execution(execution_id, status, shuffle_msg)
-            return execution_id, status, shuffle_msg
+            msg = f"Kill AR '{KILL_AR_COMMAND}' sent to agent {agent_id} pid={body.pid}"
+            _update_execution(execution_id, "executed", msg)
+            return execution_id, "executed", msg
 
         if body.action_type == "COLLECT_FORENSICS":
             payload = {
@@ -273,25 +290,27 @@ def execute_edr_action(
             h = (body.file_hash_sha256 or "").strip().lower()
             if not re.fullmatch(r"[a-f0-9]{64}", h):
                 raise ValueError("file_hash_sha256 must be 64 hex characters")
+            ar_msg = "Wazuh AR skipped (no agent)"
+            if agent_id and wazuh_client.credentials_configured():
+                wazuh_client.run_active_response(
+                    agent_id=agent_id,
+                    command=BLOCK_HASH_AR_COMMAND,
+                    arguments=[h],
+                )
+                ar_msg = f"Wazuh AR '{BLOCK_HASH_AR_COMMAND}' sent to agent {agent_id}"
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "BLOCK_HASH",
                     "sha256": h,
+                    "agent_id": agent_id,
                     "tenant_short_code": body.tenant_short_code,
+                    "status": "executed",
                 }
             )
-            if ok and agent_id and wazuh_client.credentials_configured():
-                try:
-                    wazuh_client.run_active_response(
-                        agent_id=agent_id,
-                        command="custom-block-hash",
-                        arguments=[h],
-                    )
-                except wazuh_client.WazuhClientError:
-                    logger.warning("Global hash block AR not configured; Shuffle path only")
             status = "executed" if ok else "failed"
-            _update_execution(execution_id, status, shuffle_msg)
-            return execution_id, status, shuffle_msg
+            msg = f"{ar_msg}; Shuffle: {shuffle_msg}"
+            _update_execution(execution_id, status, msg)
+            return execution_id, status, msg
 
         raise ValueError("Unknown action")
     except Exception as exc:
