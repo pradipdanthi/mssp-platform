@@ -153,6 +153,30 @@ def credentials_configured() -> bool:
         return False
 
 
+def get_agent_status(agent_id: str) -> Dict[str, Any]:
+    """Return manager view of agent id/name/status/lastKeepAlive for verification."""
+    aid = (agent_id or "").strip()
+    if not aid:
+        raise WazuhClientError("agent_id is required")
+    token = authenticate()
+    listed = _request(
+        "GET",
+        f"/agents?agents_list={urllib.parse.quote(aid)}&select=id,name,status,lastKeepAlive,ip",
+        token=token,
+    )
+    items = (listed.get("data") or {}).get("affected_items") or []
+    if not items:
+        raise WazuhClientError(f"Agent {aid} not found on manager", status=404)
+    item = items[0]
+    return {
+        "id": str(item.get("id") or aid),
+        "name": item.get("name"),
+        "status": item.get("status"),
+        "last_keep_alive": item.get("lastKeepAlive"),
+        "ip": item.get("ip"),
+    }
+
+
 def run_active_response(
     *,
     agent_id: str,

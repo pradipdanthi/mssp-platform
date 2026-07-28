@@ -112,6 +112,28 @@ export default function IncidentDetailPanel({
         <>
           <MitreBadges tactics={edr.mitre.tactics} techniques={edr.mitre.techniques} />
           <ProcessTreeWidget root={edr.process_tree.root} message={edr.process_tree.message} />
+          {edr.forensic_artifacts && edr.forensic_artifacts.length > 0 ? (
+            <div className="edr-forensics-list card-surface">
+              <h3 className="section-title">Forensic collections</h3>
+              <ul>
+                {edr.forensic_artifacts.map((a) => (
+                  <li key={a.artifact_id}>
+                    <span className="muted">{a.status}</span>
+                    {a.download_url ? (
+                      <>
+                        {" — "}
+                        <a href={a.download_url} target="_blank" rel="noreferrer">
+                          Download package
+                        </a>
+                      </>
+                    ) : (
+                      <span className="muted"> — awaiting upload</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {incident.short_code ? (
             <EdrControlPanel
               tenantShortCode={incident.short_code}

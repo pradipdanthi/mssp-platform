@@ -59,8 +59,11 @@ def main() -> int:
         data = {}
     cmd = str(data.get("command") or "add").lower()
     args = (data.get("parameters") or {}).get("extra_args") or data.get("arguments") or []
+    # Control-plane UNISOLATE_HOST sends arguments=["delete"].
+    if args and str(args[0]).lower() in ("delete", "remove", "unisolate"):
+        cmd = "delete"
     seconds = 120
-    if args:
+    if args and cmd not in ("delete", "remove"):
         try:
             seconds = int(args[0])
         except ValueError:

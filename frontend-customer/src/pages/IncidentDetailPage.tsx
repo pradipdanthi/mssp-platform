@@ -220,11 +220,34 @@ export default function IncidentDetailPage() {
                 root={edr.process_tree.root}
                 message={edr.process_tree.message}
               />
+              {edr.forensic_artifacts && edr.forensic_artifacts.length > 0 ? (
+                <div className="edr-forensics-list card-surface" style={{ marginTop: "1rem" }}>
+                  <h2 className="page-subtitle">Forensic collections</h2>
+                  <ul>
+                    {edr.forensic_artifacts.map((a) => (
+                      <li key={a.artifact_id}>
+                        <span className="muted">{a.status}</span>
+                        {a.download_url ? (
+                          <>
+                            {" — "}
+                            <a href={a.download_url} target="_blank" rel="noreferrer">
+                              Download package
+                            </a>
+                          </>
+                        ) : (
+                          <span className="muted"> — awaiting upload</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               <EdrControlPanel
                 tenantShortCode={shortCode}
                 incidentNumber={incidentNumber}
                 agentId={edr.endpoint.agent_id as string | undefined}
                 canExecute={canExecute}
+                downloadUrl={edr.forensic_artifacts?.find((a) => a.download_url)?.download_url}
               />
             </>
           ) : null}

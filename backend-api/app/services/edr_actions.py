@@ -1,7 +1,8 @@
-"""KB-083: EDR containment and forensic action execution."""
+"""KB-083/084: EDR containment, forensics, and action lifecycle execution."""
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -9,7 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from app.db.session import db_transaction, fetch_one
 from app.schemas.edr import EdrActionExecuteRequest, EdrActionType
-from app.services import shuffle_edr_client, wazuh_client
+from app.services import edr_forensics_storage, shuffle_edr_client, wazuh_client
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,26 @@ SOC_WRITE_ROLES = frozenset({"platform_admin", "soc_manager"})
 CUSTOMER_ACTION_ROLES = frozenset({"customer_admin"})
 READ_ONLY_CUSTOMER = frozenset({"customer_viewer"})
 
-# Env-overridable AR command names (must exist in Manager ossec.conf).
 ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND") or "mssp-isolate-host").strip()
 KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND") or "mssp-kill-process").strip()
 BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND") or "mssp-block-hash").strip()
 ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "120").strip()
+CALLBACK_PUBLIC_BASE = (
+    os.getenv("EDR_PUBLIC_API_BASE")
+    or os.getenv("MSSP_PUBLIC_API_BASE")
+    or "http://192.168.0.201:8000"
+).rstrip("/")
+
+ALLOWED_CUSTOMER_ACTIONS = frozenset(
+    {"ISOLATE_HOST", "UNISOLATE_HOST", "KILL_PROCESS", "COLLECT_FORENSICS", "BLOCK_HASH"}
+)
+
+
+def normalize_status(status: str) -> str:
+    """Map legacy 'executed' to 'success' for API consumers."""
+    if status == "executed":
+        return "success"
+    return status
 
 
 def assert_can_execute_action(
@@ -38,7 +54,7 @@ def assert_can_execute_action(
     if role in CUSTOMER_ACTION_ROLES:
         if str(user.get("tenant_id")) != str(tenant_id):
             raise PermissionError("tenant mismatch")
-        if action_type not in ("ISOLATE_HOST", "KILL_PROCESS", "COLLECT_FORENSICS", "BLOCK_HASH"):
+        if action_type not in ALLOWED_CUSTOMER_ACTIONS:
             raise PermissionError("action not allowed")
         return
     raise PermissionError("role not permitted for EDR actions")
@@ -123,6 +139,7 @@ def _insert_execution(
     user_id: Optional[str],
     body: EdrActionExecuteRequest,
     incident_id: Optional[str],
+    agent_id: Optional[str],
     status: str,
     message: str,
 ) -> str:
@@ -147,7 +164,7 @@ def _insert_execution(
                 body.alert_id,
                 user_id,
                 body.action_type,
-                body.agent_id,
+                agent_id or body.agent_id,
                 str(body.pid) if body.pid is not None else None,
                 body.file_hash_sha256,
                 status,
@@ -158,25 +175,197 @@ def _insert_execution(
         return row["id"]
 
 
-def _update_execution(execution_id: str, status: str, message: str) -> None:
+def _update_execution(
+    execution_id: str,
+    status: str,
+    message: str,
+    *,
+    status_detail: Optional[str] = None,
+    callback_payload: Optional[Dict[str, Any]] = None,
+    verified: bool = False,
+    external_ref: Optional[str] = None,
+) -> None:
     with db_transaction() as cur:
         cur.execute(
             """
             UPDATE edr_action_executions
-            SET status = %s, result_message = %s, updated_at = now()
+            SET status = %s,
+                result_message = %s,
+                status_detail = COALESCE(%s, status_detail),
+                callback_payload = CASE
+                    WHEN %s::jsonb IS NULL THEN callback_payload
+                    ELSE COALESCE(callback_payload, '{}'::jsonb) || %s::jsonb
+                END,
+                verified_at = CASE WHEN %s THEN now() ELSE verified_at END,
+                external_ref = COALESCE(%s, external_ref),
+                updated_at = now()
             WHERE id = %s::uuid;
             """,
-            (status, message[:2000], execution_id),
+            (
+                status,
+                message[:2000],
+                status_detail,
+                json.dumps(callback_payload) if callback_payload is not None else None,
+                json.dumps(callback_payload) if callback_payload is not None else None,
+                verified,
+                external_ref,
+                execution_id,
+            ),
         )
+
+
+def verify_isolation_state(agent_id: str, *, expect_isolated: bool) -> Tuple[bool, str]:
+    """
+    Confirm endpoint connectivity via manager agent status before VERIFIED.
+
+    Isolated hosts should still reach the manager (AR allows manager IP), so
+    status=active is expected after isolate. After unisolate we also expect active.
+    Disconnected/never_connected fails verification.
+    """
+    try:
+        info = wazuh_client.get_agent_status(agent_id)
+    except Exception as exc:
+        return False, f"Connectivity check failed: {exc}"
+    status = str(info.get("status") or "").lower()
+    if status in ("active", "connected"):
+        if expect_isolated:
+            return True, f"Endpoint reachable via manager (status={status}); isolation applied"
+        return True, f"Endpoint connectivity restored (status={status})"
+    return False, f"Endpoint not reachable for verification (status={status or 'unknown'})"
+
+
+def apply_action_callback(
+    *,
+    execution_id: str,
+    status: str,
+    message: Optional[str] = None,
+    error_log: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    external_ref: Optional[str] = None,
+    payload: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    row = fetch_one(
+        """
+        SELECT id::text, tenant_id::text, action_type, target_agent_id, status AS current_status
+        FROM edr_action_executions
+        WHERE id = %s::uuid;
+        """,
+        (execution_id,),
+    )
+    if not row:
+        raise ValueError("Action not found")
+
+    mapped = {
+        "executing": "executing",
+        "success": "success",
+        "failed": "failed",
+        "timeout": "failed",
+    }.get(status, status)
+    detail = error_log or message or ""
+    final_status = mapped
+    verified = False
+
+    aid = agent_id or row.get("target_agent_id")
+    if mapped == "success" and row["action_type"] in ("ISOLATE_HOST", "UNISOLATE_HOST") and aid:
+        ok, verify_msg = verify_isolation_state(
+            aid, expect_isolated=(row["action_type"] == "ISOLATE_HOST")
+        )
+        detail = f"{detail}; {verify_msg}".strip("; ")
+        if ok:
+            final_status = "verified"
+            verified = True
+        else:
+            # Stay success but surface verification failure in detail
+            detail = f"{detail} (verification pending: {verify_msg})"
+
+    if mapped == "success" and row["action_type"] == "UNISOLATE_HOST" and aid:
+        with db_transaction() as cur:
+            cur.execute(
+                """
+                UPDATE edr_endpoint_isolation
+                SET isolation_status = 'restored', released_at = now()
+                WHERE tenant_id = %s::uuid AND agent_id = %s;
+                """,
+                (row["tenant_id"], aid),
+            )
+
+    if mapped == "success" and row["action_type"] == "ISOLATE_HOST" and aid:
+        with db_transaction() as cur:
+            cur.execute(
+                """
+                UPDATE edr_endpoint_isolation
+                SET isolation_status = 'isolated', isolated_at = now()
+                WHERE tenant_id = %s::uuid AND agent_id = %s;
+                """,
+                (row["tenant_id"], aid),
+            )
+
+    _update_execution(
+        execution_id,
+        final_status,
+        (message or detail or final_status)[:2000],
+        status_detail=detail[:4000] if detail else None,
+        callback_payload=payload or {"status": status},
+        verified=verified,
+        external_ref=external_ref,
+    )
+    return {
+        "execution_id": execution_id,
+        "status": normalize_status(final_status),
+        "message": message or detail or final_status,
+    }
+
+
+def _create_forensic_artifact(
+    *,
+    tenant_id: str,
+    execution_id: str,
+    agent_id: Optional[str],
+) -> Dict[str, Any]:
+    with db_transaction() as cur:
+        cur.execute(
+            """
+            INSERT INTO edr_forensic_artifacts (
+                tenant_id, execution_id, agent_id, object_key, file_name,
+                status, storage_backend, upload_expires_at
+            )
+            VALUES (
+                %s::uuid, %s::uuid, %s, 'pending', 'triage.zip',
+                'awaiting_upload', %s, now() + interval '1 hour'
+            )
+            RETURNING id::text;
+            """,
+            (tenant_id, execution_id, agent_id, edr_forensics_storage.storage_backend()),
+        )
+        artifact_id = cur.fetchone()["id"]
+
+    key = edr_forensics_storage.object_key_for(
+        tenant_id=tenant_id,
+        endpoint_id=agent_id or "unknown",
+        artifact_id=artifact_id,
+    )
+    with db_transaction() as cur:
+        cur.execute(
+            """
+            UPDATE edr_forensic_artifacts
+            SET object_key = %s, updated_at = now()
+            WHERE id = %s::uuid;
+            """,
+            (key, artifact_id),
+        )
+    upload = edr_forensics_storage.build_upload_url(
+        artifact_id=artifact_id, tenant_id=tenant_id, ttl_seconds=3600
+    )
+    return {"artifact_id": artifact_id, "object_key": key, **upload}
 
 
 def execute_edr_action(
     user: Dict[str, Any],
     body: EdrActionExecuteRequest,
-) -> Tuple[str, str, str]:
+) -> Tuple[str, str, str, Optional[str], Optional[str]]:
     """
-    Returns (execution_id, status, message).
-  """
+    Returns (execution_id, status, message, upload_url, forensic_artifact_id).
+    """
     if not body.tenant_short_code:
         raise ValueError("tenant_short_code is required")
     tenant = _resolve_tenant(body.tenant_short_code)
@@ -201,9 +390,12 @@ def execute_edr_action(
         user_id=user.get("id"),
         body=body,
         incident_id=incident_id,
+        agent_id=agent_id,
         status="pending",
         message="Queued",
     )
+    _update_execution(execution_id, "executing", "Dispatching action")
+    callback_url = f"{CALLBACK_PUBLIC_BASE}/v1/edr/actions/callback"
 
     try:
         if body.action_type == "ISOLATE_HOST":
@@ -213,9 +405,9 @@ def execute_edr_action(
                     "failed",
                     "confirm_isolation must be true to isolate a host",
                 )
-                return execution_id, "failed", "Confirmation required for host isolation"
+                return execution_id, "failed", "Confirmation required for host isolation", None, None
             if not agent_id:
-                raise ValueError("Could not resolve Wazuh agent for isolation")
+                raise ValueError("Could not resolve endpoint agent for isolation")
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ISOLATE_AR_COMMAND,
@@ -224,34 +416,102 @@ def execute_edr_action(
             with db_transaction() as cur:
                 cur.execute(
                     """
-                    INSERT INTO edr_endpoint_isolation (tenant_id, agent_id, isolated_by_user_id)
-                    VALUES (%s::uuid, %s, %s::uuid)
+                    INSERT INTO edr_endpoint_isolation (
+                        tenant_id, agent_id, isolated_by_user_id, isolation_status
+                    )
+                    VALUES (%s::uuid, %s, %s::uuid, 'isolated')
                     ON CONFLICT (tenant_id, agent_id)
-                    DO UPDATE SET isolated_at = now(), isolated_by_user_id = EXCLUDED.isolated_by_user_id;
+                    DO UPDATE SET
+                        isolated_at = now(),
+                        isolated_by_user_id = EXCLUDED.isolated_by_user_id,
+                        isolation_status = 'isolated',
+                        released_at = NULL;
                     """,
                     (tenant_id, agent_id, user.get("id")),
                 )
             shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "ISOLATE_HOST",
+                    "execution_id": execution_id,
+                    "callback_url": callback_url,
                     "agent_id": agent_id,
                     "tenant_short_code": body.tenant_short_code,
                     "isolate_seconds": ISOLATE_SECONDS,
-                    "status": "executed",
+                    "status": "executing",
                 }
             )
-            msg = (
-                f"Isolation AR '{ISOLATE_AR_COMMAND}' sent to agent {agent_id} "
-                f"(auto-release ~{ISOLATE_SECONDS}s)"
+            ok, verify_msg = verify_isolation_state(agent_id, expect_isolated=True)
+            if ok:
+                _update_execution(
+                    execution_id,
+                    "verified",
+                    f"Isolation dispatched to endpoint {agent_id}; {verify_msg}",
+                    verified=True,
+                )
+                return (
+                    execution_id,
+                    "verified",
+                    f"Host isolation applied (auto-release ~{ISOLATE_SECONDS}s)",
+                    None,
+                    None,
+                )
+            _update_execution(
+                execution_id,
+                "success",
+                f"Isolation dispatched; verification pending: {verify_msg}",
             )
-            _update_execution(execution_id, "executed", msg)
-            return execution_id, "executed", msg
+            return (
+                execution_id,
+                "success",
+                f"Isolation dispatched to endpoint {agent_id}",
+                None,
+                None,
+            )
+
+        if body.action_type == "UNISOLATE_HOST":
+            if not agent_id:
+                raise ValueError("Could not resolve endpoint agent for un-isolate")
+            # Pass "delete" so the AR script restores connectivity.
+            wazuh_client.run_active_response(
+                agent_id=agent_id,
+                command=ISOLATE_AR_COMMAND,
+                arguments=["delete"],
+            )
+            with db_transaction() as cur:
+                cur.execute(
+                    """
+                    UPDATE edr_endpoint_isolation
+                    SET isolation_status = 'restored', released_at = now()
+                    WHERE tenant_id = %s::uuid AND agent_id = %s;
+                    """,
+                    (tenant_id, agent_id),
+                )
+            shuffle_edr_client.post_edr_workflow(
+                {
+                    "action": "UNISOLATE_HOST",
+                    "execution_id": execution_id,
+                    "callback_url": callback_url,
+                    "agent_id": agent_id,
+                    "tenant_short_code": body.tenant_short_code,
+                    "status": "executing",
+                }
+            )
+            ok, verify_msg = verify_isolation_state(agent_id, expect_isolated=False)
+            st = "verified" if ok else "success"
+            msg = f"Network connectivity restore dispatched to endpoint {agent_id}"
+            _update_execution(
+                execution_id,
+                st,
+                f"{msg}; {verify_msg}",
+                verified=ok,
+            )
+            return execution_id, st, msg, None, None
 
         if body.action_type == "KILL_PROCESS":
             if body.pid is None:
                 raise ValueError("pid is required for KILL_PROCESS")
             if not agent_id:
-                raise ValueError("Could not resolve Wazuh agent for kill")
+                raise ValueError("Could not resolve endpoint agent for kill")
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=KILL_AR_COMMAND,
@@ -260,60 +520,89 @@ def execute_edr_action(
             shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "KILL_PROCESS",
+                    "execution_id": execution_id,
+                    "callback_url": callback_url,
                     "agent_id": agent_id,
                     "pid": body.pid,
                     "tenant_short_code": body.tenant_short_code,
-                    "status": "executed",
+                    "status": "executing",
                 }
             )
-            msg = f"Kill AR '{KILL_AR_COMMAND}' sent to agent {agent_id} pid={body.pid}"
-            _update_execution(execution_id, "executed", msg)
-            return execution_id, "executed", msg
+            msg = f"Kill process dispatched to endpoint {agent_id} pid={body.pid}"
+            _update_execution(execution_id, "success", msg)
+            return execution_id, "success", msg, None, None
 
         if body.action_type == "COLLECT_FORENSICS":
+            artifact = _create_forensic_artifact(
+                tenant_id=tenant_id,
+                execution_id=execution_id,
+                agent_id=agent_id,
+            )
             payload = {
                 "action": "COLLECT_FORENSICS",
                 "workflow": shuffle_edr_client.forensics_workflow_name(),
+                "execution_id": execution_id,
+                "callback_url": callback_url,
+                "forensics_complete_url": f"{CALLBACK_PUBLIC_BASE}/v1/edr/forensics/complete",
                 "agent_id": agent_id,
+                "tenant_id": tenant_id,
                 "tenant_short_code": body.tenant_short_code,
-                "incident_number": body.incident_number or (incident or {}).get("incident_number"),
-                "mode": "velociraptor_server"
-                if shuffle_edr_client.velociraptor_server_url()
-                else "offline_collector_via_shuffle",
+                "incident_number": body.incident_number
+                or (incident or {}).get("incident_number"),
+                "artifact_id": artifact["artifact_id"],
+                "object_key": artifact["object_key"],
+                "upload_url": artifact["upload_url"],
+                "upload_method": artifact["upload_method"],
+                "upload_expires_at_epoch": artifact["expires_at_epoch"],
+                "mode": "direct_object_upload",
+                "velociraptor_server": shuffle_edr_client.velociraptor_server_url() or None,
             }
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(payload)
-            status = "executed" if ok else "failed"
-            _update_execution(execution_id, status, shuffle_msg)
-            return execution_id, status, shuffle_msg
+            status = "executing" if ok else "failed"
+            msg = (
+                f"Forensics collection started; upload URL issued. {shuffle_msg}"
+                if ok
+                else shuffle_msg
+            )
+            _update_execution(execution_id, status if ok else "failed", msg)
+            return (
+                execution_id,
+                status if ok else "failed",
+                msg,
+                artifact["upload_url"] if ok else None,
+                artifact["artifact_id"] if ok else None,
+            )
 
         if body.action_type == "BLOCK_HASH":
             h = (body.file_hash_sha256 or "").strip().lower()
             if not re.fullmatch(r"[a-f0-9]{64}", h):
                 raise ValueError("file_hash_sha256 must be 64 hex characters")
-            ar_msg = "Wazuh AR skipped (no agent)"
+            ar_msg = "Endpoint hash block skipped (no agent)"
             if agent_id and wazuh_client.credentials_configured():
                 wazuh_client.run_active_response(
                     agent_id=agent_id,
                     command=BLOCK_HASH_AR_COMMAND,
                     arguments=[h],
                 )
-                ar_msg = f"Wazuh AR '{BLOCK_HASH_AR_COMMAND}' sent to agent {agent_id}"
+                ar_msg = f"Hash block dispatched to endpoint {agent_id}"
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "BLOCK_HASH",
+                    "execution_id": execution_id,
+                    "callback_url": callback_url,
                     "sha256": h,
                     "agent_id": agent_id,
                     "tenant_short_code": body.tenant_short_code,
-                    "status": "executed",
+                    "status": "executing",
                 }
             )
-            status = "executed" if ok else "failed"
-            msg = f"{ar_msg}; Shuffle: {shuffle_msg}"
+            status = "success" if ok else "failed"
+            msg = f"{ar_msg}; orchestration: {shuffle_msg}"
             _update_execution(execution_id, status, msg)
-            return execution_id, status, msg
+            return execution_id, status, msg, None, None
 
         raise ValueError("Unknown action")
     except Exception as exc:
         logger.exception("EDR action failed execution_id=%s", execution_id)
         _update_execution(execution_id, "failed", str(exc)[:500])
-        return execution_id, "failed", str(exc)[:500]
+        return execution_id, "failed", str(exc)[:500], None, None

@@ -1,0 +1,43 @@
+{
+  "callback_success": {
+    "execution_id": "00000000-0000-0000-0000-000000000001",
+    "status": "success",
+    "message": "Active response completed",
+    "agent_id": "001"
+  },
+  "callback_failed": {
+    "execution_id": "00000000-0000-0000-0000-000000000001",
+    "status": "failed",
+    "message": "timeout waiting for agent ack",
+    "error_log": "AR queue delayed while host was isolated"
+  },
+  "forensics_complete": {
+    "artifact_id": "00000000-0000-0000-0000-0000000000aa",
+    "execution_id": "00000000-0000-0000-0000-000000000001",
+    "tenant_short_code": "DEMO",
+    "endpoint_id": "001",
+    "file_size_bytes": 1048576,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "status": "uploaded"
+  },
+  "sysmon_process_create": {
+    "rule": { "groups": ["sysmon"], "mitre": [{ "id": "T1059.001" }] },
+    "agent": { "id": "001", "name": "linux-endpoint-lab" },
+    "data": {
+      "win": {
+        "eventdata": {
+          "ProcessId": "4242",
+          "ParentProcessId": "1000",
+          "Image": "C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe",
+          "ParentImage": "C:\\\\Windows\\\\explorer.exe",
+          "CommandLine": "powershell.exe -enc AAAA",
+          "ParentCommandLine": "explorer.exe",
+          "User": "CORP\\\\alice",
+          "ProcessGuid": "{guid-child}",
+          "ParentProcessGuid": "{guid-parent}",
+          "Hashes": "MD5=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,SHA256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        }
+      }
+    }
+  }
+}

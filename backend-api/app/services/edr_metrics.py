@@ -22,7 +22,8 @@ def get_edr_metrics(*, tenant_id: Optional[str] = None) -> EdrMetricsSummary:
         WITH isolations AS (
             SELECT e.incident_id, MIN(e.created_at) AS isolated_at
             FROM edr_action_executions e
-            WHERE e.action_type = 'ISOLATE_HOST' AND e.status = 'executed'
+            WHERE e.action_type = 'ISOLATE_HOST'
+              AND e.status IN ('executed', 'success', 'verified')
               {tenant_filter.replace('tenant_id', 'e.tenant_id')}
             GROUP BY e.incident_id
         ),
@@ -47,7 +48,9 @@ def get_edr_metrics(*, tenant_id: Optional[str] = None) -> EdrMetricsSummary:
     )
     isolated = fetch_one(
         f"""
-        SELECT count(*)::int AS c FROM edr_endpoint_isolation WHERE 1=1 {tenant_filter};
+        SELECT count(*)::int AS c FROM edr_endpoint_isolation
+        WHERE 1=1 {tenant_filter}
+          AND COALESCE(isolation_status, 'isolated') = 'isolated';
         """,
         params,
     )
