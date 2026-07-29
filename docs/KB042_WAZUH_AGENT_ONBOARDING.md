@@ -28,7 +28,7 @@ keys come from **Vault** — **no secrets** in Git.
 | VM | Hostname | OS | Role | Status |
 |---|---|---|---|---|
 | **VM 104** | `windows-endpoint-lab` | Windows | Wazuh agent — Windows onboarding test | Not provisioned (`192.168.0.214`) |
-| **VM 105** | `linux-endpoint-lab` | Linux | Wazuh agent — Linux onboarding test | Not provisioned (`192.168.0.215`) |
+| **VM 105** | `linux-endpoint-lab` | Linux | Wazuh agent — Linux onboarding test | **Decommissioned** — VM removed from Proxmox; manual Ubuntu reinstall at operator discretion (reuse VMID 105 / `192.168.0.215` when ready) |
 | **VM 101** | `wazuh-stack` | Linux | Wazuh Manager — enrollment target | **Live** — Wazuh 4.14.6 |
 
 Ansible groups: `endpoint_lab` (hosts), `wazuh_stack` (manager).

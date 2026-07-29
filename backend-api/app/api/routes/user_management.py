@@ -35,7 +35,7 @@ file deliberately never selects password_hash at all.
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from psycopg.errors import UniqueViolation
 
 from app.api.dependencies import require_roles
@@ -85,10 +85,27 @@ def _fetch_user_detail(user_id: UUID) -> Optional[Dict[str, Any]]:
 @router.get("", response_model=UsersListResponse)
 def list_users(
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+    scope: str = Query(default="staff", pattern="^(staff|all)$"),
 ) -> Dict[str, List[Dict[str, Any]]]:
-    rows = fetch_all(
-        f"SELECT {_USER_DETAIL_COLUMNS} FROM platform_users ORDER BY created_at DESC;"
-    )
+    """
+    Default scope=staff: platform personnel only (platform_admin, soc_manager, soc_analyst).
+    Customer users are listed under /admin/tenants/{tenant_id}/users.
+    Pass scope=all for legacy full listing (SOC tooling only).
+    """
+    _ = current_user
+    if (scope or "staff").lower() == "all":
+        rows = fetch_all(
+            f"SELECT {_USER_DETAIL_COLUMNS} FROM platform_users ORDER BY created_at DESC;"
+        )
+    else:
+        rows = fetch_all(
+            f"""
+            SELECT {_USER_DETAIL_COLUMNS}
+            FROM platform_users
+            WHERE role IN ('platform_admin', 'soc_manager', 'soc_analyst')
+            ORDER BY created_at DESC;
+            """
+        )
     return {"users": rows}
 
 

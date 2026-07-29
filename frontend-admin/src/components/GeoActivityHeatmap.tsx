@@ -137,14 +137,14 @@ function WorldLand() {
       <rect
         width={WORLD_MAP_WIDTH}
         height={WORLD_MAP_HEIGHT}
-        fill="#0B0F17"
+        fill="#081120"
       />
       {WORLD_LAND_PATHS.map((d, i) => (
         <path
           key={i}
           d={d}
-          fill="#121824"
-          stroke="#1E293B"
+          fill="#101b2d"
+          stroke="#23344D"
           strokeWidth={0.5}
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
@@ -214,15 +214,15 @@ export default function GeoActivityHeatmap({
               </feMerge>
             </filter>
             <radialGradient id={cyanGrad} cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#E0FFFF" stopOpacity="0.95" />
-              <stop offset="45%" stopColor="#00F0FF" stopOpacity="0.55" />
-              <stop offset="100%" stopColor="#00F0FF" stopOpacity="0" />
+              <stop offset="0%" stopColor="#B8ECFA" stopOpacity="0.95" />
+              <stop offset="45%" stopColor="#00AEEF" stopOpacity="0.55" />
+              <stop offset="100%" stopColor="#00AEEF" stopOpacity="0" />
             </radialGradient>
             <radialGradient id={hotGrad} cx="50%" cy="50%" r="50%">
-              <stop offset="0%" stopColor="#FFFFF0" stopOpacity="1" />
-              <stop offset="30%" stopColor="#E8FFC8" stopOpacity="0.95" />
-              <stop offset="65%" stopColor="#7CF5FF" stopOpacity="0.45" />
-              <stop offset="100%" stopColor="#00F0FF" stopOpacity="0" />
+              <stop offset="0%" stopColor="#F8FAFC" stopOpacity="1" />
+              <stop offset="30%" stopColor="#D4AF37" stopOpacity="0.95" />
+              <stop offset="65%" stopColor="#5FD4F5" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#00AEEF" stopOpacity="0" />
             </radialGradient>
           </defs>
 

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { login as apiLogin, me as apiMe, UserPublic } from "../api/auth";
+import { login as apiLogin, me as apiMe, isStaffPortalUser, UserPublic } from "../api/auth";
 import { ApiError, setAuthToken } from "../api/client";
 
 // KB-018 Decision E: sessionStorage only (never localStorage), and the
@@ -37,6 +37,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthToken(stored);
     apiMe()
       .then((fetchedUser) => {
+        if (!isStaffPortalUser(fetchedUser)) {
+          sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+          setAuthToken(null);
+          setToken(null);
+          setUser(null);
+          setError("This account is for the customer portal only. Use port 3001.");
+          return;
+        }
         setToken(stored);
         setUser(fetchedUser);
       })
@@ -53,6 +61,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const result = await apiLogin(email, password);
+      if (!isStaffPortalUser(result.user)) {
+        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+        setAuthToken(null);
+        setError(
+          "This account is for the customer portal only. Open the customer portal on port 3001."
+        );
+        throw new ApiError(403, "Wrong portal");
+      }
       sessionStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
       setAuthToken(result.access_token);
       setToken(result.access_token);

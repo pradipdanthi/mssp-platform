@@ -440,6 +440,49 @@ export function getTenantDetail(tenantId: string): Promise<TenantDetail> {
   return request<TenantDetail>(`/admin/tenants/${encodeURIComponent(tenantId)}`);
 }
 
+export function getTenantUsers(tenantId: string): Promise<UsersListResponse> {
+  return request<UsersListResponse>(`/admin/tenants/${encodeURIComponent(tenantId)}/users`);
+}
+
+export function createTenantCustomerUser(
+  tenantId: string,
+  payload: Omit<UserCreateRequest, "tenant_id" | "status"> & { role: "customer_admin" | "customer_viewer" }
+): Promise<AdminUser> {
+  return request<AdminUser>(`/admin/tenants/${encodeURIComponent(tenantId)}/users`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export type TenantCustomerUserUpdate = {
+  full_name?: string;
+  phone?: string | null;
+  role?: "customer_admin" | "customer_viewer";
+  status?: UserStatus;
+};
+
+export function updateTenantCustomerUser(
+  tenantId: string,
+  userId: string,
+  payload: TenantCustomerUserUpdate
+): Promise<AdminUser> {
+  return request<AdminUser>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(userId)}`,
+    { method: "PATCH", body: payload }
+  );
+}
+
+export function updateTenantCustomerUserPassword(
+  tenantId: string,
+  userId: string,
+  payload: UserPasswordUpdateRequest
+): Promise<{ status: string }> {
+  return request<{ status: string }>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/users/${encodeURIComponent(userId)}/password`,
+    { method: "PATCH", body: payload }
+  );
+}
+
 export function createTenant(payload: TenantCreateRequest): Promise<TenantDetail> {
   return request<TenantDetail>("/admin/tenants", { method: "POST", body: payload });
 }
@@ -810,6 +853,46 @@ export function downloadReportXlsx(id: string): Promise<void> {
   );
 }
 
+export function downloadTenantAgentPackage(
+  tenantId: string,
+  osType: "windows" | "linux" | "all",
+  shortCode?: string
+): Promise<void> {
+  const code = (shortCode || "tenant").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  return downloadAuthenticated(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/agent-packages/${osType}`,
+    `mssp-agent-${code}-${osType}.zip`
+  );
+}
+
+export interface LinuxInstallCommandResponse {
+  tenant_id?: string;
+  tenant_name?: string;
+  short_code: string;
+  one_liner: string;
+  script_url: string;
+  wazuh_agent_group?: string;
+  help?: string;
+  rotated?: boolean;
+}
+
+export function getTenantLinuxInstallCommand(
+  tenantId: string
+): Promise<LinuxInstallCommandResponse> {
+  return request<LinuxInstallCommandResponse>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/agent-install/linux`
+  );
+}
+
+export function rotateTenantLinuxInstallCommand(
+  tenantId: string
+): Promise<LinuxInstallCommandResponse> {
+  return request<LinuxInstallCommandResponse>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/agent-install/linux/rotate`,
+    { method: "POST" }
+  );
+}
+
 export interface AdminAsset {
   id: string;
   tenant_name: string;
@@ -817,6 +900,7 @@ export interface AdminAsset {
   hostname: string | null;
   ip_address: string | null;
   asset_type: string;
+  os_name?: string | null;
   criticality: string;
   status: string;
   appliance_name: string | null;
@@ -832,12 +916,26 @@ export type AssetType =
   | "server"
   | "workstation"
   | "firewall"
+  | "switch"
+  | "load_balancer"
   | "network_device"
   | "application"
   | "database"
   | "other";
 export type AssetCriticality = "low" | "medium" | "high" | "critical";
 export type AssetStatus = "active" | "inactive" | "unknown";
+
+export const ASSET_TYPE_LABELS: Record<AssetType, string> = {
+  server: "Server",
+  workstation: "Workstation",
+  firewall: "Firewall",
+  switch: "Switch",
+  load_balancer: "Load balancer",
+  network_device: "Network device",
+  application: "Application",
+  database: "Database",
+  other: "Other",
+};
 
 export interface AssetDetail {
   id: string;
@@ -913,8 +1011,19 @@ export interface AuditLogsListResponse {
   audit_logs: AuditLog[];
 }
 
-export function getAuditLogs(): Promise<AuditLogsListResponse> {
-  return request<AuditLogsListResponse>("/admin/audit-logs");
+export function getAuditLogs(params?: {
+  tenant_short_code?: string;
+  actor_email?: string;
+  action_type?: string;
+  limit?: number;
+}): Promise<AuditLogsListResponse> {
+  const q = new URLSearchParams();
+  if (params?.tenant_short_code) q.set("tenant_short_code", params.tenant_short_code);
+  if (params?.actor_email) q.set("actor_email", params.actor_email);
+  if (params?.action_type) q.set("action_type", params.action_type);
+  if (params?.limit) q.set("limit", String(params.limit));
+  const qs = q.toString();
+  return request<AuditLogsListResponse>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
 }
 
 export interface AuditEventCreateRequest {
@@ -1075,6 +1184,14 @@ export interface ServiceUpgradeRequestRow {
   admin_notes?: string | null;
   created_at: string;
   updated_at?: string | null;
+  requested_asset_ids?: string[];
+  requested_assets?: Array<{
+    id: string;
+    hostname: string | null;
+    asset_type: string;
+    os_name: string | null;
+    ip_address?: string | null;
+  }>;
 }
 
 export interface ApproveServiceUpgradeResponse {
@@ -1082,6 +1199,8 @@ export interface ApproveServiceUpgradeResponse {
   entitlements_updated: boolean;
   next_steps: string[];
   request: ServiceUpgradeRequestRow;
+  covered_asset_ids?: string[];
+  covered_count?: number;
 }
 
 export function getServiceUpgradeRequests(): Promise<{ requests: ServiceUpgradeRequestRow[] }> {
@@ -1098,10 +1217,13 @@ export function patchServiceUpgradeRequest(
   });
 }
 
-export function approveServiceUpgradeRequest(id: string): Promise<ApproveServiceUpgradeResponse> {
+export function approveServiceUpgradeRequest(
+  id: string,
+  body?: { asset_ids?: string[] }
+): Promise<ApproveServiceUpgradeResponse> {
   return request<ApproveServiceUpgradeResponse>(
     `/admin/service-upgrade-requests/${encodeURIComponent(id)}/approve-enable`,
-    { method: "POST" }
+    { method: "POST", body: body ?? {} }
   );
 }
 
@@ -1109,6 +1231,49 @@ export function declineServiceUpgradeRequest(id: string): Promise<ServiceUpgrade
   return request<ServiceUpgradeRequestRow>(
     `/admin/service-upgrade-requests/${encodeURIComponent(id)}/decline`,
     { method: "POST" }
+  );
+}
+
+export interface AssetServiceCoverageAsset {
+  id: string;
+  hostname: string | null;
+  asset_type: string;
+  os_name: string | null;
+  status: string;
+  ip_address: string | null;
+  covered: boolean;
+}
+
+export interface AssetServiceCoverageResponse {
+  tenant_id: string;
+  service_key: string;
+  covered_asset_ids: string[];
+  assets: AssetServiceCoverageAsset[];
+  entitlements_updated?: boolean;
+  message?: string;
+}
+
+export function getTenantAssetServiceCoverage(
+  tenantId: string,
+  serviceKey = "vulnerability_management"
+): Promise<AssetServiceCoverageResponse> {
+  return request<AssetServiceCoverageResponse>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/asset-service-coverage?service_key=${encodeURIComponent(serviceKey)}`
+  );
+}
+
+export function putTenantAssetServiceCoverage(
+  tenantId: string,
+  body: {
+    service_key?: string;
+    asset_ids: string[];
+    enable_entitlement?: boolean;
+    greenbone_cadence?: string;
+  }
+): Promise<AssetServiceCoverageResponse> {
+  return request<AssetServiceCoverageResponse>(
+    `/admin/tenants/${encodeURIComponent(tenantId)}/asset-service-coverage`,
+    { method: "PUT", body }
   );
 }
 

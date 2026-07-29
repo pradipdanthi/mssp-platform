@@ -10,9 +10,6 @@
 default_tenant_short_code: DEMO
 
 hosts:
-  "192.168.0.215":
-    tenant_short_code: DEMO
-    asset_hostname: linux-endpoint-lab
   "192.168.0.216":
     tenant_short_code: DEMO
     asset_hostname: suricata-sensor

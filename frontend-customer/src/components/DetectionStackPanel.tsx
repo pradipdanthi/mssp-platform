@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export type StackModule = {
   id: string;
   name: string;
@@ -61,7 +63,8 @@ export default function DetectionStackPanel({
           {title}
         </h2>
         <p className="page-subtitle" style={{ margin: 0 }}>
-          Services included in your package and optional add-ons available through your MSSP.
+          Services included in your package and optional add-ons. Browse the full catalog and request
+          upgrades from <Link to="/services">Services</Link>.
         </p>
       </div>
       <div className="detection-stack-grid">

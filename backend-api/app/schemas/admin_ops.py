@@ -8,7 +8,15 @@ from pydantic import BaseModel, Field, model_validator
 
 ReportStatusLiteral = Literal["draft", "published", "archived"]
 AssetTypeLiteral = Literal[
-    "server", "workstation", "firewall", "network_device", "application", "database", "other"
+    "server",
+    "workstation",
+    "firewall",
+    "switch",
+    "load_balancer",
+    "network_device",
+    "application",
+    "database",
+    "other",
 ]
 AssetCriticalityLiteral = Literal["low", "medium", "high", "critical"]
 AssetStatusLiteral = Literal["active", "inactive", "unknown"]

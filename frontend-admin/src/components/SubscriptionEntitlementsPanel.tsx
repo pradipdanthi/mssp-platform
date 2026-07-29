@@ -1,7 +1,10 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
+  AssetServiceCoverageAsset,
   TenantEntitlements,
+  getTenantAssetServiceCoverage,
   getTenantEntitlements,
+  putTenantAssetServiceCoverage,
   putTenantEntitlements,
 } from "../api/admin";
 import { ApiError } from "../api/client";
@@ -21,6 +24,9 @@ function errMsg(err: unknown): string {
 /**
  * Admin service catalog — labels use capability names only
  * (never third-party engine brand names in the UI).
+ *
+ * Primary use for Vulnerability Management: MSSP enables after offline contract /
+ * emailed host list when the customer will not self-request in the portal.
  */
 export default function SubscriptionEntitlementsPanel({
   tenantId,
@@ -33,14 +39,24 @@ export default function SubscriptionEntitlementsPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [coverageAssets, setCoverageAssets] = useState<AssetServiceCoverageAsset[]>([]);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
+  const [assetFilter, setAssetFilter] = useState("");
+  const [pasteList, setPasteList] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getTenantEntitlements(tenantId)
-      .then((row) => {
-        if (!cancelled) setForm(row);
+    Promise.all([
+      getTenantEntitlements(tenantId),
+      getTenantAssetServiceCoverage(tenantId, "vulnerability_management"),
+    ])
+      .then(([row, cov]) => {
+        if (cancelled) return;
+        setForm(row);
+        setCoverageAssets(cov.assets || []);
+        setSelectedAssetIds(cov.covered_asset_ids || []);
       })
       .catch((err) => {
         if (!cancelled) setError(errMsg(err));
@@ -53,9 +69,62 @@ export default function SubscriptionEntitlementsPanel({
     };
   }, [tenantId]);
 
+  const filteredAssets = useMemo(() => {
+    const q = assetFilter.trim().toLowerCase();
+    if (!q) return coverageAssets;
+    return coverageAssets.filter((a) => {
+      const blob = `${a.hostname || ""} ${a.ip_address || ""} ${a.os_name || ""} ${a.asset_type || ""}`.toLowerCase();
+      return blob.includes(q);
+    });
+  }, [coverageAssets, assetFilter]);
+
+  function toggleAsset(id: string) {
+    setSelectedAssetIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function applyPasteList() {
+    const tokens = pasteList
+      .split(/[\n,;]+/)
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (tokens.length === 0) {
+      setError("Paste hostnames or IPs from the customer email/contract (one per line).");
+      return;
+    }
+    const matched = coverageAssets.filter((a) => {
+      const host = (a.hostname || "").toLowerCase();
+      const ip = (a.ip_address || "").toLowerCase();
+      return tokens.some((t) => host === t || ip === t || host.includes(t) || ip.includes(t));
+    });
+    if (matched.length === 0) {
+      setError(
+        "No assets matched that list. Check hostnames/IPs against Assets for this customer."
+      );
+      return;
+    }
+    setSelectedAssetIds((prev) => {
+      const next = new Set(prev);
+      for (const a of matched) next.add(a.id);
+      return Array.from(next);
+    });
+    setForm((f) => (f ? { ...f, greenbone_enabled: true } : f));
+    setError(null);
+    setSuccess(
+      `Matched ${matched.length} asset(s) from the pasted list. Review the checkboxes, set cadence, then Save.`
+    );
+  }
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     if (!form) return;
+    if (form.greenbone_enabled && selectedAssetIds.length === 0) {
+      setError(
+        "Vulnerability Management is on — select at least one asset to scan, or turn the service off."
+      );
+      return;
+    }
     setSaving(true);
     setError(null);
     setSuccess(null);
@@ -73,9 +142,32 @@ export default function SubscriptionEntitlementsPanel({
         roadmap_notes: form.roadmap_notes,
       });
       setForm(saved);
-      setSuccess(
-        `Subscription updated for ${tenantName}. Customer portal feature availability refreshes on next load.`
-      );
+
+      if (form.greenbone_enabled) {
+        const cov = await putTenantAssetServiceCoverage(tenantId, {
+          service_key: "vulnerability_management",
+          asset_ids: selectedAssetIds,
+          enable_entitlement: true,
+          greenbone_cadence: form.greenbone_cadence,
+        });
+        setCoverageAssets(cov.assets || []);
+        setSelectedAssetIds(cov.covered_asset_ids || []);
+        setSuccess(
+          `Subscription updated for ${tenantName}. Vulnerability Management covers ${
+            cov.covered_asset_ids?.length ?? 0
+          } selected asset(s).`
+        );
+      } else {
+        await putTenantAssetServiceCoverage(tenantId, {
+          service_key: "vulnerability_management",
+          asset_ids: [],
+          enable_entitlement: false,
+        });
+        setSelectedAssetIds([]);
+        setSuccess(
+          `Subscription updated for ${tenantName}. Customer portal feature availability refreshes on next load.`
+        );
+      }
       onSaved?.();
     } catch (err) {
       setError(errMsg(err));
@@ -87,11 +179,12 @@ export default function SubscriptionEntitlementsPanel({
   return (
     <form className="management-panel subscription-panel" onSubmit={handleSave}>
       <h2 className="section-title" style={{ marginTop: 0 }}>
-        Subscription / service entitlements — {tenantName}
+        Subscription / enable services — {tenantName}
       </h2>
       <p className="page-subtitle" style={{ marginBottom: "12px" }}>
-        Choose which security services this customer is entitled to. Optional add-on services can be
-        marked as requested; they are activated according to subscription and capacity planning.
+        Use this when the customer signed a contract offline (email / paper) and asked you to enable
+        services from the MSSP side — they do not need to click Request in their portal. Turn on
+        Vulnerability Management, select the servers from their list, then Save.
       </p>
 
       {loading && <div className="state-message">Loading entitlements…</div>}
@@ -150,9 +243,7 @@ export default function SubscriptionEntitlementsPanel({
             </select>
           </label>
 
-          <div className="entitlement-section-label">
-            Core + optional services
-          </div>
+          <div className="entitlement-section-label">Core + optional services</div>
 
           <label className="entitlement-row">
             <input
@@ -163,7 +254,7 @@ export default function SubscriptionEntitlementsPanel({
             <span>
               <strong>Vulnerability Management</strong>
               <span className="entitlement-hint">
-                Continuous CVE discovery &amp; remediation guidance
+                Enable after contract — cover only the hosts on the customer’s list
               </span>
               <select
                 className="form-input entitlement-inline"
@@ -178,72 +269,113 @@ export default function SubscriptionEntitlementsPanel({
             </span>
           </label>
 
-          <div className="entitlement-section-label">
-            Optional add-on services
-          </div>
-          <p className="entitlement-roadmap-note">
-            Request these capabilities for the customer. Activation follows subscription scope and
-            platform capacity — not a separate manual setup in third-party tool UIs.
-          </p>
+          {form.greenbone_enabled && (
+            <div className="asset-picker" style={{ margin: "0.5rem 0 1rem 1.5rem" }}>
+              <div className="entitlement-hint" style={{ marginBottom: "0.35rem" }}>
+                Devices covered by Vulnerability Management ({selectedAssetIds.length} selected)
+              </div>
+              <p className="page-subtitle" style={{ marginTop: 0 }}>
+                Match the server list from the signed contract or email. Paste names/IPs below, or
+                search and tick manually.
+              </p>
+              <label className="form-label">
+                Paste hostnames / IPs from email or contract
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  value={pasteList}
+                  onChange={(e) => setPasteList(e.target.value)}
+                  placeholder={"srv-db-01\nsrv-app-02\n192.168.0.50"}
+                />
+              </label>
+              <div className="confirm-actions" style={{ marginBottom: "0.5rem" }}>
+                <button className="btn btn-secondary" type="button" onClick={applyPasteList}>
+                  Match pasted list
+                </button>
+              </div>
+              <label className="form-label">
+                Filter assets
+                <input
+                  className="form-input"
+                  value={assetFilter}
+                  onChange={(e) => setAssetFilter(e.target.value)}
+                  placeholder="Search hostname, IP, OS…"
+                />
+              </label>
+              {coverageAssets.length === 0 ? (
+                <p className="muted">
+                  No protected assets yet for this customer. Add/install agents under Assets first,
+                  then select coverage here.
+                </p>
+              ) : (
+                <div className="asset-picker-list">
+                  {filteredAssets.map((a) => (
+                    <label key={a.id} className="upgrade-check asset-picker-row">
+                      <input
+                        type="checkbox"
+                        checked={selectedAssetIds.includes(a.id)}
+                        onChange={() => toggleAsset(a.id)}
+                      />
+                      <span>
+                        <strong>{a.hostname ?? a.id}</strong>
+                        <span className="muted-text">
+                          {" "}
+                          · {a.asset_type}
+                          {a.os_name ? ` · ${a.os_name}` : ""}
+                          {a.ip_address ? ` · ${a.ip_address}` : ""}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                  {filteredAssets.length === 0 ? (
+                    <p className="muted">No assets match this filter.</p>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
 
           <label className="entitlement-row">
             <input
               type="checkbox"
-              checked={!!form.zeek_enabled}
+              checked={form.zeek_enabled}
               onChange={(e) => setForm({ ...form, zeek_enabled: e.target.checked })}
             />
             <span>
               <strong>Network Traffic Analysis</strong>
-              <span className="entitlement-hint">
-                Protocol &amp; east-west traffic visibility · Optional add-on
-              </span>
-              {form.zeek_enabled ? (
-                <span className="entitlement-badge">Requested / queued</span>
-              ) : null}
+              <span className="entitlement-hint">Optional add-on</span>
             </span>
           </label>
 
           <label className="entitlement-row">
             <input
               type="checkbox"
-              checked={!!form.misp_enabled}
+              checked={form.misp_enabled}
               onChange={(e) => setForm({ ...form, misp_enabled: e.target.checked })}
             />
             <span>
               <strong>Threat Intelligence Sharing</strong>
-              <span className="entitlement-hint">
-                IOC enrichment &amp; community intel feeds · Optional add-on
-              </span>
-              {form.misp_enabled ? (
-                <span className="entitlement-badge">Requested / queued</span>
-              ) : null}
+              <span className="entitlement-hint">Optional add-on</span>
             </span>
           </label>
 
           <label className="entitlement-row">
             <input
               type="checkbox"
-              checked={!!form.velociraptor_enabled}
+              checked={form.velociraptor_enabled}
               onChange={(e) => setForm({ ...form, velociraptor_enabled: e.target.checked })}
             />
             <span>
               <strong>Endpoint Forensics &amp; Hunting</strong>
-              <span className="entitlement-hint">
-                Live response, artifact collection, hunt campaigns · Optional add-on
-              </span>
-              {form.velociraptor_enabled ? (
-                <span className="entitlement-badge">Requested / queued</span>
-              ) : null}
+              <span className="entitlement-hint">Optional add-on</span>
             </span>
           </label>
 
-          <label className="form-label form-grid-full" style={{ marginTop: 8 }}>
-            Internal notes (demand / rollout planning)
+          <label className="form-label" style={{ gridColumn: "1 / -1" }}>
+            Internal notes
             <textarea
               className="form-input"
-              rows={2}
-              maxLength={2000}
-              placeholder="e.g. Customer needs Network Traffic Analysis for OT segment — prioritize when 5+ tenants request."
+              rows={3}
               value={form.roadmap_notes ?? ""}
               onChange={(e) => setForm({ ...form, roadmap_notes: e.target.value || null })}
             />
@@ -252,10 +384,10 @@ export default function SubscriptionEntitlementsPanel({
       )}
 
       <div className="confirm-actions">
-        <button className="btn btn-primary" type="submit" disabled={saving || !form || loading}>
+        <button className="btn btn-primary" type="submit" disabled={saving || loading || !form}>
           {saving ? "Saving…" : "Save subscription"}
         </button>
-        <button className="btn btn-ghost" type="button" disabled={saving} onClick={onClose}>
+        <button className="btn btn-ghost" type="button" onClick={onClose} disabled={saving}>
           Close
         </button>
       </div>

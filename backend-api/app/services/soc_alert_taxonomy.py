@@ -122,6 +122,14 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
     blob = _text_blob(row)
     raw = row.get("raw_event") if isinstance(row.get("raw_event"), dict) else {}
 
+    # Explicit network appliance ingest (syslog from firewall/switch — no endpoint agent id).
+    if tool in ("network_appliance", "firewall", "syslog_network") or (
+        isinstance(raw.get("decoder"), dict)
+        and str((raw.get("decoder") or {}).get("name") or "").lower()
+        in ("fortigate-firewall", "pfsense", "vyos", "opnsense", "cisco-ios")
+    ):
+        return "security_edge_appliances", "network_appliance"
+
     if tool in ("suricata", "zeek"):
         return "network_ids_sensors", tool or "network_sensor"
     if tool == "nuclei":
@@ -149,6 +157,11 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
                 "fortinet",
                 "fortigate",
                 "pfsense",
+                "vyos",
+                "opnsense",
+                "network_appliance",
+                "syslog",
+                "filterlog",
                 " waf",
                 "vpn",
                 "edr",
@@ -156,6 +169,19 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
                 "sentinelone",
             )
         ):
+            # Prefer explicit network appliance label for firewall/switch syslog.
+            if any(
+                k in blob
+                for k in (
+                    "fortigate",
+                    "pfsense",
+                    "vyos",
+                    "opnsense",
+                    "filterlog",
+                    "network_appliance",
+                )
+            ):
+                return "security_edge_appliances", "network_appliance"
             return "security_edge_appliances", "security_appliance"
 
         if any(

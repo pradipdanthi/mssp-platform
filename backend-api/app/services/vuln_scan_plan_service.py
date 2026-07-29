@@ -47,7 +47,8 @@ def _target_from_asset(row: Dict[str, Any]) -> Optional[Tuple[str, str]]:
 def build_scan_plan(*, force_all: bool = False) -> Dict[str, Any]:
     """
     Tenants with vulnerability management entitled + due cadence.
-    Targets come from active protected_assets (IP preferred, else hostname).
+    Targets come from active asset coverage when present; otherwise all
+    active protected_assets (legacy tenants with no coverage rows).
     """
     rows = fetch_all(
         """
@@ -70,15 +71,33 @@ def build_scan_plan(*, force_all: bool = False) -> Dict[str, Any]:
         last = row.get("last_vuln_scan_at")
         if not _is_due(last, cadence, force=force_all):
             continue
-        assets = fetch_all(
+
+        covered = fetch_all(
             """
-            SELECT hostname, ip_address::text AS ip_address
-            FROM protected_assets
-            WHERE tenant_id = %s::uuid
-              AND status = 'active';
+            SELECT pa.hostname, pa.ip_address::text AS ip_address
+            FROM tenant_asset_service_coverage c
+            JOIN protected_assets pa ON pa.id = c.asset_id
+            WHERE c.tenant_id = %s::uuid
+              AND c.service_key = 'vulnerability_management'
+              AND c.status = 'active'
+              AND pa.status = 'active';
             """,
             (row["tenant_id"],),
         )
+        if covered:
+            assets = covered
+        else:
+            # Legacy: entitled with no scoped coverage → all active assets.
+            assets = fetch_all(
+                """
+                SELECT hostname, ip_address::text AS ip_address
+                FROM protected_assets
+                WHERE tenant_id = %s::uuid
+                  AND status = 'active';
+                """,
+                (row["tenant_id"],),
+            )
+
         targets: List[Dict[str, Any]] = []
         seen: set[str] = set()
         for asset in assets:

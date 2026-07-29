@@ -14,7 +14,7 @@ app/schemas/auth.py) has no such field.
 
 from typing import Any, Dict, List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.api.dependencies import get_current_user
 from app.core.security import create_access_token
@@ -28,6 +28,7 @@ from app.schemas.auth import (
     TokenResponse,
     UserPublic,
 )
+from app.services.audit_service import audit_from_user, write_audit_event
 from app.services.auth_service import (
     AccountNotActiveError,
     InvalidCredentialsError,
@@ -73,22 +74,79 @@ ROLE_CATALOG: List[RoleInfo] = [
 ]
 
 
+ADMIN_PORTAL_ROLES = frozenset({"platform_admin", "soc_manager", "soc_analyst"})
+CUSTOMER_PORTAL_ROLES = frozenset({"customer_admin", "customer_viewer"})
+
+
+def _enforce_portal_login(role: str, portal: str | None, email: str | None = None) -> None:
+    if not portal:
+        return
+    if portal == "admin" and role not in ADMIN_PORTAL_ROLES:
+        write_audit_event(
+            action="AUTH_LOGIN_FAILED",
+            entity_type="auth",
+            actor_email=email,
+            action_status="FAILED",
+            details={"reason": "wrong_portal_admin", "role": role, "portal": portal},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is for the customer portal only. Use the customer portal (port 3001), not the MSSP admin console.",
+        )
+    if portal == "customer" and role not in CUSTOMER_PORTAL_ROLES:
+        write_audit_event(
+            action="AUTH_LOGIN_FAILED",
+            entity_type="auth",
+            actor_email=email,
+            action_status="FAILED",
+            details={"reason": "wrong_portal_customer", "role": role, "portal": portal},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="MSSP staff must sign in on the admin portal (port 3000), not the customer portal.",
+        )
+
+
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest) -> TokenResponse:
+def login(payload: LoginRequest, request: Request) -> TokenResponse:
+    client_ip = None
+    if request.client:
+        client_ip = request.client.host
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()[:64]
+
     try:
         user = authenticate_user(payload.email, payload.password)
     except InvalidCredentialsError:
+        write_audit_event(
+            action="AUTH_LOGIN_FAILED",
+            entity_type="auth",
+            actor_email=payload.email.strip().lower(),
+            source_ip=client_ip,
+            action_status="FAILED",
+            details={"email": payload.email.strip().lower()},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
     except AccountNotActiveError:
+        write_audit_event(
+            action="AUTH_LOGIN_FAILED",
+            entity_type="auth",
+            actor_email=payload.email.strip().lower(),
+            source_ip=client_ip,
+            action_status="FAILED",
+            details={"email": payload.email.strip().lower(), "reason": "inactive"},
+        )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is not active",
         )
 
     public_user = to_public_user(user)
+    _enforce_portal_login(public_user["role"], payload.portal, public_user.get("email"))
 
     token_data = create_access_token(
         subject=public_user["id"],
@@ -97,6 +155,15 @@ def login(payload: LoginRequest) -> TokenResponse:
             "user_type": public_user["user_type"],
             "tenant_id": public_user["tenant_id"],
         },
+    )
+
+    audit_from_user(
+        public_user,
+        action="AUTH_LOGIN",
+        entity_type="auth",
+        tenant_id=public_user.get("tenant_id"),
+        source_ip=client_ip,
+        details={"email": public_user.get("email")},
     )
 
     return TokenResponse(
@@ -148,6 +215,13 @@ def change_password(
             payload.new_password,
         )
     except InvalidCredentialsError:
+        audit_from_user(
+            current_user,
+            action="AUTH_PASSWORD_CHANGE",
+            entity_type="auth",
+            action_status="FAILED",
+            details={"reason": "bad_current_password"},
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Current password is incorrect",
@@ -158,6 +232,12 @@ def change_password(
             detail="Account is not active",
         )
 
+    audit_from_user(
+        current_user,
+        action="AUTH_PASSWORD_CHANGE",
+        entity_type="auth",
+        details={"email": current_user.get("email")},
+    )
     return ChangePasswordResponse()
 
 

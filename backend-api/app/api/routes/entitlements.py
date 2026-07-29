@@ -11,6 +11,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from app.api.dependencies import require_roles
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import db_transaction, fetch_all, fetch_one, fetch_one_write
+from app.services.asset_service_coverage import (
+    coverage_picker_payload,
+    replace_coverage,
+    summarize_assets,
+    validate_tenant_asset_ids,
+)
 from app.services.audit_service import write_audit_event
 from app.services.customer_safe_labels import entitlements_row_to_customer_public
 
@@ -315,6 +321,7 @@ class ServiceUpgradeCreate(BaseModel):
         "network_traffic_analysis",
         "threat_intelligence",
         "endpoint_forensics",
+        "security_automation",
         "other",
     ] = "vulnerability_management"
     preferred_cadence: Literal["weekly", "monthly", "quarterly", "unsure"] = "monthly"
@@ -326,6 +333,7 @@ class ServiceUpgradeCreate(BaseModel):
     requirements_summary: str = Field(min_length=10, max_length=4000)
     preferred_contact: Literal["email", "phone", "either"] = "email"
     contact_phone: Optional[str] = Field(default=None, max_length=40)
+    requested_asset_ids: List[UUID] = Field(default_factory=list)
 
     @field_validator("requirements_summary")
     @classmethod
@@ -352,6 +360,10 @@ class ServiceUpgradeCreate(BaseModel):
             raise ValueError(f"Invalid compliance_drivers values: {bad_comp}")
         if self.preferred_contact == "phone" and not self.contact_phone:
             raise ValueError("contact_phone is required when preferred_contact is phone")
+        if self.service_key == "vulnerability_management" and not self.requested_asset_ids:
+            raise ValueError(
+                "Select at least one protected asset for Vulnerability Management coverage."
+            )
         return self
 
 
@@ -376,6 +388,28 @@ class ServiceUpgradeOut(BaseModel):
     admin_notes: Optional[str] = None
     created_at: str
     updated_at: Optional[str] = None
+    requested_asset_ids: List[str] = Field(default_factory=list)
+    requested_assets: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ServiceUpgradeApproveBody(BaseModel):
+    """Optional asset selection when approving (defaults to customer's requested set)."""
+
+    asset_ids: Optional[List[UUID]] = None
+
+
+class AssetCoveragePut(BaseModel):
+    service_key: Literal[
+        "vulnerability_management",
+        "network_traffic_analysis",
+        "threat_intelligence",
+        "endpoint_forensics",
+        "security_automation",
+        "other",
+    ] = "vulnerability_management"
+    asset_ids: List[UUID] = Field(default_factory=list)
+    enable_entitlement: bool = True
+    greenbone_cadence: Optional[Literal["weekly", "monthly", "off"]] = None
 
 
 def _resolve_customer_tenant(short_code: str, current_user: Dict[str, Any]) -> Dict[str, Any]:
@@ -393,6 +427,15 @@ def _resolve_customer_tenant(short_code: str, current_user: Dict[str, Any]) -> D
 
 
 def _row_to_upgrade(row: Dict[str, Any]) -> ServiceUpgradeOut:
+    raw_ids = row.get("requested_asset_ids") or []
+    if isinstance(raw_ids, str):
+        # unlikely; keep safe
+        asset_ids = []
+    else:
+        asset_ids = [str(x) for x in raw_ids if x]
+    requested_assets = row.get("requested_assets")
+    if requested_assets is None and asset_ids and row.get("tenant_id"):
+        requested_assets = summarize_assets(str(row["tenant_id"]), asset_ids)
     return ServiceUpgradeOut(
         id=row["id"],
         tenant_id=row["tenant_id"],
@@ -414,6 +457,8 @@ def _row_to_upgrade(row: Dict[str, Any]) -> ServiceUpgradeOut:
         admin_notes=row.get("admin_notes"),
         created_at=row["created_at"],
         updated_at=row.get("updated_at"),
+        requested_asset_ids=asset_ids,
+        requested_assets=list(requested_assets or []),
     )
 
 
@@ -447,16 +492,30 @@ def create_customer_service_upgrade_request(
             detail="An open upgrade request for this service already exists. Your MSSP will follow up.",
         )
 
+    requested_ids = validate_tenant_asset_ids(
+        tenant["id"], [str(x) for x in payload.requested_asset_ids]
+    )
+    if payload.service_key == "vulnerability_management" and not requested_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Select at least one of your protected assets for Vulnerability Management.",
+        )
+    approx = payload.approximate_assets
+    if approx is None and requested_ids:
+        approx = len(requested_ids)
+
     row = fetch_one_write(
         """
         INSERT INTO service_upgrade_requests (
             tenant_id, requested_by_user_id, service_key, preferred_cadence,
             scan_scope, approximate_assets, environments, urgency,
-            compliance_drivers, requirements_summary, preferred_contact, contact_phone
+            compliance_drivers, requirements_summary, preferred_contact, contact_phone,
+            requested_asset_ids
         ) VALUES (
             %s::uuid, %s::uuid, %s, %s,
             %s::text[], %s, %s::text[], %s,
-            %s::text[], %s, %s, %s
+            %s::text[], %s, %s, %s,
+            %s::uuid[]
         )
         RETURNING
             id::text,
@@ -474,7 +533,8 @@ def create_customer_service_upgrade_request(
             contact_phone,
             status,
             created_at::text,
-            updated_at::text;
+            updated_at::text,
+            requested_asset_ids;
         """,
         (
             tenant["id"],
@@ -482,13 +542,14 @@ def create_customer_service_upgrade_request(
             payload.service_key,
             payload.preferred_cadence,
             payload.scan_scope,
-            payload.approximate_assets,
+            approx,
             payload.environments,
             payload.urgency,
             payload.compliance_drivers,
             payload.requirements_summary,
             payload.preferred_contact,
             payload.contact_phone,
+            requested_ids,
         ),
     )
     if not row:
@@ -505,6 +566,7 @@ def create_customer_service_upgrade_request(
             "service_key": payload.service_key,
             "urgency": payload.urgency,
             "preferred_cadence": payload.preferred_cadence,
+            "requested_asset_count": len(requested_ids),
         },
     )
 
@@ -545,7 +607,8 @@ def list_customer_service_upgrade_requests(
             r.status,
             r.admin_notes,
             r.created_at::text,
-            r.updated_at::text
+            r.updated_at::text,
+            r.requested_asset_ids
         FROM service_upgrade_requests r
         JOIN tenants t ON t.id = r.tenant_id
         LEFT JOIN platform_users u ON u.id = r.requested_by_user_id
@@ -584,7 +647,8 @@ def list_admin_service_upgrade_requests(
             r.status,
             r.admin_notes,
             r.created_at::text,
-            r.updated_at::text
+            r.updated_at::text,
+            r.requested_asset_ids
         FROM service_upgrade_requests r
         JOIN tenants t ON t.id = r.tenant_id
         LEFT JOIN platform_users u ON u.id = r.requested_by_user_id
@@ -625,7 +689,8 @@ def _fetch_upgrade_request(request_id: str) -> Optional[Dict[str, Any]]:
             r.status,
             r.admin_notes,
             r.created_at::text,
-            r.updated_at::text
+            r.updated_at::text,
+            r.requested_asset_ids
         FROM service_upgrade_requests r
         JOIN tenants t ON t.id = r.tenant_id
         LEFT JOIN platform_users u ON u.id = r.requested_by_user_id
@@ -690,7 +755,8 @@ def patch_admin_service_upgrade_request(
             status,
             admin_notes,
             created_at::text,
-            updated_at::text;
+            updated_at::text,
+            requested_asset_ids;
         """,
         (payload.status, payload.admin_notes, str(request_id)),
     )
@@ -718,11 +784,12 @@ def patch_admin_service_upgrade_request(
 def approve_and_enable_service_upgrade(
     request_id: UUID,
     request: Request,
+    payload: ServiceUpgradeApproveBody = ServiceUpgradeApproveBody(),
     current_user: Dict[str, Any] = Depends(require_roles("platform_admin", "soc_manager")),
 ) -> Dict[str, Any]:
     """
     MSSP workflow: accept customer request, turn on the matching entitlement,
-    queue automated vulnerability scan (when applicable).
+    optionally scope Vulnerability Management to selected assets.
     """
     existing = _fetch_upgrade_request(str(request_id))
     if not existing:
@@ -736,8 +803,25 @@ def approve_and_enable_service_upgrade(
     tenant_id = existing["tenant_id"]
     service_key = existing["service_key"]
     next_steps: List[str] = []
+    entitlements_updated = False
+    covered_count = 0
+
+    chosen_ids: List[str] = []
+    if payload.asset_ids is not None:
+        chosen_ids = validate_tenant_asset_ids(tenant_id, [str(x) for x in payload.asset_ids])
+    else:
+        raw = existing.get("requested_asset_ids") or []
+        chosen_ids = validate_tenant_asset_ids(tenant_id, [str(x) for x in raw])
 
     if service_key == "vulnerability_management":
+        if not chosen_ids:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Select at least one protected asset to cover with Vulnerability Management "
+                    "before approving."
+                ),
+            )
         current_ent = _fetch_entitlements(UUID(tenant_id)) or dict(DEFAULTS)
         cadence = _vuln_cadence_from_request(existing["preferred_cadence"])
         merged = {
@@ -751,6 +835,13 @@ def approve_and_enable_service_upgrade(
             merged,
             actor_user_id=current_user.get("id"),
         )
+        cov = replace_coverage(
+            tenant_id=tenant_id,
+            service_key="vulnerability_management",
+            asset_ids=chosen_ids,
+            actor_user_id=current_user.get("id"),
+        )
+        covered_count = int(cov.get("covered_count") or 0)
         with db_transaction() as cur:
             cur.execute(
                 """
@@ -760,34 +851,71 @@ def approve_and_enable_service_upgrade(
                 """,
                 (tenant_id,),
             )
-        asset_count = fetch_one(
-            """
-            SELECT count(*)::int AS n
-            FROM protected_assets
-            WHERE tenant_id = %s::uuid AND status = 'active'
-              AND (ip_address IS NOT NULL OR coalesce(hostname, '') <> '');
-            """,
-            (tenant_id,),
+        next_steps.append(
+            f"Vulnerability Management enabled for {covered_count} selected asset(s) only "
+            "(not the full estate)."
         )
-        n_assets = int(asset_count["n"]) if asset_count else 0
-        if n_assets == 0:
-            next_steps.append(
-                "Add protected assets (IP or hostname) in Admin → Assets for this customer "
-                "so automated scans have targets."
-            )
-        else:
-            next_steps.append(
-                f"Automated scanning will run on the next cycle (~15 minutes) for {n_assets} "
-                "protected asset(s)."
-            )
+        next_steps.append(
+            "Automated scanning will run on the next cycle (~15 minutes) for those covered assets."
+        )
         next_steps.append(
             "After findings appear under Vulnerabilities, promote high/critical items to "
             "customer-visible recommendations."
         )
-    else:
+        entitlements_updated = True
+    elif service_key in (
+        "network_traffic_analysis",
+        "threat_intelligence",
+        "endpoint_forensics",
+        "security_automation",
+    ):
+        current_ent = _fetch_entitlements(UUID(tenant_id)) or dict(DEFAULTS)
+        merged = {
+            **DEFAULTS,
+            **{k: current_ent.get(k) for k in DEFAULTS if k in current_ent},
+        }
+        if service_key == "network_traffic_analysis":
+            merged["zeek_enabled"] = True
+            next_steps.append(
+                "Network monitoring is now entitled. Complete sensor onboarding for this customer "
+                "before traffic analytics appear."
+            )
+        elif service_key == "threat_intelligence":
+            merged["misp_enabled"] = True
+            next_steps.append(
+                "Threat intelligence is now entitled. Confirm feed sharing scope with the customer."
+            )
+        elif service_key == "endpoint_forensics":
+            merged["velociraptor_enabled"] = True
+            next_steps.append(
+                "Endpoint forensics is now entitled. Deploy collectors only after change approval."
+            )
+        elif service_key == "security_automation":
+            merged["shuffle_mode"] = "standard"
+            next_steps.append(
+                "Security automation is now entitled. Review playbooks before enabling auto-actions."
+            )
+        upsert_tenant_entitlements(
+            tenant_id,
+            merged,
+            actor_user_id=current_user.get("id"),
+        )
+        if chosen_ids:
+            replace_coverage(
+                tenant_id=tenant_id,
+                service_key=service_key,
+                asset_ids=chosen_ids,
+                actor_user_id=current_user.get("id"),
+            )
+        entitlements_updated = True
         next_steps.append(
-            "This service type is not auto-provisioned yet. Enable entitlements manually "
-            "under the customer subscription panel."
+            "Customer will see this service as Active on Services after their next portal refresh."
+        )
+    else:
+        entitlements_updated = False
+        next_steps.append(
+            "This service type is not auto-provisioned. Enable entitlements manually "
+            "under Customers → Change Subscription."
         )
 
     row = fetch_one_write(
@@ -809,16 +937,34 @@ def approve_and_enable_service_upgrade(
         tenant_id=tenant_id,
         actor_user_id=current_user.get("id"),
         source_ip=request.client.host if request.client else None,
-        details={"service_key": service_key},
+        details={
+            "service_key": service_key,
+            "covered_asset_count": covered_count or len(chosen_ids),
+        },
     )
+
+    labels = {
+        "vulnerability_management": "Vulnerability Management",
+        "network_traffic_analysis": "Network monitoring",
+        "threat_intelligence": "Threat intelligence",
+        "endpoint_forensics": "Endpoint forensics",
+        "security_automation": "Security automation",
+    }
+    label = labels.get(service_key, "Service")
 
     return {
         "request": _row_to_upgrade({**existing, "status": "accepted"}).model_dump(),
-        "entitlements_updated": service_key == "vulnerability_management",
+        "entitlements_updated": entitlements_updated,
+        "covered_asset_ids": chosen_ids if service_key == "vulnerability_management" else [],
+        "covered_count": covered_count,
         "message": (
-            "Vulnerability Management is now enabled for this customer. "
-            "They will see the active service on their next portal refresh."
-            if service_key == "vulnerability_management"
+            f"{label} is now enabled for this customer"
+            + (
+                f" on {covered_count} selected asset(s)."
+                if service_key == "vulnerability_management"
+                else ". They will see the active service on their next portal refresh."
+            )
+            if entitlements_updated
             else "Request marked accepted."
         ),
         "next_steps": next_steps,
@@ -859,7 +1005,8 @@ def decline_service_upgrade(
             status,
             admin_notes,
             created_at::text,
-            updated_at::text;
+            updated_at::text,
+            requested_asset_ids;
         """,
         (str(request_id),),
     )
@@ -878,3 +1025,94 @@ def decline_service_upgrade(
         details={},
     )
     return _row_to_upgrade(row)
+
+
+@router.get("/admin/tenants/{tenant_id}/asset-service-coverage")
+def get_admin_asset_service_coverage(
+    tenant_id: UUID,
+    service_key: str = "vulnerability_management",
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    tenant = fetch_one(
+        "SELECT id::text FROM tenants WHERE id = %s::uuid;",
+        (str(tenant_id),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return coverage_picker_payload(str(tenant_id), service_key)
+
+
+@router.put("/admin/tenants/{tenant_id}/asset-service-coverage")
+def put_admin_asset_service_coverage(
+    tenant_id: UUID,
+    payload: AssetCoveragePut,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(require_roles("platform_admin", "soc_manager")),
+) -> Dict[str, Any]:
+    """
+    Proactive / post-contract enable: set which assets are covered by a service.
+    For Vulnerability Management, also flips the tenant entitlement on when enable_entitlement.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE id = %s::uuid;",
+        (str(tenant_id),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    asset_ids = [str(x) for x in payload.asset_ids]
+    if payload.service_key == "vulnerability_management" and payload.enable_entitlement and not asset_ids:
+        raise HTTPException(
+            status_code=422,
+            detail="Select at least one asset for Vulnerability Management coverage.",
+        )
+
+    cov = replace_coverage(
+        tenant_id=str(tenant_id),
+        service_key=payload.service_key,
+        asset_ids=asset_ids,
+        actor_user_id=current_user.get("id"),
+    )
+
+    entitlements_updated = False
+    if payload.service_key == "vulnerability_management" and payload.enable_entitlement:
+        current_ent = _fetch_entitlements(tenant_id) or dict(DEFAULTS)
+        cadence = payload.greenbone_cadence or current_ent.get("greenbone_cadence") or "monthly"
+        if cadence == "off":
+            cadence = "monthly"
+        merged = {
+            **DEFAULTS,
+            **{k: current_ent.get(k) for k in DEFAULTS if k in current_ent},
+            "greenbone_enabled": True,
+            "greenbone_cadence": cadence,
+        }
+        upsert_tenant_entitlements(
+            str(tenant_id),
+            merged,
+            actor_user_id=current_user.get("id"),
+        )
+        entitlements_updated = True
+
+    write_audit_event(
+        action="asset_service_coverage.updated",
+        entity_type="tenant",
+        entity_id=str(tenant_id),
+        tenant_id=str(tenant_id),
+        actor_user_id=current_user.get("id"),
+        source_ip=request.client.host if request.client else None,
+        details={
+            "service_key": payload.service_key,
+            "covered_count": cov.get("covered_count"),
+            "entitlements_updated": entitlements_updated,
+        },
+    )
+
+    picker = coverage_picker_payload(str(tenant_id), payload.service_key)
+    return {
+        **picker,
+        "entitlements_updated": entitlements_updated,
+        "message": (
+            f"Coverage saved for {cov.get('covered_count', 0)} asset(s)."
+            + (" Vulnerability Management entitlement enabled." if entitlements_updated else "")
+        ),
+    }

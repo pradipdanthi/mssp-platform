@@ -22,7 +22,8 @@ class WazuhClientError(Exception):
 
 
 def _base_url() -> str:
-    return (os_env := __import__("os").getenv("WAZUH_API_URL", "https://192.168.0.211:55000")).rstrip("/")
+    from app.core.config import get_infra_settings
+    return get_infra_settings().wazuh_api_url.rstrip("/")
 
 
 def _credentials() -> Tuple[str, str]:
@@ -145,12 +146,61 @@ def get_agent_groups(agent_id: str) -> list[str]:
     return [str(g) for g in groups if g]
 
 
+def assign_agent_to_group(agent_id: str, group_id: str, *, force: bool = True) -> Dict[str, Any]:
+    """Assign an agent to a manager group (idempotent best-effort)."""
+    aid = (agent_id or "").strip()
+    gid = (group_id or "").strip()
+    if not aid or not gid:
+        raise WazuhClientError("agent_id and group_id are required")
+    ensure_agent_group(gid)
+    token = authenticate()
+    # Wazuh 4.14: PUT /agents/{id}/group/{group_id} (no force query).
+    path = f"/agents/{urllib.parse.quote(aid)}/group/{urllib.parse.quote(gid)}"
+    try:
+        return _request("PUT", path, token=token)
+    except WazuhClientError as exc:
+        if exc.status in (400, 404, 405, 409):
+            # Already in group or alternate endpoint shapes.
+            groups = get_agent_groups(aid)
+            if gid in groups:
+                return {"data": {"affected_items": [{"id": aid, "group": groups}]}, "message": "already_in_group"}
+            if force:
+                alt = f"/agents/{urllib.parse.quote(aid)}/group/{urllib.parse.quote(gid)}"
+                try:
+                    return _request("PUT", alt, token=token)
+                except WazuhClientError:
+                    pass
+        raise
+
+
 def credentials_configured() -> bool:
     try:
         _credentials()
         return True
     except WazuhClientError:
         return False
+
+
+def get_agent_os(agent_id: str) -> str:
+    """Return 'windows' or 'linux' (default) for the agent's OS platform."""
+    aid = (agent_id or "").strip()
+    if not aid:
+        return "linux"
+    try:
+        token = authenticate()
+        result = _request(
+            "GET",
+            f"/agents?agents_list={urllib.parse.quote(aid)}&select=os.platform",
+            token=token,
+        )
+        items = (result.get("data") or {}).get("affected_items") or []
+        if items:
+            platform = str((items[0].get("os") or {}).get("platform") or "").lower()
+            if "windows" in platform:
+                return "windows"
+    except Exception:
+        pass
+    return "linux"
 
 
 def get_agent_status(agent_id: str) -> Dict[str, Any]:
@@ -175,6 +225,45 @@ def get_agent_status(agent_id: str) -> Dict[str, Any]:
         "last_keep_alive": item.get("lastKeepAlive"),
         "ip": item.get("ip"),
     }
+
+
+def list_agents_in_group(group_id: str, *, limit: int = 500) -> list[Dict[str, Any]]:
+    """Return agents assigned to a manager group (excludes manager id 000)."""
+    gid = (group_id or "").strip()
+    if not gid:
+        return []
+    token = authenticate()
+    qlimit = max(1, min(int(limit), 1000))
+    listed = _request(
+        "GET",
+        (
+            f"/agents?group={urllib.parse.quote(gid)}"
+            f"&select=id,name,ip,status,group,os.name,os.platform,dateAdd,lastKeepAlive"
+            f"&limit={qlimit}"
+        ),
+        token=token,
+    )
+    items = (listed.get("data") or {}).get("affected_items") or []
+    out: list[Dict[str, Any]] = []
+    for item in items:
+        aid = str(item.get("id") or "").strip()
+        if not aid or aid == "000":
+            continue
+        os_info = item.get("os") or {}
+        out.append(
+            {
+                "id": aid,
+                "name": item.get("name"),
+                "ip": item.get("ip"),
+                "status": item.get("status"),
+                "group": item.get("group") or [],
+                "os_name": os_info.get("name"),
+                "os_platform": os_info.get("platform"),
+                "date_add": item.get("dateAdd"),
+                "last_keep_alive": item.get("lastKeepAlive"),
+            }
+        )
+    return out
 
 
 def run_active_response(

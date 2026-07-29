@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS service_upgrade_requests (
             'network_traffic_analysis',
             'threat_intelligence',
             'endpoint_forensics',
+            'security_automation',
             'other'
         )),
     preferred_cadence TEXT NOT NULL DEFAULT 'monthly'

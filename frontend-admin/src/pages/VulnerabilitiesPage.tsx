@@ -6,6 +6,7 @@ import {
   approveServiceUpgradeRequest,
   declineServiceUpgradeRequest,
   getServiceUpgradeRequests,
+  getTenantAssetServiceCoverage,
   getVulnerabilities,
   getVulnerabilityDetail,
   patchServiceUpgradeRequest,
@@ -45,6 +46,11 @@ export default function VulnerabilitiesPage() {
   const [selectedUpgrade, setSelectedUpgrade] = useState<ServiceUpgradeRequestRow | null>(null);
   const [upgradeActionBusy, setUpgradeActionBusy] = useState(false);
   const [upgradeNextSteps, setUpgradeNextSteps] = useState<string[] | null>(null);
+  const [approveAssetIds, setApproveAssetIds] = useState<string[]>([]);
+  const [approveAssets, setApproveAssets] = useState<
+    Array<{ id: string; hostname: string | null; asset_type: string; os_name: string | null; covered?: boolean }>
+  >([]);
+  const [approveLoading, setApproveLoading] = useState(false);
 
   function loadUpgradeRequests() {
     getServiceUpgradeRequests()
@@ -72,11 +78,38 @@ export default function VulnerabilitiesPage() {
     }
   }
 
+  async function prepareApprove(row: ServiceUpgradeRequestRow) {
+    setSelectedUpgrade(row);
+    setUpgradeNextSteps(null);
+    setUpgradeError(null);
+    setApproveLoading(true);
+    const requested = (row.requested_asset_ids || []).map(String);
+    setApproveAssetIds(requested);
+    try {
+      const cov = await getTenantAssetServiceCoverage(row.tenant_id, "vulnerability_management");
+      setApproveAssets(cov.assets || []);
+      if (requested.length === 0 && cov.assets?.length) {
+        // No customer pick — leave empty so admin must choose.
+        setApproveAssetIds([]);
+      }
+    } catch (err) {
+      setApproveAssets((row.requested_assets || []).map((a) => ({ ...a, covered: false })));
+      setUpgradeError(apiErrorMessage(err, "Could not load customer assets for coverage."));
+    } finally {
+      setApproveLoading(false);
+    }
+  }
+
   async function handleApproveEnable(row: ServiceUpgradeRequestRow) {
     if (!canWrite) return;
+    if (row.service_key === "vulnerability_management" && approveAssetIds.length === 0) {
+      setUpgradeError("Select at least one asset to cover before approving Vulnerability Management.");
+      return;
+    }
     const ok = window.confirm(
-      `Enable Vulnerability Management for ${row.tenant_name} (${row.short_code}) with ` +
-        `${row.preferred_cadence} scans? The customer portal will show the active service.`
+      row.service_key === "vulnerability_management"
+        ? `Enable Vulnerability Management for ${row.tenant_name} on ${approveAssetIds.length} selected asset(s) (${row.preferred_cadence} cadence)?`
+        : `Enable ${row.service_key.replace(/_/g, " ")} for ${row.tenant_name}?`
     );
     if (!ok) return;
     setUpgradeActionBusy(true);
@@ -84,7 +117,10 @@ export default function VulnerabilitiesPage() {
     setSuccessMessage(null);
     setUpgradeNextSteps(null);
     try {
-      const result = await approveServiceUpgradeRequest(row.id);
+      const result = await approveServiceUpgradeRequest(
+        row.id,
+        row.service_key === "vulnerability_management" ? { asset_ids: approveAssetIds } : undefined
+      );
       setSuccessMessage(result.message);
       setUpgradeNextSteps(result.next_steps || []);
       setSelectedUpgrade(result.request);
@@ -217,10 +253,13 @@ export default function VulnerabilitiesPage() {
           Customer upgrade requests
         </h2>
         <p className="page-subtitle" style={{ marginTop: 0 }}>
-          Submitted from the customer portal when Vulnerability Management (or other optional
-          services) is not yet entitled. Use <strong>Approve &amp; enable</strong> to turn on
-          scanning for the customer (cadence from their request), then add protected assets under{" "}
-          <Link to="/assets">Assets</Link> if needed.
+          Submitted from the customer portal when optional services are not yet entitled. For
+          Vulnerability Management, approve with a <strong>selected asset list</strong> — scanning
+          covers only those hosts, not the whole estate.
+          <br />
+          If the customer signed offline and emailed a server list instead of using the portal,
+          skip this queue: open <strong>Customers → Change Subscription / enable services</strong>,
+          tick Vulnerability Management, paste/select those hosts, and Save.
         </p>
         {!canWrite && (
           <p className="muted">You have read-only access. platform_admin or soc_manager can approve requests.</p>
@@ -273,8 +312,7 @@ export default function VulnerabilitiesPage() {
                             type="button"
                             disabled={upgradeActionBusy}
                             onClick={() => {
-                              setSelectedUpgrade(r);
-                              setUpgradeNextSteps(null);
+                              void prepareApprove(r);
                             }}
                           >
                             Details
@@ -293,9 +331,12 @@ export default function VulnerabilitiesPage() {
                             className="btn btn-primary"
                             type="button"
                             disabled={upgradeActionBusy}
-                            onClick={() => handleApproveEnable(r)}
+                            onClick={() => {
+                              void prepareApprove(r).then(() => undefined);
+                              setSelectedUpgrade(r);
+                            }}
                           >
-                            Approve &amp; enable
+                            Review coverage
                           </button>
                           <button
                             className="btn btn-ghost"
@@ -342,12 +383,56 @@ export default function VulnerabilitiesPage() {
               </p>
             ) : null}
             <p className="upgrade-request-quote">{selectedUpgrade.requirements_summary}</p>
-            {selectedUpgrade.short_code ? (
-              <p>
-                <Link to="/assets">Open Assets</Link> — add IP/hostname protected assets for{" "}
-                <strong>{selectedUpgrade.short_code}</strong> so automated scans have targets.
-              </p>
+
+            {selectedUpgrade.service_key === "vulnerability_management" ? (
+              <div className="asset-picker" style={{ marginTop: "0.75rem" }}>
+                <h4 className="section-title">
+                  Assets to cover ({approveAssetIds.length} selected)
+                </h4>
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Customer requested specific devices. Adjust the selection before approving — only
+                  checked hosts will receive Vulnerability Management scans.
+                </p>
+                {approveLoading ? (
+                  <p className="muted">Loading assets…</p>
+                ) : approveAssets.length === 0 ? (
+                  <p className="muted">
+                    No protected assets for this customer yet. Add them under{" "}
+                    <Link to="/assets">Assets</Link> first.
+                  </p>
+                ) : (
+                  <div className="asset-picker-list">
+                    {approveAssets.map((a) => (
+                      <label key={a.id} className="upgrade-check asset-picker-row">
+                        <input
+                          type="checkbox"
+                          checked={approveAssetIds.includes(a.id)}
+                          onChange={() =>
+                            setApproveAssetIds((prev) =>
+                              prev.includes(a.id)
+                                ? prev.filter((x) => x !== a.id)
+                                : [...prev, a.id]
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>{a.hostname ?? a.id}</strong>
+                          <span className="muted-text">
+                            {" "}
+                            · {a.asset_type}
+                            {a.os_name ? ` · ${a.os_name}` : ""}
+                            {(selectedUpgrade.requested_asset_ids || []).includes(a.id)
+                              ? " · customer-requested"
+                              : ""}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             ) : null}
+
             {upgradeNextSteps && upgradeNextSteps.length > 0 ? (
               <div className="state-message state-success">
                 <p>
@@ -360,16 +445,30 @@ export default function VulnerabilitiesPage() {
                 </ul>
               </div>
             ) : null}
-            <button
-              className="btn btn-ghost"
-              type="button"
-              onClick={() => {
-                setSelectedUpgrade(null);
-                setUpgradeNextSteps(null);
-              }}
-            >
-              Close detail
-            </button>
+            <div className="confirm-actions" style={{ marginTop: "0.75rem" }}>
+              {canWrite && selectedUpgrade.status !== "accepted" ? (
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={upgradeActionBusy || approveLoading}
+                  onClick={() => void handleApproveEnable(selectedUpgrade)}
+                >
+                  Approve &amp; enable
+                </button>
+              ) : null}
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={() => {
+                  setSelectedUpgrade(null);
+                  setUpgradeNextSteps(null);
+                  setApproveAssets([]);
+                  setApproveAssetIds([]);
+                }}
+              >
+                Close detail
+              </button>
+            </div>
           </div>
         )}
       </div>

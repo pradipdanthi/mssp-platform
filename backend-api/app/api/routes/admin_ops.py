@@ -293,6 +293,18 @@ def download_report_xlsx(
 def list_assets(
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, List[Dict[str, Any]]]:
+    # Best-effort: refresh endpoint agents for all bound tenants before listing.
+    try:
+        from app.services.agent_asset_sync import sync_tenant_endpoint_agents
+
+        bindings = fetch_all(
+            "SELECT tenant_id::text, wazuh_agent_group FROM tenant_engine_bindings LIMIT 200;"
+        )
+        for row in bindings:
+            sync_tenant_endpoint_agents(row["tenant_id"])
+    except Exception:
+        pass
+
     rows = fetch_all(
         """
         SELECT
@@ -302,6 +314,7 @@ def list_assets(
             pa.hostname,
             host(pa.ip_address) AS ip_address,
             pa.asset_type,
+            pa.os_name,
             pa.criticality,
             pa.status,
             a.appliance_name,
@@ -417,28 +430,4 @@ def update_asset(
     return row
 
 
-@router.get("/audit-logs")
-def list_audit_logs(
-    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
-) -> Dict[str, List[Dict[str, Any]]]:
-    rows = fetch_all(
-        """
-        SELECT
-            al.id::text,
-            t.name AS tenant_name,
-            t.short_code,
-            pu.email AS actor_email,
-            al.action,
-            al.entity_type,
-            al.entity_id::text,
-            host(al.source_ip) AS source_ip,
-            al.details,
-            al.created_at::text
-        FROM audit_logs al
-        LEFT JOIN tenants t ON t.id = al.tenant_id
-        LEFT JOIN platform_users pu ON pu.id = al.actor_user_id
-        ORDER BY al.created_at DESC
-        LIMIT 200;
-        """
-    )
-    return {"audit_logs": rows}
+# KB-085: GET /admin/audit-logs lives in app.api.routes.audit_logs (filterable).

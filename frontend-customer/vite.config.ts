@@ -5,6 +5,9 @@ import react from "@vitejs/plugin-react";
 // /api/* is proxied server-side to backend-api on the Compose network.
 export default defineConfig({
   plugins: [react()],
+  build: {
+    assetsDir: "bundled",
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

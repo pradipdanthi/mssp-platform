@@ -1,0 +1,77 @@
+<!--
+  MSSP Control Plane — Windows process / network telemetry baseline
+  Adapted from community Sysmon configuration practices (SwiftOnSecurity-style).
+  Deploy via endpoint onboarding package. Do not rename Event IDs.
+-->
+<Sysmon schemaversion="4.90">
+  <HashAlgorithms>md5,sha256,IMPHASH</HashAlgorithms>
+  <CheckRevocation/>
+  <EventFiltering>
+    <!-- ProcessCreate -->
+    <RuleGroup name="ProcessCreate" groupRelation="or">
+      <ProcessCreate onmatch="exclude">
+        <Image condition="is">C:\Windows\System32\smss.exe</Image>
+        <Image condition="is">C:\Windows\System32\csrss.exe</Image>
+        <Image condition="is">C:\Windows\System32\wininit.exe</Image>
+        <Image condition="is">C:\Windows\System32\services.exe</Image>
+        <Image condition="is">C:\Windows\System32\winlogon.exe</Image>
+        <ParentImage condition="is">C:\Windows\System32\SearchIndexer.exe</ParentImage>
+      </ProcessCreate>
+      <ProcessCreate onmatch="include">
+        <Image condition="contains">\</Image>
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- FileCreateTime / NetworkConnect / ImageLoad / ProcessAccess (high-signal subset) -->
+    <RuleGroup name="NetworkConnect" groupRelation="or">
+      <NetworkConnect onmatch="exclude">
+        <Image condition="is">C:\Windows\System32\svchost.exe</Image>
+        <DestinationPort condition="is">53</DestinationPort>
+      </NetworkConnect>
+      <NetworkConnect onmatch="include">
+        <DestinationPort condition="is">22</DestinationPort>
+        <DestinationPort condition="is">445</DestinationPort>
+        <DestinationPort condition="is">3389</DestinationPort>
+        <DestinationPort condition="is">5985</DestinationPort>
+        <DestinationPort condition="is">5986</DestinationPort>
+        <Image condition="end with">.exe</Image>
+      </NetworkConnect>
+    </RuleGroup>
+
+    <RuleGroup name="CreateRemoteThread" groupRelation="or">
+      <CreateRemoteThread onmatch="include">
+        <TargetImage condition="end with">\lsass.exe</TargetImage>
+        <SourceImage condition="contains">\Temp\</SourceImage>
+      </CreateRemoteThread>
+    </RuleGroup>
+
+    <RuleGroup name="FileCreate" groupRelation="or">
+      <FileCreate onmatch="include">
+        <TargetFilename condition="end with">.ps1</TargetFilename>
+        <TargetFilename condition="end with">.bat</TargetFilename>
+        <TargetFilename condition="end with">.vbs</TargetFilename>
+        <TargetFilename condition="end with">.dll</TargetFilename>
+        <TargetFilename condition="begin with">C:\Users\</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+
+    <RuleGroup name="RegistryEvent" groupRelation="or">
+      <RegistryEvent onmatch="include">
+        <TargetObject condition="contains">\CurrentVersion\Run</TargetObject>
+        <TargetObject condition="contains">\Windows\CurrentVersion\Services</TargetObject>
+        <TargetObject condition="contains">\Image File Execution Options\</TargetObject>
+      </RegistryEvent>
+    </RuleGroup>
+
+    <RuleGroup name="DnsQuery" groupRelation="or">
+      <DnsQuery onmatch="exclude">
+        <QueryName condition="end with">.microsoft.com</QueryName>
+        <QueryName condition="end with">.windows.com</QueryName>
+        <QueryName condition="end with">.windowsupdate.com</QueryName>
+      </DnsQuery>
+      <DnsQuery onmatch="include">
+        <QueryName condition="contains">.</QueryName>
+      </DnsQuery>
+    </RuleGroup>
+  </EventFiltering>
+</Sysmon>

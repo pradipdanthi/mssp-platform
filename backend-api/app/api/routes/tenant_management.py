@@ -4,18 +4,20 @@ KB-072: On create/reprovision, auto-bind Wazuh agent group + TheHive org/tag.
 KB-075: Contract-ready onboarding — commercial fields, entitlements, portal admin.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from psycopg.errors import UniqueViolation
+from pydantic import BaseModel, Field, model_validator
 
 from app.api.dependencies import require_roles
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.api.routes.entitlements import DEFAULTS as ENTITLEMENT_DEFAULTS
 from app.api.routes.entitlements import upsert_tenant_entitlements
 from app.core.security import hash_password
-from app.db.session import fetch_one, fetch_one_write
+from app.db.session import fetch_all, fetch_one, fetch_one_write
+from app.schemas.users import UserPasswordUpdateRequest
 from app.schemas.tenants import (
     DEFAULT_CREATE_ENTITLEMENTS,
     OnboardResult,
@@ -24,6 +26,7 @@ from app.schemas.tenants import (
     TenantEngineBinding,
     TenantUpdateRequest,
 )
+from app.services.audit_service import audit_from_user
 from app.services.tenant_engine_provisioner import (
     backfill_all_tenants,
     get_binding,
@@ -33,6 +36,9 @@ from app.services.tenant_engine_provisioner import (
 router = APIRouter(prefix="/admin/tenants", tags=["admin-tenants"])
 
 ADMIN_TENANT_WRITE_ROLES = ("platform_admin",)
+
+# Customer portal user lifecycle (create/reset/disable) — SOC managers + platform admin.
+ADMIN_TENANT_CUSTOMER_USER_WRITE_ROLES = ("platform_admin", "soc_manager")
 
 _COMMERCIAL_FIELDS = (
     "legal_name",
@@ -204,6 +210,259 @@ def backfill_engine_bindings(
         "count": result["count"],
         "message": f"Provisioned/refreshed {result['count']} tenant engine binding(s).",
     }
+
+
+@router.get("/{tenant_id}/users")
+def list_tenant_users(
+    tenant_id: UUID,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Customer users for one tenant (not shown on the global MSSP Users tab)."""
+    _ = current_user
+    tenant = fetch_one("SELECT id::text FROM tenants WHERE id = %s::uuid;", (str(tenant_id),))
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    rows = fetch_all(
+        """
+        SELECT
+            id::text,
+            tenant_id::text,
+            user_type,
+            role,
+            full_name,
+            email,
+            phone,
+            status,
+            last_login_at::text,
+            created_at::text,
+            updated_at::text
+        FROM platform_users
+        WHERE tenant_id = %s::uuid
+          AND role IN ('customer_admin', 'customer_viewer')
+        ORDER BY created_at DESC;
+        """,
+        (str(tenant_id),),
+    )
+    return {"users": rows}
+
+
+_EMAIL_RE = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+_TENANT_USER_COLS = """
+    id::text,
+    tenant_id::text,
+    user_type,
+    role,
+    full_name,
+    email,
+    phone,
+    status,
+    last_login_at::text,
+    created_at::text,
+    updated_at::text
+"""
+
+
+class AdminTenantUserCreate(BaseModel):
+    email: str = Field(min_length=3, max_length=320, pattern=_EMAIL_RE)
+    full_name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=8, max_length=128)
+    role: Literal["customer_admin", "customer_viewer"] = "customer_viewer"
+    phone: Optional[str] = Field(default=None, max_length=40)
+
+    @model_validator(mode="after")
+    def normalize(self) -> "AdminTenantUserCreate":
+        self.email = self.email.strip().lower()
+        self.full_name = self.full_name.strip()
+        if self.phone is not None:
+            self.phone = self.phone.strip() or None
+        return self
+
+
+class AdminTenantUserUpdate(BaseModel):
+    full_name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    phone: Optional[str] = Field(default=None, max_length=40)
+    role: Optional[Literal["customer_admin", "customer_viewer"]] = None
+    status: Optional[Literal["active", "inactive", "locked"]] = None
+
+
+def _client_ip(request: Request) -> Optional[str]:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
+    if request.client:
+        return request.client.host
+    return None
+
+
+def _fetch_tenant_customer_user(tenant_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+    return fetch_one(
+        f"""
+        SELECT {_TENANT_USER_COLS}
+        FROM platform_users
+        WHERE id = %s::uuid AND tenant_id = %s::uuid
+          AND role IN ('customer_admin', 'customer_viewer');
+        """,
+        (user_id, tenant_id),
+    )
+
+
+def _last_admin_guard(
+    tenant_id: str,
+    existing: Dict[str, Any],
+    updates: Dict[str, Any],
+    _actor_user_id: Optional[str],
+) -> None:
+    if existing.get("role") != "customer_admin" or existing.get("status") != "active":
+        return
+    would_remove = updates.get("role") == "customer_viewer" or updates.get("status") in (
+        "inactive",
+        "locked",
+    )
+    if not would_remove:
+        return
+    admins = fetch_one(
+        """
+        SELECT count(*)::int AS c FROM platform_users
+        WHERE tenant_id = %s::uuid AND role = 'customer_admin' AND status = 'active';
+        """,
+        (tenant_id,),
+    )
+    if int((admins or {}).get("c") or 0) <= 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot demote or disable the last active customer administrator",
+        )
+
+
+@router.post("/{tenant_id}/users", status_code=status.HTTP_201_CREATED)
+def create_tenant_customer_user(
+    tenant_id: UUID,
+    payload: AdminTenantUserCreate,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_TENANT_CUSTOMER_USER_WRITE_ROLES)),
+) -> Dict[str, Any]:
+    tid = str(tenant_id)
+    tenant = fetch_one("SELECT id::text, short_code FROM tenants WHERE id = %s::uuid;", (tid,))
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    try:
+        row = fetch_one_write(
+            f"""
+            INSERT INTO platform_users (
+                tenant_id, user_type, role, full_name, email, phone, status, password_hash
+            )
+            VALUES (%s::uuid, 'customer', %s, %s, %s, %s, 'active', %s)
+            RETURNING {_TENANT_USER_COLS};
+            """,
+            (
+                tid,
+                payload.role,
+                payload.full_name,
+                payload.email,
+                payload.phone,
+                hash_password(payload.password),
+            ),
+        )
+    except UniqueViolation:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="A user with this email already exists")
+    if not row:
+        raise HTTPException(status_code=500, detail="User create failed")
+    audit_from_user(
+        current_user,
+        action="USER_CREATE",
+        entity_type="platform_user",
+        entity_id=row["id"],
+        tenant_id=tid,
+        source_ip=_client_ip(request),
+        details={"email": row["email"], "role": row["role"], "tenant_short_code": tenant.get("short_code")},
+    )
+    return row
+
+
+@router.patch("/{tenant_id}/users/{user_id}")
+def update_tenant_customer_user(
+    tenant_id: UUID,
+    user_id: UUID,
+    payload: AdminTenantUserUpdate,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_TENANT_CUSTOMER_USER_WRITE_ROLES)),
+) -> Dict[str, Any]:
+    tid = str(tenant_id)
+    uid = str(user_id)
+    existing = _fetch_tenant_customer_user(tid, uid)
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    updates: Dict[str, Any] = {}
+    if payload.full_name is not None:
+        updates["full_name"] = payload.full_name.strip()
+    if "phone" in payload.model_fields_set:
+        updates["phone"] = (payload.phone or "").strip() or None
+    if payload.role is not None:
+        updates["role"] = payload.role
+    if payload.status is not None:
+        updates["status"] = payload.status
+    if not updates:
+        raise HTTPException(status_code=422, detail="At least one field must be provided")
+
+    _last_admin_guard(tid, existing, updates, current_user.get("id"))
+
+    fields = [f"{k} = %s" for k in updates]
+    params = list(updates.values()) + [uid, tid]
+    row = fetch_one_write(
+        f"""
+        UPDATE platform_users
+        SET {', '.join(fields)}, updated_at = now()
+        WHERE id = %s::uuid AND tenant_id = %s::uuid
+        RETURNING {_TENANT_USER_COLS};
+        """,
+        tuple(params),
+    )
+    audit_from_user(
+        current_user,
+        action="USER_UPDATE" if "role" not in updates else "USER_ROLE_CHANGE",
+        entity_type="platform_user",
+        entity_id=uid,
+        tenant_id=tid,
+        source_ip=_client_ip(request),
+        details={"before": {"role": existing["role"], "status": existing["status"]}, "after": updates},
+    )
+    return row
+
+
+@router.patch("/{tenant_id}/users/{user_id}/password")
+def reset_tenant_customer_user_password(
+    tenant_id: UUID,
+    user_id: UUID,
+    payload: UserPasswordUpdateRequest,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_TENANT_CUSTOMER_USER_WRITE_ROLES)),
+) -> Dict[str, str]:
+    tid = str(tenant_id)
+    uid = str(user_id)
+    existing = _fetch_tenant_customer_user(tid, uid)
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    fetch_one_write(
+        """
+        UPDATE platform_users
+        SET password_hash = %s, updated_at = now()
+        WHERE id = %s::uuid AND tenant_id = %s::uuid
+        RETURNING id::text;
+        """,
+        (hash_password(payload.new_password), uid, tid),
+    )
+    audit_from_user(
+        current_user,
+        action="USER_PASSWORD_RESET",
+        entity_type="platform_user",
+        entity_id=uid,
+        tenant_id=tid,
+        source_ip=_client_ip(request),
+        details={"email": existing["email"]},
+    )
+    return {"status": "updated"}
 
 
 @router.get("/{tenant_id}", response_model=TenantDetail)
@@ -388,8 +647,29 @@ def create_tenant(
         portal_created = True
         portal_email = payload.portal_admin.email
     except Exception as exc:
-        # Portal login is part of onboard — surface failure clearly; tenant/engines remain.
         portal_error = str(exc)[:200]
+        # Best-effort rollback of the new tenant so onboard stays atomic.
+        try:
+            fetch_one_write("DELETE FROM tenants WHERE id = %s::uuid RETURNING id::text;", (tenant_id,))
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Customer onboard failed creating first admin: {portal_error}",
+        ) from exc
+
+    audit_from_user(
+        current_user,
+        action="TENANT_ONBOARD",
+        entity_type="tenant",
+        entity_id=tenant_id,
+        tenant_id=tenant_id,
+        details={
+            "short_code": payload.short_code,
+            "portal_admin_email": portal_email,
+            "name": payload.name,
+        },
+    )
 
     tenant = _fetch_tenant_detail(UUID(tenant_id))
     if not tenant:

@@ -425,6 +425,14 @@ def customer_assets(
 
     tenant_id = tenant["id"]
 
+    # Pull enrolled endpoint agents into protected_assets so Assets stays current.
+    try:
+        from app.services.agent_asset_sync import sync_tenant_endpoint_agents
+
+        sync_tenant_endpoint_agents(tenant_id, short_code=tenant["short_code"])
+    except Exception:
+        pass
+
     appliances = fetch_all(
         """
         SELECT

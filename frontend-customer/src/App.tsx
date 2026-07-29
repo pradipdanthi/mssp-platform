@@ -17,7 +17,10 @@ import RecommendationsPage from "./pages/RecommendationsPage";
 import RecommendationDetailPage from "./pages/RecommendationDetailPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import AccountPage from "./pages/AccountPage";
+import UsersPage from "./pages/UsersPage";
+import AuditLogsPage from "./pages/AuditLogsPage";
 import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
+import ServicesPage from "./pages/ServicesPage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -130,6 +133,14 @@ export default function App() {
         }
       />
       <Route
+        path="/services"
+        element={
+          <ProtectedRoute>
+            <ServicesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/vulnerabilities"
         element={
           <ProtectedRoute>
@@ -142,6 +153,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <NotificationsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/users"
+        element={
+          <ProtectedRoute>
+            <UsersPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit"
+        element={
+          <ProtectedRoute>
+            <AuditLogsPage />
           </ProtectedRoute>
         }
       />

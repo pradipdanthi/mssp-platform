@@ -281,6 +281,32 @@ export function downloadCustomerReportXlsx(shortCode: string, reportId: string):
   );
 }
 
+/** KB-086: download endpoint monitoring agent installer for this tenant. */
+export function downloadCustomerAgentPackage(
+  shortCode: string,
+  osType: "windows" | "linux" | "all"
+): Promise<void> {
+  return downloadAuthenticated(
+    `/customer/agent-packages/${encodeURIComponent(shortCode)}/${osType}`,
+    `mssp-agent-${osType}.zip`
+  );
+}
+
+export interface CustomerLinuxInstallCommand {
+  short_code: string;
+  one_liner: string;
+  script_url: string;
+  help?: string;
+}
+
+export function getCustomerLinuxInstallCommand(
+  shortCode: string
+): Promise<CustomerLinuxInstallCommand> {
+  return request<CustomerLinuxInstallCommand>(
+    `/customer/agent-install/${encodeURIComponent(shortCode)}/linux`
+  );
+}
+
 export interface CustomerNotification {
   notification_id: string;
   notification_type: string;
@@ -461,6 +487,7 @@ export type ServiceUpgradeServiceKey =
   | "network_traffic_analysis"
   | "threat_intelligence"
   | "endpoint_forensics"
+  | "security_automation"
   | "other";
 
 export interface ServiceUpgradeRequestPayload {
@@ -474,6 +501,7 @@ export interface ServiceUpgradeRequestPayload {
   requirements_summary: string;
   preferred_contact: "email" | "phone" | "either";
   contact_phone?: string | null;
+  requested_asset_ids?: string[];
 }
 
 export interface ServiceUpgradeRequest {
@@ -494,6 +522,13 @@ export interface ServiceUpgradeRequest {
   status: string;
   created_at: string;
   requested_by_name?: string | null;
+  requested_asset_ids?: string[];
+  requested_assets?: Array<{
+    id: string;
+    hostname: string | null;
+    asset_type: string;
+    os_name: string | null;
+  }>;
 }
 
 export function createServiceUpgradeRequest(

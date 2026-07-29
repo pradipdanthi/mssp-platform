@@ -22,12 +22,12 @@ const MITRE_SEGMENTS: {
   color: string;
   severityKey: string;
 }[] = [
-  { id: "execution", label: "Execution", color: "#FF9500", severityKey: "high" },
-  { id: "initial", label: "Initial Access", color: "#FF3B30", severityKey: "critical" },
-  { id: "privesc", label: "Privilege Escalation", color: "#FFCC00", severityKey: "medium" },
-  { id: "persist", label: "Persistence", color: "#00F0FF", severityKey: "low" },
-  { id: "other", label: "Connection / Others", color: "#A855F7", severityKey: "info" },
-  { id: "discover", label: "Discovery", color: "#3B82F6", severityKey: "medium" },
+  { id: "execution", label: "Execution", color: "#F59E0B", severityKey: "high" },
+  { id: "initial", label: "Initial Access", color: "#EF4444", severityKey: "critical" },
+  { id: "privesc", label: "Privilege Escalation", color: "#EAB308", severityKey: "medium" },
+  { id: "persist", label: "Persistence", color: "#00AEEF", severityKey: "low" },
+  { id: "other", label: "Connection / Others", color: "#D4AF37", severityKey: "info" },
+  { id: "discover", label: "Discovery", color: "#22C55E", severityKey: "medium" },
 ];
 
 function normalizeCounts(slices: SeveritySlice[]): Record<string, number> {
@@ -108,7 +108,7 @@ export default function SeverityDonut({
             viewBox="0 0 200 200"
             role="img"
             aria-label={`${title} by severity and tactic`}
-            style={{ filter: "drop-shadow(0px 0px 8px rgba(0, 240, 255, 0.4))" }}
+            style={{ filter: "drop-shadow(0px 0px 8px rgba(0, 174, 239, 0.4))" }}
           >
             <defs>
               <filter id={`${uid}-glow`} x="-40%" y="-40%" width="180%" height="180%">
@@ -119,7 +119,7 @@ export default function SeverityDonut({
                 </feMerge>
               </filter>
             </defs>
-            <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#0B0F17" strokeWidth={stroke} />
+            <circle cx={cx} cy={cy} r={radius} fill="none" stroke="#081120" strokeWidth={stroke} />
             {arcs.map((arc) => (
               <circle
                 key={arc.id}

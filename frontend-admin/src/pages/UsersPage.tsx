@@ -17,13 +17,7 @@ import ConfirmDangerModal from "../components/ConfirmDangerModal";
 import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
-const ROLE_OPTIONS: PlatformRole[] = [
-  "platform_admin",
-  "soc_manager",
-  "soc_analyst",
-  "customer_admin",
-  "customer_viewer",
-];
+const ROLE_OPTIONS: PlatformRole[] = ["platform_admin", "soc_manager", "soc_analyst"];
 const CUSTOMER_ROLES: PlatformRole[] = ["customer_admin", "customer_viewer"];
 const STATUS_OPTIONS: UserStatus[] = ["active", "inactive", "locked"];
 
@@ -56,7 +50,7 @@ const EMPTY_CREATE: CreateFormState = {
   email: "",
   full_name: "",
   password: "",
-  role: "customer_admin",
+  role: "soc_analyst",
   tenant_id: "",
   phone: "",
   status: "active",
@@ -271,6 +265,10 @@ export default function UsersPage() {
       <div className="page-header-row">
         <div>
           <h1 className="page-title">Users</h1>
+          <p className="page-subtitle">
+            MSSP platform personnel only. Customer portal users are managed under Customers → select
+            customer → Users.
+          </p>
           <p className="page-subtitle">
             Create SOC staff and customer portal logins. Customer roles must be linked to a
             customer; platform/SOC roles are cross-tenant and must not be.

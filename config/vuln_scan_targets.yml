@@ -6,9 +6,9 @@
 
 tenants:
   DEMO:
-    asset_hostname: linux-endpoint-lab
-    nuclei_targets:
-      - "192.168.0.215"
+    # Lab linux endpoint (VM 105) decommissioned — add nuclei_targets when manual VM is ready.
+    asset_hostname: null
+    nuclei_targets: []
     vuls_servers: []
   # Example (disabled until Melvik is entitled and scoped):
   # MELVIK-4B9W:

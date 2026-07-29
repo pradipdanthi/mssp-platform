@@ -75,16 +75,33 @@ def download_agent_config_package(
             if not sysmon.is_file():
                 raise HTTPException(status_code=500, detail="Missing Windows telemetry template")
             zf.writestr(
-                "windows/process-telemetry-baseline.xml",
+                "windows/sysmon-windows-baseline.xml",
                 sysmon.read_text(encoding="utf-8"),
             )
             zf.writestr(
+                "windows/process-telemetry-baseline.xml",
+                sysmon.read_text(encoding="utf-8"),
+            )
+            telemetry_ps1 = root / "Enable-MsspWindowsTelemetry.ps1"
+            if telemetry_ps1.is_file():
+                zf.writestr(
+                    "windows/Enable-MsspWindowsTelemetry.ps1",
+                    telemetry_ps1.read_text(encoding="utf-8"),
+                )
+                zf.writestr(
+                    "windows/bootstrap_windows_telemetry.ps1",
+                    telemetry_ps1.read_text(encoding="utf-8"),
+                )
+            zf.writestr(
                 "windows/INSTALL.txt",
                 (
-                    "1. Install the endpoint security agent using agent-parameters.conf values.\n"
-                    "2. Install the Windows process telemetry service with "
-                    "process-telemetry-baseline.xml.\n"
-                    "3. Confirm process-create events reach the control plane.\n"
+                    "Already have the endpoint agent enrolled?\n"
+                    "1. Copy windows/ folder to the host.\n"
+                    "2. Run elevated PowerShell:\n"
+                    "     powershell -ExecutionPolicy Bypass -File .\\Enable-MsspWindowsTelemetry.ps1\n"
+                    "3. Confirm success line: MSSP_WINDOWS_TELEMETRY_OK\n\n"
+                    "New hosts: prefer the per-customer agent ZIP (install-windows-agent.ps1),\n"
+                    "which runs this telemetry bootstrap automatically after agent install.\n"
                 ),
             )
         if os_key in ("linux", "macos", "all"):

@@ -93,7 +93,10 @@ CREATE TABLE IF NOT EXISTS protected_assets (
     hostname TEXT,
     ip_address INET,
     asset_type TEXT NOT NULL DEFAULT 'server'
-        CHECK (asset_type IN ('server', 'workstation', 'firewall', 'network_device', 'application', 'database', 'other')),
+        CHECK (asset_type IN (
+            'server', 'workstation', 'firewall', 'switch', 'load_balancer',
+            'network_device', 'application', 'database', 'other'
+        )),
     os_name TEXT,
     criticality TEXT NOT NULL DEFAULT 'medium'
         CHECK (criticality IN ('low', 'medium', 'high', 'critical')),

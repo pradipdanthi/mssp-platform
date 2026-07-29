@@ -34,8 +34,14 @@ export interface RolesResponse {
 export function login(email: string, password: string): Promise<TokenResponse> {
   return request<TokenResponse>("/auth/login", {
     method: "POST",
-    body: { email, password },
+    body: { email, password, portal: "admin" },
   });
+}
+
+const STAFF_ROLES = new Set(["platform_admin", "soc_manager", "soc_analyst"]);
+
+export function isStaffPortalUser(user: UserPublic | null): boolean {
+  return !!user && STAFF_ROLES.has(user.role);
 }
 
 export function me(): Promise<UserPublic> {

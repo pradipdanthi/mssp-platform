@@ -25,7 +25,7 @@ Prompt the human to start this milestone only when **all** of the following are 
 | Gate | Ready now? | Notes |
 |---|---|---|
 | Wazuh Manager live | **Yes** | VM 101 / 4.14.6 |
-| Linux agent onboarded | **Yes** | VM 105 agent **001** Active |
+| Linux agent onboarded | **No** | VM 105 decommissioned — reinstall manually, then re-enroll |
 | Windows agent onboarded | **No** | Still required before full E2E |
 | Wazuh → Shuffle → TheHive | **Yes** | KB-049 proven |
 | Instant Wazuh → control plane | **Yes** | KB-063 live (seconds) |

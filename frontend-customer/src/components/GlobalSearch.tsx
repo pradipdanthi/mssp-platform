@@ -8,6 +8,7 @@ const ROUTES = [
   { label: "Vulnerabilities", path: "/vulnerabilities", keywords: "cve scanning findings" },
   { label: "Recommendations", path: "/recommendations", keywords: "actions" },
   { label: "Assets", path: "/assets", keywords: "appliances" },
+  { label: "Services", path: "/services", keywords: "subscription add-on vulnerability network" },
   { label: "Reports", path: "/reports", keywords: "monthly" },
   { label: "Notifications", path: "/notifications", keywords: "messages" },
   { label: "Account", path: "/account", keywords: "profile password" },

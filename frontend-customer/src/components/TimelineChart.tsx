@@ -9,9 +9,9 @@ export type SeverityBucket = {
 };
 
 const COLORS = {
-  critical: "#FF3B30",
-  high: "#FF9500",
-  cyan: "#00F0FF",
+  critical: "#EF4444",
+  high: "#F59E0B",
+  cyan: "#00AEEF",
 };
 
 const Y_MAX = 20;

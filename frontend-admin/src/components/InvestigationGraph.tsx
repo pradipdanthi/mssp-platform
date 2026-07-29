@@ -47,7 +47,7 @@ export default function InvestigationGraph({
             y1={pos[a].y}
             x2={pos[b].x}
             y2={pos[b].y}
-            stroke="#00F0FF"
+            stroke="#00AEEF"
             strokeOpacity="0.45"
             strokeWidth="1.5"
           />
@@ -56,12 +56,12 @@ export default function InvestigationGraph({
           const p = pos[e.id] || { x: 145, y: 75 };
           return (
             <g key={e.id} filter={`url(#${uid}-glow)`}>
-              <circle cx={p.x} cy={p.y} r="22" fill="#151C28" stroke="#00F0FF" strokeWidth="1.6" />
+              <circle cx={p.x} cy={p.y} r="22" fill="#101B2D" stroke="#00AEEF" strokeWidth="1.6" />
               <text
                 x={p.x}
                 y={p.y + 4}
                 textAnchor="middle"
-                fill="#E2E8F0"
+                fill="#F8FAFC"
                 fontSize="10"
                 fontFamily="Inter, sans-serif"
                 fontWeight="600"

@@ -1,7 +1,7 @@
 /** Mini sparkline for KPI cards (pure SVG). */
 export default function MiniSparkline({
   values,
-  stroke = "#00F0FF",
+  stroke = "#00AEEF",
 }: {
   values: number[];
   stroke?: string;

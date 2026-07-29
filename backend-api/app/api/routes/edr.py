@@ -207,12 +207,15 @@ def edr_process_tree(
 
 
 @router.post("/actions/execute", response_model=EdrActionExecuteResponse)
-def edr_execute_action(
+async def edr_execute_action(
     body: EdrActionExecuteRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> EdrActionExecuteResponse:
+    import asyncio
     try:
-        execution_id, st, message, upload_url, artifact_id = execute_edr_action(current_user, body)
+        execution_id, st, message, upload_url, artifact_id = await asyncio.to_thread(
+            execute_edr_action, current_user, body
+        )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
@@ -291,16 +294,17 @@ async def edr_forensics_upload(
         purpose="upload",
     ):
         raise HTTPException(status_code=401, detail="Invalid or expired upload token")
-    body = await request.body()
-    if not body:
-        raise HTTPException(status_code=400, detail="Empty upload body")
     max_bytes = int(os.getenv("EDR_FORENSICS_MAX_BYTES") or str(512 * 1024 * 1024))
-    if len(body) > max_bytes:
-        raise HTTPException(status_code=413, detail="Forensic upload exceeds size limit")
     try:
-        size, sha = edr_forensics_storage.write_upload(object_key=row["object_key"], body=body)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid object key")
+        size, sha = await edr_forensics_storage.write_upload_stream(
+            object_key=row["object_key"],
+            stream=request.stream(),
+            max_bytes=max_bytes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=413, detail=str(exc))
+    if size == 0:
+        raise HTTPException(status_code=400, detail="Empty upload body")
     with db_transaction() as cur:
         cur.execute(
             """

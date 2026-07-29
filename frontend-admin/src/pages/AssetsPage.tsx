@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   AdminAsset,
+  ASSET_TYPE_LABELS,
   AssetCriticality,
   AssetStatus,
   AssetType,
@@ -15,11 +16,14 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { ASSET_FOLDERS, AssetFolderId, assetFolderId } from "../utils/assetFolders";
 
 const TYPES: AssetType[] = [
   "server",
   "workstation",
   "firewall",
+  "switch",
+  "load_balancer",
   "network_device",
   "application",
   "database",
@@ -32,6 +36,24 @@ function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError && typeof err.detail === "string") return err.detail;
   if (err instanceof ApiError && err.status === 403) return "Access denied for this action.";
   return fallback;
+}
+
+type CustomerBucket = {
+  key: string;
+  name: string;
+  shortCode: string;
+  folders: Record<AssetFolderId, AdminAsset[]>;
+  total: number;
+};
+
+function emptyFolders(): Record<AssetFolderId, AdminAsset[]> {
+  return ASSET_FOLDERS.reduce(
+    (acc, f) => {
+      acc[f.id] = [];
+      return acc;
+    },
+    {} as Record<AssetFolderId, AdminAsset[]>
+  );
 }
 
 export default function AssetsPage() {
@@ -61,11 +83,69 @@ export default function AssetsPage() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  const [openCustomers, setOpenCustomers] = useState<Record<string, boolean>>({});
+  const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     getTenants()
       .then((r) => setTenants(r.tenants))
       .catch(() => undefined);
   }, []);
+
+  const customerBuckets = useMemo(() => {
+    const map = new Map<string, CustomerBucket>();
+
+    for (const t of tenants) {
+      map.set(t.short_code, {
+        key: t.short_code,
+        name: t.name,
+        shortCode: t.short_code,
+        folders: emptyFolders(),
+        total: 0,
+      });
+    }
+
+    for (const row of data?.assets ?? []) {
+      const key = row.short_code;
+      let bucket = map.get(key);
+      if (!bucket) {
+        bucket = {
+          key,
+          name: row.tenant_name,
+          shortCode: row.short_code,
+          folders: emptyFolders(),
+          total: 0,
+        };
+        map.set(key, bucket);
+      }
+      const folder = assetFolderId(row.asset_type, row.os_name);
+      bucket.folders[folder].push(row);
+      bucket.total += 1;
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [data?.assets, tenants]);
+
+  useEffect(() => {
+    // Auto-expand customers that already have assets (once per load).
+    setOpenCustomers((prev) => {
+      const next = { ...prev };
+      for (const c of customerBuckets) {
+        if (c.total > 0 && next[c.key] === undefined) next[c.key] = true;
+      }
+      return next;
+    });
+    setOpenFolders((prev) => {
+      const next = { ...prev };
+      for (const c of customerBuckets) {
+        for (const f of ASSET_FOLDERS) {
+          const fk = `${c.key}::${f.id}`;
+          if (c.folders[f.id].length > 0 && next[fk] === undefined) next[fk] = true;
+        }
+      }
+      return next;
+    });
+  }, [customerBuckets]);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -135,13 +215,90 @@ export default function AssetsPage() {
     }
   }
 
+  function toggleCustomer(key: string) {
+    setOpenCustomers((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function toggleFolder(customerKey: string, folderId: AssetFolderId) {
+    const fk = `${customerKey}::${folderId}`;
+    setOpenFolders((prev) => ({ ...prev, [fk]: !prev[fk] }));
+  }
+
+  function renderAssetTable(rows: AdminAsset[]) {
+    if (rows.length === 0) {
+      return <div className="asset-folder-empty">No assets in this folder yet.</div>;
+    }
+    return (
+      <table className="data-table asset-folder-table">
+        <thead>
+          <tr>
+            <th>Hostname</th>
+            <th>IP</th>
+            <th>Type</th>
+            <th>OS</th>
+            <th>Criticality</th>
+            <th>Status</th>
+            <th>Appliance</th>
+            <th>Last seen</th>
+            {canWrite && <th>Actions</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td>{row.hostname ?? "—"}</td>
+              <td>{row.ip_address ?? "—"}</td>
+              <td>{ASSET_TYPE_LABELS[row.asset_type as AssetType] ?? row.asset_type}</td>
+              <td>{row.os_name ?? "—"}</td>
+              <td>{row.criticality}</td>
+              <td>
+                <span className={`badge badge-${row.status}`}>{row.status}</span>
+              </td>
+              <td>{row.appliance_name ?? "—"}</td>
+              <td>{row.last_seen_at ?? "—"}</td>
+              {canWrite && (
+                <td>
+                  <RowActionsMenu
+                    actions={[
+                      {
+                        id: "edit",
+                        label: "Edit asset",
+                        onClick: () => openEdit(row),
+                      },
+                      {
+                        id: "deactivate",
+                        label: "Set inactive",
+                        danger: true,
+                        disabled: row.status === "inactive",
+                        onClick: async () => {
+                          try {
+                            await updateAsset(row.id, { status: "inactive" });
+                            setSuccess(`Asset ${row.hostname ?? row.id} set inactive.`);
+                            refetch();
+                          } catch (err) {
+                            setCreateError(apiErrorMessage(err, "Could not update asset."));
+                          }
+                        },
+                      },
+                    ]}
+                  />
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    );
+  }
+
   return (
     <div>
       <div className="page-header-row">
         <div>
           <h1 className="page-title">Protected Assets</h1>
           <p className="page-subtitle">
-            Inventory of customer assets the SOC is protecting. IP addresses are SOC-visible only.
+            Customer folders with OS and device-type categories. New assets land in the matching
+            folder automatically. IP addresses are SOC-visible only.
           </p>
         </div>
         {canWrite && (
@@ -163,6 +320,11 @@ export default function AssetsPage() {
           <h2 className="section-title" style={{ marginTop: 0 }}>
             Add Asset
           </h2>
+          <p className="page-subtitle" style={{ marginTop: 0 }}>
+            Choose the device type carefully — firewalls, switches, and load balancers go into their
+            own folders. For servers/workstations, set the OS so the asset sits under Windows /
+            Linux / macOS.
+          </p>
           <div className="form-grid">
             <label className="form-label">
               Customer
@@ -197,7 +359,7 @@ export default function AssetsPage() {
               >
                 {TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {ASSET_TYPE_LABELS[t]}
                   </option>
                 ))}
               </select>
@@ -232,7 +394,7 @@ export default function AssetsPage() {
             </label>
             <label className="form-label">
               OS
-              <input className="form-input" value={osName} onChange={(e) => setOsName(e.target.value)} />
+              <input className="form-input" value={osName} onChange={(e) => setOsName(e.target.value)} placeholder="e.g. Windows Server 2022" />
             </label>
             <label className="form-label">
               Owner
@@ -274,7 +436,7 @@ export default function AssetsPage() {
               >
                 {TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {t}
+                    {ASSET_TYPE_LABELS[t]}
                   </option>
                 ))}
               </select>
@@ -335,71 +497,58 @@ export default function AssetsPage() {
       {status === "loading" && <div className="state-message">Loading assets...</div>}
       {status === "forbidden" && <div className="state-message state-error">Access denied.</div>}
       {status === "error" && <div className="state-message state-error">{errorMessage}</div>}
-      {status === "success" && data && (
-        data.assets.length === 0 ? (
-          <div className="state-message">No protected assets yet.</div>
+      {status === "success" && (
+        customerBuckets.length === 0 ? (
+          <div className="state-message">No customers yet. Add a customer first, then assets.</div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Customer</th>
-                <th>Hostname</th>
-                <th>IP</th>
-                <th>Type</th>
-                <th>Criticality</th>
-                <th>Status</th>
-                <th>Appliance</th>
-                <th>Last seen</th>
-                {canWrite && <th>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {data.assets.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    {row.tenant_name} ({row.short_code})
-                  </td>
-                  <td>{row.hostname ?? "—"}</td>
-                  <td>{row.ip_address ?? "—"}</td>
-                  <td>{row.asset_type}</td>
-                  <td>{row.criticality}</td>
-                  <td>
-                    <span className={`badge badge-${row.status}`}>{row.status}</span>
-                  </td>
-                  <td>{row.appliance_name ?? "—"}</td>
-                  <td>{row.last_seen_at ?? "—"}</td>
-                  {canWrite && (
-                    <td>
-                      <RowActionsMenu
-                        actions={[
-                          {
-                            id: "edit",
-                            label: "Edit asset",
-                            onClick: () => openEdit(row),
-                          },
-                          {
-                            id: "deactivate",
-                            label: "Set inactive",
-                            danger: true,
-                            disabled: row.status === "inactive",
-                            onClick: async () => {
-                              try {
-                                await updateAsset(row.id, { status: "inactive" });
-                                setSuccess(`Asset ${row.hostname ?? row.id} set inactive.`);
-                                refetch();
-                              } catch (err) {
-                                setCreateError(apiErrorMessage(err, "Could not update asset."));
-                              }
-                            },
-                          },
-                        ]}
-                      />
-                    </td>
+          <div className="asset-tree">
+            {customerBuckets.map((customer) => {
+              const customerOpen = !!openCustomers[customer.key];
+              return (
+                <div key={customer.key} className="asset-tree-customer">
+                  <button
+                    type="button"
+                    className="asset-tree-row asset-tree-customer-row"
+                    onClick={() => toggleCustomer(customer.key)}
+                    aria-expanded={customerOpen}
+                  >
+                    <span className="asset-tree-chevron">{customerOpen ? "▾" : "▸"}</span>
+                    <span className="asset-tree-label">
+                      {customer.name}{" "}
+                      <span className="asset-tree-meta">({customer.shortCode})</span>
+                    </span>
+                    <span className="asset-tree-count">{customer.total}</span>
+                  </button>
+                  {customerOpen && (
+                    <div className="asset-tree-children">
+                      {ASSET_FOLDERS.map((folder) => {
+                        const fk = `${customer.key}::${folder.id}`;
+                        const folderOpen = !!openFolders[fk];
+                        const rows = customer.folders[folder.id];
+                        return (
+                          <div key={folder.id} className="asset-tree-folder">
+                            <button
+                              type="button"
+                              className="asset-tree-row asset-tree-folder-row"
+                              onClick={() => toggleFolder(customer.key, folder.id)}
+                              aria-expanded={folderOpen}
+                            >
+                              <span className="asset-tree-chevron">{folderOpen ? "▾" : "▸"}</span>
+                              <span className="asset-tree-label">{folder.label}</span>
+                              <span className="asset-tree-count">{rows.length}</span>
+                            </button>
+                            {folderOpen && (
+                              <div className="asset-tree-folder-body">{renderAssetTable(rows)}</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                </div>
+              );
+            })}
+          </div>
         )
       )}
     </div>

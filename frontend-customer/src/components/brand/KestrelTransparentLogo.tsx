@@ -43,7 +43,7 @@ export default function KestrelTransparentLogo({
       <path
         d="M64 8 L114 28 L104 92 L64 120 L24 92 L14 28 Z"
         fill="none"
-        stroke="#00F0FF"
+        stroke="#00AEEF"
         strokeWidth="3"
         strokeLinejoin="round"
         filter={`url(#${glowId})`}
@@ -53,23 +53,23 @@ export default function KestrelTransparentLogo({
       <path
         d="M64 16 L104 32 L96 86 L64 110 L32 86 L24 32 Z"
         fill="none"
-        stroke="#00F0FF"
+        stroke="#00AEEF"
         strokeWidth="1"
         strokeOpacity="0.3"
         strokeLinejoin="round"
       />
 
       {/* FALCON GEOMETRY & HEAD */}
-      <g stroke="#00F0FF" strokeWidth="2" fill="none" filter={`url(#${glowId})`}>
+      <g stroke="#00AEEF" strokeWidth="2" fill="none" filter={`url(#${glowId})`}>
         <path
           d="M64 30 L82 36 L94 50 L82 64 L64 70 L46 64 L34 50 L46 36 Z"
-          fill="#00F0FF"
+          fill="#00AEEF"
           fillOpacity="0.15"
         />
         <path d="M86 44 L102 50 L90 56 L82 50 Z" fill="#FFFFFF" stroke="#FFFFFF" strokeWidth="1" />
         <path d="M40 52 L12 66 M40 52 L22 88 M40 52 L30 102" strokeWidth="2.5" />
         <path d="M88 52 L116 66 M88 52 L106 88 M88 52 L98 102" strokeWidth="2.5" />
-        <path d="M64 70 L50 86 L64 100 L78 86 Z" fill="#00F0FF" fillOpacity="0.2" />
+        <path d="M64 70 L50 86 L64 100 L78 86 Z" fill="#00AEEF" fillOpacity="0.2" />
         <path d="M64 100 L64 116" strokeWidth="2" />
       </g>
     </svg>

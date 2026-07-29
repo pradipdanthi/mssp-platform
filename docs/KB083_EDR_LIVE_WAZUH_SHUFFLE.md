@@ -9,7 +9,7 @@ Status: **Live verified on control plane + Wazuh manager/agent lab** (2026-07-28
 - Payload includes `action`, `workflow` (`EDR_SHUFFLE_FORENSICS_WORKFLOW`, default `EDR_COLLECT_FORENSICS`), `agent_id`, `tenant_short_code`, `mode`.
 - **Verified:** HTTP 200 from Shuffle for `COLLECT_FORENSICS` (API + direct client).
 
-### Wazuh Active Response (Linux agent `001` / `linux-endpoint-lab`)
+### Wazuh Active Response (Linux lab agent — re-enroll after manual VM 105 reinstall)
 Custom AR scripts on manager + agent:
 
 | Command | Executable | Effect |

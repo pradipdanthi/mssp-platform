@@ -50,3 +50,35 @@ class AuthSettings:
 @lru_cache
 def get_auth_settings() -> AuthSettings:
     return AuthSettings()
+
+
+# ---------------------------------------------------------------------------
+# Infrastructure / service endpoints — env-driven with LAN defaults
+# ---------------------------------------------------------------------------
+
+class InfraSettings:
+    """
+    Centralized infrastructure configuration with local LAN defaults.
+    These match the existing home-lab demo environment so everything works
+    out of the box. Override via environment variables for cloud deployment.
+    """
+
+    def __init__(self) -> None:
+        self.wazuh_manager_host = _env("WAZUH_MANAGER_HOST", "192.168.0.211")
+        self.wazuh_api_url = _env("WAZUH_API_URL", f"https://{self.wazuh_manager_host}:55000")
+        self.control_plane_host = _env("CONTROL_PLANE_HOST", "192.168.0.201")
+        self.control_plane_url = _env("CONTROL_PLANE_URL", f"http://{self.control_plane_host}:8000")
+        self.shuffle_host = _env("SHUFFLE_HOST", "192.168.0.212")
+        self.shuffle_webhook_url = _env(
+            "SHUFFLE_WEBHOOK_URL",
+            f"http://{self.shuffle_host}:3001/api/v1/hooks/webhook",
+        )
+        self.thehive_host = _env("THEHIVE_HOST", "192.168.0.212")
+        self.thehive_url = _env("THEHIVE_URL", f"http://{self.thehive_host}:9000")
+        self.greenbone_host = _env("GREENBONE_HOST", "192.168.0.219")
+        self.suricata_host = _env("SURICATA_HOST", "192.168.0.216")
+
+
+@lru_cache
+def get_infra_settings() -> InfraSettings:
+    return InfraSettings()

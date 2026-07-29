@@ -24,8 +24,14 @@ export interface TokenResponse {
 export function login(email: string, password: string): Promise<TokenResponse> {
   return request<TokenResponse>("/auth/login", {
     method: "POST",
-    body: { email, password },
+    body: { email, password, portal: "customer" },
   });
+}
+
+const CUSTOMER_ROLES = new Set(["customer_admin", "customer_viewer"]);
+
+export function isCustomerPortalUser(user: UserPublic | null): boolean {
+  return !!user && CUSTOMER_ROLES.has(user.role);
 }
 
 export function me(): Promise<UserPublic> {

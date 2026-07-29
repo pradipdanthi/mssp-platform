@@ -43,12 +43,15 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | Item | Value |
 |---|---|
 | Latest feature tag | **KB-035** — Customer Appliance Detail (`1ac1df3`, `kb035-customer-appliance-detail-validated`) |
+| Post-KB-035 stack (git) | **KB-083/084 EDR** committed through `73376d6`; **KB-088 snapshot** (user mgmt, portal auth, `/assets` SPA, Windows telemetry) — see `docs/KB088_USER_MGMT_PORTAL_AUTH_WINDOWS_TELEMETRY.md` |
 | Roadmap docs | **KB-036–KB-060** (+ later ops/integration KBs) |
-| Active branch (typical) | `kb039-kb060-platform-roadmap-execution` |
+| Active branch (typical) | `main` (control plane VM 100) |
 | Engine provisioning | **KB-072** Tenant Engine Provisioning (Wazuh group + TheHive org/tag) |
 | Tenant deployment mode | **KB-073** — cloud with/without appliance, on-prem with/without appliance, hybrid |
 | Contract-ready onboard | **KB-075** — entitlements + engines + required portal admin on create |
 | Vuln path | **KB-078** Nuclei+Vuls free stack (primary); **KB-068–070** Greenbone CE optional; **KB-076** upgrade requests; **KB-077** Enterprise deferred |
+| Windows monitoring bar | Agent enroll **+** Sysmon/4688 telemetry bootstrap (package or `scripts/bootstrap_windows_telemetry.ps1`) — agent alone is not process-EDR ready |
+| Portal auth | Admin `:3000` = staff roles only; Customer `:3001` = customer roles only (`portal` on login) |
 
 ---
 
@@ -68,7 +71,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 |---|---|---|---|
 | 101 | `wazuh-stack` (`192.168.0.211`) | Wazuh Manager/Indexer/Dashboard | Live 4.14.6 |
 | 102 | `thehive_shuffle` (`192.168.0.212`) | TheHive + Shuffle | Live |
-| 105 | Linux endpoint (`192.168.0.215`) | Wazuh agent | Active |
+| 105 | Linux endpoint lab | **Decommissioned** (2026-07-29) — Proxmox VM destroyed; reinstall Ubuntu manually when ready | — |
 | 106 | `suricata-sensor` (`192.168.0.216`) | Suricata IDS + Wazuh agent | Live |
 | 109 | `greenbone` (`192.168.0.219`) | Greenbone CE + **Nuclei + Vuls** (`/opt/mssp-vuln-free`) | Live — scanners co-located; Enterprise deferred (KB-077) |
 | 112 | `automation` (`192.168.0.222`) | Ansible controller | Ready |
@@ -85,6 +88,7 @@ Customer portal must never expose raw logs, raw engine alerts, raw JSON, packet 
 
 | Path | Purpose |
 |---|---|
+| `docs/KB088_USER_MGMT_PORTAL_AUTH_WINDOWS_TELEMETRY.md` | Redeploy snapshot: user mgmt, portal auth, SPA, Windows telemetry |
 | `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` | Enterprise roadmap |
 | `docs/KB072_TENANT_ENGINE_PROVISIONING.md` | Tenant → engine binding |
 | `docs/KB077_GREENBONE_ENTERPRISE_READINESS_PLAN.md` | Vuln scanner enterprise gaps + phases |

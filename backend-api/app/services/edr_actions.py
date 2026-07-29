@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from app.db.session import db_transaction, fetch_one
 from app.schemas.edr import EdrActionExecuteRequest, EdrActionType
+from app.services.audit_service import audit_from_user
 from app.services import edr_forensics_storage, shuffle_edr_client, wazuh_client
 
 logger = logging.getLogger(__name__)
@@ -21,12 +22,31 @@ READ_ONLY_CUSTOMER = frozenset({"customer_viewer"})
 ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND") or "mssp-isolate-host").strip()
 KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND") or "mssp-kill-process").strip()
 BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND") or "mssp-block-hash").strip()
+
+# Windows variants (Wazuh AR framework dispatches <command>.exe on Windows agents)
+WIN_ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND_WIN") or "mssp-isolate-host.exe").strip()
+WIN_KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND_WIN") or "mssp-kill-process.exe").strip()
+WIN_BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND_WIN") or "mssp-block-hash.exe").strip()
+
+
+def _resolve_ar_command(base_command: str, win_command: str, agent_id: Optional[str]) -> str:
+    """Pick the OS-appropriate AR command name based on the agent's platform."""
+    if agent_id and wazuh_client.credentials_configured():
+        try:
+            agent_os = wazuh_client.get_agent_os(agent_id)
+            if agent_os == "windows":
+                return win_command
+        except Exception:
+            pass
+    return base_command
 ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "120").strip()
-CALLBACK_PUBLIC_BASE = (
-    os.getenv("EDR_PUBLIC_API_BASE")
-    or os.getenv("MSSP_PUBLIC_API_BASE")
-    or "http://192.168.0.201:8000"
-).rstrip("/")
+def _get_callback_base() -> str:
+    from app.core.config import get_infra_settings
+    return (
+        os.getenv("EDR_PUBLIC_API_BASE")
+        or os.getenv("MSSP_PUBLIC_API_BASE")
+        or get_infra_settings().control_plane_url
+    ).rstrip("/")
 
 ALLOWED_CUSTOMER_ACTIONS = frozenset(
     {"ISOLATE_HOST", "UNISOLATE_HOST", "KILL_PROCESS", "COLLECT_FORENSICS", "BLOCK_HASH"}
@@ -395,7 +415,7 @@ def execute_edr_action(
         message="Queued",
     )
     _update_execution(execution_id, "executing", "Dispatching action")
-    callback_url = f"{CALLBACK_PUBLIC_BASE}/v1/edr/actions/callback"
+    callback_url = f"{_get_callback_base()}/v1/edr/actions/callback"
 
     try:
         if body.action_type == "ISOLATE_HOST":
@@ -408,9 +428,10 @@ def execute_edr_action(
                 return execution_id, "failed", "Confirmation required for host isolation", None, None
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for isolation")
+            ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
             wazuh_client.run_active_response(
                 agent_id=agent_id,
-                command=ISOLATE_AR_COMMAND,
+                command=ar_cmd,
                 arguments=[ISOLATE_SECONDS],
             )
             with db_transaction() as cur:
@@ -442,39 +463,48 @@ def execute_edr_action(
             )
             ok, verify_msg = verify_isolation_state(agent_id, expect_isolated=True)
             if ok:
+                msg = f"Host isolation applied (auto-release ~{ISOLATE_SECONDS}s)"
                 _update_execution(
                     execution_id,
                     "verified",
                     f"Isolation dispatched to endpoint {agent_id}; {verify_msg}",
                     verified=True,
                 )
-                return (
-                    execution_id,
-                    "verified",
-                    f"Host isolation applied (auto-release ~{ISOLATE_SECONDS}s)",
-                    None,
-                    None,
+                _audit_success(
+                    user,
+                    action_type=body.action_type,
+                    execution_id=execution_id,
+                    tenant_id=tenant_id,
+                    status="verified",
+                    message=msg,
+                    agent_id=agent_id,
                 )
+                return execution_id, "verified", msg, None, None
+            msg = f"Isolation dispatched to endpoint {agent_id}"
             _update_execution(
                 execution_id,
                 "success",
                 f"Isolation dispatched; verification pending: {verify_msg}",
             )
-            return (
-                execution_id,
-                "success",
-                f"Isolation dispatched to endpoint {agent_id}",
-                None,
-                None,
+            _audit_success(
+                user,
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                status="success",
+                message=msg,
+                agent_id=agent_id,
             )
+            return execution_id, "success", msg, None, None
 
         if body.action_type == "UNISOLATE_HOST":
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for un-isolate")
             # Pass "delete" so the AR script restores connectivity.
+            ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
             wazuh_client.run_active_response(
                 agent_id=agent_id,
-                command=ISOLATE_AR_COMMAND,
+                command=ar_cmd,
                 arguments=["delete"],
             )
             with db_transaction() as cur:
@@ -505,6 +535,15 @@ def execute_edr_action(
                 f"{msg}; {verify_msg}",
                 verified=ok,
             )
+            _audit_success(
+                user,
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                status=st,
+                message=msg,
+                agent_id=agent_id,
+            )
             return execution_id, st, msg, None, None
 
         if body.action_type == "KILL_PROCESS":
@@ -512,9 +551,10 @@ def execute_edr_action(
                 raise ValueError("pid is required for KILL_PROCESS")
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for kill")
+            ar_cmd = _resolve_ar_command(KILL_AR_COMMAND, WIN_KILL_AR_COMMAND, agent_id)
             wazuh_client.run_active_response(
                 agent_id=agent_id,
-                command=KILL_AR_COMMAND,
+                command=ar_cmd,
                 arguments=[str(body.pid)],
             )
             shuffle_edr_client.post_edr_workflow(
@@ -530,6 +570,15 @@ def execute_edr_action(
             )
             msg = f"Kill process dispatched to endpoint {agent_id} pid={body.pid}"
             _update_execution(execution_id, "success", msg)
+            _audit_success(
+                user,
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                status="success",
+                message=msg,
+                agent_id=agent_id,
+            )
             return execution_id, "success", msg, None, None
 
         if body.action_type == "COLLECT_FORENSICS":
@@ -543,7 +592,7 @@ def execute_edr_action(
                 "workflow": shuffle_edr_client.forensics_workflow_name(),
                 "execution_id": execution_id,
                 "callback_url": callback_url,
-                "forensics_complete_url": f"{CALLBACK_PUBLIC_BASE}/v1/edr/forensics/complete",
+                "forensics_complete_url": f"{_get_callback_base()}/v1/edr/forensics/complete",
                 "agent_id": agent_id,
                 "tenant_id": tenant_id,
                 "tenant_short_code": body.tenant_short_code,
@@ -565,6 +614,15 @@ def execute_edr_action(
                 else shuffle_msg
             )
             _update_execution(execution_id, status if ok else "failed", msg)
+            _audit_success(
+                user,
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                status=status if ok else "failed",
+                message=msg,
+                agent_id=agent_id,
+            )
             return (
                 execution_id,
                 status if ok else "failed",
@@ -579,9 +637,10 @@ def execute_edr_action(
                 raise ValueError("file_hash_sha256 must be 64 hex characters")
             ar_msg = "Endpoint hash block skipped (no agent)"
             if agent_id and wazuh_client.credentials_configured():
+                ar_cmd = _resolve_ar_command(BLOCK_HASH_AR_COMMAND, WIN_BLOCK_HASH_AR_COMMAND, agent_id)
                 wazuh_client.run_active_response(
                     agent_id=agent_id,
-                    command=BLOCK_HASH_AR_COMMAND,
+                    command=ar_cmd,
                     arguments=[h],
                 )
                 ar_msg = f"Hash block dispatched to endpoint {agent_id}"
@@ -599,10 +658,55 @@ def execute_edr_action(
             status = "success" if ok else "failed"
             msg = f"{ar_msg}; orchestration: {shuffle_msg}"
             _update_execution(execution_id, status, msg)
+            _audit_success(
+                user,
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                status=status,
+                message=msg,
+                agent_id=agent_id,
+            )
             return execution_id, status, msg, None, None
 
         raise ValueError("Unknown action")
     except Exception as exc:
         logger.exception("EDR action failed execution_id=%s", execution_id)
         _update_execution(execution_id, "failed", str(exc)[:500])
+        try:
+            audit_from_user(
+                user,
+                action=f"EDR_{body.action_type}",
+                entity_type="edr_action",
+                entity_id=execution_id,
+                tenant_id=tenant_id,
+                action_status="FAILED",
+                details={"error": str(exc)[:300], "agent_id": agent_id},
+            )
+        except Exception:
+            pass
         return execution_id, "failed", str(exc)[:500], None, None
+
+
+def _audit_success(
+    user: Dict[str, Any],
+    *,
+    action_type: str,
+    execution_id: str,
+    tenant_id: str,
+    status: str,
+    message: str,
+    agent_id: Optional[str],
+) -> None:
+    try:
+        audit_from_user(
+            user,
+            action=f"EDR_{action_type}",
+            entity_type="edr_action",
+            entity_id=execution_id,
+            tenant_id=tenant_id,
+            action_status="SUCCESS" if status != "failed" else "FAILED",
+            details={"status": status, "message": message[:500], "agent_id": agent_id},
+        )
+    except Exception:
+        logger.exception("EDR audit write failed")

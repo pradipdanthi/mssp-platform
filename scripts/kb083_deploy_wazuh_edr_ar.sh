@@ -5,7 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/deploy/wazuh-active-response"
 WAZUH_HOST="${WAZUH_MANAGER_HOST:-192.168.0.211}"
-LINUX_AGENT_HOST="${WAZUH_LINUX_AGENT_HOST:-192.168.0.215}"
+LINUX_AGENT_HOST="${WAZUH_LINUX_AGENT_HOST:?Set WAZUH_LINUX_AGENT_HOST to the Linux agent IP}"
 KEY="${WAZUH_SSH_KEY:-/home/secadmin/.ssh/id_ed25519_wazuh_stack}"
 LINUX_KEY="${WAZUH_LINUX_SSH_KEY:-/home/secadmin/.ssh/id_ed25519_linux_endpoint}"
 SSH_USER="${WAZUH_SSH_USER:-secadmin}"

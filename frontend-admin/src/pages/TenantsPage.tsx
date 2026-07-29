@@ -8,6 +8,9 @@ import {
   TenantSlaLevel,
   TenantStatus,
   createTenant,
+  downloadTenantAgentPackage,
+  getTenantLinuxInstallCommand,
+  rotateTenantLinuxInstallCommand,
   getTenantDetail,
   getTenantEngineBinding,
   getTenants,
@@ -25,6 +28,7 @@ import CreateEntitlementsFields, {
 } from "../components/CreateEntitlementsFields";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SubscriptionEntitlementsPanel from "../components/SubscriptionEntitlementsPanel";
+import TenantCustomerUsersPanel from "../components/TenantCustomerUsersPanel";
 import {
   COMPANY_SIZE_OPTIONS,
   DATA_RESIDENCY_OPTIONS,
@@ -310,6 +314,12 @@ function profilePayloadFromForm(form: CreateFormState | EditFormState) {
 export default function TenantsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin";
+  const isSocStaff =
+    user?.role === "platform_admin" ||
+    user?.role === "soc_manager" ||
+    user?.role === "soc_analyst";
+  const canManageCustomerUsers =
+    user?.role === "platform_admin" || user?.role === "soc_manager";
   const { status, data, errorMessage, refetch } = useAdminQuery(() => getTenants(), []);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -326,9 +336,13 @@ export default function TenantsPage() {
   const editPanelRef = useRef<HTMLFormElement | null>(null);
 
   const [subscriptionTenant, setSubscriptionTenant] = useState<Tenant | null>(null);
+  const [usersTenant, setUsersTenant] = useState<Tenant | null>(null);
+  const [editTab, setEditTab] = useState<"details" | "users">("details");
   const [engineBinding, setEngineBinding] = useState<TenantEngineBinding | null>(null);
   const [engineTenant, setEngineTenant] = useState<Tenant | null>(null);
   const [engineBusy, setEngineBusy] = useState(false);
+  const [linuxInstallCmd, setLinuxInstallCmd] = useState<string | null>(null);
+  const [linuxInstallBusy, setLinuxInstallBusy] = useState(false);
   const [offboardTenant, setOffboardTenant] = useState<Tenant | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -390,6 +404,7 @@ export default function TenantsPage() {
 
   function openEdit(tenant: Tenant) {
     setShowCreate(false);
+    setEditTab("details");
     setEditing(tenant);
     setEditForm({
       name: tenant.name,
@@ -671,15 +686,41 @@ export default function TenantsPage() {
   async function showEngineBinding(tenant: Tenant) {
     setActionError(null);
     setEngineTenant(tenant);
+    setLinuxInstallCmd(null);
     try {
       const binding = await getTenantEngineBinding(tenant.id);
       setEngineBinding(binding);
+      try {
+        const cmd = await getTenantLinuxInstallCommand(tenant.id);
+        setLinuxInstallCmd(cmd.one_liner);
+      } catch {
+        /* optional until first publish */
+      }
     } catch {
       if (!canWrite) {
         setActionError("No engine binding for this customer yet.");
         return;
       }
       await runProvision(tenant);
+    }
+  }
+
+  async function loadOrRotateLinuxInstall(rotate: boolean) {
+    if (!engineTenant || linuxInstallBusy) return;
+    setLinuxInstallBusy(true);
+    setActionError(null);
+    try {
+      const cmd = rotate
+        ? await rotateTenantLinuxInstallCommand(engineTenant.id)
+        : await getTenantLinuxInstallCommand(engineTenant.id);
+      setLinuxInstallCmd(cmd.one_liner);
+      if (rotate) {
+        setEditSuccess("Linux install command rotated. Old one-liners stop working.");
+      }
+    } catch (err) {
+      setActionError(apiErrorMessage(err, "Could not load Linux install command."));
+    } finally {
+      setLinuxInstallBusy(false);
     }
   }
 
@@ -791,20 +832,33 @@ export default function TenantsPage() {
         />
       )}
 
+      {usersTenant && (
+        <TenantCustomerUsersPanel
+          tenant={usersTenant}
+          canWrite={canManageCustomerUsers}
+          onClose={() => setUsersTenant(null)}
+        />
+      )}
+
       {engineBinding && (
         <div className="card-surface" style={{ marginBottom: "1rem", padding: "1rem" }}>
           <div className="page-header-row" style={{ marginBottom: "0.75rem" }}>
             <h2 className="page-title" style={{ fontSize: "1.05rem", margin: 0 }}>
               Engine binding
             </h2>
-            <button className="btn btn-ghost" type="button" onClick={() => { setEngineBinding(null); setEngineTenant(null); }}>
+            <button className="btn btn-ghost" type="button" onClick={() => { setEngineBinding(null); setEngineTenant(null); setLinuxInstallCmd(null); }}>
               Close
             </button>
           </div>
           <p className="page-subtitle" style={{ marginTop: 0 }}>
-            Enroll customer devices into the Wazuh agent group below. Alerts tagged with the TheHive
-            tenant tag map back to this customer automatically.
+            Download a preconfigured agent package for this customer. The installer enrolls the
+            endpoint into the Wazuh group below automatically.
           </p>
+          <div className="state-message" style={{ marginBottom: "0.75rem" }}>
+            Each ZIP is tied to <strong>this customer only</strong> (folder name includes their
+            short code, e.g. <code>mssp-agent-alphawincorp-6vs2-windows.zip</code>). Do not reuse an
+            old package from a deleted or different customer — always download again from this panel.
+          </div>
           <ul style={{ margin: 0, paddingLeft: "1.2rem", lineHeight: 1.6 }}>
             <li>
               <strong>Wazuh group:</strong> <code>{engineBinding.wazuh_agent_group}</code> —{" "}
@@ -821,15 +875,118 @@ export default function TenantsPage() {
             </li>
           </ul>
           {canWrite && engineTenant && (
-            <button
-              className="btn btn-primary"
-              type="button"
-              style={{ marginTop: "0.75rem" }}
-              disabled={engineBusy}
-              onClick={() => void runProvision(engineTenant)}
-            >
-              Retry provision
-            </button>
+            <div className="edr-control-actions" style={{ marginTop: "0.75rem" }}>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={engineBusy}
+                onClick={() => {
+                  void downloadTenantAgentPackage(engineTenant.id, "windows", engineTenant.short_code).catch((err) =>
+                    setActionError(apiErrorMessage(err, "Could not download Windows agent package"))
+                  );
+                }}
+              >
+                Download Windows package
+              </button>
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={engineBusy}
+                onClick={() => {
+                  void downloadTenantAgentPackage(engineTenant.id, "linux", engineTenant.short_code).catch((err) =>
+                    setActionError(apiErrorMessage(err, "Could not download Linux agent package"))
+                  );
+                }}
+              >
+                Download Linux package
+              </button>
+              <button
+                className="btn btn-secondary"
+                type="button"
+                disabled={engineBusy}
+                onClick={() => {
+                  void downloadTenantAgentPackage(engineTenant.id, "all", engineTenant.short_code).catch((err) =>
+                    setActionError(apiErrorMessage(err, "Could not download agent package"))
+                  );
+                }}
+              >
+                Download both (ZIP)
+              </button>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                disabled={engineBusy}
+                onClick={() => void runProvision(engineTenant)}
+              >
+                Retry provision
+              </button>
+            </div>
+          )}
+          {engineTenant && (
+            <div style={{ marginTop: "1rem" }}>
+              <p style={{ margin: "0 0 0.5rem", fontWeight: 600 }}>
+                Linux headless install (no browser)
+              </p>
+              <p className="page-subtitle" style={{ marginTop: 0 }}>
+                Copy this single command onto the Linux server — it downloads the customer package
+                from the control plane and installs the agent (same idea as Windows download, for
+                servers without a GUI).
+              </p>
+              {linuxInstallCmd ? (
+                <pre
+                  style={{
+                    margin: 0,
+                    padding: "0.75rem",
+                    background: "var(--soc-surface-hover, #18283f)",
+                    borderRadius: 6,
+                    overflowX: "auto",
+                    fontSize: "0.85rem",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  {linuxInstallCmd}
+                </pre>
+              ) : (
+                <p className="page-subtitle" style={{ marginTop: 0 }}>
+                  Install command not loaded yet.
+                </p>
+              )}
+              <div className="edr-control-actions" style={{ marginTop: "0.5rem" }}>
+                <button
+                  className="btn btn-secondary"
+                  type="button"
+                  disabled={linuxInstallBusy}
+                  onClick={() => void loadOrRotateLinuxInstall(false)}
+                >
+                  {linuxInstallBusy ? "Loading…" : "Show / refresh install command"}
+                </button>
+                {canWrite && (
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    disabled={linuxInstallBusy}
+                    onClick={() => void loadOrRotateLinuxInstall(true)}
+                  >
+                    Rotate token
+                  </button>
+                )}
+                {linuxInstallCmd && (
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(linuxInstallCmd).then(
+                        () => setEditSuccess("Linux install command copied."),
+                        () => setActionError("Could not copy to clipboard.")
+                      );
+                    }}
+                  >
+                    Copy command
+                  </button>
+                )}
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -1418,6 +1575,32 @@ export default function TenantsPage() {
           <h2 className="section-title" style={{ marginTop: 0 }}>
             {canWrite ? "Edit" : "View"} {editing.name} ({editing.short_code})
           </h2>
+          <div className="tab-row" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+            <button
+              type="button"
+              className={"btn " + (editTab === "details" ? "btn-primary" : "btn-ghost")}
+              onClick={() => setEditTab("details")}
+            >
+              Customer details
+            </button>
+            {isSocStaff ? (
+              <button
+                type="button"
+                className={"btn " + (editTab === "users" ? "btn-primary" : "btn-ghost")}
+                onClick={() => setEditTab("users")}
+              >
+                User management
+              </button>
+            ) : null}
+          </div>
+          {editTab === "users" ? (
+            <TenantCustomerUsersPanel
+              tenant={editing}
+              canWrite={canManageCustomerUsers}
+              onClose={() => setEditTab("details")}
+            />
+          ) : (
+            <>
           <p className="page-subtitle" style={{ marginBottom: "12px" }}>
             Short code cannot be changed after creation.
             {!canWrite ? " You can view details but not save changes." : ""}
@@ -1880,6 +2063,8 @@ export default function TenantsPage() {
               {canWrite ? "Cancel" : "Close"}
             </button>
           </div>
+            </>
+          )}
         </form>
       )}
 
@@ -1935,6 +2120,7 @@ export default function TenantsPage() {
                 <th>Appliances</th>
                 <th>Protected Assets</th>
                 <th>Incidents</th>
+                {isSocStaff ? <th>Portal users</th> : null}
                 {canWrite && <th>Actions</th>}
               </tr>
             </thead>
@@ -1977,6 +2163,17 @@ export default function TenantsPage() {
                   <td>{tenant.appliances}</td>
                   <td>{tenant.protected_assets}</td>
                   <td>{tenant.incidents}</td>
+                  {isSocStaff ? (
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-ghost"
+                        onClick={() => setUsersTenant(tenant)}
+                      >
+                        Manage users
+                      </button>
+                    </td>
+                  ) : null}
                   {canWrite && (
                     <td>
                       <RowActionsMenu
@@ -1988,8 +2185,13 @@ export default function TenantsPage() {
                           },
                           {
                             id: "subscription",
-                            label: "Change Subscription",
+                            label: "Change Subscription / enable services",
                             onClick: () => setSubscriptionTenant(tenant),
+                          },
+                          {
+                            id: "users",
+                            label: "Users",
+                            onClick: () => setUsersTenant(tenant),
                           },
                           {
                             id: "engines",

@@ -11,6 +11,10 @@ import react from "@vitejs/plugin-react";
 // cross-origin request at all.
 export default defineConfig({
   plugins: [react()],
+  build: {
+    // Avoid clashing with React route /assets (Vite default assetsDir breaks SPA refresh).
+    assetsDir: "bundled",
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { login as apiLogin, me as apiMe, UserPublic } from "../api/auth";
+import { login as apiLogin, me as apiMe, isCustomerPortalUser, UserPublic } from "../api/auth";
 import { ApiError, setAuthToken } from "../api/client";
 
 const TOKEN_STORAGE_KEY = "mssp_customer_access_token";
@@ -40,6 +40,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthToken(stored);
     apiMe()
       .then((fetchedUser) => {
+        if (!isCustomerPortalUser(fetchedUser)) {
+          sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+          setAuthToken(null);
+          setToken(null);
+          setUser(null);
+          setError("MSSP staff must use the admin portal on port 3000.");
+          return;
+        }
         setToken(stored);
         setUser(fetchedUser);
       })
@@ -56,6 +64,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const result = await apiLogin(email, password);
+      if (!isCustomerPortalUser(result.user)) {
+        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+        setAuthToken(null);
+        setError("MSSP staff must sign in on the admin portal (port 3000).");
+        throw new ApiError(403, "Wrong portal");
+      }
       sessionStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
       setAuthToken(result.access_token);
       setToken(result.access_token);

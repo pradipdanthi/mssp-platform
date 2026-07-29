@@ -24,6 +24,18 @@ from app.api.routes.soc_sync import router as soc_sync_router
 from app.api.routes.tenant_management import router as tenant_management_router
 from app.api.routes.user_management import router as user_management_router
 from app.api.routes.admin_onboarding_configs import router as admin_onboarding_configs_router
+from app.api.routes.admin_agent_packages import router as admin_agent_packages_router
+from app.api.routes.delegated_user_management_v1 import router as delegated_user_management_v1_router
+from app.api.routes.admin_customers_v1 import router as admin_customers_v1_router
+from app.api.routes.audit_logs import (
+    admin_router as audit_admin_router,
+    customer_router as audit_customer_router,
+    v1_admin_router as audit_v1_admin_router,
+    v1_customer_router as audit_v1_customer_router,
+)
+from app.api.routes.customer_agent_packages import router as customer_agent_packages_router
+from app.api.routes.public_agent_install import router as public_agent_install_router
+from app.api.routes.customer_users import router as customer_users_router
 from app.api.routes.edr import router as edr_router
 from app.api.routes.entitlements import router as entitlements_router
 from app.api.routes.vuln_sync import router as vuln_sync_router
@@ -103,3 +115,36 @@ app.include_router(edr_router)
 
 # KB-084: endpoint onboarding config packages (Sysmon/Osquery templates).
 app.include_router(admin_onboarding_configs_router)
+
+# KB-086: per-tenant agent install packages (Windows/Linux) + public Linux one-liner.
+app.include_router(admin_agent_packages_router)
+app.include_router(customer_agent_packages_router)
+app.include_router(public_agent_install_router)
+
+# KB-085: customer user mgmt, audit logs, v1 customer onboarding alias.
+app.include_router(customer_users_router)
+app.include_router(audit_admin_router)
+app.include_router(audit_customer_router)
+app.include_router(audit_v1_admin_router)
+app.include_router(audit_v1_customer_router)
+app.include_router(admin_customers_v1_router)
+app.include_router(delegated_user_management_v1_router)
+
+
+# ---------------------------------------------------------------------------
+# Background tasks
+# ---------------------------------------------------------------------------
+import asyncio
+from app.services.edr_sweeper import edr_sweeper_loop
+
+_sweeper_task = None
+
+@app.on_event("startup")
+async def _start_background_tasks():
+    global _sweeper_task
+    _sweeper_task = asyncio.create_task(edr_sweeper_loop())
+
+@app.on_event("shutdown")
+async def _stop_background_tasks():
+    if _sweeper_task:
+        _sweeper_task.cancel()

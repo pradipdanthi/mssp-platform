@@ -33,7 +33,7 @@ if grep -q -- "--gmp-password" scripts/kb070_pull_greenbone_findings.sh; then fa
 grep -q "Instant path\|instant" docs/KB070_GREENBONE_LIVE_PULLER.md || fail "doc must describe instant path"
 grep -q "never commit\|Never commit\|never printed" docs/KB070_GREENBONE_LIVE_PULLER.md || fail "doc secrets rule"
 grep -q "default_tenant_short_code" config/greenbone_host_tenant_map.yml || fail "map missing default"
-grep -q "192.168.0.215" config/greenbone_host_tenant_map.yml || fail "map missing lab endpoint"
+grep -q "192.168.0.216" config/greenbone_host_tenant_map.yml || fail "map missing lab sensor host"
 # Mapping file must not embed credential-looking assignments
 if grep -vE '^\s*#' config/greenbone_host_tenant_map.yml | grep -qiE '(^|[^a-z])(password|api_key)\s*:'; then
   fail "secrets in map file"

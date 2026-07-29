@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# KB-070: Start (or reuse) the lab Full-and-fast scan of linux-endpoint 192.168.0.215.
+# KB-070: Start (or reuse) a lab Full-and-fast scan (set TARGET_HOST).
+# Example: TARGET_HOST=192.168.0.216 ./scripts/kb070_greenbone_start_lab_scan.sh
 set -euo pipefail
 
 GREENBONE_SSH_HOST="${GREENBONE_SSH_HOST:-greenbone}"
-TARGET_HOST="${TARGET_HOST:-192.168.0.215}"
+TARGET_HOST="${TARGET_HOST:?Set TARGET_HOST to the scan target IP}"
 TASK_NAME="${TASK_NAME:-mssp-lab-linux-full-and-fast}"
 TARGET_NAME="${TARGET_NAME:-mssp-lab-linux-endpoint}"
 

@@ -6,7 +6,7 @@ structurally impossible for a password hash to leak through this model,
 because the field simply does not exist on it.
 """
 
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -14,6 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class LoginRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1, max_length=256)
+    # admin (:3000) vs customer (:3001). When set, wrong portal roles are rejected at login.
+    portal: Optional[Literal["admin", "customer"]] = None
 
 
 class UserPublic(BaseModel):
