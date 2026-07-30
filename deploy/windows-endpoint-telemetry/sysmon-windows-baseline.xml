@@ -1,5 +1,5 @@
 <!--
-  MSSP Control Plane — Windows process / network telemetry baseline
+  MSSP Control Plane - Windows process / network telemetry baseline
   Adapted from community Sysmon configuration practices (SwiftOnSecurity-style).
   Deploy via endpoint onboarding package. Do not rename Event IDs.
 -->

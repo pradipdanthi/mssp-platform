@@ -1,6 +1,18 @@
-import { useMemo, useState } from "react";
-import { AuditLog, getAuditLogs } from "../api/admin";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { getAuditLogs } from "../api/admin";
+import ListToolbar from "../components/ListToolbar";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+
+const ACTION_OPTIONS = [
+  { value: "EDR_ISOLATE_HOST", label: "Isolate / quarantine host" },
+  { value: "EDR_UNISOLATE_HOST", label: "Un-isolate / release host" },
+  { value: "EDR_KILL_PROCESS", label: "Kill process" },
+  { value: "EDR_BLOCK_HASH", label: "Block file hash" },
+  { value: "EDR_COLLECT_FORENSICS", label: "Collect forensics" },
+  { value: "LOGIN_SUCCESS", label: "Login succeeded" },
+  { value: "LOGIN_FAILURE", label: "Login failed" },
+  { value: "PASSWORD_CHANGE", label: "Password changed" },
+];
 
 function downloadBlob(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -14,54 +26,48 @@ function downloadBlob(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-function toCsv(rows: AuditLog[]): string {
-  const header = [
-    "created_at",
-    "actor_email",
-    "action",
-    "entity_type",
-    "entity_id",
-    "tenant_name",
-    "short_code",
-    "source_ip",
-    "details_json",
-  ];
-  const escape = (v: unknown) => {
-    const s = v == null ? "" : String(v);
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
-  const lines = [header.join(",")];
-  for (const r of rows) {
-    lines.push(
-      [
-        r.created_at,
-        r.actor_email,
-        r.action,
-        r.entity_type,
-        r.entity_id,
-        r.tenant_name,
-        r.short_code,
-        r.source_ip,
-        r.details ? JSON.stringify(r.details) : "",
-      ]
-        .map(escape)
-        .join(",")
-    );
-  }
-  return lines.join("\n");
-}
-
 export default function AuditLogsPage() {
-  const { status, data, errorMessage } = useAdminQuery(() => getAuditLogs(), []);
-  const [actorFilter, setActorFilter] = useState<string | null>(null);
-  const [selected, setSelected] = useState<AuditLog | null>(null);
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const qFilter = params.get("q") ?? "";
+  const actionFilter = params.get("action") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
 
-  const rows = useMemo(() => {
-    const all = data?.audit_logs ?? [];
-    if (!actorFilter) return all;
-    return all.filter((r) => (r.actor_email ?? "").toLowerCase() === actorFilter.toLowerCase());
-  }, [data, actorFilter]);
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
+  const { status, data, errorMessage } = useAdminQuery(
+    () =>
+      getAuditLogs({
+        page,
+        page_size: pageSize,
+        ...(qFilter ? { q: qFilter } : {}),
+        ...(actionFilter ? { action_type: actionFilter } : {}),
+      }),
+    [qFilter, actionFilter, page, pageSize]
+  );
+
+  const rows = status === "success" && data ? data.audit_logs : [];
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? rows.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   return (
     <div>
@@ -69,25 +75,11 @@ export default function AuditLogsPage() {
         <div>
           <h1 className="page-title">Audit Log</h1>
           <p className="page-subtitle">
-            Connected platform actions with actor / entity drill-down (latest 200). Click an actor
-            to filter; click an entity to view before/after details.
+            Who did what, when, from which portal/IP — including customer isolate actions. Click a row
+            for full detail.
           </p>
         </div>
         <div className="ops-grid-actions">
-          <button
-            type="button"
-            className="btn btn-ghost"
-            disabled={rows.length === 0}
-            onClick={() =>
-              downloadBlob(
-                `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`,
-                toCsv(rows),
-                "text/csv;charset=utf-8"
-              )
-            }
-          >
-            Export CSV
-          </button>
           <button
             type="button"
             className="btn btn-ghost"
@@ -100,19 +92,23 @@ export default function AuditLogsPage() {
               )
             }
           >
-            Export JSON
+            Export page JSON
           </button>
         </div>
       </div>
 
-      {actorFilter && (
-        <div className="filter-bar" style={{ marginBottom: "12px" }}>
-          <span className="filter-chip">Actor: {actorFilter}</span>
-          <button type="button" className="linkish" onClick={() => setActorFilter(null)}>
-            Clear actor filter
-          </button>
-        </div>
-      )}
+      <ListToolbar
+        searchPlaceholder="Search actor, action, tenant, incident, agent, IP…"
+        searchValue={qFilter}
+        onSearchChange={(value) => patchParams({ q: value || null, page: "1" })}
+        statusOptions={ACTION_OPTIONS}
+        statusValue={actionFilter}
+        onStatusChange={(value) => patchParams({ action: value || null, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       {status === "loading" && <div className="state-message">Loading audit log...</div>}
       {status === "forbidden" && <div className="state-message state-error">Access denied.</div>}
@@ -120,97 +116,83 @@ export default function AuditLogsPage() {
 
       {status === "success" && data && (
         rows.length === 0 ? (
-          <div className="state-message">
-            {actorFilter
-              ? "No events for this actor in the current window."
-              : "No audit events recorded yet. Events appear as platform actions are written to audit_logs."}
-          </div>
+          <div className="state-message">No audit events match this filter.</div>
         ) : (
           <table className="data-table data-table--readable">
             <thead>
               <tr>
                 <th>When</th>
-                <th>Actor</th>
-                <th>Action</th>
-                <th>Entity</th>
+                <th>Who</th>
+                <th>What</th>
                 <th>Customer</th>
-                <th>Source IP</th>
+                <th>Source</th>
                 <th>Status</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id}>
-                  <td className="cell-mono">{row.created_at}</td>
+                <tr
+                  key={row.id}
+                  className="clickable-row"
+                  onClick={() => navigate(`/audit/${row.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") navigate(`/audit/${row.id}`);
+                  }}
+                  tabIndex={0}
+                  role="link"
+                >
+                  <td className="cell-mono">{row.timestamp || row.created_at}</td>
                   <td>
-                    {row.actor_email ? (
-                      <button
-                        type="button"
-                        className="linkish"
-                        onClick={() => setActorFilter(row.actor_email)}
-                        title="Filter by this actor"
-                      >
-                        {row.actor_email}
-                      </button>
-                    ) : (
-                      "—"
-                    )}
+                    {row.actor_email ?? "—"}
+                    {row.actor_role ? (
+                      <div className="muted" style={{ fontSize: "0.85em" }}>
+                        {row.actor_role}
+                      </div>
+                    ) : null}
                   </td>
-                  <td>{row.action}</td>
                   <td>
-                    <button
-                      type="button"
-                      className="linkish cell-mono"
-                      onClick={() => setSelected(row)}
-                      title="Open change details"
-                    >
-                      {row.entity_type}
-                      {row.entity_id ? ` / ${row.entity_id.slice(0, 8)}…` : ""}
-                    </button>
+                    <div>{row.summary || row.action_label || row.action}</div>
+                    <div className="muted cell-mono" style={{ fontSize: "0.85em" }}>
+                      {row.action}
+                    </div>
                   </td>
                   <td>
                     {row.tenant_name
                       ? `${row.tenant_name}${row.short_code ? ` (${row.short_code})` : ""}`
                       : "—"}
                   </td>
-                  <td className="cell-mono">{row.source_ip ?? "—"}</td>
                   <td>
-                    <span className="badge badge-active">ok</span>
+                    <div>{row.portal === "customer_portal" ? "Customer portal" : row.portal === "mssp_admin_portal" ? "MSSP admin" : "—"}</div>
+                    <div className="cell-mono muted" style={{ fontSize: "0.85em" }}>
+                      {row.source_ip ?? "—"}
+                    </div>
+                  </td>
+                  <td>
+                    <span
+                      className={
+                        (row.action_status || "SUCCESS") === "FAILED"
+                          ? "badge badge-critical"
+                          : "badge badge-active"
+                      }
+                    >
+                      {row.action_status || "SUCCESS"}
+                    </span>
+                  </td>
+                  <td>
+                    <Link
+                      to={`/audit/${row.id}`}
+                      className="linkish"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Open
+                    </Link>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )
-      )}
-
-      {selected && (
-        <div className="modal-root" role="dialog" aria-modal="true" aria-label="Audit event detail">
-          <button
-            type="button"
-            className="modal-backdrop"
-            aria-label="Close"
-            onClick={() => setSelected(null)}
-          />
-          <div className="modal-card card-surface">
-            <h2 className="modal-title">Change details</h2>
-            <p className="modal-body">
-              <span className="cell-mono">{selected.action}</span> on{" "}
-              <span className="cell-mono">
-                {selected.entity_type}
-                {selected.entity_id ? `:${selected.entity_id}` : ""}
-              </span>
-            </p>
-            <pre className="audit-diff-json">
-              {JSON.stringify(selected.details ?? { note: "No before/after payload stored" }, null, 2)}
-            </pre>
-            <div className="modal-actions">
-              <button type="button" className="btn btn-primary" onClick={() => setSelected(null)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

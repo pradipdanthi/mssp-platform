@@ -16,13 +16,25 @@ class AlertTriageUpdateRequest(BaseModel):
 
     status: Optional[AlertStatus] = None
     customer_visible: Optional[bool] = None
+    # Customer-facing copy SOC can polish before enabling visibility.
+    ai_plain_summary: Optional[str] = Field(default=None, max_length=4000)
+    ai_recommended_action: Optional[str] = Field(default=None, max_length=4000)
 
     @model_validator(mode="after")
     def require_update(self) -> "AlertTriageUpdateRequest":
         if not self.model_fields_set:
             raise ValueError("At least one triage field must be provided")
-        if any(getattr(self, field) is None for field in self.model_fields_set):
-            raise ValueError("Triage fields cannot be null")
+        # Status / visibility flags cannot be null when sent.
+        for field in ("status", "customer_visible"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+        # Text fields: blank string → store as NULL (clear).
+        for field in ("ai_plain_summary", "ai_recommended_action"):
+            if field in self.model_fields_set:
+                value = getattr(self, field)
+                if value is not None:
+                    cleaned = value.strip()
+                    setattr(self, field, cleaned or None)
         return self
 
 
@@ -32,6 +44,7 @@ class IncidentTriageUpdateRequest(BaseModel):
     status: Optional[IncidentStatus] = None
     assigned_to_user_id: Optional[UUID] = None
     customer_visible_summary: Optional[str] = Field(default=None, max_length=10000)
+    customer_action_required: Optional[str] = Field(default=None, max_length=4000)
 
     @model_validator(mode="after")
     def require_update(self) -> "IncidentTriageUpdateRequest":
@@ -39,6 +52,12 @@ class IncidentTriageUpdateRequest(BaseModel):
             raise ValueError("At least one triage field must be provided")
         if "status" in self.model_fields_set and self.status is None:
             raise ValueError("status cannot be null")
+        for field in ("customer_visible_summary", "customer_action_required"):
+            if field in self.model_fields_set:
+                value = getattr(self, field)
+                if value is not None:
+                    cleaned = value.strip()
+                    setattr(self, field, cleaned or None)
         return self
 
 

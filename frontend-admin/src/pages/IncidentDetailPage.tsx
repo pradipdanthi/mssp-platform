@@ -7,9 +7,13 @@ import {
   IncidentTriageUpdate,
   updateIncidentTriage,
 } from "../api/admin";
+import { getEdrDeepDive, type EdrDeepDive } from "../api/edr";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import EdrControlPanel from "../components/edr/EdrControlPanel";
+import MitreBadges from "../components/edr/MitreBadges";
+import ProcessTreeWidget from "../components/edr/ProcessTreeWidget";
 
 type IncidentStatus = NonNullable<IncidentTriageUpdate["status"]>;
 const INCIDENT_STATUSES: IncidentStatus[] = [
@@ -22,27 +26,49 @@ const INCIDENT_STATUSES: IncidentStatus[] = [
 
 export default function IncidentDetailPage() {
   const { incidentId } = useParams<{ incidentId: string }>();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
+  const canExecuteEdr =
+    user?.role === "platform_admin" ||
+    user?.role === "soc_manager" ||
+    user?.role === "soc_analyst";
   const incidentQuery = useAdminQuery(
     () => getIncidentDetail(incidentId as string),
     [incidentId]
   );
-  const usersQuery = useAdminQuery(() => getUsers(), []);
+  const usersQuery = useAdminQuery(() => getUsers({ page_size: 200 }), []);
   const [triageStatus, setTriageStatus] = useState<IncidentStatus>("open");
   const [assigneeId, setAssigneeId] = useState("");
   const [customerSummary, setCustomerSummary] = useState("");
+  const [recommendedAction, setRecommendedAction] = useState("");
   const [commentText, setCommentText] = useState("");
   const [commentVisibility, setCommentVisibility] = useState<"internal" | "customer">("internal");
   const [saving, setSaving] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [edr, setEdr] = useState<EdrDeepDive | null>(null);
 
   useEffect(() => {
     if (incidentQuery.data) {
       setTriageStatus(incidentQuery.data.incident.status as IncidentStatus);
       setAssigneeId(incidentQuery.data.incident.assigned_to_user_id ?? "");
       setCustomerSummary(incidentQuery.data.incident.customer_visible_summary ?? "");
+      setRecommendedAction(
+        incidentQuery.data.incident.customer_action_required ??
+          incidentQuery.data.primary_alert?.ai_recommended_action ??
+          ""
+      );
     }
   }, [incidentQuery.data]);
+
+  useEffect(() => {
+    const inc = incidentQuery.data?.incident;
+    if (!inc?.incident_number || !inc.short_code) {
+      setEdr(null);
+      return;
+    }
+    getEdrDeepDive(inc.incident_number, inc.short_code)
+      .then(setEdr)
+      .catch(() => setEdr(null));
+  }, [incidentQuery.data?.incident.incident_number, incidentQuery.data?.incident.short_code]);
 
   function handleActionError(error: unknown, fallback: string) {
     if (error instanceof ApiError && error.status === 401) {
@@ -64,6 +90,7 @@ export default function IncidentDetailPage() {
         status: triageStatus,
         assigned_to_user_id: assigneeId || null,
         customer_visible_summary: customerSummary || null,
+        customer_action_required: recommendedAction || null,
       });
       setActionMessage("Incident triage updated.");
       incidentQuery.refetch();
@@ -136,6 +163,59 @@ export default function IncidentDetailPage() {
             </tbody>
           </table>
 
+          {incidentQuery.data.primary_alert ? (
+            <>
+              <h2 className="section-title">Primary alert context</h2>
+              <table className="data-table">
+                <tbody>
+                  <tr>
+                    <th>Alert</th>
+                    <td>
+                      <Link to={`/alerts/${incidentQuery.data.primary_alert.id}`}>
+                        {incidentQuery.data.primary_alert.alert_title}
+                      </Link>
+                    </td>
+                  </tr>
+                  <tr><th>Device type</th><td>{incidentQuery.data.primary_alert.device_type ?? "—"}</td></tr>
+                  <tr><th>Asset category</th><td>{incidentQuery.data.primary_alert.asset_category_label ?? "—"}</td></tr>
+                  <tr><th>Criticality</th><td>{incidentQuery.data.primary_alert.asset_criticality ?? "—"}</td></tr>
+                  <tr><th>Location</th><td>{incidentQuery.data.primary_alert.asset_location ?? "—"}</td></tr>
+                  <tr><th>IP address</th><td className="cell-mono">{incidentQuery.data.primary_alert.display_ip_address ?? "—"}</td></tr>
+                  <tr><th>Operating system</th><td>{incidentQuery.data.primary_alert.display_operating_system ?? "—"}</td></tr>
+                  <tr><th>MAC address</th><td className="cell-mono">{incidentQuery.data.primary_alert.display_mac_address ?? incidentQuery.data.primary_alert.mac_address_status ?? "—"}</td></tr>
+                  <tr><th>Business impact</th><td>{incidentQuery.data.primary_alert.ai_business_impact ?? incidentQuery.data.incident.business_impact ?? "—"}</td></tr>
+                  <tr><th>Recommended action</th><td>{incidentQuery.data.primary_alert.ai_recommended_action ?? "—"}</td></tr>
+                  <tr><th>Likely attack type</th><td>{incidentQuery.data.primary_alert.ai_likely_attack_type ?? "—"}</td></tr>
+                </tbody>
+              </table>
+            </>
+          ) : null}
+
+          {incidentQuery.data.incident.short_code ? (
+            <>
+              <h2 className="section-title">Endpoint containment (EDR)</h2>
+              <p className="page-subtitle">
+                Network quarantine blocks all traffic except Manager/DHCP/loopback (not RDP-only).
+                Every isolate/unisolate is written to the Audit Log with actor, portal, and source IP.
+              </p>
+              {edr ? (
+                <>
+                  <MitreBadges tactics={edr.mitre.tactics} techniques={edr.mitre.techniques} />
+                  <ProcessTreeWidget
+                    root={edr.process_tree.root}
+                    message={edr.process_tree.message}
+                  />
+                </>
+              ) : null}
+              <EdrControlPanel
+                tenantShortCode={incidentQuery.data.incident.short_code}
+                incidentNumber={incidentQuery.data.incident.incident_number}
+                agentId={(edr?.endpoint?.agent_id as string | undefined) ?? undefined}
+                canExecute={canExecuteEdr}
+              />
+            </>
+          ) : null}
+
           <h2 className="section-title">Triage</h2>
           <form className="credential-panel" onSubmit={handleTriageSave}>
             <label className="form-label" htmlFor="incident-status">Status</label>
@@ -171,7 +251,23 @@ export default function IncidentDetailPage() {
               value={customerSummary}
               disabled={saving}
               onChange={(event) => setCustomerSummary(event.target.value)}
+              placeholder="Plain-language summary shown on the customer portal for this incident."
             />
+            <label className="form-label" htmlFor="customer-recommended-action">
+              Recommended action
+            </label>
+            <textarea
+              id="customer-recommended-action"
+              className="form-input"
+              rows={4}
+              value={recommendedAction}
+              disabled={saving}
+              onChange={(event) => setRecommendedAction(event.target.value)}
+              placeholder="What the customer should do next (shown as Action required)."
+            />
+            <p className="page-subtitle">
+              These fields are what the customer portal shows. Polish rule-driven defaults before sharing.
+            </p>
             <div style={{ marginTop: "14px" }}>
               <button className="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? "Saving..." : "Save triage"}

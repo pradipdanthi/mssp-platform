@@ -13,6 +13,7 @@ export type DrawerIncident = {
   business_impact?: string | null;
   customer_action_required?: string | boolean | null;
   opened_at?: string | null;
+  affected_entity?: string | null;
   detailPath?: string;
 };
 

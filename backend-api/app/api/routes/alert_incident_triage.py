@@ -1,6 +1,6 @@
 """KB-056 Admin/SOC alert and incident detail and triage endpoints."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,14 +32,21 @@ def _alert_detail(alert_id: UUID) -> Dict[str, Any]:
             a.appliance_name,
             sa.asset_id::text,
             pa.hostname AS asset_hostname,
+            pa.asset_type AS asset_type,
+            pa.os_name AS asset_os_name,
+            CASE WHEN pa.ip_address IS NOT NULL THEN host(pa.ip_address)::text ELSE NULL END AS asset_ip,
+            pa.criticality AS asset_criticality,
+            pa.owner AS asset_owner,
+            pa.details AS asset_details,
+            t.timezone AS tenant_timezone,
             sa.source_tool,
             sa.external_alert_id,
             sa.severity,
             sa.alert_title,
             sa.alert_description,
             sa.event_time,
-            sa.source_ip::text,
-            sa.destination_ip::text,
+            CASE WHEN sa.source_ip IS NOT NULL THEN host(sa.source_ip)::text ELSE NULL END AS source_ip,
+            CASE WHEN sa.destination_ip IS NOT NULL THEN host(sa.destination_ip)::text ELSE NULL END AS destination_ip,
             sa.source_user,
             sa.destination_host,
             sa.raw_event,
@@ -102,6 +109,13 @@ def _incident_detail(incident_id: UUID) -> Dict[str, Any]:
     if not incident:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
 
+    primary_alert: Optional[Dict[str, Any]] = None
+    if incident.get("primary_alert_id"):
+        try:
+            primary_alert = _alert_detail(UUID(str(incident["primary_alert_id"])))
+        except HTTPException:
+            primary_alert = None
+
     timeline = fetch_all(
         """
         SELECT
@@ -136,7 +150,12 @@ def _incident_detail(incident_id: UUID) -> Dict[str, Any]:
         """,
         (incident_id,),
     )
-    return {"incident": incident, "timeline": timeline, "comments": comments}
+    return {
+        "incident": incident,
+        "primary_alert": primary_alert,
+        "timeline": timeline,
+        "comments": comments,
+    }
 
 
 @router.get("/alerts/{alert_id}")
@@ -161,6 +180,12 @@ def update_admin_alert_triage(
     if "customer_visible" in payload.model_fields_set:
         assignments.append("customer_visible = %s")
         values.append(payload.customer_visible)
+    if "ai_plain_summary" in payload.model_fields_set:
+        assignments.append("ai_plain_summary = %s")
+        values.append(payload.ai_plain_summary)
+    if "ai_recommended_action" in payload.model_fields_set:
+        assignments.append("ai_recommended_action = %s")
+        values.append(payload.ai_recommended_action)
     assignments.append("updated_at = now()")
     values.append(alert_id)
 
@@ -220,6 +245,9 @@ def update_admin_incident_triage(
     if "customer_visible_summary" in payload.model_fields_set:
         assignments.append("customer_visible_summary = %s")
         values.append(payload.customer_visible_summary)
+    if "customer_action_required" in payload.model_fields_set:
+        assignments.append("customer_action_required = %s")
+        values.append(payload.customer_action_required)
     assignments.append("updated_at = now()")
     values.append(incident_id)
 

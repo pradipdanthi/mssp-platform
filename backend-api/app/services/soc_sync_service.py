@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import logging
+import os
 import secrets
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 from app.db.session import db_transaction
 from app.schemas.soc_sync import SocSyncRequest
+
+logger = logging.getLogger(__name__)
+
+# Correlate same-title bursts into one open incident (minutes).
+CORRELATE_WINDOW_MINUTES = int(
+    (os.getenv("SOC_INCIDENT_CORRELATE_MINUTES") or "15").strip() or "15"
+)
 
 
 class TenantNotFoundError(Exception):
@@ -43,6 +52,106 @@ def _next_incident_number(cur: Any, short_code: str) -> str:
         n = int(secrets.randbelow(9000) + 1000)
     return f"{prefix}{n:04d}"
 
+
+def _find_correlated_open_incident(
+    cur: Any,
+    *,
+    tenant_id: str,
+    alert_title: str,
+    destination_host: Optional[str],
+    window_minutes: int,
+) -> Optional[Dict[str, str]]:
+    """
+    Phase-1 burst correlation: reuse an open incident with the same title
+    opened within the correlation window. Prefer matching host via primary alert.
+    """
+    if window_minutes <= 0:
+        return None
+    host = (destination_host or "").strip()
+    if host:
+        cur.execute(
+            """
+            SELECT i.id::text AS id, i.incident_number
+            FROM incidents i
+            LEFT JOIN security_alerts sa ON sa.id = i.primary_alert_id
+            WHERE i.tenant_id = %s
+              AND i.title = %s
+              AND i.status IN ('open', 'in_progress', 'waiting_customer')
+              AND i.opened_at >= (now() - make_interval(mins => %s))
+              AND (
+                    lower(COALESCE(sa.destination_host, '')) = lower(%s)
+                 OR sa.destination_host IS NULL
+                 OR btrim(COALESCE(sa.destination_host, '')) = ''
+              )
+            ORDER BY i.opened_at DESC
+            LIMIT 1;
+            """,
+            (tenant_id, alert_title, window_minutes, host),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT id::text AS id, incident_number
+            FROM incidents
+            WHERE tenant_id = %s
+              AND title = %s
+              AND status IN ('open', 'in_progress', 'waiting_customer')
+              AND opened_at >= (now() - make_interval(mins => %s))
+            ORDER BY opened_at DESC
+            LIMIT 1;
+            """,
+            (tenant_id, alert_title, window_minutes),
+        )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return {"id": row["id"], "incident_number": row["incident_number"]}
+
+
+def _attach_alert_to_incident(
+    cur: Any,
+    *,
+    incident_id: str,
+    alert_id: str,
+    payload: SocSyncRequest,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO incident_alerts (incident_id, alert_id)
+        VALUES (%s::uuid, %s::uuid)
+        ON CONFLICT DO NOTHING;
+        """,
+        (incident_id, alert_id),
+    )
+    cur.execute(
+        """
+        INSERT INTO incident_timeline (
+            incident_id, event_type, visibility, title, details
+        )
+        VALUES (
+            %s::uuid, 'comment', 'internal',
+            'Correlated alert attached',
+            %s
+        );
+        """,
+        (
+            incident_id,
+            (
+                f"Burst correlation: attached alert {payload.external_alert_id} "
+                f"({payload.source_tool}) host={payload.destination_host or 'n/a'}"
+            )[:4000],
+        ),
+    )
+    cur.execute(
+        """
+        UPDATE security_alerts
+        SET status = 'incident_created',
+            severity = %s,
+            updated_at = now()
+        WHERE id = %s::uuid;
+        """,
+        (payload.severity, alert_id),
+    )
 
 
 def _create_incident(
@@ -123,11 +232,116 @@ def _create_incident(
     return inc["id"], inc["incident_number"]
 
 
+def _create_or_correlate_incident(
+    cur: Any,
+    *,
+    tenant_id: str,
+    short_code: str,
+    alert_id: str,
+    payload: SocSyncRequest,
+) -> Tuple[str, str]:
+    # Serialize burst create/correlate so parallel Shuffle webhooks cannot
+    # each open a duplicate incident for the same title+host window.
+    correlate_key = (
+        f"soc-correlate:{tenant_id}:{payload.alert_title}:"
+        f"{(payload.destination_host or '').strip().lower()}"
+    )
+    cur.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0));",
+        (correlate_key,),
+    )
+    existing = _find_correlated_open_incident(
+        cur,
+        tenant_id=tenant_id,
+        alert_title=payload.alert_title,
+        destination_host=payload.destination_host,
+        window_minutes=CORRELATE_WINDOW_MINUTES,
+    )
+    if existing:
+        logger.info(
+            "SOC sync correlated alert to existing incident %s (title=%s host=%s)",
+            existing["incident_number"],
+            payload.alert_title[:80],
+            payload.destination_host,
+        )
+        _attach_alert_to_incident(
+            cur,
+            incident_id=existing["id"],
+            alert_id=alert_id,
+            payload=payload,
+        )
+        return existing["id"], existing["incident_number"]
+    return _create_incident(
+        cur,
+        tenant_id=tenant_id,
+        short_code=short_code,
+        alert_id=alert_id,
+        payload=payload,
+    )
+
+
+def _resolve_protected_asset_id(
+    cur: Any,
+    *,
+    tenant_id: str,
+    wazuh_agent_id: Optional[str],
+    destination_host: Optional[str],
+) -> Optional[str]:
+    """Link alert to protected_assets via Wazuh agent id, then hostname."""
+    agent_id = (wazuh_agent_id or "").strip()
+    if agent_id:
+        cur.execute(
+            """
+            SELECT id::text AS id
+            FROM protected_assets
+            WHERE tenant_id = %s::uuid
+              AND details->>'wazuh_agent_id' = %s
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 1;
+            """,
+            (tenant_id, agent_id),
+        )
+        row = cur.fetchone()
+        if row:
+            return row["id"]
+    host = (destination_host or "").strip()
+    if host:
+        cur.execute(
+            """
+            SELECT id::text AS id
+            FROM protected_assets
+            WHERE tenant_id = %s::uuid
+              AND lower(hostname) = lower(%s)
+            ORDER BY updated_at DESC NULLS LAST, created_at DESC
+            LIMIT 1;
+            """,
+            (tenant_id, host),
+        )
+        row = cur.fetchone()
+        if row:
+            return row["id"]
+    return None
+
+
+def _safe_inet(value: Optional[str]) -> Optional[str]:
+    """Return a value suitable for PostgreSQL inet, or None."""
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    # Drop CIDR if present for host-only display consistency.
+    if "/" in text:
+        text = text.split("/", 1)[0].strip()
+    return text or None
+
+
 def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
     """
     Insert or return existing security_alerts row; optionally create incident.
 
     Always customer_visible=false. Dedup key: tenant + source_tool + external_alert_id.
+    Phase-1: correlated bursts reuse one open incident; known noise skips incident.
     """
     with db_transaction() as cur:
         cur.execute(
@@ -149,6 +363,19 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
         duplicate_key = f"soc-sync:{tenant_id}:{payload.source_tool}:{payload.external_alert_id}"
         cur.execute("SELECT pg_advisory_xact_lock(hashtextextended(%s, 0));", (duplicate_key,))
 
+        asset_id = _resolve_protected_asset_id(
+            cur,
+            tenant_id=tenant_id,
+            wazuh_agent_id=getattr(payload, "wazuh_agent_id", None),
+            destination_host=payload.destination_host,
+        )
+        source_ip = _safe_inet(getattr(payload, "source_ip", None))
+        destination_ip = _safe_inet(
+            getattr(payload, "destination_ip", None) or source_ip
+        )
+        source_user = (getattr(payload, "source_user", None) or None)
+        technical_summary = (getattr(payload, "technical_summary", None) or None)
+
         cur.execute(
             """
             SELECT id::text AS id, customer_visible, status
@@ -168,6 +395,31 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
 
         if alert_row:
             duplicate = True
+            # Backfill enrichment columns that may have been empty on older rows.
+            cur.execute(
+                """
+                UPDATE security_alerts
+                SET asset_id = COALESCE(asset_id, %s::uuid),
+                    source_ip = COALESCE(source_ip, %s::inet),
+                    destination_ip = COALESCE(destination_ip, %s::inet),
+                    source_user = COALESCE(NULLIF(source_user, ''), %s),
+                    destination_host = COALESCE(NULLIF(destination_host, ''), %s),
+                    ai_technical_summary = COALESCE(
+                        NULLIF(ai_technical_summary, ''), %s
+                    ),
+                    updated_at = now()
+                WHERE id = %s::uuid;
+                """,
+                (
+                    asset_id,
+                    source_ip,
+                    destination_ip,
+                    source_user,
+                    payload.destination_host,
+                    technical_summary,
+                    alert_row["id"],
+                ),
+            )
             cur.execute(
                 """
                 SELECT id::text AS id, incident_number
@@ -184,7 +436,7 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                 incident_id = inc["id"]
                 incident_number = inc["incident_number"]
             elif _should_create_incident(payload):
-                incident_id, incident_number = _create_incident(
+                incident_id, incident_number = _create_or_correlate_incident(
                     cur,
                     tenant_id=tenant_id,
                     short_code=short_code,
@@ -198,19 +450,24 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                 }
         else:
             event_time = payload.event_time or datetime.utcnow()
+            initial_status = (
+                "false_positive" if payload.create_incident is False else "new"
+            )
             cur.execute(
                 """
                 INSERT INTO security_alerts (
                     tenant_id, source_tool, external_alert_id,
                     severity, alert_title, alert_description, event_time,
-                    destination_host, customer_visible, status,
-                    ai_plain_summary
+                    destination_host, destination_ip, source_ip, source_user,
+                    asset_id, customer_visible, status,
+                    ai_plain_summary, ai_technical_summary
                 )
                 VALUES (
                     %s, %s, %s,
                     %s, %s, %s, %s,
-                    %s, false, 'new',
-                    %s
+                    %s, %s::inet, %s::inet, %s,
+                    %s::uuid, false, %s,
+                    %s, %s
                 )
                 RETURNING id::text AS id, customer_visible, status;
                 """,
@@ -223,13 +480,19 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                     payload.alert_description,
                     event_time,
                     payload.destination_host,
+                    destination_ip,
+                    source_ip,
+                    source_user,
+                    asset_id,
+                    initial_status,
                     payload.customer_visible_summary,
+                    technical_summary,
                 ),
             )
             alert_row = cur.fetchone()
 
             if _should_create_incident(payload):
-                incident_id, incident_number = _create_incident(
+                incident_id, incident_number = _create_or_correlate_incident(
                     cur,
                     tenant_id=tenant_id,
                     short_code=short_code,

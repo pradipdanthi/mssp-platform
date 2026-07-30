@@ -78,7 +78,7 @@ function toDrawer(inc: Incident): DrawerIncident {
 
 export default function DashboardPage() {
   const dash = useAdminQuery(() => getDashboard(), []);
-  const incidentsQ = useAdminQuery(() => getIncidents(), []);
+  const incidentsQ = useAdminQuery(() => getIncidents({ page: 1, page_size: 200 }), []);
   const [selected, setSelected] = useState<DrawerIncident | null>(null);
   const [feedSeverity, setFeedSeverity] = useState<string | null>(null);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("24h");
@@ -124,7 +124,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getTenants()
+    getTenants({ page_size: 200 })
       .then((res) => {
         if (cancelled) return;
         const map: Record<string, string> = {};
@@ -198,19 +198,14 @@ export default function DashboardPage() {
   const eventsMonitored = overview
     ? overview.total_alerts + overview.protected_assets * 10 + liveTick * 3
     : 0;
-  const slaPercent = overview
-    ? Math.max(
-        40,
-        Math.min(
-          99,
-          Math.round(
-            100 -
-              overview.open_incidents * 4 -
-              overview.high_or_critical_alerts * 2 +
-              overview.online_appliances * 2
-          )
+  const collectorCoverage = overview
+    ? overview.online_appliances + overview.offline_appliances === 0
+      ? 0
+      : Math.round(
+          (overview.online_appliances /
+            (overview.online_appliances + overview.offline_appliances)) *
+            100
         )
-      )
     : 0;
   const heatSpots = useMemo(
     () =>
@@ -328,8 +323,8 @@ export default function DashboardPage() {
 
             <Link
               className="kpi-card kpi-card--accent card-surface kpi-card--link"
-              to="/appliances?status=offline"
-              aria-label="Open offline appliances"
+              to="/alerts"
+              aria-label="Open security alerts / events"
             >
               <div className="kpi-card-top">
                 <span className="kpi-label">Events Collected</span>
@@ -340,7 +335,9 @@ export default function DashboardPage() {
                   ? `${(eventsMonitored / 1000).toFixed(1)}K`
                   : eventsMonitored.toLocaleString()}
               </div>
-              <div className="kpi-foot">Offline collectors: {overview.offline_appliances}</div>
+              <div className="kpi-foot">
+                {overview.total_alerts} alerts · {overview.protected_assets} assets
+              </div>
             </Link>
 
             <Link
@@ -358,16 +355,20 @@ export default function DashboardPage() {
 
             <Link
               className="kpi-card kpi-card--low card-surface kpi-card--link"
-              to="/tenants"
-              aria-label="Open customers / tenants"
+              to="/appliances"
+              aria-label="Open appliances / collectors"
             >
               <div className="kpi-card-top">
-                <span className="kpi-label">Automation / SLA</span>
-                <RadialGauge percent={slaPercent} label="SLA" />
+                <span className="kpi-label">Collector health</span>
+                <RadialGauge percent={collectorCoverage} label="Online" />
               </div>
-              <div className="kpi-value kpi-value--low">{slaPercent}%</div>
+              <div className="kpi-value kpi-value--low">{collectorCoverage}%</div>
               <div className="kpi-foot">
-                {overview.active_tenants}/{overview.total_tenants} active tenants
+                {overview.online_appliances} online
+                {overview.offline_appliances
+                  ? ` · ${overview.offline_appliances} offline`
+                  : ""}{" "}
+                · click → appliances
               </div>
             </Link>
           </div>

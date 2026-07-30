@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   AdminVulnerability,
   ServiceUpgradeRequestRow,
@@ -14,7 +14,20 @@ import {
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import ListToolbar from "../components/ListToolbar";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+
+const STATUS_OPTIONS = [
+  { value: "open", label: "Open" },
+  { value: "fixed", label: "Fixed" },
+  { value: "accepted_risk", label: "Accepted risk" },
+  { value: "false_positive", label: "False positive" },
+];
+const SOURCE_OPTIONS = [
+  { value: "nuclei", label: "Nuclei" },
+  { value: "vuls", label: "Vuls" },
+  { value: "greenbone", label: "Greenbone" },
+];
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
@@ -29,11 +42,47 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 export default function VulnerabilitiesPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
-  const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const sourceFilter = params.get("source") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
   const { status, data, errorMessage, refetch } = useAdminQuery(
-    () => getVulnerabilities(sourceFilter ? { source_platform: sourceFilter } : undefined),
-    [sourceFilter]
+    () =>
+      getVulnerabilities({
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(sourceFilter ? { source_platform: sourceFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
+    [statusFilter, sourceFilter, qFilter, page, pageSize]
   );
+  const rows = data?.vulnerabilities ?? [];
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? rows.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   const [selected, setSelected] = useState<AdminVulnerability | null>(null);
   const [detailNotes, setDetailNotes] = useState<string | null>(null);
@@ -207,7 +256,6 @@ export default function VulnerabilitiesPage() {
     }
   }
 
-  const rows = data?.vulnerabilities ?? [];
   const openUpgrades = upgradeRequests.filter((r) =>
     ["submitted", "reviewing", "quoted"].includes(r.status)
   );
@@ -224,17 +272,6 @@ export default function VulnerabilitiesPage() {
           </p>
         </div>
         <div className="page-header-actions" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-          <select
-            className="form-input"
-            value={sourceFilter}
-            onChange={(e) => setSourceFilter(e.target.value)}
-            aria-label="Filter by scanner source"
-          >
-            <option value="">All sources</option>
-            <option value="nuclei">Nuclei</option>
-            <option value="vuls">Vuls</option>
-            <option value="greenbone">Greenbone</option>
-          </select>
           <button
             className="btn btn-ghost"
             type="button"
@@ -247,6 +284,23 @@ export default function VulnerabilitiesPage() {
           </button>
         </div>
       </div>
+
+      <ListToolbar
+        searchPlaceholder="Search title, CVE, asset, tenant…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        severityOptions={SOURCE_OPTIONS}
+        severityValue={sourceFilter}
+        onSeverityChange={(source) => patchParams({ source, page: "1" })}
+        severityLabel="Source"
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       <div className="management-panel" style={{ marginBottom: "1.25rem" }}>
         <h2 className="section-title" style={{ marginTop: 0 }}>

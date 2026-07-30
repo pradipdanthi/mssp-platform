@@ -121,6 +121,14 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
     tool = (row.get("source_tool") or "").strip().lower()
     blob = _text_blob(row)
     raw = row.get("raw_event") if isinstance(row.get("raw_event"), dict) else {}
+    host = str(row.get("destination_host") or row.get("asset_hostname") or "").lower()
+    asset_os = str(row.get("asset_os_name") or row.get("asset_type") or "").lower()
+
+    # Linked inventory OS/type is authoritative when present.
+    if "windows" in asset_os or host.startswith("win-"):
+        return "endpoints_windows", "windows_host"
+    if any(x in asset_os for x in ("linux", "ubuntu", "debian", "rhel", "centos", "unix")):
+        return "endpoints_linux", "linux_host"
 
     # Explicit network appliance ingest (syslog from firewall/switch — no endpoint agent id).
     if tool in ("network_appliance", "firewall", "syslog_network") or (
@@ -138,8 +146,8 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
         return "vuln_infrastructure", tool
 
     if tool == "wazuh" or tool in ("shuffle", "thehive") or not tool:
-        os_name = _agent_os(raw)
-        if "windows" in os_name or "win" in os_name.split():
+        os_name = _agent_os(raw) or asset_os
+        if "windows" in os_name or "win" in os_name.split() or host.startswith("win-"):
             return "endpoints_windows", "windows_host"
         if any(x in os_name for x in ("linux", "ubuntu", "debian", "rhel", "centos", "unix")):
             if any(k in blob for k in ("docker", "kubernetes", "k8s", "container", "pod", "ecs", "eks")):
@@ -261,7 +269,7 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
             return "vuln_infrastructure", "cve_scan"
 
         if tool == "wazuh":
-            if "windows" in blob:
+            if "windows" in blob or host.startswith("win-"):
                 return "endpoints_windows", "windows_host"
             if any(x in blob for x in ("linux", "sshd", "sudo", "/var/log/auth")):
                 return "endpoints_linux", "linux_host"
@@ -271,13 +279,15 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
 
 def enrich_alert_row(row: Dict[str, Any]) -> Dict[str, Any]:
     """Attach taxonomy fields without mutating raw_event."""
+    from app.services.soc_alert_synthesis import apply_soc_enrichment
+
     out = dict(row)
     cat, device = derive_asset_category(out)
     out["asset_category"] = cat
     out["device_type"] = device
     out["asset_category_label"] = TAXONOMY_LABELS.get(cat, cat)
     out["contextual"] = build_contextual_fields(out, cat)
-    return out
+    return apply_soc_enrichment(out)
 
 
 def build_contextual_fields(row: Dict[str, Any], category: str) -> Dict[str, Any]:

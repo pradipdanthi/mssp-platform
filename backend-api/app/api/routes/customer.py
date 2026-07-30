@@ -13,13 +13,15 @@ mismatch raises 404 (not 403) so a customer token can never be used to tell
 "wrong tenant" apart from "tenant doesn't exist" (anti-enumeration).
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.dependencies import get_current_user, require_tenant_match
 from app.db.session import fetch_all, fetch_one
 from app.services.customer_safe_labels import customer_safe_alert_source
+from app.services.list_pagination import clamp_pagination, pagination_meta
+from app.services.soc_alert_taxonomy import enrich_alert_row
 
 router = APIRouter(prefix="/customer", tags=["customer"])
 
@@ -29,6 +31,46 @@ def _customer_safe_alert_rows(rows: list) -> list:
         if "source" in row:
             row["source"] = customer_safe_alert_source(row.get("source"))
     return rows
+
+
+def _customer_safe_alert_detail_row(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not row:
+        return None
+    enriched = enrich_alert_row(row)
+    return {
+        "alert_id": enriched.get("alert_id") or enriched.get("id"),
+        "title": enriched.get("title") or enriched.get("alert_title"),
+        "severity": enriched.get("severity"),
+        "status": enriched.get("status"),
+        "source": customer_safe_alert_source(enriched.get("source") or enriched.get("source_tool")),
+        "summary": enriched.get("summary") or enriched.get("ai_plain_summary"),
+        "description": enriched.get("description") or enriched.get("alert_description"),
+        "detected_at": enriched.get("detected_at") or enriched.get("event_time"),
+        "hostname": enriched.get("hostname") or enriched.get("destination_host"),
+        "asset_category": enriched.get("asset_category"),
+        "asset_category_label": enriched.get("asset_category_label"),
+        "device_type": enriched.get("device_type"),
+        "operating_system": enriched.get("display_operating_system"),
+        "business_impact": enriched.get("ai_business_impact"),
+        "recommended_action": enriched.get("ai_recommended_action"),
+        "likely_attack_type": enriched.get("ai_likely_attack_type"),
+        "criticality": enriched.get("asset_criticality"),
+    }
+
+
+def _customer_safe_incident_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    safe = dict(row)
+    alert = _customer_safe_alert_detail_row(row)
+    if alert:
+        safe["hostname"] = alert.get("hostname")
+        safe["asset_category"] = alert.get("asset_category")
+        safe["asset_category_label"] = alert.get("asset_category_label")
+        safe["device_type"] = alert.get("device_type")
+        safe["operating_system"] = alert.get("operating_system")
+        safe["recommended_action"] = alert.get("recommended_action")
+        safe["likely_attack_type"] = alert.get("likely_attack_type")
+        safe["criticality"] = alert.get("criticality")
+    return safe
 
 
 @router.get("/dashboard/{short_code}")
@@ -85,20 +127,38 @@ def customer_dashboard(
     open_incidents = fetch_all(
         """
         SELECT
-            incident_number,
-            title,
-            severity,
-            status,
-            customer_visible_summary,
-            customer_action_required,
-            opened_at
-        FROM incidents
-        WHERE tenant_id = %s
-          AND status IN ('open','in_progress','waiting_customer')
-        ORDER BY opened_at DESC;
+            i.incident_number,
+            i.title,
+            i.severity,
+            i.status,
+            i.customer_visible_summary,
+            i.business_impact,
+            i.customer_action_required,
+            i.opened_at,
+            sa.id::text AS alert_id,
+            sa.alert_title AS alert_title,
+            sa.source_tool AS source,
+            sa.ai_plain_summary AS summary,
+            sa.alert_description AS description,
+            sa.event_time AS detected_at,
+            sa.destination_host AS hostname,
+            pa.hostname AS asset_hostname,
+            pa.asset_type,
+            pa.os_name AS asset_os_name,
+            pa.criticality AS asset_criticality,
+            sa.raw_event,
+            sa.ai_recommended_action,
+            sa.ai_likely_attack_type
+        FROM incidents i
+        LEFT JOIN security_alerts sa ON sa.id = i.primary_alert_id AND sa.customer_visible = true
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE i.tenant_id = %s
+          AND i.status IN ('open','in_progress','waiting_customer')
+        ORDER BY i.opened_at DESC;
         """,
         (tenant_id,),
     )
+    open_incidents = [_customer_safe_incident_row(row) for row in open_incidents]
 
     recommendations = fetch_all(
         """
@@ -162,6 +222,11 @@ def customer_dashboard(
 @router.get("/incidents/{short_code}")
 def customer_incidents(
     short_code: str,
+    status: Optional[str] = Query(default=None),
+    severity: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     tenant = fetch_one(
@@ -175,28 +240,91 @@ def customer_incidents(
     # KB-011: see customer_dashboard() above for why this is 404, not 403.
     require_tenant_match(tenant["id"], current_user)
 
-    rows = fetch_all(
-        """
-        SELECT
-            incident_number,
-            title,
-            severity,
-            status,
-            customer_visible_summary,
-            business_impact,
-            customer_action_required,
-            resolution_summary,
-            opened_at,
-            resolved_at,
-            closed_at
-        FROM incidents
-        WHERE tenant_id = %s
-        ORDER BY opened_at DESC;
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = ["i.tenant_id = %s"]
+    params: list = [tenant["id"]]
+    st = (status or "").strip().lower()
+    if st == "open":
+        where.append("i.status IN ('open', 'in_progress', 'waiting_customer')")
+    elif st in ("in_progress", "waiting_customer", "resolved", "closed"):
+        where.append("i.status = %s")
+        params.append(st)
+    sev = (severity or "").strip().lower()
+    if sev in ("urgent", "high_critical", "high,critical"):
+        where.append("i.severity IN ('high', 'critical')")
+    elif sev in ("low", "medium", "high", "critical"):
+        where.append("i.severity = %s")
+        params.append(sev)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "i.incident_number ILIKE %s OR "
+            "i.title ILIKE %s OR "
+            "COALESCE(i.customer_visible_summary, '') ILIKE %s OR "
+            "COALESCE(sa.destination_host, '') ILIKE %s OR "
+            "COALESCE(pa.hostname, '') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like])
+    where_sql = " AND ".join(where)
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM incidents i
+        LEFT JOIN security_alerts sa ON sa.id = i.primary_alert_id AND sa.customer_visible = true
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE {where_sql};
         """,
-        (tenant["id"],),
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
+    rows = fetch_all(
+        f"""
+        SELECT
+            i.incident_number,
+            i.title,
+            i.severity,
+            i.status,
+            i.customer_visible_summary,
+            i.business_impact,
+            i.customer_action_required,
+            i.resolution_summary,
+            i.opened_at,
+            i.resolved_at,
+            i.closed_at,
+            sa.id::text AS alert_id,
+            sa.alert_title AS alert_title,
+            sa.source_tool AS source,
+            sa.ai_plain_summary AS summary,
+            sa.alert_description AS description,
+            sa.event_time AS detected_at,
+            sa.destination_host AS hostname,
+            pa.hostname AS asset_hostname,
+            pa.asset_type,
+            pa.os_name AS asset_os_name,
+            pa.criticality AS asset_criticality,
+            sa.raw_event,
+            sa.ai_recommended_action,
+            sa.ai_likely_attack_type
+        FROM incidents i
+        LEFT JOIN security_alerts sa ON sa.id = i.primary_alert_id AND sa.customer_visible = true
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE {where_sql}
+        ORDER BY i.opened_at DESC
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
 
-    return {"tenant": tenant, "incidents": rows}
+    return {
+        "tenant": tenant,
+        "incidents": [_customer_safe_incident_row(row) for row in rows],
+        **pagination_meta(total, page, page_size),
+    }
 
 
 @router.get("/incidents/{short_code}/{incident_number}")
@@ -280,10 +408,19 @@ def customer_incident_detail(
             sa.ai_plain_summary AS summary,
             sa.alert_description AS description,
             sa.event_time AS detected_at,
-            sa.destination_host AS hostname
+            sa.destination_host AS hostname,
+            pa.hostname AS asset_hostname,
+            pa.asset_type,
+            pa.os_name AS asset_os_name,
+            pa.criticality AS asset_criticality,
+            sa.raw_event,
+            sa.ai_business_impact,
+            sa.ai_recommended_action,
+            sa.ai_likely_attack_type
         FROM incident_alerts ia
         JOIN security_alerts sa ON sa.id = ia.alert_id
         JOIN incidents i ON i.id = ia.incident_id
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
         WHERE i.tenant_id = %s
           AND i.incident_number = %s
           AND sa.tenant_id = %s
@@ -292,19 +429,60 @@ def customer_incident_detail(
         """,
         (tenant_id, incident_number, tenant_id),
     )
-    related_alerts = _customer_safe_alert_rows(related_alerts)
+    related_alerts = [
+        _customer_safe_alert_detail_row(row) for row in related_alerts
+    ]
+
+    primary_alert = fetch_one(
+        """
+        SELECT
+            sa.id::text AS alert_id,
+            sa.alert_title AS title,
+            sa.severity,
+            sa.status,
+            sa.source_tool AS source,
+            sa.ai_plain_summary AS summary,
+            sa.alert_description AS description,
+            sa.event_time AS detected_at,
+            sa.destination_host AS hostname,
+            pa.hostname AS asset_hostname,
+            pa.asset_type,
+            pa.os_name AS asset_os_name,
+            pa.criticality AS asset_criticality,
+            sa.raw_event,
+            sa.ai_business_impact,
+            sa.ai_recommended_action,
+            sa.ai_likely_attack_type
+        FROM incidents i
+        JOIN security_alerts sa ON sa.id = i.primary_alert_id
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE i.tenant_id = %s
+          AND i.incident_number = %s
+          AND sa.customer_visible = true
+        LIMIT 1;
+        """,
+        (tenant_id, incident_number),
+    )
 
     return {
         "tenant": tenant,
         "incident": incident,
         "timeline": timeline,
         "related_alerts": related_alerts,
+        "primary_alert": _customer_safe_alert_detail_row(primary_alert),
     }
 
 
 @router.get("/alerts/{short_code}")
 def customer_alerts(
     short_code: str,
+    status: Optional[
+        Literal["new", "triaged", "incident_created", "false_positive", "closed"]
+    ] = None,
+    severity: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -325,28 +503,77 @@ def customer_alerts(
     # KB-011: see customer_dashboard() above for why this is 404, not 403.
     require_tenant_match(tenant["id"], current_user)
 
-    rows = fetch_all(
-        """
-        SELECT
-            id::text AS alert_id,
-            alert_title AS title,
-            severity,
-            status,
-            source_tool AS source,
-            ai_plain_summary AS summary,
-            alert_description AS description,
-            event_time AS detected_at,
-            destination_host AS hostname
-        FROM security_alerts
-        WHERE tenant_id = %s
-          AND customer_visible = true
-        ORDER BY event_time DESC NULLS LAST, created_at DESC
-        LIMIT 100;
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = ["sa.tenant_id = %s", "sa.customer_visible = true"]
+    params: list = [tenant["id"]]
+    if status is not None:
+        where.append("sa.status = %s")
+        params.append(status)
+    sev = (severity or "").strip().lower()
+    if sev in ("urgent", "high_critical", "high,critical"):
+        where.append("sa.severity IN ('high', 'critical')")
+    elif sev in ("low", "medium", "high", "critical"):
+        where.append("sa.severity = %s")
+        params.append(sev)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "sa.alert_title ILIKE %s OR "
+            "COALESCE(sa.ai_plain_summary, '') ILIKE %s OR "
+            "COALESCE(sa.destination_host, '') ILIKE %s OR "
+            "COALESCE(pa.hostname, '') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like])
+    where_sql = " AND ".join(where)
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM security_alerts sa
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE {where_sql};
         """,
-        (tenant["id"],),
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
+    rows = fetch_all(
+        f"""
+        SELECT
+            sa.id::text AS alert_id,
+            sa.alert_title AS title,
+            sa.severity,
+            sa.status,
+            sa.source_tool AS source,
+            sa.ai_plain_summary AS summary,
+            sa.alert_description AS description,
+            sa.event_time AS detected_at,
+            sa.destination_host AS hostname,
+            pa.hostname AS asset_hostname,
+            pa.asset_type,
+            pa.os_name AS asset_os_name,
+            pa.criticality AS asset_criticality,
+            sa.raw_event,
+            sa.ai_business_impact,
+            sa.ai_recommended_action,
+            sa.ai_likely_attack_type
+        FROM security_alerts sa
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE {where_sql}
+        ORDER BY sa.event_time DESC NULLS LAST, sa.created_at DESC
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
 
-    return {"tenant": tenant, "alerts": _customer_safe_alert_rows(rows)}
+    return {
+        "tenant": tenant,
+        "alerts": [_customer_safe_alert_detail_row(row) for row in rows],
+        **pagination_meta(total, page, page_size),
+    }
 
 
 @router.get("/alerts/{short_code}/{alert_id}")
@@ -376,19 +603,28 @@ def customer_alert_detail(
     alert = fetch_one(
         """
         SELECT
-            id::text AS alert_id,
-            alert_title AS title,
-            severity,
-            status,
-            source_tool AS source,
-            ai_plain_summary AS summary,
-            alert_description AS description,
-            event_time AS detected_at,
-            destination_host AS hostname
-        FROM security_alerts
-        WHERE tenant_id = %s
-          AND id = %s
-          AND customer_visible = true;
+            sa.id::text AS alert_id,
+            sa.alert_title AS title,
+            sa.severity,
+            sa.status,
+            sa.source_tool AS source,
+            sa.ai_plain_summary AS summary,
+            sa.alert_description AS description,
+            sa.event_time AS detected_at,
+            sa.destination_host AS hostname,
+            pa.hostname AS asset_hostname,
+            pa.asset_type,
+            pa.os_name AS asset_os_name,
+            pa.criticality AS asset_criticality,
+            sa.raw_event,
+            sa.ai_business_impact,
+            sa.ai_recommended_action,
+            sa.ai_likely_attack_type
+        FROM security_alerts sa
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE sa.tenant_id = %s
+          AND sa.id = %s
+          AND sa.customer_visible = true;
         """,
         (tenant["id"], alert_id),
     )
@@ -396,13 +632,16 @@ def customer_alert_detail(
     if not alert:
         raise HTTPException(status_code=404, detail="Alert not found")
 
-    alert["source"] = customer_safe_alert_source(alert.get("source"))
-    return {"tenant": tenant, "alert": alert}
+    return {"tenant": tenant, "alert": _customer_safe_alert_detail_row(alert)}
 
 
 @router.get("/assets/{short_code}")
 def customer_assets(
     short_code: str,
+    asset_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -465,8 +704,42 @@ def customer_assets(
         (tenant_id,),
     )
 
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = ["pa.tenant_id = %s"]
+    params: list = [tenant_id]
+    st = (asset_status or "").strip().lower()
+    if st in ("active", "inactive", "unknown"):
+        where.append("pa.status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "COALESCE(pa.hostname, '') ILIKE %s OR "
+            "COALESCE(pa.os_name, '') ILIKE %s OR "
+            "COALESCE(pa.asset_type, '') ILIKE %s OR "
+            "COALESCE(pa.owner, '') ILIKE %s OR "
+            "COALESCE(a.appliance_name, '') ILIKE %s OR "
+            "COALESCE(a.site_name, '') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like, like])
+    where_sql = " AND ".join(where)
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM protected_assets pa
+        LEFT JOIN appliances a ON a.id = pa.appliance_id
+        WHERE {where_sql};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     assets = fetch_all(
-        """
+        f"""
         SELECT
             pa.id::text AS asset_id,
             pa.hostname,
@@ -480,7 +753,7 @@ def customer_assets(
             a.site_name
         FROM protected_assets pa
         LEFT JOIN appliances a ON a.id = pa.appliance_id
-        WHERE pa.tenant_id = %s
+        WHERE {where_sql}
         ORDER BY
             CASE pa.criticality
                 WHEN 'critical' THEN 1
@@ -491,12 +764,17 @@ def customer_assets(
             END,
             pa.hostname NULLS LAST,
             pa.created_at DESC
-        LIMIT 200;
+        LIMIT %s OFFSET %s;
         """,
-        (tenant_id,),
+        tuple(params + [page_size, offset]),
     )
 
-    return {"tenant": tenant, "appliances": appliances, "assets": assets}
+    return {
+        "tenant": tenant,
+        "appliances": appliances,
+        "assets": assets,
+        **pagination_meta(total, page, page_size),
+    }
 
 
 @router.get("/assets/{short_code}/{asset_id}")
@@ -650,6 +928,10 @@ def customer_appliance_detail(
 @router.get("/reports/{short_code}")
 def customer_reports(
     short_code: str,
+    report_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -670,8 +952,34 @@ def customer_reports(
     # KB-011: see customer_dashboard() above for why this is 404, not 403.
     require_tenant_match(tenant["id"], current_user)
 
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = ["tenant_id = %s", "status IN ('published', 'archived')"]
+    params: list = [tenant["id"]]
+    st = (report_status or "").strip().lower()
+    if st in ("published", "archived"):
+        where.append("status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "('Monthly Security Report — ' || to_char(report_month, 'Mon YYYY')) ILIKE %s OR "
+            "COALESCE(executive_summary, '') ILIKE %s OR "
+            "to_char(report_month, 'YYYY-MM') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like])
+    where_sql = " AND ".join(where)
+
+    count_row = fetch_one(
+        f"SELECT count(*)::int AS total FROM monthly_reports WHERE {where_sql};",
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             id::text AS report_id,
             report_month,
@@ -681,15 +989,14 @@ def customer_reports(
             created_at,
             published_at
         FROM monthly_reports
-        WHERE tenant_id = %s
-          AND status IN ('published', 'archived')
+        WHERE {where_sql}
         ORDER BY report_month DESC
-        LIMIT 100;
+        LIMIT %s OFFSET %s;
         """,
-        (tenant["id"],),
+        tuple(params + [page_size, offset]),
     )
 
-    return {"tenant": tenant, "reports": rows}
+    return {"tenant": tenant, "reports": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/reports/{short_code}/{report_id}")
@@ -839,6 +1146,10 @@ def customer_report_download_xlsx(
 @router.get("/recommendations/{short_code}")
 def customer_recommendations(
     short_code: str,
+    rec_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -858,8 +1169,34 @@ def customer_recommendations(
     # KB-011: see customer_dashboard() above for why this is 404, not 403.
     require_tenant_match(tenant["id"], current_user)
 
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = ["tenant_id = %s", "customer_visible = true"]
+    params: list = [tenant["id"]]
+    st = (rec_status or "").strip().lower()
+    if st in ("open", "in_progress", "accepted_risk", "completed", "dismissed"):
+        where.append("status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "title ILIKE %s OR "
+            "COALESCE(description, '') ILIKE %s OR "
+            "COALESCE(category, '') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like])
+    where_sql = " AND ".join(where)
+
+    count_row = fetch_one(
+        f"SELECT count(*)::int AS total FROM customer_recommendations WHERE {where_sql};",
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             id::text AS recommendation_id,
             title,
@@ -872,8 +1209,7 @@ def customer_recommendations(
             created_at,
             updated_at
         FROM customer_recommendations
-        WHERE tenant_id = %s
-          AND customer_visible = true
+        WHERE {where_sql}
         ORDER BY
             CASE priority
                 WHEN 'critical' THEN 1
@@ -883,12 +1219,16 @@ def customer_recommendations(
                 ELSE 5
             END,
             created_at DESC
-        LIMIT 100;
+        LIMIT %s OFFSET %s;
         """,
-        (tenant["id"],),
+        tuple(params + [page_size, offset]),
     )
 
-    return {"tenant": tenant, "recommendations": rows}
+    return {
+        "tenant": tenant,
+        "recommendations": rows,
+        **pagination_meta(total, page, page_size),
+    }
 
 
 @router.get("/recommendations/{short_code}/{recommendation_id}")
@@ -1013,6 +1353,10 @@ def customer_vulnerability_summary(
 @router.get("/notifications/{short_code}")
 def customer_notifications(
     short_code: str,
+    notif_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
     """
@@ -1033,8 +1377,33 @@ def customer_notifications(
     # KB-011: see customer_dashboard() above for why this is 404, not 403.
     require_tenant_match(tenant["id"], current_user)
 
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = ["tenant_id = %s"]
+    params: list = [tenant["id"]]
+    st = (notif_status or "").strip().lower()
+    if st:
+        where.append("status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "notification_type ILIKE %s OR "
+            "COALESCE(message_body, '') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like])
+    where_sql = " AND ".join(where)
+
+    count_row = fetch_one(
+        f"SELECT count(*)::int AS total FROM notification_events WHERE {where_sql};",
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             id::text AS notification_id,
             notification_type,
@@ -1044,11 +1413,15 @@ def customer_notifications(
             delivered_at,
             created_at
         FROM notification_events
-        WHERE tenant_id = %s
+        WHERE {where_sql}
         ORDER BY created_at DESC
-        LIMIT 100;
+        LIMIT %s OFFSET %s;
         """,
-        (tenant["id"],),
+        tuple(params + [page_size, offset]),
     )
 
-    return {"tenant": tenant, "notifications": rows}
+    return {
+        "tenant": tenant,
+        "notifications": rows,
+        **pagination_meta(total, page, page_size),
+    }

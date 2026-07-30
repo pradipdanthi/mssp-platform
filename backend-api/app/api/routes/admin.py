@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import require_roles
 from app.db.session import fetch_all, fetch_one
+from app.services.list_pagination import clamp_pagination, pagination_meta
 from app.services.soc_alert_taxonomy import (
     TAXONOMY_LABELS,
     TAXONOMY_SLUGS,
@@ -106,10 +107,43 @@ def admin_dashboard(
 
 @router.get("/tenants")
 def admin_tenants(
+    tenant_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200, description="Search name/code/contact"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where: list[str] = []
+    params: list = []
+    st = (tenant_status or "").strip().lower()
+    if st in ("onboarding", "active", "inactive", "suspended"):
+        where.append("t.status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s OR "
+            "COALESCE(t.primary_contact_name, '') ILIKE %s OR "
+            "COALESCE(t.primary_contact_email, '') ILIKE %s OR "
+            "COALESCE(t.country, '') ILIKE %s OR "
+            "COALESCE(t.city, '') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like, like])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"SELECT count(*)::int AS total FROM tenants t {where_sql};",
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             t.id::text,
             t.name,
@@ -136,19 +170,60 @@ def admin_tenants(
         LEFT JOIN appliances a ON a.tenant_id = t.id
         LEFT JOIN protected_assets pa ON pa.tenant_id = t.id
         LEFT JOIN incidents i ON i.tenant_id = t.id
+        {where_sql}
         GROUP BY t.id
-        ORDER BY t.created_at DESC;
-        """
+        ORDER BY t.created_at DESC
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
-    return {"tenants": rows}
+    return {"tenants": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/appliances")
 def admin_appliances(
+    appliance_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(
+        default=None, max_length=200, description="Search name/site/tenant"
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where: list[str] = []
+    params: list = []
+    st = (appliance_status or "").strip().lower()
+    if st:
+        where.append("a.status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "a.appliance_name ILIKE %s OR "
+            "a.site_name ILIKE %s OR "
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM appliances a
+        JOIN tenants t ON t.id = a.tenant_id
+        {where_sql};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             t.name AS tenant_name,
             t.short_code,
@@ -176,10 +251,13 @@ def admin_appliances(
             ORDER BY h.heartbeat_at DESC
             LIMIT 1
         ) h ON true
-        ORDER BY a.last_seen_at DESC NULLS LAST;
-        """
+        {where_sql}
+        ORDER BY a.last_seen_at DESC NULLS LAST
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
-    return {"appliances": rows}
+    return {"appliances": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/alerts/taxonomy-summary")
@@ -234,28 +312,53 @@ def admin_alerts(
     alert_status: Optional[
         Literal["new", "triaged", "incident_created", "false_positive", "closed"]
     ] = Query(default=None, alias="status"),
-    severity: Optional[Literal["low", "medium", "high", "critical"]] = None,
+    severity: Optional[str] = Query(
+        default=None,
+        description="low|medium|high|critical or urgent/high_critical for high+critical",
+    ),
     tenant_id: Optional[UUID] = None,
     asset_category: Optional[str] = Query(default=None, description="KB-082 taxonomy slug"),
+    q: Optional[str] = Query(default=None, max_length=200, description="Search title/host/summary"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
     if asset_category and asset_category not in TAXONOMY_SLUGS:
         asset_category = "uncategorized"
+    page, page_size, offset = clamp_pagination(page, page_size)
+
     where = []
-    params = []
+    params: list = []
     if alert_status is not None:
         where.append("sa.status = %s")
         params.append(alert_status)
-    if severity is not None:
+    sev = (severity or "").strip().lower()
+    if sev in ("urgent", "high_critical", "high,critical"):
+        where.append("sa.severity IN ('high', 'critical')")
+    elif sev in ("low", "medium", "high", "critical"):
         where.append("sa.severity = %s")
-        params.append(severity)
+        params.append(sev)
     if tenant_id is not None:
         where.append("sa.tenant_id = %s")
         params.append(tenant_id)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "sa.alert_title ILIKE %s OR "
+            "COALESCE(sa.alert_description, '') ILIKE %s OR "
+            "COALESCE(sa.destination_host, '') ILIKE %s OR "
+            "COALESCE(sa.ai_plain_summary, '') ILIKE %s OR "
+            "COALESCE(sa.external_alert_id, '') ILIKE %s OR "
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like, like, like])
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
-    rows = fetch_all(
-        f"""
+    select_sql = f"""
         SELECT
             sa.id::text,
             t.name AS tenant_name,
@@ -280,39 +383,99 @@ def admin_alerts(
         JOIN tenants t ON t.id = sa.tenant_id
         {where_sql}
         ORDER BY sa.created_at DESC
-        LIMIT 200;
+    """
+
+    # Taxonomy category is derived in Python; when filtering by category we
+    # page after enrichment. Otherwise use SQL LIMIT/OFFSET.
+    if asset_category and asset_category != "all":
+        rows = fetch_all(select_sql + " LIMIT 2000;", tuple(params))
+        enriched = filter_by_asset_category(
+            [enrich_alert_row(r) for r in rows], asset_category
+        )
+        total = len(enriched)
+        page_rows = enriched[offset : offset + page_size]
+        return {"alerts": page_rows, **pagination_meta(total, page, page_size)}
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM security_alerts sa
+        JOIN tenants t ON t.id = sa.tenant_id
+        {where_sql};
         """,
         tuple(params),
     )
+    total = int((count_row or {}).get("total") or 0)
+    rows = fetch_all(
+        select_sql + " LIMIT %s OFFSET %s;",
+        tuple(params + [page_size, offset]),
+    )
     enriched = [enrich_alert_row(r) for r in rows]
-    if asset_category and asset_category != "all":
-        enriched = filter_by_asset_category(enriched, asset_category)
-    # Preserve prior list cap for default view
-    enriched = enriched[:100]
-    return {"alerts": enriched}
+    return {"alerts": enriched, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/incidents")
 def admin_incidents(
-    incident_status: Optional[
-        Literal["open", "in_progress", "waiting_customer", "resolved", "closed"]
-    ] = Query(default=None, alias="status"),
-    severity: Optional[Literal["low", "medium", "high", "critical"]] = None,
+    incident_status: Optional[str] = Query(
+        default=None,
+        alias="status",
+        description="Exact status, or open for open/in_progress/waiting_customer",
+    ),
+    severity: Optional[str] = Query(
+        default=None,
+        description="low|medium|high|critical or urgent/high_critical for high+critical",
+    ),
     tenant_id: Optional[UUID] = None,
+    q: Optional[str] = Query(
+        default=None, max_length=200, description="Search number/title/tenant/summary"
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
+    page, page_size, offset = clamp_pagination(page, page_size)
     where = []
-    params = []
-    if incident_status is not None:
+    params: list = []
+    st = (incident_status or "").strip().lower()
+    if st == "open":
+        where.append("i.status IN ('open', 'in_progress', 'waiting_customer')")
+    elif st in ("in_progress", "waiting_customer", "resolved", "closed"):
         where.append("i.status = %s")
-        params.append(incident_status)
-    if severity is not None:
+        params.append(st)
+    sev = (severity or "").strip().lower()
+    if sev in ("urgent", "high_critical", "high,critical"):
+        where.append("i.severity IN ('high', 'critical')")
+    elif sev in ("low", "medium", "high", "critical"):
         where.append("i.severity = %s")
-        params.append(severity)
+        params.append(sev)
     if tenant_id is not None:
         where.append("i.tenant_id = %s")
         params.append(tenant_id)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "i.incident_number ILIKE %s OR "
+            "i.title ILIKE %s OR "
+            "COALESCE(i.customer_visible_summary, '') ILIKE %s OR "
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like])
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM incidents i
+        JOIN tenants t ON t.id = i.tenant_id
+        {where_sql};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
 
     rows = fetch_all(
         f"""
@@ -334,20 +497,58 @@ def admin_incidents(
         LEFT JOIN platform_users u ON u.id = i.assigned_to_user_id
         {where_sql}
         ORDER BY i.created_at DESC
-        LIMIT 100;
+        LIMIT %s OFFSET %s;
         """,
-        tuple(params),
+        tuple(params + [page_size, offset]),
     )
-    return {"incidents": rows}
+    return {"incidents": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/recommendations")
 def admin_recommendations(
+    rec_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(
+        default=None, max_length=200, description="Search title/category/tenant"
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
-    """KB-062: cross-tenant recommendations list for Admin/SOC (latest 100)."""
+    """KB-062: cross-tenant recommendations list for Admin/SOC."""
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where: list[str] = []
+    params: list = []
+    st = (rec_status or "").strip().lower()
+    if st in ("open", "in_progress", "accepted_risk", "completed", "dismissed"):
+        where.append("cr.status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "cr.title ILIKE %s OR "
+            "COALESCE(cr.category, '') ILIKE %s OR "
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM customer_recommendations cr
+        JOIN tenants t ON t.id = cr.tenant_id
+        {where_sql};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             cr.id::text,
             t.name AS tenant_name,
@@ -362,6 +563,7 @@ def admin_recommendations(
             cr.created_at
         FROM customer_recommendations cr
         JOIN tenants t ON t.id = cr.tenant_id
+        {where_sql}
         ORDER BY
             CASE cr.status
                 WHEN 'open' THEN 1
@@ -376,19 +578,59 @@ def admin_recommendations(
                 ELSE 5
             END,
             cr.created_at DESC
-        LIMIT 100;
-        """
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
-    return {"recommendations": rows}
+    return {"recommendations": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/notifications")
 def admin_notifications(
+    notif_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(
+        default=None, max_length=200, description="Search type/preview/tenant"
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
-    """KB-062: cross-tenant notification events for Admin/SOC (latest 100)."""
+    """KB-062: cross-tenant notification events for Admin/SOC."""
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where: list[str] = []
+    params: list = []
+    st = (notif_status or "").strip().lower()
+    if st:
+        where.append("ne.status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "ne.notification_type ILIKE %s OR "
+            "COALESCE(ne.message_body, '') ILIKE %s OR "
+            "COALESCE(ne.provider, '') ILIKE %s OR "
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM notification_events ne
+        JOIN tenants t ON t.id = ne.tenant_id
+        {where_sql};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             ne.id::text,
             t.name AS tenant_name,
@@ -402,9 +644,11 @@ def admin_notifications(
             ne.created_at
         FROM notification_events ne
         JOIN tenants t ON t.id = ne.tenant_id
+        {where_sql}
         ORDER BY ne.created_at DESC
-        LIMIT 100;
-        """
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
-    return {"notifications": rows}
+    return {"notifications": rows, **pagination_meta(total, page, page_size)}
 

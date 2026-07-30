@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AdminUser,
   PlatformRole,
@@ -14,12 +15,14 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ConfirmDangerModal from "../components/ConfirmDangerModal";
+import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
 const ROLE_OPTIONS: PlatformRole[] = ["platform_admin", "soc_manager", "soc_analyst"];
 const CUSTOMER_ROLES: PlatformRole[] = ["customer_admin", "customer_viewer"];
 const STATUS_OPTIONS: UserStatus[] = ["active", "inactive", "locked"];
+const STATUS_FILTER_OPTIONS = STATUS_OPTIONS.map((s) => ({ value: s, label: s }));
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
@@ -59,7 +62,45 @@ const EMPTY_CREATE: CreateFormState = {
 export default function UsersPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin";
-  const { status, data, errorMessage, refetch } = useAdminQuery(() => getUsers(), []);
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
+  const { status, data, errorMessage, refetch } = useAdminQuery(
+    () =>
+      getUsers({
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
+    [statusFilter, qFilter, page, pageSize]
+  );
+  const users = status === "success" && data ? data.users : [];
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? users.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [tenantsError, setTenantsError] = useState<string | null>(null);
@@ -87,7 +128,7 @@ export default function UsersPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getTenants()
+    getTenants({ page_size: 200 })
       .then((result) => {
         if (!cancelled) setTenants(result.tenants);
       })
@@ -291,6 +332,19 @@ export default function UsersPage() {
       {createSuccess && <div className="state-message state-success">{createSuccess}</div>}
       {editSuccess && <div className="state-message state-success">{editSuccess}</div>}
       {passwordSuccess && <div className="state-message state-success">{passwordSuccess}</div>}
+
+      <ListToolbar
+        searchPlaceholder="Search name, email, role…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_FILTER_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       <ConfirmDangerModal
         open={!!disableUser}
@@ -541,8 +595,8 @@ export default function UsersPage() {
       {status === "error" && <div className="state-message state-error">{errorMessage}</div>}
 
       {status === "success" && data && (
-        data.users.length === 0 ? (
-          <div className="state-message">No users yet.</div>
+        users.length === 0 ? (
+          <div className="state-message">No users matching this view.</div>
         ) : (
           <table className="data-table">
             <thead>
@@ -558,7 +612,7 @@ export default function UsersPage() {
               </tr>
             </thead>
             <tbody>
-              {data.users.map((u) => (
+              {users.map((u) => (
                 <tr key={u.id}>
                   <td>{u.full_name}</td>
                   <td>{u.email}</td>

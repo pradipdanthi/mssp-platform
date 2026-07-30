@@ -1,66 +1,95 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getIncidents } from "../api/admin";
+import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
-function isOpenStatus(status: string): boolean {
-  const s = status.toLowerCase();
-  return s === "open" || s === "investigating" || s === "in_progress" || s === "new";
-}
+const STATUS_OPTIONS = [
+  { value: "open", label: "Open (active)" },
+  { value: "in_progress", label: "In progress" },
+  { value: "waiting_customer", label: "Waiting customer" },
+  { value: "resolved", label: "Resolved" },
+  { value: "closed", label: "Closed" },
+];
+
+const SEVERITY_OPTIONS = [
+  { value: "critical", label: "Critical" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "High + Critical" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+];
 
 export default function IncidentsPage() {
   const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const statusFilter = params.get("status");
-  const severityFilter = params.get("severity");
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const severityFilter = params.get("severity") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
   const { status, data, errorMessage } = useAdminQuery(
     () =>
-      getIncidents(
-        statusFilter && statusFilter !== "open"
-          ? { status: statusFilter, ...(severityFilter ? { severity: severityFilter } : {}) }
-          : severityFilter
-            ? { severity: severityFilter }
-            : undefined
-      ),
-    [statusFilter, severityFilter]
+      getIncidents({
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(severityFilter ? { severity: severityFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
+    [statusFilter, severityFilter, qFilter, page, pageSize]
   );
 
-  const incidents =
+  const incidents = status === "success" && data ? data.incidents : [];
+  const meta =
     status === "success" && data
-      ? data.incidents.filter((i) => {
-          if (statusFilter === "open") {
-            if (!isOpenStatus(i.status)) return false;
-          } else if (statusFilter && i.status.toLowerCase() !== statusFilter.toLowerCase()) {
-            return false;
-          }
-          if (severityFilter && i.severity.toLowerCase() !== severityFilter.toLowerCase()) {
-            return false;
-          }
-          return true;
-        })
-      : [];
-
-  const filterBits = [
-    statusFilter ? `status=${statusFilter}` : null,
-    severityFilter ? `severity=${severityFilter}` : null,
-  ].filter(Boolean);
+      ? {
+          total: data.total ?? incidents.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   return (
     <div>
       <h1 className="page-title">Incidents</h1>
       <p className="page-subtitle">
-        Open and historical incidents across all tenants (latest 100). Use the ⋯ menu to open the
-        investigation workspace.
-        {filterBits.length ? (
-          <>
-            {" "}
-            Filtered by <strong>{filterBits.join(" · ")}</strong>
-            {" · "}
-            <Link to="/incidents">Clear filter</Link>
-          </>
-        ) : null}
+        Open and historical incidents across all tenants. Search by number, title, or tenant; use
+        filters and pagination when queues grow large. Use the ⋯ menu to open the investigation
+        workspace.
       </p>
+
+      <ListToolbar
+        searchPlaceholder="Search number, title, tenant, summary…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        severityOptions={SEVERITY_OPTIONS}
+        severityValue={severityFilter}
+        onSeverityChange={(severity) => patchParams({ severity, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       {status === "loading" && <div className="state-message">Loading incidents...</div>}
       {status === "forbidden" && (
@@ -73,7 +102,7 @@ export default function IncidentsPage() {
       {status === "success" && data && (
         incidents.length === 0 ? (
           <div className="state-message">
-            No incidents{statusFilter ? ` matching “${statusFilter}”` : ""} yet.
+            No incidents{statusFilter ? ` matching “${statusFilter}”` : ""} in this view.
           </div>
         ) : (
           <table className="data-table">

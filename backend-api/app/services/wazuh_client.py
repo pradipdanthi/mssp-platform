@@ -182,25 +182,36 @@ def credentials_configured() -> bool:
 
 
 def get_agent_os(agent_id: str) -> str:
-    """Return 'windows' or 'linux' (default) for the agent's OS platform."""
+    """
+    Return 'windows', 'linux', or 'unknown'.
+
+    Never guess. A wrong OS routes Active Response to the wrong script family
+    and creates false confidence that containment ran.
+    """
     aid = (agent_id or "").strip()
     if not aid:
-        return "linux"
+        return "unknown"
     try:
         token = authenticate()
         result = _request(
             "GET",
-            f"/agents?agents_list={urllib.parse.quote(aid)}&select=os.platform",
+            f"/agents?agents_list={urllib.parse.quote(aid)}&select=os.platform,os.name",
             token=token,
         )
         items = (result.get("data") or {}).get("affected_items") or []
-        if items:
-            platform = str((items[0].get("os") or {}).get("platform") or "").lower()
-            if "windows" in platform:
-                return "windows"
+        if not items:
+            return "unknown"
+        os_info = items[0].get("os") or {}
+        platform = str(os_info.get("platform") or "").lower()
+        name = str(os_info.get("name") or "").lower()
+        blob = f"{platform} {name}"
+        if "win" in blob:
+            return "windows"
+        if any(x in blob for x in ("linux", "ubuntu", "centos", "debian", "rhel", "amzn")):
+            return "linux"
+        return "unknown"
     except Exception:
-        pass
-    return "linux"
+        return "unknown"
 
 
 def get_agent_status(agent_id: str) -> Dict[str, Any]:

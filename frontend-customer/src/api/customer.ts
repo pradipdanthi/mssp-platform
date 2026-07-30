@@ -44,6 +44,14 @@ export interface CustomerIncident {
   opened_at: string | null;
   resolved_at?: string | null;
   closed_at?: string | null;
+  hostname?: string | null;
+  asset_category?: string | null;
+  asset_category_label?: string | null;
+  device_type?: string | null;
+  operating_system?: string | null;
+  recommended_action?: string | null;
+  likely_attack_type?: string | null;
+  criticality?: string | null;
 }
 
 export interface CustomerIncidentTimelineEvent {
@@ -57,6 +65,7 @@ export interface CustomerIncidentDetailResponse {
   incident: CustomerIncident;
   timeline: CustomerIncidentTimelineEvent[];
   related_alerts: CustomerAlert[];
+  primary_alert?: CustomerAlert | null;
 }
 
 export interface CustomerRecommendation {
@@ -88,6 +97,12 @@ export interface CustomerDashboardResponse {
 export interface CustomerIncidentsResponse {
   tenant: CustomerTenant;
   incidents: CustomerIncident[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface CustomerAlert {
@@ -100,19 +115,57 @@ export interface CustomerAlert {
   description: string | null;
   detected_at: string | null;
   hostname: string | null;
+  asset_category?: string | null;
+  asset_category_label?: string | null;
+  device_type?: string | null;
+  operating_system?: string | null;
+  business_impact?: string | null;
+  recommended_action?: string | null;
+  likely_attack_type?: string | null;
+  criticality?: string | null;
 }
 
 export interface CustomerAlertsResponse {
   tenant: CustomerTenant;
   alerts: CustomerAlert[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
+}
+
+export interface CustomerListFilters {
+  status?: string;
+  severity?: string;
+  q?: string;
+  page?: number;
+  page_size?: number;
+}
+
+function withCustomerListFilters(path: string, filters?: CustomerListFilters): string {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.severity) params.set("severity", filters.severity);
+  if (filters?.q) params.set("q", filters.q);
+  if (filters?.page != null) params.set("page", String(filters.page));
+  if (filters?.page_size != null) params.set("page_size", String(filters.page_size));
+  const query = params.toString();
+  return query ? `${path}?${query}` : path;
 }
 
 export function getCustomerDashboard(shortCode: string): Promise<CustomerDashboardResponse> {
   return request<CustomerDashboardResponse>(`/customer/dashboard/${encodeURIComponent(shortCode)}`);
 }
 
-export function getCustomerIncidents(shortCode: string): Promise<CustomerIncidentsResponse> {
-  return request<CustomerIncidentsResponse>(`/customer/incidents/${encodeURIComponent(shortCode)}`);
+export function getCustomerIncidents(
+  shortCode: string,
+  filters?: CustomerListFilters
+): Promise<CustomerIncidentsResponse> {
+  return request<CustomerIncidentsResponse>(
+    withCustomerListFilters(`/customer/incidents/${encodeURIComponent(shortCode)}`, filters)
+  );
 }
 
 export function getCustomerIncidentDetail(
@@ -124,8 +177,13 @@ export function getCustomerIncidentDetail(
   );
 }
 
-export function getCustomerAlerts(shortCode: string): Promise<CustomerAlertsResponse> {
-  return request<CustomerAlertsResponse>(`/customer/alerts/${encodeURIComponent(shortCode)}`);
+export function getCustomerAlerts(
+  shortCode: string,
+  filters?: CustomerListFilters
+): Promise<CustomerAlertsResponse> {
+  return request<CustomerAlertsResponse>(
+    withCustomerListFilters(`/customer/alerts/${encodeURIComponent(shortCode)}`, filters)
+  );
 }
 
 export interface CustomerAlertDetailResponse {
@@ -172,10 +230,21 @@ export interface CustomerAssetsResponse {
   tenant: CustomerTenant;
   appliances: CustomerAppliance[];
   assets: CustomerProtectedAsset[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
-export function getCustomerAssets(shortCode: string): Promise<CustomerAssetsResponse> {
-  return request<CustomerAssetsResponse>(`/customer/assets/${encodeURIComponent(shortCode)}`);
+export function getCustomerAssets(
+  shortCode: string,
+  filters?: CustomerListFilters
+): Promise<CustomerAssetsResponse> {
+  return request<CustomerAssetsResponse>(
+    withCustomerListFilters(`/customer/assets/${encodeURIComponent(shortCode)}`, filters)
+  );
 }
 
 export interface CustomerAssetDetailResponse {
@@ -247,10 +316,21 @@ export interface CustomerReport {
 export interface CustomerReportsResponse {
   tenant: CustomerTenant;
   reports: CustomerReport[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
-export function getCustomerReports(shortCode: string): Promise<CustomerReportsResponse> {
-  return request<CustomerReportsResponse>(`/customer/reports/${encodeURIComponent(shortCode)}`);
+export function getCustomerReports(
+  shortCode: string,
+  filters?: CustomerListFilters
+): Promise<CustomerReportsResponse> {
+  return request<CustomerReportsResponse>(
+    withCustomerListFilters(`/customer/reports/${encodeURIComponent(shortCode)}`, filters)
+  );
 }
 
 export interface CustomerReportDetailResponse {
@@ -320,13 +400,20 @@ export interface CustomerNotification {
 export interface CustomerNotificationsResponse {
   tenant: CustomerTenant;
   notifications: CustomerNotification[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export function getCustomerNotifications(
-  shortCode: string
+  shortCode: string,
+  filters?: CustomerListFilters
 ): Promise<CustomerNotificationsResponse> {
   return request<CustomerNotificationsResponse>(
-    `/customer/notifications/${encodeURIComponent(shortCode)}`
+    withCustomerListFilters(`/customer/notifications/${encodeURIComponent(shortCode)}`, filters)
   );
 }
 
@@ -346,13 +433,20 @@ export interface CustomerRecommendationItem {
 export interface CustomerRecommendationsResponse {
   tenant: CustomerTenant;
   recommendations: CustomerRecommendationItem[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export function getCustomerRecommendations(
-  shortCode: string
+  shortCode: string,
+  filters?: CustomerListFilters
 ): Promise<CustomerRecommendationsResponse> {
   return request<CustomerRecommendationsResponse>(
-    `/customer/recommendations/${encodeURIComponent(shortCode)}`
+    withCustomerListFilters(`/customer/recommendations/${encodeURIComponent(shortCode)}`, filters)
   );
 }
 
@@ -390,54 +484,54 @@ export interface CustomerDashboardV2Response {
   recent_appliances: CustomerAppliance[];
 }
 
-const OPEN_INCIDENT_STATUSES = new Set(["open", "in_progress", "waiting_customer"]);
-const OPEN_RECOMMENDATION_STATUSES = new Set(["open", "in_progress"]);
-const HIGH_CRITICAL_SEVERITIES = new Set(["high", "critical"]);
-
 export async function getCustomerDashboardV2(
   shortCode: string
 ): Promise<CustomerDashboardV2Response> {
-  const [incidentsRes, alertsRes, recommendationsRes, assetsRes, reportsRes] =
-    await Promise.all([
-      getCustomerIncidents(shortCode),
-      getCustomerAlerts(shortCode),
-      getCustomerRecommendations(shortCode),
-      getCustomerAssets(shortCode),
-      getCustomerReports(shortCode),
-    ]);
+  const [
+    openIncidentsRes,
+    recentIncidentsRes,
+    urgentAlertsRes,
+    recentAlertsRes,
+    recommendationsRes,
+    openRecsRes,
+    inProgressRecsRes,
+    assetsRes,
+    reportsRes,
+  ] = await Promise.all([
+    getCustomerIncidents(shortCode, { status: "open", page: 1, page_size: 5 }),
+    getCustomerIncidents(shortCode, { page: 1, page_size: 5 }),
+    getCustomerAlerts(shortCode, { severity: "urgent", page: 1, page_size: 5 }),
+    getCustomerAlerts(shortCode, { page: 1, page_size: 5 }),
+    getCustomerRecommendations(shortCode, { page: 1, page_size: 5 }),
+    getCustomerRecommendations(shortCode, { status: "open", page: 1, page_size: 1 }),
+    getCustomerRecommendations(shortCode, { status: "in_progress", page: 1, page_size: 1 }),
+    getCustomerAssets(shortCode, { page: 1, page_size: 1 }),
+    getCustomerReports(shortCode, { page: 1, page_size: 5 }),
+  ]);
 
   const tenant =
-    incidentsRes.tenant ??
-    alertsRes.tenant ??
+    recentIncidentsRes.tenant ??
+    recentAlertsRes.tenant ??
     recommendationsRes.tenant ??
     assetsRes.tenant ??
     reportsRes.tenant;
 
-  const openIncidents = incidentsRes.incidents.filter((i) =>
-    OPEN_INCIDENT_STATUSES.has(i.status)
-  );
-  const highCriticalAlerts = alertsRes.alerts.filter((a) =>
-    HIGH_CRITICAL_SEVERITIES.has(a.severity)
-  );
-  const openRecommendations = recommendationsRes.recommendations.filter((r) =>
-    OPEN_RECOMMENDATION_STATUSES.has(r.status)
-  );
   const appliancesOnline = assetsRes.appliances.filter((a) => a.status === "online");
   const appliancesOther = assetsRes.appliances.filter((a) => a.status !== "online");
 
   return {
     tenant,
     kpis: {
-      open_incidents: openIncidents.length,
-      high_critical_alerts: highCriticalAlerts.length,
-      open_recommendations: openRecommendations.length,
-      assets_monitored: assetsRes.assets.length,
+      open_incidents: openIncidentsRes.total ?? openIncidentsRes.incidents.length,
+      high_critical_alerts: urgentAlertsRes.total ?? urgentAlertsRes.alerts.length,
+      open_recommendations: (openRecsRes.total ?? 0) + (inProgressRecsRes.total ?? 0),
+      assets_monitored: assetsRes.total ?? assetsRes.assets.length,
       appliances_online: appliancesOnline.length,
       appliances_other: appliancesOther.length,
     },
-    recent_incidents: incidentsRes.incidents.slice(0, 5),
+    recent_incidents: recentIncidentsRes.incidents.slice(0, 5),
     recent_recommendations: recommendationsRes.recommendations.slice(0, 5),
-    recent_alerts: alertsRes.alerts.slice(0, 5),
+    recent_alerts: recentAlertsRes.alerts.slice(0, 5),
     latest_report: reportsRes.reports.length > 0 ? reportsRes.reports[0] : null,
     recent_appliances: assetsRes.appliances.slice(0, 5),
   };

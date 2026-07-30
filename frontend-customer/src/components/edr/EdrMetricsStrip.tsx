@@ -4,7 +4,8 @@ import type { EdrMetricsSummary } from "../../api/edr";
 type Props = {
   metrics: EdrMetricsSummary | null;
   loading?: boolean;
-  incidentsLink?: string;
+  isolatedHref?: string;
+  telemetryHref?: string;
 };
 
 function fmtMttc(seconds: number | null | undefined): string {
@@ -13,41 +14,66 @@ function fmtMttc(seconds: number | null | undefined): string {
   return `${Math.round(seconds / 60)}m`;
 }
 
-export default function EdrMetricsStrip({ metrics, loading, incidentsLink = "/incidents" }: Props) {
+/**
+ * Customer-safe EDR/MXDR strip. Same meaning as admin: service metrics only.
+ * Containment buttons live on incident detail, not here.
+ */
+export default function EdrMetricsStrip({
+  metrics,
+  loading,
+  isolatedHref = "/incidents",
+  telemetryHref = "/alerts",
+}: Props) {
   return (
-    <section className="edr-metrics-strip card-surface" id="edr-mxdr" aria-label="Endpoint detection and response metrics">
+    <section className="edr-metrics-strip card-surface" id="edr-mxdr" aria-label="Endpoint response metrics">
       <div className="edr-metrics-strip-head">
         <h2 className="section-title" style={{ margin: 0 }}>
-          EDR / MXDR operations
+          Endpoint response metrics
         </h2>
         <p className="page-subtitle" style={{ margin: "0.25rem 0 0" }}>
-          Co-managed endpoint response — open an incident for process tree and containment actions.
+          How quickly hosts are contained and how much endpoint activity is being monitored.
+          To isolate or release a host, open an <strong>incident</strong> below and use the
+          containment controls.
         </p>
       </div>
       {loading ? (
-        <p className="muted">Loading EDR metrics…</p>
+        <p className="muted">Loading endpoint metrics…</p>
       ) : (
         <div className="kpi-row-3 edr-metrics-kpis">
           <div className="kpi-card card-surface">
             <span className="kpi-label">Mean time to contain</span>
-            <div className="kpi-value kpi-value--accent">{fmtMttc(metrics?.mean_time_to_contain_seconds)}</div>
-            <div className="kpi-foot">Alert → host isolation (avg)</div>
+            <div className="kpi-value kpi-value--accent">
+              {fmtMttc(metrics?.mean_time_to_contain_seconds)}
+            </div>
+            <div className="kpi-foot">Average containment speed</div>
           </div>
-          <div className="kpi-card card-surface">
-            <span className="kpi-label">Telemetry processed</span>
-            <div className="kpi-value">{(metrics?.telemetry_events_processed ?? 0).toLocaleString()}</div>
-            <div className="kpi-foot">Sysmon / Osquery events (today rollup)</div>
-          </div>
-          <div className="kpi-card card-surface">
+          <Link
+            className="kpi-card card-surface kpi-card--link"
+            to={telemetryHref}
+            aria-label="Open alerts"
+          >
+            <span className="kpi-label">Endpoint activity</span>
+            <div className="kpi-value">
+              {(metrics?.telemetry_events_processed ?? 0).toLocaleString()}
+            </div>
+            <div className="kpi-foot">Monitored events · click → alerts</div>
+          </Link>
+          <Link
+            className="kpi-card card-surface kpi-card--link"
+            to={isolatedHref}
+            aria-label="Open incidents"
+          >
             <span className="kpi-label">Isolated endpoints</span>
-            <div className="kpi-value kpi-value--critical">{metrics?.isolated_endpoints_count ?? 0}</div>
-            <div className="kpi-foot">Currently quarantined</div>
-          </div>
+            <div className="kpi-value kpi-value--critical">
+              {metrics?.isolated_endpoints_count ?? 0}
+            </div>
+            <div className="kpi-foot">Hosts in quarantine · click → incidents</div>
+          </Link>
         </div>
       )}
       <p style={{ marginTop: "0.75rem" }}>
-        <Link className="btn btn-ghost" to={incidentsLink}>
-          View incidents with EDR deep dive →
+        <Link className="btn btn-ghost" to="/incidents">
+          Open incidents →
         </Link>
       </p>
     </section>

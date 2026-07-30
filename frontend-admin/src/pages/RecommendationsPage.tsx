@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AdminRecommendation,
   RecommendationCreateRequest,
@@ -13,6 +14,7 @@ import {
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import ListToolbar from "../components/ListToolbar";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 
@@ -24,6 +26,7 @@ const STATUSES: RecommendationStatus[] = [
   "completed",
   "dismissed",
 ];
+const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, " ") }));
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
@@ -70,7 +73,46 @@ const EMPTY_CREATE: CreateForm = {
 export default function RecommendationsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
-  const { status, data, errorMessage, refetch } = useAdminQuery(() => getRecommendations(), []);
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
+  const { status, data, errorMessage, refetch } = useAdminQuery(
+    () =>
+      getRecommendations({
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
+    [statusFilter, qFilter, page, pageSize]
+  );
+
+  const recommendations = status === "success" && data ? data.recommendations : [];
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? recommendations.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -86,7 +128,7 @@ export default function RecommendationsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    getTenants()
+    getTenants({ page_size: 200 })
       .then((result) => {
         if (!cancelled) setTenants(result.tenants);
       })
@@ -210,6 +252,19 @@ export default function RecommendationsPage() {
       )}
 
       {successMessage && <div className="state-message state-success">{successMessage}</div>}
+
+      <ListToolbar
+        searchPlaceholder="Search title, category, tenant…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       {showCreate && canWrite && (
         <form className="management-panel" onSubmit={handleCreate}>
@@ -457,8 +512,8 @@ export default function RecommendationsPage() {
       {status === "error" && <div className="state-message state-error">{errorMessage}</div>}
 
       {status === "success" && data && (
-        data.recommendations.length === 0 ? (
-          <div className="state-message">No recommendations yet.</div>
+        recommendations.length === 0 ? (
+          <div className="state-message">No recommendations matching this view.</div>
         ) : (
           <table className="data-table">
             <thead>
@@ -475,7 +530,7 @@ export default function RecommendationsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.recommendations.map((row) => (
+              {recommendations.map((row) => (
                 <tr key={row.id}>
                   <td>
                     {row.tenant_name} ({row.short_code})

@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   AdminAsset,
   ASSET_TYPE_LABELS,
@@ -14,6 +15,7 @@ import {
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 import { ASSET_FOLDERS, AssetFolderId, assetFolderId } from "../utils/assetFolders";
@@ -31,6 +33,7 @@ const TYPES: AssetType[] = [
 ];
 const CRITICALITIES: AssetCriticality[] = ["low", "medium", "high", "critical"];
 const STATUSES: AssetStatus[] = ["active", "inactive", "unknown"];
+const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: s }));
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError && typeof err.detail === "string") return err.detail;
@@ -59,7 +62,44 @@ function emptyFolders(): Record<AssetFolderId, AdminAsset[]> {
 export default function AssetsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
-  const { status, data, errorMessage, refetch } = useAdminQuery(() => getAssets(), []);
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
+  const { status, data, errorMessage, refetch } = useAdminQuery(
+    () =>
+      getAssets({
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
+    [statusFilter, qFilter, page, pageSize]
+  );
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? (data.assets?.length ?? 0),
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [tenantId, setTenantId] = useState("");
@@ -87,23 +127,13 @@ export default function AssetsPage() {
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    getTenants()
+    getTenants({ page_size: 200 })
       .then((r) => setTenants(r.tenants))
       .catch(() => undefined);
   }, []);
 
   const customerBuckets = useMemo(() => {
     const map = new Map<string, CustomerBucket>();
-
-    for (const t of tenants) {
-      map.set(t.short_code, {
-        key: t.short_code,
-        name: t.name,
-        shortCode: t.short_code,
-        folders: emptyFolders(),
-        total: 0,
-      });
-    }
 
     for (const row of data?.assets ?? []) {
       const key = row.short_code;
@@ -124,7 +154,7 @@ export default function AssetsPage() {
     }
 
     return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [data?.assets, tenants]);
+  }, [data?.assets]);
 
   useEffect(() => {
     // Auto-expand customers that already have assets (once per load).
@@ -315,6 +345,19 @@ export default function AssetsPage() {
       )}
       {success && <div className="state-message state-success">{success}</div>}
 
+      <ListToolbar
+        searchPlaceholder="Search hostname, OS, tenant, IP…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
+
       {showCreate && canWrite && (
         <form className="management-panel" onSubmit={handleCreate}>
           <h2 className="section-title" style={{ marginTop: 0 }}>
@@ -499,7 +542,7 @@ export default function AssetsPage() {
       {status === "error" && <div className="state-message state-error">{errorMessage}</div>}
       {status === "success" && (
         customerBuckets.length === 0 ? (
-          <div className="state-message">No customers yet. Add a customer first, then assets.</div>
+          <div className="state-message">No assets matching this view.</div>
         ) : (
           <div className="asset-tree">
             {customerBuckets.map((customer) => {

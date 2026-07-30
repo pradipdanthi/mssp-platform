@@ -28,10 +28,34 @@ _TELEMETRY_PS1_CANDIDATES = (
     Path("/opt/mssp-control/templates/endpoint-configs/Enable-MsspWindowsTelemetry.ps1"),
 )
 
+_WINDOWS_AR_DIR_CANDIDATES = (
+    Path(__file__).resolve().parents[1] / "endpoint_configs" / "windows-edr-ar",
+    Path("/app/app/endpoint_configs/windows-edr-ar"),
+    Path(__file__).resolve().parents[2] / "deploy" / "wazuh-active-response" / "windows",
+    Path("/opt/mssp-control/deploy/wazuh-active-response/windows"),
+)
+
+_WINDOWS_AR_FILES = (
+    "mssp-kill-process.cmd",
+    "mssp-kill-process.ps1",
+    "mssp-isolate-host.cmd",
+    "mssp-isolate-host.ps1",
+    "mssp-block-hash.cmd",
+    "mssp-block-hash.ps1",
+    "Install-MsspWindowsEdrAr.ps1",
+)
+
 
 def _first_existing(paths: tuple[Path, ...]) -> Optional[Path]:
     for path in paths:
         if path.is_file():
+            return path
+    return None
+
+
+def _first_existing_dir(paths: tuple[Path, ...]) -> Optional[Path]:
+    for path in paths:
+        if path.is_dir():
             return path
     return None
 
@@ -48,6 +72,20 @@ def load_windows_telemetry_script() -> str:
     if not path:
         raise FileNotFoundError("Enable-MsspWindowsTelemetry.ps1 / bootstrap not found")
     return path.read_text(encoding="utf-8")
+
+
+def load_windows_edr_ar_files() -> Dict[str, str]:
+    """Return {filename: text} for Windows kill/isolate/block-hash AR pack."""
+    root = _first_existing_dir(_WINDOWS_AR_DIR_CANDIDATES)
+    if not root:
+        raise FileNotFoundError("deploy/wazuh-active-response/windows not found")
+    out: Dict[str, str] = {}
+    for name in _WINDOWS_AR_FILES:
+        path = root / name
+        if not path.is_file():
+            raise FileNotFoundError(f"Windows AR file missing: {path}")
+        out[name] = path.read_text(encoding="utf-8")
+    return out
 
 
 def manager_address() -> str:
@@ -132,12 +170,15 @@ def build_agent_package_zip(
             try:
                 sysmon_xml = load_sysmon_baseline_xml()
                 telemetry_ps1 = load_windows_telemetry_script()
+                ar_files = load_windows_edr_ar_files()
             except FileNotFoundError as exc:
                 raise ValueError(
-                    "Windows package requires Sysmon baseline + telemetry bootstrap scripts"
+                    "Windows package requires Sysmon baseline + telemetry + EDR AR scripts"
                 ) from exc
             zf.writestr("windows/sysmon-windows-baseline.xml", sysmon_xml)
             zf.writestr("windows/Enable-MsspWindowsTelemetry.ps1", telemetry_ps1)
+            for name, text in ar_files.items():
+                zf.writestr(f"windows/edr-ar/{name}", text)
             zf.writestr(
                 "windows/install-windows-agent.ps1",
                 _windows_script(manager, group, version, code),
@@ -187,8 +228,8 @@ Windows
 
 Notes
 -----
-- Keep this package private — it is specific to your organization.
-- Process telemetry is filtered collection for investigation — not an alert for every process.
+- Keep this package private - it is specific to your organization.
+- Process telemetry is filtered collection for investigation - not an alert for every process.
 - After install, open Assets in the portal and refresh; the computer should
   appear under Protected assets within a minute.
 - Ask your security provider if you need help with installation.
@@ -265,10 +306,10 @@ def _windows_install_txt(group: str, manager: str, *, customer_facing: bool = Fa
 
 
 def _linux_script(manager: str, group: str, version: str, short_code: str) -> str:
-    # Keep shell escaping simple — values are controlled (short_code alphanumeric).
+    # Keep shell escaping simple - values are controlled (short_code alphanumeric).
     return f"""#!/usr/bin/env bash
 set -euo pipefail
-# MSSP Linux endpoint agent installer — tenant {short_code}
+# MSSP Linux endpoint agent installer - tenant {short_code}
 MANAGER="{manager}"
 GROUP="{group}"
 VERSION="{version}"
@@ -324,7 +365,7 @@ echo "OK: agent installed for group $GROUP (tenant {short_code})"
 def _windows_script(manager: str, group: str, version: str, short_code: str) -> str:
     msi = f"https://packages.wazuh.com/4.x/windows/wazuh-agent-{version}.msi"
     return f"""#Requires -RunAsAdministrator
-# MSSP Windows endpoint agent installer — tenant {short_code}
+# MSSP Windows endpoint agent installer - tenant {short_code}
 # Installs agent + process telemetry prerequisites (Sysmon / audit / localfile).
 $ErrorActionPreference = "Stop"
 $Manager = "{manager}"
@@ -360,6 +401,14 @@ if (-not (Test-Path -LiteralPath $SysmonCfg)) {{
 Write-Host "Configuring Windows process telemetry prerequisites ..."
 & $Telemetry -SysmonConfigPath $SysmonCfg
 
+$EdrArDir = Join-Path $Here "edr-ar"
+$EdrArInstaller = Join-Path $EdrArDir "Install-MsspWindowsEdrAr.ps1"
+if (-not (Test-Path -LiteralPath $EdrArInstaller)) {{
+  throw "Missing edr-ar/Install-MsspWindowsEdrAr.ps1 (kill/isolate/block-hash pack)"
+}}
+Write-Host "Installing Windows EDR response actions (kill / isolate / block-hash) ..."
+& $EdrArInstaller -ManagerIp $Manager
+
 Get-Service -Name WazuhSvc | Format-List Name, Status
-Write-Host "OK: agent installed for group $Group (tenant {short_code}) with telemetry prerequisites"
+Write-Host "OK: agent installed for group $Group (tenant {short_code}) with telemetry + EDR AR"
 """

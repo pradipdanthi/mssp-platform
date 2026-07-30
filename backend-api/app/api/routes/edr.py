@@ -208,13 +208,23 @@ def edr_process_tree(
 
 @router.post("/actions/execute", response_model=EdrActionExecuteResponse)
 async def edr_execute_action(
+    request: Request,
     body: EdrActionExecuteRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ) -> EdrActionExecuteResponse:
     import asyncio
+
+    def _client_ip() -> Optional[str]:
+        forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        if forwarded:
+            return forwarded[:64]
+        if request.client and request.client.host:
+            return str(request.client.host)[:64]
+        return None
+
     try:
         execution_id, st, message, upload_url, artifact_id = await asyncio.to_thread(
-            execute_edr_action, current_user, body
+            execute_edr_action, current_user, body, source_ip=_client_ip()
         )
     except PermissionError as exc:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))

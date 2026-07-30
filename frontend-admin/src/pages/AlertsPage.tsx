@@ -1,19 +1,10 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { getAlertTaxonomySummary, getAlerts } from "../api/admin";
 import AlertTaxonomyNav from "../components/AlertTaxonomyNav";
+import ListToolbar from "../components/ListToolbar";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 import { useEffect, useState } from "react";
-
-function matchesSeverityFilter(severity: string, filter: string | null): boolean {
-  if (!filter) return true;
-  const s = severity.toLowerCase();
-  const f = filter.toLowerCase();
-  if (f === "urgent" || f === "high_critical" || f === "high,critical") {
-    return s === "high" || s === "critical";
-  }
-  return s === f;
-}
 
 type ColumnMode = "default" | "endpoints" | "network" | "vuln" | "data";
 
@@ -34,42 +25,83 @@ function columnModeForCategory(category: string | null): ColumnMode {
   return "default";
 }
 
+const SEVERITY_OPTIONS = [
+  { value: "critical", label: "Critical" },
+  { value: "high", label: "High" },
+  { value: "urgent", label: "High + Critical" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "new", label: "New" },
+  { value: "triaged", label: "Triaged" },
+  { value: "incident_created", label: "Incident created" },
+  { value: "false_positive", label: "False positive" },
+  { value: "closed", label: "Closed" },
+];
+
 export default function AlertsPage() {
-  const [params] = useSearchParams();
-  const severityFilter = params.get("severity");
+  const [params, setParams] = useSearchParams();
+  const severityFilter = params.get("severity") ?? "";
+  const statusFilter = params.get("status") ?? "";
   const categoryFilter = params.get("category");
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
   const columnMode = columnModeForCategory(categoryFilter);
 
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
   const listFilters = {
-    ...(severityFilter &&
-    !["urgent", "high_critical", "high,critical"].includes(severityFilter)
-      ? { severity: severityFilter }
-      : {}),
+    page,
+    page_size: pageSize,
+    ...(qFilter ? { q: qFilter } : {}),
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(severityFilter ? { severity: severityFilter } : {}),
     ...(categoryFilter ? { asset_category: categoryFilter } : {}),
   };
 
   const { status, data, errorMessage } = useAdminQuery(
-    () => getAlerts(Object.keys(listFilters).length ? listFilters : undefined),
-    [severityFilter, categoryFilter]
+    () => getAlerts(listFilters),
+    [severityFilter, statusFilter, categoryFilter, qFilter, page, pageSize]
   );
 
   const [taxonomyCounts, setTaxonomyCounts] = useState<Record<string, number>>({ all: 0 });
 
   useEffect(() => {
     getAlertTaxonomySummary(
-      severityFilter &&
-        !["urgent", "high_critical", "high,critical"].includes(severityFilter)
+      severityFilter && !["urgent", "high_critical", "high,critical"].includes(severityFilter)
         ? { severity: severityFilter }
-        : undefined
+        : severityFilter
+          ? { severity: severityFilter }
+          : undefined
     )
       .then((res) => setTaxonomyCounts(res.counts))
       .catch(() => undefined);
   }, [severityFilter, data]);
 
-  const alerts =
+  const alerts = status === "success" && data ? data.alerts : [];
+  const meta =
     status === "success" && data
-      ? data.alerts.filter((a) => matchesSeverityFilter(a.severity, severityFilter))
-      : [];
+      ? {
+          total: data.total ?? alerts.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   const filterLabel =
     severityFilter === "urgent"
@@ -83,31 +115,48 @@ export default function AlertsPage() {
       <AlertTaxonomyNav
         counts={taxonomyCounts}
         activeCategory={categoryFilter}
-        severityFilter={severityFilter}
+        severityFilter={severityFilter || null}
       />
       <div className="alerts-page-main">
         <h1 className="page-title">Alerts</h1>
         <p className="page-subtitle">
-          All-device SOC alert stream with derived taxonomy (latest 100 in view).
+          All-device SOC alert stream with derived taxonomy. Use search and filters to narrow the
+          queue; results are paginated.
           {categoryFilter ? (
             <>
               {" "}
               Category: <strong>{categoryFilter.replace(/_/g, " ")}</strong>
               {" · "}
-              <Link to="/alerts">Clear category</Link>
+              <Link
+                to={`/alerts${severityFilter ? `?severity=${encodeURIComponent(severityFilter)}` : ""}`}
+              >
+                Clear category
+              </Link>
             </>
           ) : null}
           {filterLabel ? (
             <>
               {" "}
               Severity: <strong style={{ textTransform: "capitalize" }}>{filterLabel}</strong>
-              {" · "}
-              <Link to={categoryFilter ? `/alerts?category=${categoryFilter}` : "/alerts"}>
-                Clear severity
-              </Link>
             </>
           ) : null}
         </p>
+
+        <ListToolbar
+          searchPlaceholder="Search title, host, tenant, summary…"
+          searchValue={qFilter}
+          onSearchChange={(q) => patchParams({ q, page: "1" })}
+          statusOptions={STATUS_OPTIONS}
+          statusValue={statusFilter}
+          onStatusChange={(status) => patchParams({ status, page: "1" })}
+          severityOptions={SEVERITY_OPTIONS}
+          severityValue={severityFilter}
+          onSeverityChange={(severity) => patchParams({ severity, page: "1" })}
+          pageSize={pageSize}
+          onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+          meta={meta}
+          onPageChange={(p) => patchParams({ page: String(p) })}
+        />
 
         {status === "loading" && <div className="state-message">Loading alerts...</div>}
         {status === "forbidden" && (
@@ -120,7 +169,7 @@ export default function AlertsPage() {
         {status === "success" && data && (
           alerts.length === 0 ? (
             <div className="state-message">
-              No alerts{filterLabel ? ` matching “${filterLabel}”` : ""} in this category yet.
+              No alerts{filterLabel ? ` matching “${filterLabel}”` : ""} in this view.
             </div>
           ) : (
             <table className="data-table">
@@ -191,7 +240,9 @@ export default function AlertsPage() {
                           <td>
                             <Link to={`/alerts/${alert.id}`}>{alert.alert_title}</Link>
                           </td>
-                          <td className="cell-mono">{String(ctx.source_endpoint ?? alert.source_ip ?? "—")}</td>
+                          <td className="cell-mono">
+                            {String(ctx.source_endpoint ?? alert.source_ip ?? "—")}
+                          </td>
                           <td className="cell-mono">{String(ctx.dest_endpoint ?? "—")}</td>
                           <td>{String(ctx.protocol ?? "—")}</td>
                           <td>{String(ctx.action ?? "—")}</td>

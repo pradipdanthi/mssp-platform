@@ -18,7 +18,7 @@ export default function TenantSwitcher() {
 
   useEffect(() => {
     let cancelled = false;
-    getTenants()
+    getTenants({ page_size: 200 })
       .then((res) => {
         if (cancelled) return;
         setTenants(

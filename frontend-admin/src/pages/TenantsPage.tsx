@@ -1,4 +1,5 @@
 import { FormEvent, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Tenant,
   TenantCloudProvider,
@@ -26,6 +27,7 @@ import ConfirmDangerModal from "../components/ConfirmDangerModal";
 import CreateEntitlementsFields, {
   CreateEntitlementsState,
 } from "../components/CreateEntitlementsFields";
+import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SubscriptionEntitlementsPanel from "../components/SubscriptionEntitlementsPanel";
 import TenantCustomerUsersPanel from "../components/TenantCustomerUsersPanel";
@@ -42,6 +44,7 @@ import { useAdminQuery } from "../hooks/useAdminQuery";
 const TIMEZONE_OPTIONS = getTimezoneOptions();
 
 const STATUS_OPTIONS: TenantStatus[] = ["onboarding", "active", "inactive", "suspended"];
+const STATUS_FILTER_OPTIONS = STATUS_OPTIONS.map((s) => ({ value: s, label: s }));
 const SLA_OPTIONS: TenantSlaLevel[] = ["standard", "business", "premium", "24x7"];
 const CRITICALITY_OPTIONS: TenantCriticality[] = ["low", "medium", "high", "critical"];
 const DEPLOYMENT_MODE_OPTIONS: { value: TenantDeploymentMode; label: string; hint: string }[] = [
@@ -320,7 +323,44 @@ export default function TenantsPage() {
     user?.role === "soc_analyst";
   const canManageCustomerUsers =
     user?.role === "platform_admin" || user?.role === "soc_manager";
-  const { status, data, errorMessage, refetch } = useAdminQuery(() => getTenants(), []);
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
+  const { status, data, errorMessage, refetch } = useAdminQuery(
+    () =>
+      getTenants({
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
+    [statusFilter, qFilter, page, pageSize]
+  );
+  const listMeta =
+    status === "success" && data
+      ? {
+          total: data.total ?? (data.tenants?.length ?? 0),
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<CreateFormState>(EMPTY_CREATE);
@@ -823,6 +863,19 @@ export default function TenantsPage() {
       {createSuccess && <div className="state-message state-success">{createSuccess}</div>}
       {editSuccess && <div className="state-message state-success">{editSuccess}</div>}
       {actionError && <div className="state-message state-error">{actionError}</div>}
+
+      <ListToolbar
+        searchPlaceholder="Search name, code, contact, country…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_FILTER_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={listMeta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       {subscriptionTenant && canWrite && (
         <SubscriptionEntitlementsPanel
@@ -2087,7 +2140,7 @@ export default function TenantsPage() {
                 className={"command-chip" + (modeFilter === "all" ? " is-active" : "")}
                 onClick={() => setModeFilter("all")}
               >
-                All ({data.tenants.length})
+                All ({listMeta?.total ?? data.tenants.length})
               </button>
               {DEPLOYMENT_MODE_OPTIONS.map((o) => {
                 const count = data.tenants.filter((t) => t.deployment_mode === o.value).length;

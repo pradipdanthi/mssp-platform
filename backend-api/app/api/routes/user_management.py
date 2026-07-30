@@ -51,6 +51,7 @@ from app.schemas.users import (
     UsersListResponse,
     UserUpdateRequest,
 )
+from app.services.list_pagination import clamp_pagination, pagination_meta
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
 
@@ -86,27 +87,56 @@ def _fetch_user_detail(user_id: UUID) -> Optional[Dict[str, Any]]:
 def list_users(
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
     scope: str = Query(default="staff", pattern="^(staff|all)$"),
-) -> Dict[str, List[Dict[str, Any]]]:
+    user_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200, description="Search name/email/role"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+) -> Dict[str, Any]:
     """
     Default scope=staff: platform personnel only (platform_admin, soc_manager, soc_analyst).
     Customer users are listed under /admin/tenants/{tenant_id}/users.
     Pass scope=all for legacy full listing (SOC tooling only).
     """
     _ = current_user
-    if (scope or "staff").lower() == "all":
-        rows = fetch_all(
-            f"SELECT {_USER_DETAIL_COLUMNS} FROM platform_users ORDER BY created_at DESC;"
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where: list[str] = []
+    params: list = []
+    if (scope or "staff").lower() != "all":
+        where.append("role IN ('platform_admin', 'soc_manager', 'soc_analyst')")
+    st = (user_status or "").strip().lower()
+    if st in ("active", "inactive", "locked"):
+        where.append("status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "full_name ILIKE %s OR "
+            "email ILIKE %s OR "
+            "role ILIKE %s OR "
+            "COALESCE(phone, '') ILIKE %s"
+            ")"
         )
-    else:
-        rows = fetch_all(
-            f"""
-            SELECT {_USER_DETAIL_COLUMNS}
-            FROM platform_users
-            WHERE role IN ('platform_admin', 'soc_manager', 'soc_analyst')
-            ORDER BY created_at DESC;
-            """
-        )
-    return {"users": rows}
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"SELECT count(*)::int AS total FROM platform_users {where_sql};",
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+    rows = fetch_all(
+        f"""
+        SELECT {_USER_DETAIL_COLUMNS}
+        FROM platform_users
+        {where_sql}
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
+    )
+    return {"users": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/{user_id}", response_model=UserDetail)

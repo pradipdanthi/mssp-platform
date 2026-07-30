@@ -95,7 +95,8 @@ export function executeEdrAction(body: {
   upload_url?: string | null;
   forensic_artifact_id?: string | null;
 }> {
-  return request("/v1/edr/actions/execute", { method: "POST", body: JSON.stringify(body) });
+  // Pass the object — client.request() already JSON.stringifies once.
+  return request("/v1/edr/actions/execute", { method: "POST", body });
 }
 
 export function getEdrActionStatus(
@@ -119,10 +120,19 @@ export function statusBadgeLabel(status: string, actionType?: string): string {
   const s = status.toLowerCase();
   if (s === "executing" || s === "pending") return "Executing…";
   if (s === "failed") return "Failed";
-  if (actionType === "ISOLATE_HOST" && (s === "verified" || s === "success" || s === "executed"))
-    return "Isolated";
-  if (actionType === "UNISOLATE_HOST" && (s === "verified" || s === "success" || s === "executed"))
-    return "Restored";
+  // Isolate only becomes "Isolated" after a real verified signal (not agent-online alone).
+  if (s === "verified" && actionType === "ISOLATE_HOST") return "Isolated";
+  if (s === "verified" && actionType === "UNISOLATE_HOST") return "Restored";
+  // Dispatch accepted ≠ endpoint effect proven.
+  if (
+    (s === "success" || s === "executed") &&
+    (actionType === "ISOLATE_HOST" ||
+      actionType === "UNISOLATE_HOST" ||
+      actionType === "KILL_PROCESS" ||
+      actionType === "BLOCK_HASH")
+  ) {
+    return "Dispatched";
+  }
   if (s === "verified") return "Verified";
   if (s === "success" || s === "executed") return "Success";
   return status;

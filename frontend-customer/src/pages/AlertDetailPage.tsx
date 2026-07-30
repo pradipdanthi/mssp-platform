@@ -53,44 +53,82 @@ export default function AlertDetailPage() {
       )}
 
       {status === "success" && data && (
-        <table className="data-table">
-          <tbody>
-            <tr>
-              <th>Title</th>
-              <td>{data.alert.title}</td>
-            </tr>
-            <tr>
-              <th>Severity</th>
-              <td>
-                <span className={`badge badge-${data.alert.severity}`}>{data.alert.severity}</span>
-              </td>
-            </tr>
-            <tr>
-              <th>Status</th>
-              <td>{data.alert.status}</td>
-            </tr>
-            <tr>
-              <th>Detection</th>
-              <td>{data.alert.source}</td>
-            </tr>
-            <tr>
-              <th>Summary</th>
-              <td>{data.alert.summary ?? "—"}</td>
-            </tr>
-            <tr>
-              <th>Description</th>
-              <td>{data.alert.description ?? "—"}</td>
-            </tr>
-            <tr>
-              <th>Hostname</th>
-              <td>{data.alert.hostname ?? "—"}</td>
-            </tr>
-            <tr>
-              <th>Detected</th>
-              <td>{data.alert.detected_at ?? "—"}</td>
-            </tr>
-          </tbody>
-        </table>
+        <>
+          <table className="data-table">
+            <tbody>
+              <tr>
+                <th>Title</th>
+                <td>{data.alert.title}</td>
+              </tr>
+              <tr>
+                <th>Severity</th>
+                <td>
+                  <span className={`badge badge-${data.alert.severity}`}>{data.alert.severity}</span>
+                </td>
+              </tr>
+              <tr>
+                <th>Status</th>
+                <td>{data.alert.status}</td>
+              </tr>
+              <tr>
+                <th>Detection</th>
+                <td>{data.alert.source}</td>
+              </tr>
+              <tr>
+                <th>Summary</th>
+                <td>{data.alert.summary ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Description</th>
+                <td>{data.alert.description ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Hostname</th>
+                <td>{data.alert.hostname ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Device type</th>
+                <td>{data.alert.device_type ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Asset category</th>
+                <td>{data.alert.asset_category_label ?? data.alert.asset_category ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Criticality</th>
+                <td>{data.alert.criticality ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Operating system</th>
+                <td>{data.alert.operating_system ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Detected</th>
+                <td>{data.alert.detected_at ?? "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h2 className="page-subtitle" style={{ marginTop: "2rem" }}>
+            What this means
+          </h2>
+          <table className="data-table">
+            <tbody>
+              <tr>
+                <th>Business impact</th>
+                <td>{data.alert.business_impact ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Recommended action</th>
+                <td>{data.alert.recommended_action ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Likely attack type</th>
+                <td>{data.alert.likely_attack_type ?? "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
       )}
     </div>
   );

@@ -68,7 +68,15 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
 
   if (!response.ok) {
-    throw new ApiError(response.status, extractDetail(data));
+    const detail = extractDetail(data);
+    let message = `Request failed with status ${response.status}`;
+    if (typeof detail === "string" && detail.trim()) {
+      message = detail;
+    } else if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: string; loc?: unknown };
+      if (typeof first?.msg === "string") message = first.msg;
+    }
+    throw new ApiError(response.status, detail, message);
   }
 
   return data as T;

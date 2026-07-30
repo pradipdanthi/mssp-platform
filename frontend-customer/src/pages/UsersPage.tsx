@@ -1,7 +1,9 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { ApiError, request } from "../api/client";
 import ConfirmDangerModal from "../components/ConfirmDangerModal";
+import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu, { RowAction } from "../components/RowActionsMenu";
 
 type CustomerRole = "customer_admin" | "customer_viewer";
@@ -16,6 +18,12 @@ interface TenantUser {
   phone?: string | null;
   created_at: string;
 }
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "locked", label: "Locked" },
+];
 
 function errMsg(err: unknown, fallback: string): string {
   if (err instanceof ApiError && typeof err.detail === "string") return err.detail;
@@ -36,7 +44,32 @@ export default function UsersPage() {
   const { user } = useAuth();
   const shortCode = user?.tenant_short_code || "";
   const canWrite = user?.role === "customer_admin";
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
   const [users, setUsers] = useState<TenantUser[]>([]);
+  const [meta, setMeta] = useState<{
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+    has_next: boolean;
+    has_prev: boolean;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,12 +100,33 @@ export default function UsersPage() {
     if (!shortCode) return;
     setError(null);
     try {
-      const res = await request<{ users: TenantUser[] }>("/v1/customer/users");
+      const qs = new URLSearchParams();
+      qs.set("page", String(page));
+      qs.set("page_size", String(pageSize));
+      if (statusFilter) qs.set("status", statusFilter);
+      if (qFilter) qs.set("q", qFilter);
+      const res = await request<{
+        users: TenantUser[];
+        total?: number;
+        page?: number;
+        page_size?: number;
+        total_pages?: number;
+        has_next?: boolean;
+        has_prev?: boolean;
+      }>(`/v1/customer/users?${qs.toString()}`);
       setUsers(res.users || []);
+      setMeta({
+        total: res.total ?? (res.users || []).length,
+        page: res.page ?? page,
+        page_size: res.page_size ?? pageSize,
+        total_pages: res.total_pages ?? 1,
+        has_next: Boolean(res.has_next),
+        has_prev: Boolean(res.has_prev),
+      });
     } catch (e) {
       setError(errMsg(e, "Could not load users"));
     }
-  }, [shortCode]);
+  }, [shortCode, page, pageSize, statusFilter, qFilter]);
 
   useEffect(() => {
     void load();
@@ -235,6 +289,19 @@ export default function UsersPage() {
       ) : null}
       {error ? <p className="form-error">{error}</p> : null}
 
+      <ListToolbar
+        searchPlaceholder="Search name, email, role…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_FILTER_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
+
       {canWrite ? (
         <div style={{ marginBottom: "1.5rem" }}>
           {!showCreate ? (
@@ -339,7 +406,7 @@ export default function UsersPage() {
             {users.length === 0 ? (
               <tr>
                 <td colSpan={canWrite ? 5 : 4} className="muted">
-                  No users yet.
+                  No users matching this view.
                 </td>
               </tr>
             ) : null}

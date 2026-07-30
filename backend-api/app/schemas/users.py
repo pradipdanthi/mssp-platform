@@ -92,3 +92,9 @@ class UserDetail(BaseModel):
 
 class UsersListResponse(BaseModel):
     users: List[UserDetail]
+    total: Optional[int] = None
+    page: Optional[int] = None
+    page_size: Optional[int] = None
+    total_pages: Optional[int] = None
+    has_next: Optional[bool] = None
+    has_prev: Optional[bool] = None

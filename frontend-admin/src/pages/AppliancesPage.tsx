@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import React, { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Appliance,
   Tenant,
@@ -21,9 +21,18 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ConfirmDangerModal from "../components/ConfirmDangerModal";
+import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+
+const STATUS_OPTIONS = [
+  { value: "online", label: "Online" },
+  { value: "offline", label: "Offline" },
+  { value: "maintenance", label: "Maintenance" },
+  { value: "retired", label: "Retired" },
+  { value: "pending", label: "Pending" },
+];
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
@@ -36,30 +45,66 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function AppliancesPage() {
-  const [params] = useSearchParams();
-  const statusFilter = params.get("status");
-  const { status, data, errorMessage, refetch } = useAdminQuery(() => getAppliances(), []);
-  const appliances = useMemo(() => {
-    const rows = data?.appliances ?? [];
-    if (!statusFilter) return rows;
-    return rows.filter((a) => a.status.toLowerCase() === statusFilter.toLowerCase());
-  }, [data, statusFilter]);
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
+  const { status, data, errorMessage, refetch } = useAdminQuery(
+    () =>
+      getAppliances({
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
+    [statusFilter, qFilter, page, pageSize]
+  );
+  const appliances = status === "success" && data ? data.appliances : [];
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? appliances.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   return (
     <div>
       <h1 className="page-title">Appliances</h1>
       <p className="page-subtitle">
         Appliance list with credential visibility/rotation, plus tenant activation-token
-        management.
-        {statusFilter ? (
-          <>
-            {" "}
-            Filtered by status: <strong>{statusFilter}</strong>
-            {" · "}
-            <Link to="/appliances">Clear filter</Link>
-          </>
-        ) : null}
+        management. Search by name, site, or tenant; filter and paginate as the fleet grows.
       </p>
+
+      <ListToolbar
+        searchPlaceholder="Search appliance, site, tenant…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       {status === "loading" && <div className="state-message">Loading appliances...</div>}
       {status === "forbidden" && (
@@ -72,7 +117,7 @@ export default function AppliancesPage() {
       {status === "success" && data && (
         appliances.length === 0 ? (
           <div className="state-message">
-            No appliances{statusFilter ? ` matching “${statusFilter}”` : ""} yet.
+            No appliances{statusFilter ? ` matching “${statusFilter}”` : ""} in this view.
           </div>
         ) : (
           <table className="data-table data-table--readable">
@@ -413,7 +458,7 @@ function ActivationTokensSection() {
     let cancelled = false;
     setTenantsLoading(true);
     setTenantsError(null);
-    getTenants()
+    getTenants({ page_size: 200 })
       .then((result) => {
         if (cancelled) return;
         setTenants(result.tenants);

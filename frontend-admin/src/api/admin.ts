@@ -71,6 +71,12 @@ export interface Tenant {
 
 export interface TenantsListResponse {
   tenants: Tenant[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface AdminUser {
@@ -91,6 +97,12 @@ export interface AdminUser {
 
 export interface UsersListResponse {
   users: AdminUser[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface Appliance {
@@ -115,6 +127,12 @@ export interface Appliance {
 
 export interface AppliancesListResponse {
   appliances: Appliance[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface Alert {
@@ -151,6 +169,12 @@ export interface AlertTaxonomySummaryResponse {
 
 export interface AlertsListResponse {
   alerts: Alert[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface AlertDetail extends Alert {
@@ -159,6 +183,9 @@ export interface AlertDetail extends Alert {
   appliance_name: string | null;
   asset_id: string | null;
   asset_hostname: string | null;
+  asset_type?: string | null;
+  asset_os_name?: string | null;
+  asset_ip?: string | null;
   alert_description: string | null;
   event_time: string | null;
   source_user: string | null;
@@ -169,6 +196,15 @@ export interface AlertDetail extends Alert {
   ai_false_positive_score: number | null;
   mitre_mapping: Record<string, unknown>;
   updated_at: string;
+  asset_criticality?: string | null;
+  asset_location?: string | null;
+  asset_owner?: string | null;
+  display_ip_address?: string | null;
+  display_operating_system?: string | null;
+  display_mac_address?: string | null;
+  mac_address_status?: string | null;
+  wazuh_rule_id?: string | null;
+  wazuh_agent_id?: string | null;
 }
 
 export interface AlertDetailResponse {
@@ -178,6 +214,8 @@ export interface AlertDetailResponse {
 export interface AlertTriageUpdate {
   status?: "new" | "triaged" | "incident_created" | "false_positive" | "closed";
   customer_visible?: boolean;
+  ai_plain_summary?: string | null;
+  ai_recommended_action?: string | null;
 }
 
 export interface Incident {
@@ -197,6 +235,12 @@ export interface Incident {
 
 export interface IncidentsListResponse {
   incidents: Incident[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface IncidentTimelineEvent {
@@ -234,6 +278,7 @@ export interface IncidentDetail extends Incident {
 
 export interface IncidentDetailResponse {
   incident: IncidentDetail;
+  primary_alert?: AlertDetail | null;
   timeline: IncidentTimelineEvent[];
   comments: IncidentComment[];
 }
@@ -242,6 +287,7 @@ export interface IncidentTriageUpdate {
   status?: "open" | "in_progress" | "waiting_customer" | "resolved" | "closed";
   assigned_to_user_id?: string | null;
   customer_visible_summary?: string | null;
+  customer_action_required?: string | null;
 }
 
 export interface IncidentCommentCreate {
@@ -258,6 +304,12 @@ export interface TriageListFilters {
   severity?: string;
   tenant_id?: string;
   asset_category?: string;
+  q?: string;
+  page?: number;
+  page_size?: number;
+  source_platform?: string;
+  tenant_short_code?: string;
+  scope?: string;
 }
 
 function withFilters(path: string, filters?: TriageListFilters): string {
@@ -266,6 +318,12 @@ function withFilters(path: string, filters?: TriageListFilters): string {
   if (filters?.severity) params.set("severity", filters.severity);
   if (filters?.tenant_id) params.set("tenant_id", filters.tenant_id);
   if (filters?.asset_category) params.set("asset_category", filters.asset_category);
+  if (filters?.q) params.set("q", filters.q);
+  if (filters?.page != null) params.set("page", String(filters.page));
+  if (filters?.page_size != null) params.set("page_size", String(filters.page_size));
+  if (filters?.source_platform) params.set("source_platform", filters.source_platform);
+  if (filters?.tenant_short_code) params.set("tenant_short_code", filters.tenant_short_code);
+  if (filters?.scope) params.set("scope", filters.scope);
   const query = params.toString();
   return query ? `${path}?${query}` : path;
 }
@@ -274,8 +332,8 @@ export function getDashboard(): Promise<DashboardResponse> {
   return request<DashboardResponse>("/admin/dashboard");
 }
 
-export function getTenants(): Promise<TenantsListResponse> {
-  return request<TenantsListResponse>("/admin/tenants");
+export function getTenants(filters?: TriageListFilters): Promise<TenantsListResponse> {
+  return request<TenantsListResponse>(withFilters("/admin/tenants", filters));
 }
 
 /** KB-072: Wazuh/TheHive engine binding for a tenant. */
@@ -516,8 +574,8 @@ export function backfillTenantEngineBindings(): Promise<{ count: number; message
   });
 }
 
-export function getUsers(): Promise<UsersListResponse> {
-  return request<UsersListResponse>("/admin/users");
+export function getUsers(filters?: TriageListFilters): Promise<UsersListResponse> {
+  return request<UsersListResponse>(withFilters("/admin/users", filters));
 }
 
 export type PlatformRole =
@@ -570,8 +628,8 @@ export function updateUserPassword(
   });
 }
 
-export function getAppliances(): Promise<AppliancesListResponse> {
-  return request<AppliancesListResponse>("/admin/appliances");
+export function getAppliances(filters?: TriageListFilters): Promise<AppliancesListResponse> {
+  return request<AppliancesListResponse>(withFilters("/admin/appliances", filters));
 }
 
 export function getAlerts(filters?: TriageListFilters): Promise<AlertsListResponse> {
@@ -644,6 +702,12 @@ export interface AdminRecommendation {
 
 export interface RecommendationsListResponse {
   recommendations: AdminRecommendation[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface AdminNotification {
@@ -661,10 +725,16 @@ export interface AdminNotification {
 
 export interface NotificationsListResponse {
   notifications: AdminNotification[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
-export function getRecommendations(): Promise<RecommendationsListResponse> {
-  return request<RecommendationsListResponse>("/admin/recommendations");
+export function getRecommendations(filters?: TriageListFilters): Promise<RecommendationsListResponse> {
+  return request<RecommendationsListResponse>(withFilters("/admin/recommendations", filters));
 }
 
 export type RecommendationPriority = "low" | "medium" | "high" | "critical";
@@ -727,8 +797,8 @@ export function updateRecommendation(
   });
 }
 
-export function getNotifications(): Promise<NotificationsListResponse> {
-  return request<NotificationsListResponse>("/admin/notifications");
+export function getNotifications(filters?: TriageListFilters): Promise<NotificationsListResponse> {
+  return request<NotificationsListResponse>(withFilters("/admin/notifications", filters));
 }
 
 export interface AdminReport {
@@ -746,6 +816,12 @@ export interface AdminReport {
 
 export interface ReportsListResponse {
   reports: AdminReport[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export interface ReportSections {
@@ -814,8 +890,8 @@ export interface ReportUpdateRequest {
   leadership_asks?: string | null;
 }
 
-export function getReports(): Promise<ReportsListResponse> {
-  return request<ReportsListResponse>("/admin/reports");
+export function getReports(filters?: TriageListFilters): Promise<ReportsListResponse> {
+  return request<ReportsListResponse>(withFilters("/admin/reports", filters));
 }
 
 export function getReportDetail(id: string): Promise<ReportDetail> {
@@ -910,6 +986,12 @@ export interface AdminAsset {
 
 export interface AssetsListResponse {
   assets: AdminAsset[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export type AssetType =
@@ -975,8 +1057,8 @@ export interface AssetUpdateRequest {
   owner?: string | null;
 }
 
-export function getAssets(): Promise<AssetsListResponse> {
-  return request<AssetsListResponse>("/admin/assets");
+export function getAssets(filters?: TriageListFilters): Promise<AssetsListResponse> {
+  return request<AssetsListResponse>(withFilters("/admin/assets", filters));
 }
 
 export function getAssetDetail(id: string): Promise<AssetDetail> {
@@ -999,31 +1081,55 @@ export interface AuditLog {
   tenant_name: string | null;
   short_code: string | null;
   actor_email: string | null;
+  actor_role?: string | null;
   action: string;
+  action_label?: string | null;
+  summary?: string | null;
+  portal?: string | null;
   entity_type: string;
   entity_id: string | null;
+  resource_type?: string | null;
+  resource_id?: string | null;
   source_ip: string | null;
+  action_status?: string | null;
   details: Record<string, unknown> | null;
   created_at: string;
+  timestamp?: string;
 }
 
 export interface AuditLogsListResponse {
   audit_logs: AuditLog[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export function getAuditLogs(params?: {
   tenant_short_code?: string;
   actor_email?: string;
   action_type?: string;
+  q?: string;
+  page?: number;
+  page_size?: number;
   limit?: number;
 }): Promise<AuditLogsListResponse> {
   const q = new URLSearchParams();
   if (params?.tenant_short_code) q.set("tenant_short_code", params.tenant_short_code);
   if (params?.actor_email) q.set("actor_email", params.actor_email);
   if (params?.action_type) q.set("action_type", params.action_type);
+  if (params?.q) q.set("q", params.q);
+  if (params?.page) q.set("page", String(params.page));
+  if (params?.page_size) q.set("page_size", String(params.page_size));
   if (params?.limit) q.set("limit", String(params.limit));
   const qs = q.toString();
   return request<AuditLogsListResponse>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
+}
+
+export function getAuditLogDetail(auditId: string): Promise<{ audit_log: AuditLog }> {
+  return request<{ audit_log: AuditLog }>(`/admin/audit-logs/${encodeURIComponent(auditId)}`);
 }
 
 export interface AuditEventCreateRequest {
@@ -1127,18 +1233,31 @@ export interface AdminVulnerability {
 
 export interface VulnerabilitiesListResponse {
   vulnerabilities: AdminVulnerability[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
 }
 
 export function getVulnerabilities(params?: {
   source_platform?: string;
   tenant_short_code?: string;
+  status?: string;
+  q?: string;
+  page?: number;
+  page_size?: number;
 }): Promise<VulnerabilitiesListResponse> {
-  const qs = new URLSearchParams();
-  if (params?.source_platform) qs.set("source_platform", params.source_platform);
-  if (params?.tenant_short_code) qs.set("tenant_short_code", params.tenant_short_code);
-  const q = qs.toString();
   return request<VulnerabilitiesListResponse>(
-    `/admin/vulnerabilities${q ? `?${q}` : ""}`
+    withFilters("/admin/vulnerabilities", {
+      source_platform: params?.source_platform,
+      tenant_short_code: params?.tenant_short_code,
+      status: params?.status,
+      q: params?.q,
+      page: params?.page,
+      page_size: params?.page_size,
+    })
   );
 }
 

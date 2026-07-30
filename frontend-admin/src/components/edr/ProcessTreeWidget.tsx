@@ -50,7 +50,12 @@ function Node({ node, depth }: { node: ProcessTreeNode; depth: number }) {
 
 export default function ProcessTreeWidget({ root, message }: Props) {
   if (!root) {
-    return <p className="muted">{message ?? "No process tree available."}</p>;
+    return (
+      <p className="muted">
+        {message ??
+          "No process-creation telemetry found for this incident. This usually means Sysmon/process auditing is not flowing yet — not that the attack had no process chain."}
+      </p>
+    );
   }
   return (
     <div className="edr-process-tree card-surface">

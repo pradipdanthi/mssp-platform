@@ -9,7 +9,7 @@ KB-067: projected `sections` only (never raw metrics JSONB / report_file_path).
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import Response
 from psycopg.errors import UniqueViolation
 
@@ -25,6 +25,7 @@ from app.schemas.admin_ops import (
     ReportUpdateRequest,
 )
 from app.schemas.report_snapshot import EMPTY_NARRATIVE
+from app.services.list_pagination import clamp_pagination, pagination_meta
 from app.services.report_export_service import build_pdf_bytes, build_xlsx_bytes, export_filename
 from app.services.report_snapshot_service import (
     ensure_snapshot_for_publish,
@@ -104,10 +105,49 @@ def _asset_detail(asset_id: UUID) -> Optional[Dict[str, Any]]:
 
 @router.get("/reports")
 def list_reports(
+    report_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(
+        default=None, max_length=200, description="Search title/summary/tenant"
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> Dict[str, Any]:
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where: list[str] = []
+    params: list = []
+    st = (report_status or "").strip().lower()
+    if st in ("draft", "published", "archived"):
+        where.append("mr.status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "('Monthly Security Report — ' || to_char(mr.report_month, 'Mon YYYY')) ILIKE %s OR "
+            "COALESCE(mr.executive_summary, '') ILIKE %s OR "
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s OR "
+            "to_char(mr.report_month, 'YYYY-MM') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM monthly_reports mr
+        JOIN tenants t ON t.id = mr.tenant_id
+        {where_sql};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             mr.id::text,
             mr.tenant_id::text,
@@ -121,11 +161,13 @@ def list_reports(
             mr.created_at::text
         FROM monthly_reports mr
         JOIN tenants t ON t.id = mr.tenant_id
+        {where_sql}
         ORDER BY mr.report_month DESC, mr.created_at DESC
-        LIMIT 100;
-        """
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
-    return {"reports": rows}
+    return {"reports": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/reports/{report_id}", response_model=ReportDetail)
@@ -291,8 +333,14 @@ def download_report_xlsx(
 
 @router.get("/assets")
 def list_assets(
+    asset_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(
+        default=None, max_length=200, description="Search hostname/OS/tenant/type"
+    ),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
-) -> Dict[str, List[Dict[str, Any]]]:
+) -> Dict[str, Any]:
     # Best-effort: refresh endpoint agents for all bound tenants before listing.
     try:
         from app.services.agent_asset_sync import sync_tenant_endpoint_agents
@@ -305,8 +353,45 @@ def list_assets(
     except Exception:
         pass
 
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where: list[str] = []
+    params: list = []
+    st = (asset_status or "").strip().lower()
+    if st in ("active", "inactive", "unknown"):
+        where.append("pa.status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "COALESCE(pa.hostname, '') ILIKE %s OR "
+            "COALESCE(pa.os_name, '') ILIKE %s OR "
+            "COALESCE(pa.asset_type, '') ILIKE %s OR "
+            "COALESCE(pa.owner, '') ILIKE %s OR "
+            "COALESCE(host(pa.ip_address), '') ILIKE %s OR "
+            "t.name ILIKE %s OR "
+            "t.short_code ILIKE %s OR "
+            "COALESCE(a.appliance_name, '') ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like, like, like, like, like, like])
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM protected_assets pa
+        JOIN tenants t ON t.id = pa.tenant_id
+        LEFT JOIN appliances a ON a.id = pa.appliance_id
+        {where_sql};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
     rows = fetch_all(
-        """
+        f"""
         SELECT
             pa.id::text,
             t.name AS tenant_name,
@@ -323,11 +408,13 @@ def list_assets(
         FROM protected_assets pa
         JOIN tenants t ON t.id = pa.tenant_id
         LEFT JOIN appliances a ON a.id = pa.appliance_id
+        {where_sql}
         ORDER BY pa.created_at DESC
-        LIMIT 100;
-        """
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
     )
-    return {"assets": rows}
+    return {"assets": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/assets/{asset_id}", response_model=AssetDetail)

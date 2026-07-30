@@ -134,19 +134,26 @@ export default function EdrControlPanel({
               className="btn btn-danger"
               disabled={busy}
               onClick={() => {
-                if (window.confirm("Isolate this host? Network access will be restricted.")) {
+              if (
+                window.confirm(
+                  "Quarantine this host?\n\n" +
+                    "All network traffic will be blocked except the SOC Manager path " +
+                    "(and DHCP/loopback). This is full network quarantine, not ping-only. " +
+                    "Auto-release is about 2 minutes unless you Un-isolate sooner."
+                )
+              ) {
                   void run("ISOLATE_HOST", { confirm_isolation: true });
                 }
               }}
             >
-              Isolate host
+              Isolate host (quarantine)
             </button>
             <button
               type="button"
               className="btn btn-secondary"
               disabled={busy}
               onClick={() => {
-                if (window.confirm("Restore network connectivity for this host?")) {
+                if (window.confirm("Lift network quarantine and restore normal connectivity?")) {
                   void run("UNISOLATE_HOST");
                 }
               }}

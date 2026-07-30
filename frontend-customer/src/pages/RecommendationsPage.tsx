@@ -1,15 +1,47 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { getCustomerRecommendations } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
+import ListToolbar from "../components/ListToolbar";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
+
+const STATUS_OPTIONS = [
+  { value: "open", label: "Open" },
+  { value: "in_progress", label: "In progress" },
+  { value: "accepted_risk", label: "Accepted risk" },
+  { value: "completed", label: "Completed" },
+  { value: "dismissed", label: "Dismissed" },
+];
 
 export default function RecommendationsPage() {
   const { user } = useAuth();
   const shortCode = user?.tenant_short_code ?? null;
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
   const { status, data, errorMessage } = useCustomerQuery(
-    () => getCustomerRecommendations(shortCode as string),
+    () =>
+      getCustomerRecommendations(shortCode as string, {
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
     Boolean(shortCode),
-    [shortCode]
+    [shortCode, statusFilter, qFilter, page, pageSize]
   );
 
   if (!shortCode) {
@@ -23,6 +55,19 @@ export default function RecommendationsPage() {
     );
   }
 
+  const recommendations = status === "success" && data ? data.recommendations : [];
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? recommendations.length,
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
+
   return (
     <div>
       <h1 className="page-title">Recommendations</h1>
@@ -30,6 +75,19 @@ export default function RecommendationsPage() {
         Read-only customer-visible security recommendations for your organization, including open
         and historical items.
       </p>
+
+      <ListToolbar
+        searchPlaceholder="Search title, category, or description…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       {status === "loading" && <div className="state-message">Loading recommendations...</div>}
       {status === "forbidden" && (
@@ -40,10 +98,9 @@ export default function RecommendationsPage() {
       )}
 
       {status === "success" && data && (
-        data.recommendations.length === 0 ? (
+        recommendations.length === 0 ? (
           <div className="state-message">
-            No customer-visible recommendations right now. Your SOC team may still be preparing
-            items that are not yet shared with your organization.
+            No customer-visible recommendations matching this view.
           </div>
         ) : (
           <table className="data-table">
@@ -60,7 +117,7 @@ export default function RecommendationsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.recommendations.map((rec) => (
+              {recommendations.map((rec) => (
                 <tr key={rec.recommendation_id}>
                   <td>
                     <Link to={`/recommendations/${encodeURIComponent(rec.recommendation_id)}`}>

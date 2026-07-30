@@ -27,7 +27,9 @@ export default function IncidentDetailPanel({
   const { user } = useAuth();
   const [edr, setEdr] = useState<EdrDeepDive | null>(null);
   const canExecute =
-    user?.role === "platform_admin" || user?.role === "soc_manager";
+    user?.role === "platform_admin" ||
+    user?.role === "soc_manager" ||
+    user?.role === "soc_analyst";
 
   useEffect(() => {
     if (!incident?.incident_number || !incident.short_code || mode !== "admin") {
@@ -134,15 +136,16 @@ export default function IncidentDetailPanel({
               </ul>
             </div>
           ) : null}
-          {incident.short_code ? (
-            <EdrControlPanel
-              tenantShortCode={incident.short_code}
-              incidentNumber={incident.incident_number}
-              agentId={edr.endpoint.agent_id as string | undefined}
-              canExecute={canExecute}
-            />
-          ) : null}
         </>
+      ) : null}
+
+      {mode === "admin" && incident.short_code ? (
+        <EdrControlPanel
+          tenantShortCode={incident.short_code}
+          incidentNumber={incident.incident_number}
+          agentId={(edr?.endpoint?.agent_id as string | undefined) ?? undefined}
+          canExecute={canExecute}
+        />
       ) : null}
 
       <div className="incident-detail-actions">

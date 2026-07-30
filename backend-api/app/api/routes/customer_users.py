@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from psycopg.errors import UniqueViolation
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -13,6 +13,7 @@ from app.api.dependencies import get_current_user, require_tenant_match
 from app.core.security import hash_password
 from app.db.session import fetch_all, fetch_one, fetch_one_write
 from app.services.audit_service import audit_from_user
+from app.services.list_pagination import clamp_pagination, pagination_meta
 
 router = APIRouter(prefix="/customer", tags=["customer-users"])
 
@@ -92,45 +93,107 @@ def _require_customer_admin(user: Dict[str, Any]) -> None:
 @router.get("/users")
 def list_customer_users_self(
     current_user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, List[Dict[str, Any]]]:
+    user_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+) -> Dict[str, Any]:
     """List users for the authenticated customer's tenant (no short_code in path)."""
     if current_user.get("role") not in CUSTOMER_ROLES:
         raise HTTPException(status_code=403, detail="Customer role required")
     tenant_id = current_user.get("tenant_id")
     if not tenant_id:
         raise HTTPException(status_code=403, detail="Customer tenant context required")
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = [
+        "tenant_id = %s::uuid",
+        "role IN ('customer_admin', 'customer_viewer')",
+    ]
+    params: list = [str(tenant_id)]
+    st = (user_status or "").strip().lower()
+    if st in ("active", "inactive", "locked"):
+        where.append("status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "full_name ILIKE %s OR "
+            "email ILIKE %s OR "
+            "role ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like])
+    where_sql = " AND ".join(where)
+    count_row = fetch_one(
+        f"SELECT count(*)::int AS total FROM platform_users WHERE {where_sql};",
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
     rows = fetch_all(
         f"""
         SELECT {_USER_COLS}
         FROM platform_users
-        WHERE tenant_id = %s::uuid
-          AND role IN ('customer_admin', 'customer_viewer')
-        ORDER BY created_at DESC;
+        WHERE {where_sql}
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s;
         """,
-        (str(tenant_id),),
+        tuple(params + [page_size, offset]),
     )
-    return {"users": rows}
+    return {"users": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.get("/users/{short_code}")
 def list_customer_users(
     short_code: str,
     current_user: Dict[str, Any] = Depends(get_current_user),
-) -> Dict[str, List[Dict[str, Any]]]:
+    user_status: Optional[str] = Query(default=None, alias="status"),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+) -> Dict[str, Any]:
     if current_user.get("role") not in CUSTOMER_ROLES:
         raise HTTPException(status_code=403, detail="Customer role required")
     tenant = _resolve_tenant(short_code, current_user)
+    page, page_size, offset = clamp_pagination(page, page_size)
+    where = [
+        "tenant_id = %s::uuid",
+        "role IN ('customer_admin', 'customer_viewer')",
+    ]
+    params: list = [tenant["id"]]
+    st = (user_status or "").strip().lower()
+    if st in ("active", "inactive", "locked"):
+        where.append("status = %s")
+        params.append(st)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "("
+            "full_name ILIKE %s OR "
+            "email ILIKE %s OR "
+            "role ILIKE %s"
+            ")"
+        )
+        like = f"%{q_clean}%"
+        params.extend([like, like, like])
+    where_sql = " AND ".join(where)
+    count_row = fetch_one(
+        f"SELECT count(*)::int AS total FROM platform_users WHERE {where_sql};",
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
     rows = fetch_all(
         f"""
         SELECT {_USER_COLS}
         FROM platform_users
-        WHERE tenant_id = %s::uuid
-          AND role IN ('customer_admin', 'customer_viewer')
-        ORDER BY created_at DESC;
+        WHERE {where_sql}
+        ORDER BY created_at DESC
+        LIMIT %s OFFSET %s;
         """,
-        (tenant["id"],),
+        tuple(params + [page_size, offset]),
     )
-    return {"users": rows}
+    return {"users": rows, **pagination_meta(total, page, page_size)}
 
 
 @router.post("/users/{short_code}", status_code=status.HTTP_201_CREATED)

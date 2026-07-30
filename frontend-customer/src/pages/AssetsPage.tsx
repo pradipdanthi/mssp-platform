@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import {
   CustomerProtectedAsset,
@@ -8,8 +8,15 @@ import {
   getCustomerLinuxInstallCommand,
 } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
+import ListToolbar from "../components/ListToolbar";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
 import { ASSET_FOLDERS, AssetFolderId, assetFolderId } from "../utils/assetFolders";
+
+const STATUS_OPTIONS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "unknown", label: "Unknown" },
+];
 
 export default function AssetsPage() {
   const { user } = useAuth();
@@ -19,11 +26,46 @@ export default function AssetsPage() {
   const [linuxCmd, setLinuxCmd] = useState<string | null>(null);
   const [linuxBusy, setLinuxBusy] = useState(false);
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({});
+  const [params, setParams] = useSearchParams();
+  const statusFilter = params.get("status") ?? "";
+  const qFilter = params.get("q") ?? "";
+  const page = Math.max(1, Number(params.get("page") || "1") || 1);
+  const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
+    ? Number(params.get("page_size"))
+    : 25;
+
+  function patchParams(updates: Record<string, string | null>) {
+    const next = new URLSearchParams(params);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value == null || value === "") next.delete(key);
+      else next.set(key, value);
+    }
+    setParams(next, { replace: true });
+  }
+
   const { status, data, errorMessage } = useCustomerQuery(
-    () => getCustomerAssets(shortCode as string),
+    () =>
+      getCustomerAssets(shortCode as string, {
+        page,
+        page_size: pageSize,
+        ...(statusFilter ? { status: statusFilter } : {}),
+        ...(qFilter ? { q: qFilter } : {}),
+      }),
     Boolean(shortCode),
-    [shortCode]
+    [shortCode, statusFilter, qFilter, page, pageSize]
   );
+
+  const meta =
+    status === "success" && data
+      ? {
+          total: data.total ?? (data.assets?.length ?? 0),
+          page: data.page ?? page,
+          page_size: data.page_size ?? pageSize,
+          total_pages: data.total_pages ?? 1,
+          has_next: Boolean(data.has_next),
+          has_prev: Boolean(data.has_prev),
+        }
+      : null;
 
   useEffect(() => {
     if (!shortCode) return;
@@ -126,6 +168,19 @@ export default function AssetsPage() {
         Appliance posture, protected assets by device category, and endpoint agent installers for
         your organization.
       </p>
+
+      <ListToolbar
+        searchPlaceholder="Search hostname, OS, type…"
+        searchValue={qFilter}
+        onSearchChange={(q) => patchParams({ q, page: "1" })}
+        statusOptions={STATUS_OPTIONS}
+        statusValue={statusFilter}
+        onStatusChange={(status) => patchParams({ status, page: "1" })}
+        pageSize={pageSize}
+        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+        meta={meta}
+        onPageChange={(p) => patchParams({ page: String(p) })}
+      />
 
       <section style={{ marginBottom: "1.5rem" }}>
         <h2 className="page-subtitle" style={{ marginTop: 0 }}>

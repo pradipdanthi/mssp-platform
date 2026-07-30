@@ -5,7 +5,7 @@
 
 .DESCRIPTION
   Production prerequisite for process-tree / EDR detection on Windows.
-  Does NOT alert on every process — it enables filtered telemetry collection.
+  Does NOT alert on every process - it enables filtered telemetry collection.
   Wazuh/manager rules decide what becomes an alert.
 
   Safe to re-run (idempotent).
@@ -118,7 +118,7 @@ function Install-OrUpdateSysmon {
         Write-Step "Sysmon install exit code: $LASTEXITCODE (continuing if service present)"
       }
     } else {
-      Write-Step "Sysmon already present ($sysmonExe) — updating config..."
+      Write-Step "Sysmon already present ($sysmonExe) - updating config..."
       & $sysmonExe -accepteula -c $ConfigPath
     }
 
@@ -150,7 +150,7 @@ function Get-OssecConfPath {
 function Ensure-AgentLocalfiles {
   $conf = Get-OssecConfPath
   if (-not $conf) {
-    Write-Step "WARNING: Agent ossec.conf not found — install the endpoint agent first, then re-run this script."
+    Write-Step "WARNING: Agent ossec.conf not found - install the endpoint agent first, then re-run this script."
     return $false
   }
 
@@ -207,7 +207,7 @@ function Ensure-AgentLocalfiles {
     Start-Sleep -Seconds 3
     Get-Service -Name WazuhSvc | Format-List Name, Status
   } else {
-    Write-Step "WARNING: WazuhSvc not found — localfile saved; start agent after install."
+    Write-Step "WARNING: WazuhSvc not found - localfile saved; start agent after install."
   }
   return $true
 }
@@ -232,4 +232,4 @@ Ensure-AgentLocalfiles | Out-Null
 Write-Host ""
 Write-Host "MSSP_WINDOWS_TELEMETRY_OK"
 Write-Host "Next: generate a controlled suspicious process (e.g. encoded PowerShell) and confirm"
-Write-Host "alerts/incidents in Admin portal — not every process create will alert."
+Write-Host "alerts/incidents in Admin portal - not every process create will alert."

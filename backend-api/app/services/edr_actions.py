@@ -15,7 +15,8 @@ from app.services import edr_forensics_storage, shuffle_edr_client, wazuh_client
 
 logger = logging.getLogger(__name__)
 
-SOC_WRITE_ROLES = frozenset({"platform_admin", "soc_manager"})
+# SOC analysts may execute containment from the MSSP/Admin portal (audited).
+SOC_WRITE_ROLES = frozenset({"platform_admin", "soc_manager", "soc_analyst"})
 CUSTOMER_ACTION_ROLES = frozenset({"customer_admin"})
 READ_ONLY_CUSTOMER = frozenset({"customer_viewer"})
 
@@ -23,22 +24,28 @@ ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND") or "mssp-isolate-ho
 KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND") or "mssp-kill-process").strip()
 BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND") or "mssp-block-hash").strip()
 
-# Windows variants (Wazuh AR framework dispatches <command>.exe on Windows agents)
-WIN_ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND_WIN") or "mssp-isolate-host.exe").strip()
-WIN_KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND_WIN") or "mssp-kill-process.exe").strip()
-WIN_BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND_WIN") or "mssp-block-hash.exe").strip()
+# Windows AR command names registered on the Manager (see kb090 / deploy helpers).
+# Scripts on the endpoint are *.cmd wrappers calling PowerShell (no Python required).
+WIN_ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND_WIN") or "mssp-isolate-host.cmd").strip()
+WIN_KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND_WIN") or "mssp-kill-process.cmd").strip()
+WIN_BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND_WIN") or "mssp-block-hash.cmd").strip()
 
 
 def _resolve_ar_command(base_command: str, win_command: str, agent_id: Optional[str]) -> str:
-    """Pick the OS-appropriate AR command name based on the agent's platform."""
-    if agent_id and wazuh_client.credentials_configured():
-        try:
-            agent_os = wazuh_client.get_agent_os(agent_id)
-            if agent_os == "windows":
-                return win_command
-        except Exception:
-            pass
-    return base_command
+    """Pick the OS-appropriate AR command name. Fail closed if OS is unknown."""
+    if not agent_id:
+        raise ValueError("agent_id is required to resolve the Active Response command")
+    if not wazuh_client.credentials_configured():
+        raise ValueError("Wazuh credentials are not configured; cannot resolve agent OS")
+    agent_os = wazuh_client.get_agent_os(agent_id)
+    if agent_os == "windows":
+        return win_command
+    if agent_os == "linux":
+        return base_command
+    raise ValueError(
+        f"Cannot dispatch containment: agent {agent_id} OS is unknown. "
+        "Confirm the agent is active on the manager and OS inventory is populated."
+    )
 ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "120").strip()
 def _get_callback_base() -> str:
     from app.core.config import get_infra_settings
@@ -236,11 +243,11 @@ def _update_execution(
 
 def verify_isolation_state(agent_id: str, *, expect_isolated: bool) -> Tuple[bool, str]:
     """
-    Confirm endpoint connectivity via manager agent status before VERIFIED.
+    Soft connectivity check only — NOT proof that firewall isolation worked.
 
     Isolated hosts should still reach the manager (AR allows manager IP), so
-    status=active is expected after isolate. After unisolate we also expect active.
-    Disconnected/never_connected fails verification.
+    status=active is expected both before and after isolate. This cannot confirm
+    LAN/gateway blocking; treat results as advisory for operator follow-up.
     """
     try:
         info = wazuh_client.get_agent_status(agent_id)
@@ -249,8 +256,12 @@ def verify_isolation_state(agent_id: str, *, expect_isolated: bool) -> Tuple[boo
     status = str(info.get("status") or "").lower()
     if status in ("active", "connected"):
         if expect_isolated:
-            return True, f"Endpoint reachable via manager (status={status}); isolation applied"
-        return True, f"Endpoint connectivity restored (status={status})"
+            return (
+                True,
+                f"Agent still reachable via manager (status={status}); "
+                "firewall isolation not proven — confirm MSSP_ISOLATE_* rules on endpoint",
+            )
+        return True, f"Endpoint connectivity via manager OK (status={status})"
     return False, f"Endpoint not reachable for verification (status={status or 'unknown'})"
 
 
@@ -291,11 +302,17 @@ def apply_action_callback(
             aid, expect_isolated=(row["action_type"] == "ISOLATE_HOST")
         )
         detail = f"{detail}; {verify_msg}".strip("; ")
-        if ok:
+        if ok and row["action_type"] == "UNISOLATE_HOST":
+            # Unisolate: agent-online is a reasonable restore signal.
             final_status = "verified"
             verified = True
+        elif ok and row["action_type"] == "ISOLATE_HOST":
+            # Do not promote isolate to verified on agent-online alone.
+            detail = (
+                f"{detail} (dispatched only — confirm MSSP isolation firewall "
+                "policy on the endpoint; agent stay-online is expected)"
+            )
         else:
-            # Stay success but surface verification failure in detail
             detail = f"{detail} (verification pending: {verify_msg})"
 
     if mapped == "success" and row["action_type"] == "UNISOLATE_HOST" and aid:
@@ -382,6 +399,8 @@ def _create_forensic_artifact(
 def execute_edr_action(
     user: Dict[str, Any],
     body: EdrActionExecuteRequest,
+    *,
+    source_ip: Optional[str] = None,
 ) -> Tuple[str, str, str, Optional[str], Optional[str]]:
     """
     Returns (execution_id, status, message, upload_url, forensic_artifact_id).
@@ -391,6 +410,10 @@ def execute_edr_action(
     tenant = _resolve_tenant(body.tenant_short_code)
     tenant_id = tenant["id"]
     assert_can_execute_action(user, tenant_id=tenant_id, action_type=body.action_type)
+    # Stash for audit enrichment (who / portal / incident / source).
+    user = dict(user)
+    if source_ip:
+        user["_audit_source_ip"] = source_ip
 
     incident = _resolve_incident(
         tenant_id,
@@ -461,30 +484,19 @@ def execute_edr_action(
                     "status": "executing",
                 }
             )
-            ok, verify_msg = verify_isolation_state(agent_id, expect_isolated=True)
-            if ok:
-                msg = f"Host isolation applied (auto-release ~{ISOLATE_SECONDS}s)"
-                _update_execution(
-                    execution_id,
-                    "verified",
-                    f"Isolation dispatched to endpoint {agent_id}; {verify_msg}",
-                    verified=True,
-                )
-                _audit_success(
-                    user,
-                    action_type=body.action_type,
-                    execution_id=execution_id,
-                    tenant_id=tenant_id,
-                    status="verified",
-                    message=msg,
-                    agent_id=agent_id,
-                )
-                return execution_id, "verified", msg, None, None
-            msg = f"Isolation dispatched to endpoint {agent_id}"
+            # Agent remaining "active" is expected (manager IP is allow-listed) and does
+            # NOT prove network quarantine. Mark dispatched; require endpoint applied=true.
+            _, verify_msg = verify_isolation_state(agent_id, expect_isolated=True)
+            msg = (
+                f"Network quarantine command dispatched to agent {agent_id} "
+                f"(auto-release ~{ISOLATE_SECONDS}s). "
+                "This is default-deny all traffic except Manager/DHCP/loopback — not ICMP-only. "
+                "Confirm on host log: QUARANTINE ACTIVE applied=true (or FAILED applied=false)."
+            )
             _update_execution(
                 execution_id,
                 "success",
-                f"Isolation dispatched; verification pending: {verify_msg}",
+                f"{msg} ({verify_msg})",
             )
             _audit_success(
                 user,
@@ -494,6 +506,8 @@ def execute_edr_action(
                 status="success",
                 message=msg,
                 agent_id=agent_id,
+                incident_number=body.incident_number or (incident or {}).get("incident_number"),
+                tenant_short_code=body.tenant_short_code,
             )
             return execution_id, "success", msg, None, None
 
@@ -543,6 +557,8 @@ def execute_edr_action(
                 status=st,
                 message=msg,
                 agent_id=agent_id,
+                incident_number=body.incident_number or (incident or {}).get("incident_number"),
+                tenant_short_code=body.tenant_short_code,
             )
             return execution_id, st, msg, None, None
 
@@ -568,7 +584,11 @@ def execute_edr_action(
                     "status": "executing",
                 }
             )
-            msg = f"Kill process dispatched to endpoint {agent_id} pid={body.pid}"
+            msg = (
+                f"Kill process command dispatched to agent {agent_id} pid={body.pid}. "
+                "Not confirmed: verify process is gone on the endpoint "
+                "(tasklist / Get-Process) and active-responses.log."
+            )
             _update_execution(execution_id, "success", msg)
             _audit_success(
                 user,
@@ -578,6 +598,8 @@ def execute_edr_action(
                 status="success",
                 message=msg,
                 agent_id=agent_id,
+                incident_number=body.incident_number or (incident or {}).get("incident_number"),
+                tenant_short_code=body.tenant_short_code,
             )
             return execution_id, "success", msg, None, None
 
@@ -622,6 +644,8 @@ def execute_edr_action(
                 status=status if ok else "failed",
                 message=msg,
                 agent_id=agent_id,
+                incident_number=body.incident_number or (incident or {}).get("incident_number"),
+                tenant_short_code=body.tenant_short_code,
             )
             return (
                 execution_id,
@@ -635,7 +659,7 @@ def execute_edr_action(
             h = (body.file_hash_sha256 or "").strip().lower()
             if not re.fullmatch(r"[a-f0-9]{64}", h):
                 raise ValueError("file_hash_sha256 must be 64 hex characters")
-            ar_msg = "Endpoint hash block skipped (no agent)"
+            ar_msg = "Endpoint hash record skipped (no agent)"
             if agent_id and wazuh_client.credentials_configured():
                 ar_cmd = _resolve_ar_command(BLOCK_HASH_AR_COMMAND, WIN_BLOCK_HASH_AR_COMMAND, agent_id)
                 wazuh_client.run_active_response(
@@ -643,7 +667,12 @@ def execute_edr_action(
                     command=ar_cmd,
                     arguments=[h],
                 )
-                ar_msg = f"Hash block dispatched to endpoint {agent_id}"
+                ar_msg = (
+                    f"Hash record command dispatched to agent {agent_id}. "
+                    "IMPORTANT: current endpoint script only appends to "
+                    "mssp_blocked_hashes.txt — it does NOT prevent execution "
+                    "(WDAC/AppLocker/ASR enforcement is not wired yet)."
+                )
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "BLOCK_HASH",
@@ -655,7 +684,10 @@ def execute_edr_action(
                     "status": "executing",
                 }
             )
-            status = "success" if ok else "failed"
+            # Dispatch accepted is "success" in lifecycle terms, but UI must label Dispatched.
+            status = "success" if (agent_id and wazuh_client.credentials_configured()) or ok else "failed"
+            if not agent_id and not ok:
+                status = "failed"
             msg = f"{ar_msg}; orchestration: {shuffle_msg}"
             _update_execution(execution_id, status, msg)
             _audit_success(
@@ -666,6 +698,8 @@ def execute_edr_action(
                 status=status,
                 message=msg,
                 agent_id=agent_id,
+                incident_number=body.incident_number or (incident or {}).get("incident_number"),
+                tenant_short_code=body.tenant_short_code,
             )
             return execution_id, status, msg, None, None
 
@@ -680,12 +714,75 @@ def execute_edr_action(
                 entity_type="edr_action",
                 entity_id=execution_id,
                 tenant_id=tenant_id,
+                source_ip=user.get("_audit_source_ip"),
                 action_status="FAILED",
-                details={"error": str(exc)[:300], "agent_id": agent_id},
+                details=_edr_audit_details(
+                    user=user,
+                    action_type=body.action_type,
+                    status="failed",
+                    message=str(exc)[:300],
+                    agent_id=agent_id,
+                    incident_number=body.incident_number
+                    or (incident or {}).get("incident_number"),
+                    tenant_short_code=body.tenant_short_code,
+                    execution_id=execution_id,
+                    error=str(exc)[:300],
+                ),
             )
         except Exception:
             pass
         return execution_id, "failed", str(exc)[:500], None, None
+
+
+def _portal_label(user: Dict[str, Any]) -> str:
+    role = str(user.get("role") or "")
+    if role.startswith("customer_"):
+        return "customer_portal"
+    return "mssp_admin_portal"
+
+
+def _action_summary(action_type: str, *, agent_id: Optional[str], incident_number: Optional[str]) -> str:
+    host = f" agent {agent_id}" if agent_id else ""
+    incident = f" (incident {incident_number})" if incident_number else ""
+    labels = {
+        "ISOLATE_HOST": f"Isolated/quarantined endpoint{host}{incident}",
+        "UNISOLATE_HOST": f"Released endpoint from quarantine{host}{incident}",
+        "KILL_PROCESS": f"Requested process kill on endpoint{host}{incident}",
+        "BLOCK_HASH": f"Requested hash block on endpoint{host}{incident}",
+        "COLLECT_FORENSICS": f"Requested forensic collection on endpoint{host}{incident}",
+    }
+    return labels.get(action_type, f"EDR action {action_type}{host}{incident}")
+
+
+def _edr_audit_details(
+    *,
+    user: Dict[str, Any],
+    action_type: str,
+    status: str,
+    message: str,
+    agent_id: Optional[str],
+    incident_number: Optional[str],
+    tenant_short_code: Optional[str],
+    execution_id: str,
+    error: Optional[str] = None,
+) -> Dict[str, Any]:
+    details: Dict[str, Any] = {
+        "summary": _action_summary(
+            action_type, agent_id=agent_id, incident_number=incident_number
+        ),
+        "status": status,
+        "message": (message or "")[:500],
+        "agent_id": agent_id,
+        "incident_number": incident_number,
+        "tenant_short_code": tenant_short_code,
+        "execution_id": execution_id,
+        "portal": _portal_label(user),
+        "actor_email": user.get("email"),
+        "actor_role": user.get("role"),
+    }
+    if error:
+        details["error"] = error
+    return details
 
 
 def _audit_success(
@@ -697,6 +794,8 @@ def _audit_success(
     status: str,
     message: str,
     agent_id: Optional[str],
+    incident_number: Optional[str] = None,
+    tenant_short_code: Optional[str] = None,
 ) -> None:
     try:
         audit_from_user(
@@ -705,8 +804,18 @@ def _audit_success(
             entity_type="edr_action",
             entity_id=execution_id,
             tenant_id=tenant_id,
+            source_ip=user.get("_audit_source_ip"),
             action_status="SUCCESS" if status != "failed" else "FAILED",
-            details={"status": status, "message": message[:500], "agent_id": agent_id},
+            details=_edr_audit_details(
+                user=user,
+                action_type=action_type,
+                status=status,
+                message=message,
+                agent_id=agent_id,
+                incident_number=incident_number,
+                tenant_short_code=tenant_short_code,
+                execution_id=execution_id,
+            ),
         )
     except Exception:
         logger.exception("EDR audit write failed")

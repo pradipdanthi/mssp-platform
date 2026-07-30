@@ -106,6 +106,91 @@ def _level_to_severity(level: int) -> str:
     return "low"
 
 
+def unwrap_wazuh_ingress_payload(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Normalize live Wazuh → control-plane webhook body shapes.
+
+    Wazuh's stock Shuffle integration does NOT POST the raw alert JSON.
+    It wraps the original alert under ``all_fields`` and adds Shuffle fields
+    (severity/pretext/title/...). Accept both shapes so ingress never silently
+    422s on a production integration that is "configured but wrong shape".
+    """
+    if not isinstance(raw, dict):
+        return {}
+    wrapped = raw.get("all_fields")
+    if isinstance(wrapped, dict) and (
+        isinstance(wrapped.get("rule"), dict) or isinstance(wrapped.get("agent"), dict)
+    ):
+        return wrapped
+    return raw
+
+
+def _extract_target_filename(raw: Dict[str, Any]) -> str:
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+    win = data.get("win") if isinstance(data.get("win"), dict) else {}
+    eventdata = win.get("eventdata") if isinstance(win.get("eventdata"), dict) else {}
+    for key in ("targetFilename", "TargetFilename", "targetfilename"):
+        val = eventdata.get(key)
+        if val:
+            return str(val)
+    # Fallback: scan message text (Sysmon FileCreate)
+    system = win.get("system") if isinstance(win.get("system"), dict) else {}
+    msg = str(system.get("message") or "")
+    return msg
+
+
+def _extract_source_user(raw: Dict[str, Any]) -> Optional[str]:
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+    win = data.get("win") if isinstance(data.get("win"), dict) else {}
+    eventdata = win.get("eventdata") if isinstance(win.get("eventdata"), dict) else {}
+    for key in ("User", "user", "srcuser", "destinationUserName", "SubjectUserName"):
+        val = eventdata.get(key) or data.get(key)
+        if val:
+            return str(val)[:255]
+    return None
+
+
+def _build_wazuh_technical_summary(raw: Dict[str, Any]) -> str:
+    """Deterministic SOC evidence string from Wazuh fields (not AI)."""
+    rule = raw.get("rule") if isinstance(raw.get("rule"), dict) else {}
+    agent = raw.get("agent") if isinstance(raw.get("agent"), dict) else {}
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+    win = data.get("win") if isinstance(data.get("win"), dict) else {}
+    eventdata = win.get("eventdata") if isinstance(win.get("eventdata"), dict) else {}
+    groups = rule.get("groups") or []
+    if isinstance(groups, str):
+        groups = [groups]
+    parts = [
+        f"Wazuh rule {rule.get('id', 'n/a')} level {rule.get('level', 'n/a')}",
+        str(rule.get("description") or "").strip(),
+        f"agent={agent.get('name') or 'n/a'} id={agent.get('id') or 'n/a'} ip={agent.get('ip') or 'n/a'}",
+    ]
+    if groups:
+        parts.append("groups=" + ",".join(str(g) for g in groups[:12]))
+    target = _extract_target_filename(raw)
+    if target:
+        parts.append(f"target_file={target[:500]}")
+    image = eventdata.get("Image") or eventdata.get("image")
+    if image:
+        parts.append(f"image={str(image)[:400]}")
+    user = _extract_source_user(raw)
+    if user:
+        parts.append(f"user={user}")
+    cmd = eventdata.get("CommandLine") or eventdata.get("commandLine")
+    if cmd:
+        parts.append(f"cmdline={str(cmd)[:600]}")
+    return "; ".join(p for p in parts if p)[:4000]
+
+
+def is_known_noise_file_drop(raw: Dict[str, Any]) -> bool:
+    """
+    Phase-1 known noise: PowerShell policy-test temp scripts.
+    These fire Wazuh 92213 (critical) on nearly every elevated PowerShell run.
+    """
+    blob = _extract_target_filename(raw).replace("\\", "/").lower()
+    return "__psscriptpolicytest_" in blob
+
+
 def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
     from app.services.tenant_engine_provisioner import resolve_short_code_by_wazuh_group
 
@@ -121,10 +206,20 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
     if not external_id:
         external_id = f"wazuh-{rule.get('id', 'unknown')}-{agent.get('id', 'na')}-{level}"
     host = str(agent.get("name") or raw.get("hostname") or "")[:255] or None
+    agent_ip = str(agent.get("ip") or "").strip() or None
+    agent_id = str(agent.get("id") or "").strip() or None
+    source_user = _extract_source_user(raw)
+    target = _extract_target_filename(raw)
     desc_parts = [
         f"Wazuh rule {rule.get('id', 'n/a')} level {level}",
         f"agent={agent.get('name', 'n/a')}",
     ]
+    if agent_ip:
+        desc_parts.append(f"agent_ip={agent_ip}")
+    if source_user:
+        desc_parts.append(f"user={source_user}")
+    if target:
+        desc_parts.append(f"target={target[:300]}")
     description = "; ".join(desc_parts)[:4000]
 
     # Resolve tenant from Wazuh agent group binding (KB-072).
@@ -143,7 +238,6 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
         if str(val).startswith("tenant_"):
             candidates.append(str(val))
     if not any(str(g).startswith("tenant_") for g in candidates):
-        agent_id = str(agent.get("id") or "").strip()
         if agent_id:
             try:
                 from app.services import wazuh_client
@@ -169,6 +263,17 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
             "Unmapped Wazuh agent: no tenant group binding and no WAZUH_DEFAULT_TENANT_SHORT_CODE"
         )
 
+    # Phase-1: known PowerShell Temp policy-test noise must not open incidents.
+    create_incident = level >= 10
+    if is_known_noise_file_drop(raw):
+        create_incident = False
+        logger.info(
+            "Wazuh ingress: suppressing auto-incident for known noise file drop "
+            "(rule=%s agent=%s)",
+            rule.get("id"),
+            agent.get("name"),
+        )
+
     return SocSyncRequest(
         source_tool="wazuh",
         external_alert_id=external_id[:255],
@@ -176,8 +281,13 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
         alert_title=title,
         alert_description=description,
         destination_host=host,
+        destination_ip=agent_ip,
+        source_ip=agent_ip,
+        source_user=source_user,
+        wazuh_agent_id=agent_id,
+        technical_summary=_build_wazuh_technical_summary(raw),
         tenant_short_code=tenant_code,
-        create_incident=level >= 10,
+        create_incident=create_incident,
         customer_visible_summary=f"SOC is reviewing: {title}"[:4000],
         business_impact=(
             "Under SOC investigation. Details appear when approved for customer view."
@@ -270,6 +380,8 @@ async def wazuh_instant_ingress(token: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid JSON")
     if not isinstance(raw, dict):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid alert payload")
+
+    raw = unwrap_wazuh_ingress_payload(raw)
 
     try:
         payload = _normalize_wazuh_alert(raw)

@@ -126,6 +126,46 @@ export default function IncidentDetailPage() {
             </tbody>
           </table>
 
+          {data.primary_alert ? (
+            <>
+              <h2 className="page-subtitle" style={{ marginTop: "2rem" }}>
+                Affected asset
+              </h2>
+              <table className="data-table">
+                <tbody>
+                  <tr>
+                    <th>Hostname</th>
+                    <td>{data.primary_alert.hostname ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Device type</th>
+                    <td>{data.primary_alert.device_type ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Asset category</th>
+                    <td>
+                      {data.primary_alert.asset_category_label ??
+                        data.primary_alert.asset_category ??
+                        "—"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Criticality</th>
+                    <td>{data.primary_alert.criticality ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Operating system</th>
+                    <td>{data.primary_alert.operating_system ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Recommended action</th>
+                    <td>{data.primary_alert.recommended_action ?? "—"}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </>
+          ) : null}
+
           <h2 className="page-subtitle" style={{ marginTop: "2rem" }}>
             Timeline
           </h2>
@@ -165,6 +205,7 @@ export default function IncidentDetailPage() {
                   <th>Severity</th>
                   <th>Status</th>
                   <th>Detection</th>
+                  <th>Device</th>
                   <th>Summary</th>
                   <th>Hostname</th>
                   <th>Detected</th>
@@ -179,6 +220,7 @@ export default function IncidentDetailPage() {
                     </td>
                     <td>{alert.status}</td>
                     <td>{alert.source}</td>
+                    <td>{alert.device_type ?? "—"}</td>
                     <td>{alert.summary ?? alert.description ?? "—"}</td>
                     <td>{alert.hostname ?? "—"}</td>
                     <td>{alert.detected_at ?? "—"}</td>
@@ -202,10 +244,6 @@ export default function IncidentDetailPage() {
                   <tr>
                     <th>OS</th>
                     <td>{String(edr.endpoint.os_version ?? "—")}</td>
-                  </tr>
-                  <tr>
-                    <th>Logged-in user</th>
-                    <td>{String(edr.endpoint.logged_in_user ?? "—")}</td>
                   </tr>
                 </tbody>
               </table>

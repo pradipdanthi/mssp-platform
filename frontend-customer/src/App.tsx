@@ -19,6 +19,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import AccountPage from "./pages/AccountPage";
 import UsersPage from "./pages/UsersPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
 import ServicesPage from "./pages/ServicesPage";
 
@@ -169,6 +170,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AuditLogsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit/:auditId"
+        element={
+          <ProtectedRoute>
+            <AuditLogDetailPage />
           </ProtectedRoute>
         }
       />

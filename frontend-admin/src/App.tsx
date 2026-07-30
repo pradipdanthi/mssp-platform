@@ -17,6 +17,7 @@ import NotificationsPage from "./pages/NotificationsPage";
 import ReportsPage from "./pages/ReportsPage";
 import AssetsPage from "./pages/AssetsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -141,6 +142,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AuditLogsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/audit/:auditId"
+        element={
+          <ProtectedRoute>
+            <AuditLogDetailPage />
           </ProtectedRoute>
         }
       />

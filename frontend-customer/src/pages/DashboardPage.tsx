@@ -156,18 +156,6 @@ export default function DashboardPage() {
   const eventsMonitored = data
     ? data.kpis.high_critical_alerts + data.kpis.assets_monitored * 10 + data.recent_alerts.length
     : 0;
-  const slaPercent = data
-    ? Math.max(
-        50,
-        Math.min(
-          99,
-          92 -
-            data.kpis.open_incidents * 3 -
-            data.kpis.high_critical_alerts +
-            data.kpis.appliances_online * 2
-        )
-      )
-    : 0;
 
   const hasStacked = stackedBuckets.some(
     (b) => b.critical + b.high + b.medium + b.low > 0
@@ -230,9 +218,13 @@ export default function DashboardPage() {
               <div className="kpi-foot">Open cases · click to review</div>
             </Link>
 
-            <Link className="kpi-card kpi-card--accent card-surface kpi-card--link" to="/assets">
+            <Link
+              className="kpi-card kpi-card--accent card-surface kpi-card--link"
+              to="/alerts"
+              aria-label="Open security alerts / events"
+            >
               <div className="kpi-card-top">
-                <span className="kpi-label">Events / Assets</span>
+                <span className="kpi-label">Events monitored</span>
                 <MiniSparkline values={sparkFromTotal(eventsMonitored)} />
               </div>
               <div className="kpi-value kpi-value--accent">
@@ -240,7 +232,9 @@ export default function DashboardPage() {
                   ? `${(eventsMonitored / 1000).toFixed(1)}K`
                   : eventsMonitored.toLocaleString()}
               </div>
-              <div className="kpi-foot">Collectors online: {data.kpis.appliances_online}</div>
+              <div className="kpi-foot">
+                Collectors online: {data.kpis.appliances_online} · click → alerts
+              </div>
             </Link>
 
             <Link
@@ -258,13 +252,25 @@ export default function DashboardPage() {
             <Link
               className="kpi-card kpi-card--low card-surface kpi-card--link"
               to="/recommendations"
+              aria-label="Open recommendations"
             >
               <div className="kpi-card-top">
-                <span className="kpi-label">Automation / SLA</span>
-                <RadialGauge percent={slaPercent} label="SLA" />
+                <span className="kpi-label">Open recommendations</span>
+                <RadialGauge
+                  percent={Math.min(
+                    99,
+                    Math.max(
+                      5,
+                      100 - Math.min(90, (data.kpis.open_recommendations || 0) * 8)
+                    )
+                  )}
+                  label="Done"
+                />
               </div>
-              <div className="kpi-value kpi-value--low">{slaPercent}%</div>
-              <div className="kpi-foot">Click → recommendations</div>
+              <div className="kpi-value kpi-value--low">
+                {data.kpis.open_recommendations ?? 0}
+              </div>
+              <div className="kpi-foot">Actions for your team · click to open</div>
             </Link>
           </div>
 
@@ -275,6 +281,8 @@ export default function DashboardPage() {
             highCritical={data.kpis.high_critical_alerts}
             onlineAppliances={data.kpis.appliances_online}
             offlineAppliances={data.kpis.appliances_other}
+            collectorsHref="/assets"
+            queueHref="/incidents"
           />
 
           <div className="analytics-row analytics-row--trio">
@@ -335,6 +343,8 @@ export default function DashboardPage() {
                     <tr>
                       <th>Incident ID</th>
                       <th>Title / Rule Name</th>
+                      <th>Asset</th>
+                      <th>Device</th>
                       <th>Severity</th>
                       <th>Status</th>
                       <th>Summary</th>
@@ -358,6 +368,7 @@ export default function DashboardPage() {
                               business_impact: inc.business_impact,
                               customer_action_required: inc.customer_action_required,
                               opened_at: inc.opened_at,
+                              affected_entity: inc.hostname ?? "Protected asset",
                               detailPath: `/incidents/${encodeURIComponent(inc.incident_number)}`,
                             })
                           }
@@ -366,6 +377,8 @@ export default function DashboardPage() {
                           <td className="cell-truncate" title={inc.title}>
                             {inc.title}
                           </td>
+                          <td className="cell-mono">{inc.hostname ?? "—"}</td>
+                          <td>{inc.device_type ?? "—"}</td>
                           <td>
                             <SeverityPill value={inc.severity} onIsolate={(v) => setFeedSeverity(v)} />
                           </td>

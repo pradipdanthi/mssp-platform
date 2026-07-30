@@ -99,7 +99,18 @@ export default function EdrControlPanel({
     }
   }
 
-  if (!canExecute) return null;
+  if (!canExecute) {
+    return (
+      <div className="edr-control-panel card-surface">
+        <h3 className="section-title" style={{ marginTop: "1rem" }}>
+          EDR control
+        </h3>
+        <p className="muted">
+          Containment actions require platform admin, SOC manager, or SOC analyst role.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="edr-control-panel card-surface">
@@ -120,19 +131,24 @@ export default function EdrControlPanel({
           className="btn btn-danger"
           disabled={busy}
           onClick={() => {
-            if (window.confirm("Isolate host network connectivity?")) {
+            if (window.confirm(
+              "Quarantine this host?\n\n" +
+                "All network traffic will be blocked except the SOC Manager path " +
+                "(and DHCP/loopback). This is full network quarantine, not ping-only. " +
+                "Auto-release is about 2 minutes unless you Un-isolate sooner."
+            )) {
               void run("ISOLATE_HOST", { confirm_isolation: true });
             }
           }}
         >
-          Isolate host
+          Isolate host (quarantine)
         </button>
         <button
           type="button"
           className="btn btn-secondary"
           disabled={busy}
           onClick={() => {
-            if (window.confirm("Restore host network connectivity?")) {
+            if (window.confirm("Lift network quarantine and restore normal connectivity?")) {
               void run("UNISOLATE_HOST");
             }
           }}
