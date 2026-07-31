@@ -15,17 +15,34 @@ fi
 mkdir -p "$DEST_ROOT"
 echo "[dr-cold-copy] $SRC → $DEST"
 
-rsync -aH --delete \
-  --exclude '__pycache__/' \
-  --exclude '*.pyc' \
-  --exclude '.venv/' \
-  --exclude 'frontend-admin/node_modules/' \
-  --exclude 'frontend-customer/node_modules/' \
-  --exclude 'frontend-admin/dist/' \
-  --exclude 'frontend-customer/dist/' \
-  --exclude '.staging_*/' \
-  --exclude 'runtime/vuln-free/' \
-  "$SRC/" "$DEST/"
+# Prefer rsync; fall back to tar (rsync may be absent on minimal hosts)
+if command -v rsync >/dev/null 2>&1; then
+  mkdir -p "$DEST"
+  rsync -aH --delete \
+    --exclude '__pycache__/' \
+    --exclude '*.pyc' \
+    --exclude '.venv/' \
+    --exclude 'frontend-admin/node_modules/' \
+    --exclude 'frontend-customer/node_modules/' \
+    --exclude 'frontend-admin/dist/' \
+    --exclude 'frontend-customer/dist/' \
+    --exclude '.staging_*/' \
+    --exclude 'runtime/vuln-free/' \
+    "$SRC/" "$DEST/"
+else
+  rm -rf "$DEST"
+  mkdir -p "$DEST"
+  tar -C "$SRC" \
+    --exclude='__pycache__' \
+    --exclude='*.pyc' \
+    --exclude='.venv' \
+    --exclude='frontend-admin/node_modules' \
+    --exclude='frontend-customer/node_modules' \
+    --exclude='frontend-admin/dist' \
+    --exclude='frontend-customer/dist' \
+    --exclude='runtime/vuln-free' \
+    -cf - . | tar -C "$DEST" -xf -
+fi
 
 # Operator README (no secrets)
 cat > "${DEST_ROOT%/}/README_RESTORE.txt" <<'EOF'
