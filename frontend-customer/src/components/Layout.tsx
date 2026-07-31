@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: "/assets", label: "Assets" },
   { to: "/vulnerabilities", label: "Vulnerabilities" },
   { to: "/compliance", label: "Compliance" },
+  { to: "/easm", label: "Attack Surface" },
   { to: "/recommendations", label: "Recommendations" },
   { to: "/reports", label: "Reports" },
   { to: "/notifications", label: "Notifications" },

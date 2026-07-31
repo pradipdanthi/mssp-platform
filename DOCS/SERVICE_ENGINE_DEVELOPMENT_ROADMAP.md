@@ -1,7 +1,7 @@
 # Service Engine Development Roadmap
 
 Status: Living tracker for backend engines behind the 10-card Service Catalog.  
-Created: 2026-07-31 · **Phase 1 Continuous Compliance (CaaS) — COMPLETE**
+Created: 2026-07-31 · **Phase 2 External Attack Surface (EASM) — COMPLETE**
 
 **Conventions (this repo):**
 - Customer APIs: `/customer/{feature}/{short_code}/...` (nginx strips `/api` prefix).
@@ -23,7 +23,7 @@ Created: 2026-07-31 · **Phase 1 Continuous Compliance (CaaS) — COMPLETE**
 | 6 | Network Detection & Response (NDR) | `network_detection_response` | Suricata (VM 106) + Zeek (pending) | **PARTIAL** (Suricata live; Zeek pending) |
 | 7 | Threat Intelligence & Enrichment | `threat_intelligence` | MISP (pending) + enrichment workers | **PLANNED** |
 | 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | Velociraptor + Canarytokens (pending) | **PLANNED** |
-| 9 | External Attack Surface (EASM) | `external_attack_surface` | Amass + Nuclei (VM 109 extend) | **PLANNED** |
+| 9 | External Attack Surface (EASM) | `external_attack_surface` | MSSP External Surface Scanner (+ future Amass/Nuclei on VM 109) | **PHASE 2 — COMPLETE** |
 | 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | M365 / Entra ID connectors (pending) | **PLANNED** |
 
 ---
@@ -32,34 +32,38 @@ Created: 2026-07-31 · **Phase 1 Continuous Compliance (CaaS) — COMPLETE**
 
 ### Phase 1 — Continuous Compliance & Hardening (CaaS) — COMPLETE (2026-07-31)
 
-**Delivered:**
-- Schema: `postgres/init/022_continuous_compliance_sca.sql` — `tenant_compliance_summaries`, `sca_evaluations`, `sca_check_details`, `tenant_entitlements.continuous_compliance_enabled`
-- Service: `backend-api/app/services/sca_compliance_service.py`
-- Wazuh client helpers: `list_sca_policies`, `list_sca_checks` (alert ingest / AR untouched)
-- APIs:
-  - `GET /customer/compliance/{short_code}/summary`
-  - `GET /customer/compliance/{short_code}/evaluations`
-  - `GET /customer/compliance/{short_code}/checks`
-  - `GET /customer/compliance/{short_code}/report` (HTML audit pack; print → PDF)
-  - `POST /admin/compliance/{short_code}/sync`
-  - `GET /admin/compliance/summary`
-- Customer UI: `/compliance` — readiness gauge, framework tabs, failed-check table + remediation, download report
-- Catalog Card 5 → `ACTIVE` when SCA data present / entitlement enabled
-- Smoke (Alpha-Win): sync `ok`, score **27.3%**, 1 policy (CIS Windows Server 2022), 261 failed checks stored
+**Delivered:** SCA sync, customer `/compliance`, catalog Card 5 ACTIVE binding. See prior section history in git.
 
-### Phase 2+ (next)
+### Phase 2 — External Attack Surface Management (EASM) — COMPLETE (2026-07-31)
+
+**Delivered:**
+- Schema: `postgres/init/023_easm_attack_surface.sql` — `tenant_easm_assets`, `tenant_easm_scans`, `tenant_easm_findings`, `tenant_entitlements.external_attack_surface_enabled`
+- Service: `backend-api/app/services/easm_service.py` — domain registration + lightweight perimeter discovery (DNS common-name enum, TLS, open ports, HTTP hardening). Customer label: **MSSP External Surface Scanner**. No Amass/Nuclei binaries on the control plane (VM 109 deep templates remain future extension).
+- APIs:
+  - `GET /customer/easm/{short_code}/summary`
+  - `GET /customer/easm/{short_code}/assets`
+  - `GET /customer/easm/{short_code}/findings`
+  - `POST /customer/easm/{short_code}/domains`
+  - `POST /admin/easm/{tenant_ref}/scan` (UUID or short_code)
+  - `GET /admin/easm/summary`
+- Customer UI: `/easm` — KPI cards, asset table, findings + remediation, Register New Domain modal
+- Catalog Card 9 → `ACTIVE` when domains registered / entitlement enabled
+- Phase 1 SCA paths untouched
+
+### Phase 3+ (next)
 
 | Phase | Service | Notes |
 |---|---|---|
-| 2 | NDR completion | Zeek metadata + customer-safe NDR summary |
-| 3 | Threat Intelligence | MISP IOC enrichment into alerts |
-| 4 | EASM | Scheduled Amass/Nuclei perimeter jobs on VM 109 |
+| 3 | NDR completion | Zeek metadata + customer-safe NDR summary |
+| 4 | Threat Intelligence | MISP IOC enrichment into alerts |
 | 5 | Endpoint Forensics & Deception | Velociraptor + canary tripwires |
 | 6 | ITDR | M365/Entra connectors + Impossible Travel rules |
+| Later | EASM deep scan | Optional Amass/Nuclei template jobs on VM 109 pushing into EASM tables |
 
 ---
 
 ## Dependencies by phase
 
-- **Phase 1:** Wazuh Manager API credentials already on control plane; agents with SCA policies enabled; tenant ↔ agent via `protected_assets.details.wazuh_agent_id` / engine bindings.
+- **Phase 1:** Wazuh Manager API; agent ↔ tenant mapping.
+- **Phase 2:** Outbound DNS/TLS/TCP from control plane to customer-approved public targets only; no new VM installs.
 - **Later phases:** Do not install new VMs/tools unless a named KB approves it.

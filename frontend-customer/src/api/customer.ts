@@ -546,6 +546,7 @@ export interface CustomerEntitlements {
     vulnerability_management_enabled: boolean;
   vulnerability_scan_cadence: string;
   continuous_compliance_enabled?: boolean;
+  external_attack_surface_enabled?: boolean;
   security_automation: string;
   network_traffic_analysis_enabled?: boolean;
   threat_intelligence_enabled?: boolean;
@@ -670,6 +671,82 @@ export function getComplianceChecks(
 
 export function getComplianceReportUrl(shortCode: string): string {
   return `/api/customer/compliance/${encodeURIComponent(shortCode)}/report`;
+}
+
+/** External Attack Surface Management (EASM) — customer-safe. */
+export interface EasmSummary {
+  tenant: { short_code: string; name: string };
+  total_external_assets: number;
+  primary_domains: number;
+  subdomains: number;
+  public_ips: number;
+  open_public_ports: number;
+  expiring_ssl_certificates: number;
+  perimeter_vulnerabilities: number;
+  open_findings: number;
+  high_critical_findings: number;
+  has_data: boolean;
+  scanner_label?: string;
+  last_scan?: {
+    scan_status?: string;
+    target_domain?: string;
+    completed_at?: string | null;
+    ssl_status?: string | null;
+  } | null;
+}
+
+export interface EasmAsset {
+  id: string;
+  domain_or_ip: string;
+  asset_type: string;
+  discovery_source_label: string;
+  first_seen?: string;
+  last_seen?: string;
+  status: string;
+}
+
+export interface EasmFinding {
+  id: string;
+  asset_name: string;
+  finding_type: string;
+  severity: string;
+  title: string;
+  description: string;
+  remediation: string;
+  created_at?: string;
+}
+
+export function getEasmSummary(shortCode: string): Promise<EasmSummary> {
+  return request(`/customer/easm/${encodeURIComponent(shortCode)}/summary`);
+}
+
+export function getEasmAssets(shortCode: string): Promise<{ assets: EasmAsset[] }> {
+  return request(`/customer/easm/${encodeURIComponent(shortCode)}/assets`);
+}
+
+export function getEasmFindings(
+  shortCode: string,
+  opts?: { severity?: string; page?: number; page_size?: number }
+): Promise<{
+  findings: EasmFinding[];
+  pagination: { page: number; page_size: number; total_items: number; total_pages: number };
+}> {
+  const params = new URLSearchParams();
+  if (opts?.severity) params.set("severity", opts.severity);
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/easm/${encodeURIComponent(shortCode)}/findings${q}`);
+}
+
+export function registerEasmDomain(
+  shortCode: string,
+  payload: { domain_or_ip: string; notes?: string; start_scan?: boolean }
+): Promise<{ asset: EasmAsset; scan?: unknown }> {
+  return request(`/customer/easm/${encodeURIComponent(shortCode)}/domains`, {
+    method: "POST",
+    body: payload,
+  });
 }
 
 /** KB-076: customer service upgrade / interest request. */

@@ -216,6 +216,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
       "Vulnerability scanning on public-facing web applications",
       "Shadow-IT discovery for unauthorized cloud deployments",
     ],
+    learnMorePath: "/easm",
     requestable: true,
     scopeFields: ["domains", "notes"],
   },
@@ -263,6 +264,8 @@ export function resolveServiceStatus(
       return ent?.vulnerability_management_enabled ? "active" : "available";
     case "continuous_compliance":
       return ent?.continuous_compliance_enabled ? "active" : "available";
+    case "external_attack_surface":
+      return ent?.external_attack_surface_enabled ? "active" : "available";
     case "network_detection_response":
       return ent?.network_traffic_analysis_enabled ? "active" : "available";
     case "threat_intelligence":

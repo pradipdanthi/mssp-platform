@@ -256,6 +256,10 @@ export function resolveServiceStatus(
       return ent?.shuffle_mode && ent.shuffle_mode !== "not_included" ? "active" : "active";
     case "vulnerability_management":
       return ent?.greenbone_enabled ? "active" : "available";
+    case "continuous_compliance":
+      return ent?.continuous_compliance_enabled ? "active" : "available";
+    case "external_attack_surface":
+      return ent?.external_attack_surface_enabled ? "active" : "available";
     case "network_detection_response":
       return ent?.zeek_enabled ? "active" : "available";
     case "threat_intelligence":

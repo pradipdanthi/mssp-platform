@@ -60,6 +60,10 @@ def entitlements_row_to_customer_public(row: Dict[str, Any]) -> Dict[str, Any]:
             row.get("continuous_compliance_enabled")
             or row.get("has_compliance_data")
         ),
+        "external_attack_surface_enabled": bool(
+            row.get("external_attack_surface_enabled")
+            or row.get("has_easm_data")
+        ),
         "security_automation": customer_safe_automation_mode(row.get("shuffle_mode")),
         "network_traffic_analysis_enabled": bool(row.get("zeek_enabled")),
         "threat_intelligence_enabled": bool(row.get("misp_enabled")),

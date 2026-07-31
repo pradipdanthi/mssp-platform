@@ -22,6 +22,7 @@ import AuditLogsPage from "./pages/AuditLogsPage";
 import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
 import CompliancePage from "./pages/CompliancePage";
+import EasmPage from "./pages/EasmPage";
 import ServicesPage from "./pages/ServicesPage";
 
 function RootRedirect() {
@@ -155,6 +156,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <CompliancePage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/easm"
+        element={
+          <ProtectedRoute>
+            <EasmPage />
           </ProtectedRoute>
         }
       />
