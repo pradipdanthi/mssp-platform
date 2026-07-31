@@ -54,7 +54,9 @@ def entitlements_row_to_customer_public(row: Dict[str, Any]) -> Dict[str, Any]:
         "log_monitoring_enabled": bool(row.get("wazuh_siem", True)),
         "log_retention_days": int(row.get("wazuh_retention_days") or 30),
         "incident_response": customer_safe_incident_response_mode(row.get("thehive_mode")),
-        "vulnerability_management_enabled": bool(row.get("greenbone_enabled")),
+        "vulnerability_management_enabled": bool(
+            row.get("greenbone_enabled") or row.get("has_vmaas_data")
+        ),
         "vulnerability_scan_cadence": row.get("greenbone_cadence") or "monthly",
         "continuous_compliance_enabled": bool(
             row.get("continuous_compliance_enabled")

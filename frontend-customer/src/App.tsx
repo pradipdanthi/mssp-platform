@@ -153,6 +153,14 @@ export default function App() {
         }
       />
       <Route
+        path="/vulnerability"
+        element={
+          <ProtectedRoute>
+            <VulnerabilitiesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/compliance"
         element={
           <ProtectedRoute>

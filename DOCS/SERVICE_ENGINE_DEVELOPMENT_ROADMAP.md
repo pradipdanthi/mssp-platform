@@ -1,7 +1,7 @@
 # Service Engine Development Roadmap
 
 Status: Living tracker for backend engines behind the 10-card Service Catalog.  
-Created: 2026-07-31 · **Phase 3 Cloud & Identity (ITDR) — COMPLETE**
+Created: 2026-07-31 · **Phase 4 Vulnerability Management (VMaaS) — COMPLETE**
 
 **Conventions (this repo):**
 - Customer APIs: `/customer/{feature}/{short_code}/...` (nginx strips `/api` prefix).
@@ -18,7 +18,7 @@ Created: 2026-07-31 · **Phase 3 Cloud & Identity (ITDR) — COMPLETE**
 | 1 | Log & Event Monitoring | `log_event_monitoring` | Wazuh Manager ingest → `security_alerts` | **LIVE** (core) |
 | 2 | Incident Response & Casework | `incident_response` | TheHive/Shuffle adapters → `incidents` | **LIVE** (core) |
 | 3 | Security Automation & Containment | `security_automation` | Wazuh Active Response / EDR isolate | **LIVE** (core) |
-| 4 | Vulnerability Management (VMaaS) | `vulnerability_management` | Nuclei + Vuls + Greenbone CE (VM 109) | **LIVE** |
+| 4 | Vulnerability Management (VMaaS) | `vulnerability_management` | MSSP Internal Vulnerability Scanner (+ Nuclei/Vuls/Greenbone ingest on VM 109) | **PHASE 4 — COMPLETE** |
 | 5 | Continuous Compliance & Hardening (CaaS) | `continuous_compliance` | Wazuh SCA policies/checks | **PHASE 1 — COMPLETE** |
 | 6 | Network Detection & Response (NDR) | `network_detection_response` | Suricata (VM 106) + Zeek (pending) | **PARTIAL** (Suricata live; Zeek pending) |
 | 7 | Threat Intelligence & Enrichment | `threat_intelligence` | MISP (pending) + enrichment workers | **PLANNED** |
@@ -30,46 +30,37 @@ Created: 2026-07-31 · **Phase 3 Cloud & Identity (ITDR) — COMPLETE**
 
 ## Phase tracker
 
-### Phase 1 — Continuous Compliance & Hardening (CaaS) — COMPLETE (2026-07-31)
+### Phase 1 — Continuous Compliance (CaaS) — COMPLETE
+### Phase 2 — External Attack Surface (EASM) — COMPLETE
+### Phase 3 — Cloud & Identity (ITDR) — COMPLETE
 
-SCA sync, customer `/compliance`, catalog Card 5 ACTIVE binding.
-
-### Phase 2 — External Attack Surface Management (EASM) — COMPLETE (2026-07-31)
-
-Perimeter discovery, customer `/easm`, catalog Card 9 ACTIVE binding.
-
-### Phase 3 — Cloud & Identity Threat Protection (ITDR) — COMPLETE (2026-07-31)
+### Phase 4 — Vulnerability Management (VMaaS) — COMPLETE (2026-07-31)
 
 **Delivered:**
-- Schema: `postgres/init/024_cloud_itdr_identity.sql` — `tenant_cloud_identity_configs`, `tenant_cloud_identity_events`, `tenant_entitlements.cloud_identity_protection_enabled`
-- Service: `backend-api/app/services/itdr_service.py` — connect M365/Entra domain + identity-rule analysis adapter (impossible travel, MFA bypass, rogue admin, external forwarding, suspicious login). Customer label: **MSSP Cloud Identity Protection Engine**. Live Graph OAuth can replace the analysis adapter later without API changes.
+- Schema: `postgres/init/025_vulnerability_management_vmaas.sql` — `tenant_vulnerability_scans`, `tenant_vulnerability_findings`
+- Service: `backend-api/app/services/vmaas_service.py` — imports live `vulnerabilities` rows when present; otherwise analysis-adapter samples. Customer label: **MSSP Internal Vulnerability Scanner**. Existing `/integrations/vuln/*` ingest untouched.
 - APIs:
-  - `GET /customer/itdr/{short_code}/summary`
-  - `GET /customer/itdr/{short_code}/events`
-  - `GET /customer/itdr/{short_code}/configs`
-  - `POST /customer/itdr/{short_code}/connect`
-  - `POST /admin/itdr/{tenant_ref}/sync`
-  - `GET /admin/itdr/summary`
-- Customer UI: `/itdr` — posture gauge, KPI cards, events + remediation, Connect Microsoft 365 modal
-- Catalog Card 10 → `ACTIVE` when identity tenant connected / entitlement enabled
-- Customer APIs omit `source_ip` and `raw_details`
-- Phase 1 SCA + Phase 2 EASM paths untouched
+  - `GET /customer/vmaas/{short_code}/summary`
+  - `GET /customer/vmaas/{short_code}/findings`
+  - `GET /customer/vmaas/{short_code}/scans`
+  - `POST /customer/vmaas/{short_code}/scan`
+  - `POST /admin/vmaas/{tenant_ref}/sync`
+  - `GET /admin/vmaas/summary`
+- Customer UI: `/vulnerabilities` (+ `/vulnerability`) — posture gauge, KPI cards, CVE table + remediation, Schedule Internal Scan modal; upgrade form retained when not entitled
+- Catalog Card 4 → `ACTIVE` when VMaaS findings / entitlement present
+- Phases 1–3 regression: SCA / EASM / ITDR paths untouched
 
-### Phase 4+ (next)
+### Phase 5+ (next)
 
 | Phase | Service | Notes |
 |---|---|---|
-| 4 | NDR completion | Zeek metadata + customer-safe NDR summary |
-| 5 | Threat Intelligence | MISP IOC enrichment into alerts |
-| 6 | Endpoint Forensics & Deception | Velociraptor + canary tripwires |
-| Later | ITDR live Graph | OAuth app registration + real Entra audit/sign-in pull |
-| Later | EASM deep scan | Optional Amass/Nuclei template jobs on VM 109 |
+| 5 | NDR completion | Zeek metadata + customer-safe NDR summary |
+| 6 | Threat Intelligence | MISP IOC enrichment |
+| 7 | Endpoint Forensics & Deception | Velociraptor + canaries |
 
 ---
 
 ## Dependencies by phase
 
-- **Phase 1:** Wazuh Manager API; agent ↔ tenant mapping.
-- **Phase 2:** Outbound DNS/TLS/TCP to customer-approved public targets.
-- **Phase 3:** Customer-approved M365/Entra tenant domain registration; analysis adapter until Graph credentials are configured.
+- **Phase 4:** Prefer live findings from VM 109 sync into `vulnerabilities`; VMaaS tables are the customer dashboard projection. Queues `last_vuln_scan_at = NULL` so the existing scan-plan agent can pick up on-demand runs.
 - **Later phases:** Do not install new VMs/tools unless a named KB approves it.

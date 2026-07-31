@@ -578,6 +578,72 @@ export function getVulnerabilityServiceSummary(
   );
 }
 
+/** VMaaS — MSSP Internal Vulnerability Scanner (customer-safe). */
+export interface VmaasSummary {
+  tenant: { short_code: string; name: string };
+  critical_cves: number;
+  high_risk_vulnerabilities: number;
+  medium_count: number;
+  low_count: number;
+  open_findings: number;
+  unpatched_assets: number;
+  average_cvss_score: number;
+  posture_score: number;
+  top_vulnerable_hosts: { host: string; open_findings: number; high_critical: number }[];
+  has_data: boolean;
+  scanner_label?: string;
+  last_scan?: {
+    status?: string;
+    findings_count?: number;
+    risk_score?: number;
+    completed_at?: string | null;
+  } | null;
+}
+
+export interface VmaasFinding {
+  id: string;
+  asset_host: string;
+  cve_id?: string | null;
+  title: string;
+  cvss_score?: number | null;
+  severity: string;
+  vulnerable_package_or_port?: string | null;
+  description: string;
+  remediation: string;
+  status: string;
+}
+
+export function getVmaasSummary(shortCode: string): Promise<VmaasSummary> {
+  return request(`/customer/vmaas/${encodeURIComponent(shortCode)}/summary`);
+}
+
+export function getVmaasFindings(
+  shortCode: string,
+  opts?: { severity?: string; status?: string; cve_id?: string; page?: number; page_size?: number }
+): Promise<{
+  findings: VmaasFinding[];
+  pagination: { page: number; page_size: number; total_items: number; total_pages: number };
+}> {
+  const params = new URLSearchParams();
+  if (opts?.severity) params.set("severity", opts.severity);
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.cve_id) params.set("cve_id", opts.cve_id);
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/vmaas/${encodeURIComponent(shortCode)}/findings${q}`);
+}
+
+export function requestVmaasScan(
+  shortCode: string,
+  payload?: { target_range?: string }
+): Promise<{ scan_status: string; findings_count?: number; summary?: VmaasSummary }> {
+  return request(`/customer/vmaas/${encodeURIComponent(shortCode)}/scan`, {
+    method: "POST",
+    body: payload || {},
+  });
+}
+
 /** Continuous Compliance & Hardening (CaaS) — customer-safe. */
 export interface ComplianceFrameworkScore {
   score_percentage: number;
