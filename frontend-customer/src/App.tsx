@@ -21,6 +21,7 @@ import UsersPage from "./pages/UsersPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
+import CompliancePage from "./pages/CompliancePage";
 import ServicesPage from "./pages/ServicesPage";
 
 function RootRedirect() {
@@ -146,6 +147,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <VulnerabilitiesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/compliance"
+        element={
+          <ProtectedRoute>
+            <CompliancePage />
           </ProtectedRoute>
         }
       />

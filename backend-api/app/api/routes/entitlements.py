@@ -60,6 +60,7 @@ class EntitlementsOut(BaseModel):
     zeek_enabled: bool = False
     misp_enabled: bool = False
     velociraptor_enabled: bool = False
+    continuous_compliance_enabled: bool = False
     roadmap_notes: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -73,6 +74,7 @@ class CustomerEntitlementsPublic(BaseModel):
     incident_response: str = "included"
     vulnerability_management_enabled: bool = False
     vulnerability_scan_cadence: str = "monthly"
+    continuous_compliance_enabled: bool = False
     security_automation: str = "included"
     network_traffic_analysis_enabled: bool = False
     threat_intelligence_enabled: bool = False
@@ -90,6 +92,7 @@ class EntitlementsUpdate(BaseModel):
     zeek_enabled: Optional[bool] = None
     misp_enabled: Optional[bool] = None
     velociraptor_enabled: Optional[bool] = None
+    continuous_compliance_enabled: Optional[bool] = None
     roadmap_notes: Optional[str] = None
 
 
@@ -111,6 +114,7 @@ DEFAULTS = {
     "zeek_enabled": False,
     "misp_enabled": False,
     "velociraptor_enabled": False,
+    "continuous_compliance_enabled": False,
     "roadmap_notes": None,
 }
 
@@ -140,10 +144,11 @@ def upsert_tenant_entitlements(
         INSERT INTO tenant_entitlements (
             tenant_id, wazuh_siem, wazuh_retention_days, thehive_mode,
             greenbone_enabled, greenbone_cadence, shuffle_mode,
-            zeek_enabled, misp_enabled, velociraptor_enabled, roadmap_notes,
+            zeek_enabled, misp_enabled, velociraptor_enabled,
+            continuous_compliance_enabled, roadmap_notes,
             updated_by
         ) VALUES (
-            %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid
+            %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid
         )
         ON CONFLICT (tenant_id) DO UPDATE SET
             wazuh_siem = EXCLUDED.wazuh_siem,
@@ -155,6 +160,7 @@ def upsert_tenant_entitlements(
             zeek_enabled = EXCLUDED.zeek_enabled,
             misp_enabled = EXCLUDED.misp_enabled,
             velociraptor_enabled = EXCLUDED.velociraptor_enabled,
+            continuous_compliance_enabled = EXCLUDED.continuous_compliance_enabled,
             roadmap_notes = EXCLUDED.roadmap_notes,
             updated_by = EXCLUDED.updated_by,
             updated_at = now()
@@ -169,6 +175,7 @@ def upsert_tenant_entitlements(
             COALESCE(zeek_enabled, FALSE) AS zeek_enabled,
             COALESCE(misp_enabled, FALSE) AS misp_enabled,
             COALESCE(velociraptor_enabled, FALSE) AS velociraptor_enabled,
+            COALESCE(continuous_compliance_enabled, FALSE) AS continuous_compliance_enabled,
             roadmap_notes,
             updated_at::text;
         """,
@@ -183,6 +190,7 @@ def upsert_tenant_entitlements(
             merged["zeek_enabled"],
             merged["misp_enabled"],
             merged["velociraptor_enabled"],
+            merged["continuous_compliance_enabled"],
             merged.get("roadmap_notes"),
             actor_user_id,
         ),
@@ -194,20 +202,25 @@ def _fetch_entitlements(tenant_id: UUID) -> Optional[Dict[str, Any]]:
     return fetch_one(
         """
         SELECT
-            tenant_id::text,
-            wazuh_siem,
-            wazuh_retention_days,
-            thehive_mode,
-            greenbone_enabled,
-            greenbone_cadence,
-            shuffle_mode,
-            COALESCE(zeek_enabled, FALSE) AS zeek_enabled,
-            COALESCE(misp_enabled, FALSE) AS misp_enabled,
-            COALESCE(velociraptor_enabled, FALSE) AS velociraptor_enabled,
-            roadmap_notes,
-            updated_at::text
-        FROM tenant_entitlements
-        WHERE tenant_id = %s;
+            e.tenant_id::text,
+            e.wazuh_siem,
+            e.wazuh_retention_days,
+            e.thehive_mode,
+            e.greenbone_enabled,
+            e.greenbone_cadence,
+            e.shuffle_mode,
+            COALESCE(e.zeek_enabled, FALSE) AS zeek_enabled,
+            COALESCE(e.misp_enabled, FALSE) AS misp_enabled,
+            COALESCE(e.velociraptor_enabled, FALSE) AS velociraptor_enabled,
+            COALESCE(e.continuous_compliance_enabled, FALSE) AS continuous_compliance_enabled,
+            EXISTS (
+                SELECT 1 FROM tenant_compliance_summaries s
+                WHERE s.tenant_id = e.tenant_id AND s.total_checks > 0
+            ) AS has_compliance_data,
+            e.roadmap_notes,
+            e.updated_at::text
+        FROM tenant_entitlements e
+        WHERE e.tenant_id = %s;
         """,
         (str(tenant_id),),
     )
@@ -289,8 +302,18 @@ def get_customer_entitlements(
     if row:
         base.update({k: row[k] for k in DEFAULTS if k in row})
         base["tenant_id"] = tenant["id"]
+        base["has_compliance_data"] = bool(row.get("has_compliance_data"))
         if row.get("updated_at") is not None:
             base["updated_at"] = row["updated_at"]
+    else:
+        has = fetch_one(
+            """
+            SELECT 1 AS ok FROM tenant_compliance_summaries
+            WHERE tenant_id = %s::uuid AND total_checks > 0 LIMIT 1;
+            """,
+            (tenant["id"],),
+        )
+        base["has_compliance_data"] = bool(has)
     return CustomerEntitlementsPublic(**entitlements_row_to_customer_public(base))
 
 

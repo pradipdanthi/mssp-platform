@@ -543,8 +543,9 @@ export interface CustomerEntitlements {
   log_monitoring_enabled: boolean;
   log_retention_days: number;
   incident_response: string;
-  vulnerability_management_enabled: boolean;
+    vulnerability_management_enabled: boolean;
   vulnerability_scan_cadence: string;
+  continuous_compliance_enabled?: boolean;
   security_automation: string;
   network_traffic_analysis_enabled?: boolean;
   threat_intelligence_enabled?: boolean;
@@ -573,6 +574,102 @@ export function getVulnerabilityServiceSummary(
   return request<VulnerabilityServiceSummary>(
     `/customer/vulnerabilities/${encodeURIComponent(shortCode)}/summary`
   );
+}
+
+/** Continuous Compliance & Hardening (CaaS) — customer-safe. */
+export interface ComplianceFrameworkScore {
+  score_percentage: number;
+  passed_checks: number;
+  failed_checks: number;
+  total_checks: number;
+}
+
+export interface ComplianceSummary {
+  tenant: { short_code: string; name: string };
+  overall_score_percentage: number;
+  passed_checks: number;
+  failed_checks: number;
+  total_checks: number;
+  agent_count: number;
+  policy_count: number;
+  framework_scores: Record<string, ComplianceFrameworkScore>;
+  last_evaluated_at?: string | null;
+  last_synced_at?: string | null;
+  sync_status?: string;
+  has_data: boolean;
+  message?: string | null;
+}
+
+export interface ComplianceEvaluation {
+  id: string;
+  endpoint_name: string;
+  policy_id: string;
+  title: string;
+  description?: string;
+  pass_count: number;
+  fail_count: number;
+  total_checks: number;
+  score: number;
+  compliance_frameworks: string[];
+  last_evaluated_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface ComplianceCheckItem {
+  id: string;
+  check_id: string;
+  rule_title: string;
+  status: string;
+  severity: string;
+  rationale: string;
+  remediation: string;
+  compliance_frameworks: string[];
+  policy_title?: string;
+  endpoint_name?: string;
+  updated_at?: string | null;
+}
+
+export function getComplianceSummary(
+  shortCode: string,
+  refresh = false
+): Promise<ComplianceSummary> {
+  const q = refresh ? "?refresh=true" : "";
+  return request<ComplianceSummary>(
+    `/customer/compliance/${encodeURIComponent(shortCode)}/summary${q}`
+  );
+}
+
+export function getComplianceEvaluations(
+  shortCode: string
+): Promise<{ tenant: { short_code: string; name: string }; evaluations: ComplianceEvaluation[] }> {
+  return request(
+    `/customer/compliance/${encodeURIComponent(shortCode)}/evaluations`
+  );
+}
+
+export function getComplianceChecks(
+  shortCode: string,
+  opts?: { status?: string; framework?: string; page?: number; page_size?: number }
+): Promise<{
+  checks: ComplianceCheckItem[];
+  pagination: {
+    page: number;
+    page_size: number;
+    total_items: number;
+    total_pages: number;
+  };
+}> {
+  const params = new URLSearchParams();
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.framework) params.set("framework", opts.framework);
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/compliance/${encodeURIComponent(shortCode)}/checks${q}`);
+}
+
+export function getComplianceReportUrl(shortCode: string): string {
+  return `/api/customer/compliance/${encodeURIComponent(shortCode)}/report`;
 }
 
 /** KB-076: customer service upgrade / interest request. */
@@ -640,5 +737,78 @@ export function listServiceUpgradeRequests(
 ): Promise<{ requests: ServiceUpgradeRequest[] }> {
   return request<{ requests: ServiceUpgradeRequest[] }>(
     `/customer/service-upgrade-requests/${encodeURIComponent(shortCode)}`
+  );
+}
+
+/** Service Catalog consultation / upgrade requests (email + ticket pipeline). */
+export type ConsultationServiceKey =
+  | "log_event_monitoring"
+  | "incident_response"
+  | "security_automation"
+  | "vulnerability_management"
+  | "continuous_compliance"
+  | "network_detection_response"
+  | "threat_intelligence"
+  | "endpoint_forensics_deception"
+  | "external_attack_surface"
+  | "cloud_identity_protection"
+  | "other";
+
+export type ConsultationRequestStatus =
+  | "PENDING_CONSULTATION"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "PROVISIONED"
+  | "DECLINED"
+  | "CLOSED";
+
+export interface ConsultationRequestPayload {
+  service_key: ConsultationServiceKey;
+  service_name: string;
+  pricing_tier?: string | null;
+  endpoint_count?: number | null;
+  m365_seat_count?: number | null;
+  target_domains?: string[];
+  scope_notes?: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+}
+
+export interface ConsultationRequest {
+  id: string;
+  tenant_id: string;
+  tenant_name?: string | null;
+  short_code?: string | null;
+  service_key: string;
+  service_name: string;
+  pricing_tier?: string | null;
+  endpoint_count?: number | null;
+  m365_seat_count?: number | null;
+  target_domains: string[];
+  scope_notes: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  status: ConsultationRequestStatus | string;
+  email_dispatched_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+  requested_by_name?: string | null;
+}
+
+export function createConsultationRequest(
+  shortCode: string,
+  payload: ConsultationRequestPayload
+): Promise<ConsultationRequest> {
+  return request<ConsultationRequest>(
+    `/customer/service-consultation-requests/${encodeURIComponent(shortCode)}`,
+    { method: "POST", body: payload }
+  );
+}
+
+export function listConsultationRequests(
+  shortCode: string
+): Promise<{ requests: ConsultationRequest[] }> {
+  return request<{ requests: ConsultationRequest[] }>(
+    `/customer/service-consultation-requests/${encodeURIComponent(shortCode)}`
   );
 }

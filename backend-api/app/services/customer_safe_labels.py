@@ -56,6 +56,10 @@ def entitlements_row_to_customer_public(row: Dict[str, Any]) -> Dict[str, Any]:
         "incident_response": customer_safe_incident_response_mode(row.get("thehive_mode")),
         "vulnerability_management_enabled": bool(row.get("greenbone_enabled")),
         "vulnerability_scan_cadence": row.get("greenbone_cadence") or "monthly",
+        "continuous_compliance_enabled": bool(
+            row.get("continuous_compliance_enabled")
+            or row.get("has_compliance_data")
+        ),
         "security_automation": customer_safe_automation_mode(row.get("shuffle_mode")),
         "network_traffic_analysis_enabled": bool(row.get("zeek_enabled")),
         "threat_intelligence_enabled": bool(row.get("misp_enabled")),

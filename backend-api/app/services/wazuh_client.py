@@ -277,6 +277,62 @@ def list_agents_in_group(group_id: str, *, limit: int = 500) -> list[Dict[str, A
     return out
 
 
+def list_sca_policies(agent_id: str, *, limit: int = 100) -> list[Dict[str, Any]]:
+    """Return SCA policy summaries for one agent (empty list if none / agent unknown)."""
+    aid = (agent_id or "").strip()
+    if not aid or aid == "000":
+        return []
+    try:
+        token = authenticate()
+        qlimit = max(1, min(int(limit), 500))
+        listed = _request(
+            "GET",
+            f"/sca/{urllib.parse.quote(aid)}?limit={qlimit}",
+            token=token,
+        )
+        items = (listed.get("data") or {}).get("affected_items") or []
+        return [item for item in items if isinstance(item, dict)]
+    except WazuhClientError:
+        return []
+
+
+def list_sca_checks(
+    agent_id: str,
+    policy_id: str,
+    *,
+    result: Optional[str] = None,
+    limit: int = 500,
+    offset: int = 0,
+) -> tuple[list[Dict[str, Any]], int]:
+    """
+    Return SCA checks for an agent/policy.
+
+    ``result`` may be ``passed``, ``failed``, or None (all).
+    Returns (items, total_count). On API errors returns ([], 0).
+    """
+    aid = (agent_id or "").strip()
+    pid = (policy_id or "").strip()
+    if not aid or aid == "000" or not pid:
+        return [], 0
+    try:
+        token = authenticate()
+        qlimit = max(1, min(int(limit), 1000))
+        qoffset = max(0, int(offset))
+        path = (
+            f"/sca/{urllib.parse.quote(aid)}/checks/{urllib.parse.quote(pid)}"
+            f"?limit={qlimit}&offset={qoffset}"
+        )
+        if result:
+            path += f"&result={urllib.parse.quote(str(result).strip().lower())}"
+        listed = _request("GET", path, token=token)
+        data = listed.get("data") or {}
+        items = data.get("affected_items") or []
+        total = int(data.get("total_affected_items") or len(items) or 0)
+        return [item for item in items if isinstance(item, dict)], total
+    except WazuhClientError:
+        return [], 0
+
+
 def run_active_response(
     *,
     agent_id: str,
