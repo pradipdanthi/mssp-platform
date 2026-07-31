@@ -720,6 +720,84 @@ export function getNdrSensors(shortCode: string): Promise<{ sensors: NdrSensor[]
   return request(`/customer/ndr/${encodeURIComponent(shortCode)}/sensors`);
 }
 
+/** Threat Intelligence & Enrichment — customer-safe. */
+export interface ThreatIntelSummary {
+  tenant: { short_code: string; name: string };
+  matched_threat_indicators: number;
+  high_confidence_malicious_iocs: number;
+  malicious_count?: number;
+  suspicious_count?: number;
+  high_risk_actor_detections?: number;
+  mitre_attack_coverage_count: number;
+  mitre_tactics?: string[];
+  mitre_techniques?: string[];
+  active_campaign_advisories: number;
+  has_data: boolean;
+  engine_label?: string;
+}
+
+export interface ThreatIntelIoc {
+  id: string;
+  ioc_value: string;
+  ioc_type: string;
+  threat_actor: string;
+  confidence_score: number;
+  reputation_status: string;
+  mitre_tactics: string[];
+  mitre_techniques: string[];
+  summary: string;
+  recommended_action: string;
+  related_alert_count?: number;
+  last_seen_in_tenant?: string;
+}
+
+export interface ThreatIntelCampaign {
+  id: string;
+  campaign_name: string;
+  target_industry: string;
+  severity: string;
+  summary: string;
+  recommended_defenses: string;
+  threat_actor?: string | null;
+  mitre_techniques: string[];
+  published_at?: string;
+}
+
+export function getThreatIntelSummary(shortCode: string): Promise<ThreatIntelSummary> {
+  return request(`/customer/threat-intel/${encodeURIComponent(shortCode)}/summary`);
+}
+
+export function getThreatIntelIocs(
+  shortCode: string,
+  opts?: {
+    ioc_type?: string;
+    reputation_status?: string;
+    mitre_tactic?: string;
+    min_confidence?: number;
+    page?: number;
+    page_size?: number;
+  }
+): Promise<{
+  iocs: ThreatIntelIoc[];
+  pagination: { page: number; page_size: number; total_items: number; total_pages: number };
+}> {
+  const params = new URLSearchParams();
+  if (opts?.ioc_type) params.set("ioc_type", opts.ioc_type);
+  if (opts?.reputation_status) params.set("reputation_status", opts.reputation_status);
+  if (opts?.mitre_tactic) params.set("mitre_tactic", opts.mitre_tactic);
+  if (opts?.min_confidence != null) params.set("min_confidence", String(opts.min_confidence));
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/threat-intel/${encodeURIComponent(shortCode)}/iocs${q}`);
+}
+
+export function getThreatIntelCampaigns(
+  shortCode: string
+): Promise<{ campaigns: ThreatIntelCampaign[] }> {
+  return request(`/customer/threat-intel/${encodeURIComponent(shortCode)}/campaigns`);
+}
+
 /** Continuous Compliance & Hardening (CaaS) — customer-safe. */
 export interface ComplianceFrameworkScore {
   score_percentage: number;

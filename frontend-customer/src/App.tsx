@@ -25,6 +25,7 @@ import CompliancePage from "./pages/CompliancePage";
 import EasmPage from "./pages/EasmPage";
 import ItdrPage from "./pages/ItdrPage";
 import NdrPage from "./pages/NdrPage";
+import ThreatIntelPage from "./pages/ThreatIntelPage";
 import ServicesPage from "./pages/ServicesPage";
 
 function RootRedirect() {
@@ -198,6 +199,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <NdrPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/threat-intel"
+        element={
+          <ProtectedRoute>
+            <ThreatIntelPage />
           </ProtectedRoute>
         }
       />

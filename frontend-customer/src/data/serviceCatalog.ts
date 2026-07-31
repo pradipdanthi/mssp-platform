@@ -177,6 +177,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
       "Early-warning alerts when active campaigns target your vertical",
       "Real-time IP and domain reputation scoring",
     ],
+    learnMorePath: "/threat-intel",
     requestable: true,
     scopeFields: ["notes"],
   },
