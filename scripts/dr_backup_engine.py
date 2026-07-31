@@ -490,6 +490,8 @@ def _dir_size(path: Path) -> int:
 
 def stream_remote_capture(staging: Path, node: Dict[str, Any]) -> Dict[str, Any]:
     """SSH tar of capture_paths streamed into staging on backup root (no remote temp archive)."""
+    import shlex
+
     ip = node["ip"]
     result: Dict[str, Any] = {
         "vm_id": node.get("vm_id"),
@@ -513,15 +515,15 @@ def stream_remote_capture(staging: Path, node: Dict[str, Any]) -> Dict[str, Any]
         result["status"] = "no_paths"
         return result
 
-    # Remote: tar only existing paths to stdout
+    # Build a safe remote bash snippet (no nested quote breakage).
+    path_checks = " ".join(
+        f"[ -e {shlex.quote(p)} ] && set -- \"$@\" {shlex.quote(p)};" for p in paths
+    )
     remote_script = (
-        "paths=''; "
-        + " ".join(paths)
-        + "'; "
-        "exist=''; "
-        "for p in $paths; do [ -e \"$p\" ] && exist=\"$exist $p\"; done; "
-        "if [ -z \"$exist\" ]; then echo NO_PATHS >&2; exit 2; fi; "
-        "tar -czf - $exist"
+        "set --; "
+        + path_checks
+        + ' if [ "$#" -eq 0 ]; then echo NO_PATHS >&2; exit 2; fi; '
+        "tar -czf - \"$@\""
     )
     out_file = staging / "remote" / f"vm{node['vm_id']}_{node['hostname']}.tar.gz"
     out_file.parent.mkdir(parents=True, exist_ok=True)
@@ -539,6 +541,8 @@ def stream_remote_capture(staging: Path, node: Dict[str, Any]) -> Dict[str, Any]
                 "-o",
                 "ConnectTimeout=8",
                 f"{user}@{ip}",
+                "bash",
+                "-lc",
                 remote_script,
             ],
             stdout=out,

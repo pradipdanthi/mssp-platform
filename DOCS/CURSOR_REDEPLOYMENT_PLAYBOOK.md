@@ -271,9 +271,10 @@ On VM 100, with USB shared from `192.168.0.192`:
 cd /opt/mssp-control
 # One-time: Windows user + password file (gitignored)
 # echo -n 'WINDOWSPASS' > .secrets/dr_smb_password && chmod 600 .secrets/dr_smb_password
-export MSSP_DR_SMB_USER='<windows-user>'
+# Windows account Name is "User" (Full Name may show as "Admin")
+export MSSP_DR_SMB_USER=User
 export MSSP_DR_SMB_PASSWORD_FILE=/opt/mssp-control/.secrets/dr_smb_password
-python3 scripts/dr_backup_engine.py --mount-smb
+python3 scripts/dr_backup_engine.py --smb-push
 ```
 
 If the share is already mounted at `/mnt/mssp-dr-usb/MSSP_Full_Backup`:
