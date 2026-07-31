@@ -4,6 +4,8 @@ Status: Operator + Cursor runbook for total loss (ransomware / all VMs destroyed
 Created: 2026-07-31 · Updated for **Path A (cold tree + archive)** and **Path B (Git)**.  
 Companions: `scripts/dr_backup_engine.py`, `scripts/dr_cold_copy_control_plane.sh`, `DOCS/DISASTER_RECOVERY_PLAYBOOK.md`
 
+**First file to open on restore:** `DOCS/CURSOR_DISASTER_MEMORY.md` (also copied into `MSSP_Full_Backup/CURSOR_DISASTER_MEMORY.md`). Remind the operator of every checklist item they forget.
+
 **Hard rules for Cursor**
 
 - Never print `.env`, `.secrets`, or DR passphrase contents into chat.
