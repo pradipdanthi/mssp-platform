@@ -237,6 +237,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
       "Automated flagging of dangerous inbox auto-forwarding rules",
       "Centralized dashboard unifying cloud identity events with on-premise alerts",
     ],
+    learnMorePath: "/itdr",
     requestable: true,
     scopeFields: ["m365_seats", "notes"],
   },
@@ -266,6 +267,8 @@ export function resolveServiceStatus(
       return ent?.continuous_compliance_enabled ? "active" : "available";
     case "external_attack_surface":
       return ent?.external_attack_surface_enabled ? "active" : "available";
+    case "cloud_identity_protection":
+      return ent?.cloud_identity_protection_enabled ? "active" : "available";
     case "network_detection_response":
       return ent?.network_traffic_analysis_enabled ? "active" : "available";
     case "threat_intelligence":

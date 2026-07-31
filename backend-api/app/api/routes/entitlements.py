@@ -62,6 +62,7 @@ class EntitlementsOut(BaseModel):
     velociraptor_enabled: bool = False
     continuous_compliance_enabled: bool = False
     external_attack_surface_enabled: bool = False
+    cloud_identity_protection_enabled: bool = False
     roadmap_notes: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -77,6 +78,7 @@ class CustomerEntitlementsPublic(BaseModel):
     vulnerability_scan_cadence: str = "monthly"
     continuous_compliance_enabled: bool = False
     external_attack_surface_enabled: bool = False
+    cloud_identity_protection_enabled: bool = False
     security_automation: str = "included"
     network_traffic_analysis_enabled: bool = False
     threat_intelligence_enabled: bool = False
@@ -96,6 +98,7 @@ class EntitlementsUpdate(BaseModel):
     velociraptor_enabled: Optional[bool] = None
     continuous_compliance_enabled: Optional[bool] = None
     external_attack_surface_enabled: Optional[bool] = None
+    cloud_identity_protection_enabled: Optional[bool] = None
     roadmap_notes: Optional[str] = None
 
 
@@ -119,6 +122,7 @@ DEFAULTS = {
     "velociraptor_enabled": False,
     "continuous_compliance_enabled": False,
     "external_attack_surface_enabled": False,
+    "cloud_identity_protection_enabled": False,
     "roadmap_notes": None,
 }
 
@@ -150,10 +154,11 @@ def upsert_tenant_entitlements(
             greenbone_enabled, greenbone_cadence, shuffle_mode,
             zeek_enabled, misp_enabled, velociraptor_enabled,
             continuous_compliance_enabled, external_attack_surface_enabled,
+            cloud_identity_protection_enabled,
             roadmap_notes,
             updated_by
         ) VALUES (
-            %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid
+            %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::uuid
         )
         ON CONFLICT (tenant_id) DO UPDATE SET
             wazuh_siem = EXCLUDED.wazuh_siem,
@@ -167,6 +172,7 @@ def upsert_tenant_entitlements(
             velociraptor_enabled = EXCLUDED.velociraptor_enabled,
             continuous_compliance_enabled = EXCLUDED.continuous_compliance_enabled,
             external_attack_surface_enabled = EXCLUDED.external_attack_surface_enabled,
+            cloud_identity_protection_enabled = EXCLUDED.cloud_identity_protection_enabled,
             roadmap_notes = EXCLUDED.roadmap_notes,
             updated_by = EXCLUDED.updated_by,
             updated_at = now()
@@ -183,6 +189,7 @@ def upsert_tenant_entitlements(
             COALESCE(velociraptor_enabled, FALSE) AS velociraptor_enabled,
             COALESCE(continuous_compliance_enabled, FALSE) AS continuous_compliance_enabled,
             COALESCE(external_attack_surface_enabled, FALSE) AS external_attack_surface_enabled,
+            COALESCE(cloud_identity_protection_enabled, FALSE) AS cloud_identity_protection_enabled,
             roadmap_notes,
             updated_at::text;
         """,
@@ -199,6 +206,7 @@ def upsert_tenant_entitlements(
             merged["velociraptor_enabled"],
             merged["continuous_compliance_enabled"],
             merged["external_attack_surface_enabled"],
+            merged["cloud_identity_protection_enabled"],
             merged.get("roadmap_notes"),
             actor_user_id,
         ),
@@ -222,6 +230,7 @@ def _fetch_entitlements(tenant_id: UUID) -> Optional[Dict[str, Any]]:
             COALESCE(e.velociraptor_enabled, FALSE) AS velociraptor_enabled,
             COALESCE(e.continuous_compliance_enabled, FALSE) AS continuous_compliance_enabled,
             COALESCE(e.external_attack_surface_enabled, FALSE) AS external_attack_surface_enabled,
+            COALESCE(e.cloud_identity_protection_enabled, FALSE) AS cloud_identity_protection_enabled,
             EXISTS (
                 SELECT 1 FROM tenant_compliance_summaries s
                 WHERE s.tenant_id = e.tenant_id AND s.total_checks > 0
@@ -230,6 +239,10 @@ def _fetch_entitlements(tenant_id: UUID) -> Optional[Dict[str, Any]]:
                 SELECT 1 FROM tenant_easm_assets ea
                 WHERE ea.tenant_id = e.tenant_id AND ea.status = 'ACTIVE'
             ) AS has_easm_data,
+            EXISTS (
+                SELECT 1 FROM tenant_cloud_identity_configs ic
+                WHERE ic.tenant_id = e.tenant_id AND ic.status = 'CONNECTED'
+            ) AS has_itdr_data,
             e.roadmap_notes,
             e.updated_at::text
         FROM tenant_entitlements e
@@ -317,6 +330,7 @@ def get_customer_entitlements(
         base["tenant_id"] = tenant["id"]
         base["has_compliance_data"] = bool(row.get("has_compliance_data"))
         base["has_easm_data"] = bool(row.get("has_easm_data"))
+        base["has_itdr_data"] = bool(row.get("has_itdr_data"))
         if row.get("updated_at") is not None:
             base["updated_at"] = row["updated_at"]
     else:
@@ -334,8 +348,16 @@ def get_customer_entitlements(
             """,
             (tenant["id"],),
         )
+        has_itdr = fetch_one(
+            """
+            SELECT 1 AS ok FROM tenant_cloud_identity_configs
+            WHERE tenant_id = %s::uuid AND status = 'CONNECTED' LIMIT 1;
+            """,
+            (tenant["id"],),
+        )
         base["has_compliance_data"] = bool(has)
         base["has_easm_data"] = bool(has_easm)
+        base["has_itdr_data"] = bool(has_itdr)
     return CustomerEntitlementsPublic(**entitlements_row_to_customer_public(base))
 
 

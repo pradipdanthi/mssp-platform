@@ -41,6 +41,7 @@ from app.api.routes.entitlements import router as entitlements_router
 from app.api.routes.service_catalog import router as service_catalog_router
 from app.api.routes.compliance import router as compliance_router
 from app.api.routes.easm import router as easm_router
+from app.api.routes.itdr import router as itdr_router
 from app.api.routes.vuln_sync import router as vuln_sync_router
 from app.api.routes.vulnerability_management import router as vulnerability_management_router
 from app.core.error_handlers import validation_exception_handler
@@ -117,6 +118,7 @@ app.include_router(entitlements_router)
 app.include_router(service_catalog_router)
 app.include_router(compliance_router)
 app.include_router(easm_router)
+app.include_router(itdr_router)
 app.include_router(edr_router)
 
 # KB-084: endpoint onboarding config packages (Sysmon/Osquery templates).

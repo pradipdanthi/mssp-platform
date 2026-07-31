@@ -1,7 +1,7 @@
 # Service Engine Development Roadmap
 
 Status: Living tracker for backend engines behind the 10-card Service Catalog.  
-Created: 2026-07-31 · **Phase 2 External Attack Surface (EASM) — COMPLETE**
+Created: 2026-07-31 · **Phase 3 Cloud & Identity (ITDR) — COMPLETE**
 
 **Conventions (this repo):**
 - Customer APIs: `/customer/{feature}/{short_code}/...` (nginx strips `/api` prefix).
@@ -24,7 +24,7 @@ Created: 2026-07-31 · **Phase 2 External Attack Surface (EASM) — COMPLETE**
 | 7 | Threat Intelligence & Enrichment | `threat_intelligence` | MISP (pending) + enrichment workers | **PLANNED** |
 | 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | Velociraptor + Canarytokens (pending) | **PLANNED** |
 | 9 | External Attack Surface (EASM) | `external_attack_surface` | MSSP External Surface Scanner (+ future Amass/Nuclei on VM 109) | **PHASE 2 — COMPLETE** |
-| 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | M365 / Entra ID connectors (pending) | **PLANNED** |
+| 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | MSSP Cloud Identity Protection Engine (M365/Entra) | **PHASE 3 — COMPLETE** |
 
 ---
 
@@ -32,38 +32,44 @@ Created: 2026-07-31 · **Phase 2 External Attack Surface (EASM) — COMPLETE**
 
 ### Phase 1 — Continuous Compliance & Hardening (CaaS) — COMPLETE (2026-07-31)
 
-**Delivered:** SCA sync, customer `/compliance`, catalog Card 5 ACTIVE binding. See prior section history in git.
+SCA sync, customer `/compliance`, catalog Card 5 ACTIVE binding.
 
 ### Phase 2 — External Attack Surface Management (EASM) — COMPLETE (2026-07-31)
 
-**Delivered:**
-- Schema: `postgres/init/023_easm_attack_surface.sql` — `tenant_easm_assets`, `tenant_easm_scans`, `tenant_easm_findings`, `tenant_entitlements.external_attack_surface_enabled`
-- Service: `backend-api/app/services/easm_service.py` — domain registration + lightweight perimeter discovery (DNS common-name enum, TLS, open ports, HTTP hardening). Customer label: **MSSP External Surface Scanner**. No Amass/Nuclei binaries on the control plane (VM 109 deep templates remain future extension).
-- APIs:
-  - `GET /customer/easm/{short_code}/summary`
-  - `GET /customer/easm/{short_code}/assets`
-  - `GET /customer/easm/{short_code}/findings`
-  - `POST /customer/easm/{short_code}/domains`
-  - `POST /admin/easm/{tenant_ref}/scan` (UUID or short_code)
-  - `GET /admin/easm/summary`
-- Customer UI: `/easm` — KPI cards, asset table, findings + remediation, Register New Domain modal
-- Catalog Card 9 → `ACTIVE` when domains registered / entitlement enabled
-- Phase 1 SCA paths untouched
+Perimeter discovery, customer `/easm`, catalog Card 9 ACTIVE binding.
 
-### Phase 3+ (next)
+### Phase 3 — Cloud & Identity Threat Protection (ITDR) — COMPLETE (2026-07-31)
+
+**Delivered:**
+- Schema: `postgres/init/024_cloud_itdr_identity.sql` — `tenant_cloud_identity_configs`, `tenant_cloud_identity_events`, `tenant_entitlements.cloud_identity_protection_enabled`
+- Service: `backend-api/app/services/itdr_service.py` — connect M365/Entra domain + identity-rule analysis adapter (impossible travel, MFA bypass, rogue admin, external forwarding, suspicious login). Customer label: **MSSP Cloud Identity Protection Engine**. Live Graph OAuth can replace the analysis adapter later without API changes.
+- APIs:
+  - `GET /customer/itdr/{short_code}/summary`
+  - `GET /customer/itdr/{short_code}/events`
+  - `GET /customer/itdr/{short_code}/configs`
+  - `POST /customer/itdr/{short_code}/connect`
+  - `POST /admin/itdr/{tenant_ref}/sync`
+  - `GET /admin/itdr/summary`
+- Customer UI: `/itdr` — posture gauge, KPI cards, events + remediation, Connect Microsoft 365 modal
+- Catalog Card 10 → `ACTIVE` when identity tenant connected / entitlement enabled
+- Customer APIs omit `source_ip` and `raw_details`
+- Phase 1 SCA + Phase 2 EASM paths untouched
+
+### Phase 4+ (next)
 
 | Phase | Service | Notes |
 |---|---|---|
-| 3 | NDR completion | Zeek metadata + customer-safe NDR summary |
-| 4 | Threat Intelligence | MISP IOC enrichment into alerts |
-| 5 | Endpoint Forensics & Deception | Velociraptor + canary tripwires |
-| 6 | ITDR | M365/Entra connectors + Impossible Travel rules |
-| Later | EASM deep scan | Optional Amass/Nuclei template jobs on VM 109 pushing into EASM tables |
+| 4 | NDR completion | Zeek metadata + customer-safe NDR summary |
+| 5 | Threat Intelligence | MISP IOC enrichment into alerts |
+| 6 | Endpoint Forensics & Deception | Velociraptor + canary tripwires |
+| Later | ITDR live Graph | OAuth app registration + real Entra audit/sign-in pull |
+| Later | EASM deep scan | Optional Amass/Nuclei template jobs on VM 109 |
 
 ---
 
 ## Dependencies by phase
 
 - **Phase 1:** Wazuh Manager API; agent ↔ tenant mapping.
-- **Phase 2:** Outbound DNS/TLS/TCP from control plane to customer-approved public targets only; no new VM installs.
+- **Phase 2:** Outbound DNS/TLS/TCP to customer-approved public targets.
+- **Phase 3:** Customer-approved M365/Entra tenant domain registration; analysis adapter until Graph credentials are configured.
 - **Later phases:** Do not install new VMs/tools unless a named KB approves it.

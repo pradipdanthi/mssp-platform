@@ -260,6 +260,8 @@ export function resolveServiceStatus(
       return ent?.continuous_compliance_enabled ? "active" : "available";
     case "external_attack_surface":
       return ent?.external_attack_surface_enabled ? "active" : "available";
+    case "cloud_identity_protection":
+      return ent?.cloud_identity_protection_enabled ? "active" : "available";
     case "network_detection_response":
       return ent?.zeek_enabled ? "active" : "available";
     case "threat_intelligence":

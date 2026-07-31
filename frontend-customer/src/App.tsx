@@ -23,6 +23,7 @@ import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
 import CompliancePage from "./pages/CompliancePage";
 import EasmPage from "./pages/EasmPage";
+import ItdrPage from "./pages/ItdrPage";
 import ServicesPage from "./pages/ServicesPage";
 
 function RootRedirect() {
@@ -164,6 +165,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <EasmPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/itdr"
+        element={
+          <ProtectedRoute>
+            <ItdrPage />
           </ProtectedRoute>
         }
       />

@@ -547,6 +547,7 @@ export interface CustomerEntitlements {
   vulnerability_scan_cadence: string;
   continuous_compliance_enabled?: boolean;
   external_attack_surface_enabled?: boolean;
+  cloud_identity_protection_enabled?: boolean;
   security_automation: string;
   network_traffic_analysis_enabled?: boolean;
   threat_intelligence_enabled?: boolean;
@@ -744,6 +745,88 @@ export function registerEasmDomain(
   payload: { domain_or_ip: string; notes?: string; start_scan?: boolean }
 ): Promise<{ asset: EasmAsset; scan?: unknown }> {
   return request(`/customer/easm/${encodeURIComponent(shortCode)}/domains`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+/** Cloud & Identity Threat Protection (ITDR) — customer-safe. */
+export interface ItdrSummary {
+  tenant: { short_code: string; name: string };
+  monitored_cloud_seats: number;
+  connected_providers: number;
+  identity_threat_alerts: number;
+  suspicious_logins: number;
+  risky_mail_rules: number;
+  impossible_travel?: number;
+  mfa_bypass_attempts?: number;
+  rogue_admin_assignments?: number;
+  high_critical_findings: number;
+  identity_posture_score: number;
+  last_synced_at?: string | null;
+  has_data: boolean;
+  engine_label?: string;
+}
+
+export interface ItdrEvent {
+  id: string;
+  user_principal_name: string;
+  event_type: string;
+  severity: string;
+  location_country?: string | null;
+  location_city?: string | null;
+  title: string;
+  summary: string;
+  remediation: string;
+  detected_at?: string;
+}
+
+export interface ItdrConfig {
+  id: string;
+  provider_label: string;
+  tenant_domain: string;
+  display_name?: string | null;
+  status: string;
+  monitored_seat_count: number;
+  last_synced_at?: string | null;
+}
+
+export function getItdrSummary(shortCode: string): Promise<ItdrSummary> {
+  return request(`/customer/itdr/${encodeURIComponent(shortCode)}/summary`);
+}
+
+export function getItdrEvents(
+  shortCode: string,
+  opts?: { severity?: string; event_type?: string; user?: string; page?: number; page_size?: number }
+): Promise<{
+  events: ItdrEvent[];
+  pagination: { page: number; page_size: number; total_items: number; total_pages: number };
+}> {
+  const params = new URLSearchParams();
+  if (opts?.severity) params.set("severity", opts.severity);
+  if (opts?.event_type) params.set("event_type", opts.event_type);
+  if (opts?.user) params.set("user", opts.user);
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/itdr/${encodeURIComponent(shortCode)}/events${q}`);
+}
+
+export function getItdrConfigs(shortCode: string): Promise<{ configs: ItdrConfig[] }> {
+  return request(`/customer/itdr/${encodeURIComponent(shortCode)}/configs`);
+}
+
+export function connectItdrProvider(
+  shortCode: string,
+  payload: {
+    provider?: string;
+    tenant_domain: string;
+    display_name?: string;
+    monitored_seat_count?: number;
+    run_sync?: boolean;
+  }
+): Promise<{ config: { id: string; tenant_domain: string; status: string }; sync?: unknown }> {
+  return request(`/customer/itdr/${encodeURIComponent(shortCode)}/connect`, {
     method: "POST",
     body: payload,
   });

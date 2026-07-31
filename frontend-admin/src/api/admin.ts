@@ -1161,6 +1161,7 @@ export interface TenantEntitlements {
   velociraptor_enabled: boolean;
   continuous_compliance_enabled?: boolean;
   external_attack_surface_enabled?: boolean;
+  cloud_identity_protection_enabled?: boolean;
   roadmap_notes: string | null;
   updated_at: string | null;
 }
