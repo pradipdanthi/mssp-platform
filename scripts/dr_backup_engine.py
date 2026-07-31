@@ -256,6 +256,78 @@ def try_mount_smb(mount_point: Path) -> Path:
     return mount_point
 
 
+def _smb_connect() -> Tuple[str, str]:
+    """Configure smbprotocol client from env; return (host, share). Never logs password."""
+    try:
+        import smbclient  # type: ignore
+    except ImportError as exc:
+        raise SystemExit(
+            "Python smbprotocol not installed. On VM 100 run:\n"
+            "  pip3 install --user --break-system-packages smbprotocol"
+        ) from exc
+
+    host = (os.environ.get("MSSP_DR_SMB_HOST") or DEFAULT_SMB_HOST).strip()
+    share = (os.environ.get("MSSP_DR_SMB_SHARE") or DEFAULT_SMB_SHARE).strip()
+    user = (os.environ.get("MSSP_DR_SMB_USER") or "").strip()
+    pass_file = (os.environ.get("MSSP_DR_SMB_PASSWORD_FILE") or "").strip()
+    if not user or not pass_file:
+        raise SystemExit(
+            "SMB push requires MSSP_DR_SMB_USER and MSSP_DR_SMB_PASSWORD_FILE"
+        )
+    password = Path(pass_file).read_text(encoding="utf-8").strip("\r\n")
+    if not password:
+        raise SystemExit("SMB password file is empty.")
+    smbclient.reset_connection_cache()
+    smbclient.ClientConfig(username=user, password=password)
+    return host, share
+
+
+def smb_probe() -> None:
+    """Test Windows share login; exit non-zero on failure (no secrets printed)."""
+    import smbclient  # type: ignore
+
+    host, share = _smb_connect()
+    unc = fr"\\{host}\{share}"
+    try:
+        entries = list(smbclient.listdir(unc))
+    except Exception as exc:  # noqa: BLE001
+        raise SystemExit(
+            f"SMB login/share failed for {unc}: {type(exc).__name__}: {str(exc)[:240]}\n"
+            "On Windows 192.168.0.192:\n"
+            "  1) Share F:\\MSSP_Full_Backup as share name 'MSSP_Full_Backup' (Read/Write).\n"
+            "  2) Confirm password in .secrets/dr_smb_password matches that Windows user.\n"
+            "  3) If using built-in Admin: enable network share access for local admins\n"
+            "     (LocalAccountTokenFilterPolicy=1) OR create a normal local user for SMB.\n"
+            "  4) Network profile must be Private; File and Printer Sharing enabled.\n"
+        ) from exc
+    _log(f"SMB OK {unc} ({len(entries)} entries)")
+
+
+def smb_push_files(local_dir: Path, names: List[str]) -> None:
+    """Upload named files from local_dir into \\\\host\\share via smbprotocol."""
+    import smbclient  # type: ignore
+
+    host, share = _smb_connect()
+    remote_root = fr"\\{host}\{share}"
+    try:
+        smbclient.makedirs(remote_root, exist_ok=True)
+    except Exception:
+        pass
+    for name in names:
+        src = local_dir / name
+        if not src.is_file():
+            raise SystemExit(f"Missing local file to push: {src}")
+        dest = fr"{remote_root}\{name}"
+        _log(f"SMB upload {name} → {dest}")
+        with open(src, "rb") as rf, smbclient.open_file(dest, mode="wb") as wf:
+            while True:
+                chunk = rf.read(1024 * 1024)
+                if not chunk:
+                    break
+                wf.write(chunk)
+    _log("SMB upload complete")
+
+
 def load_passphrase(passphrase_file: Optional[str]) -> str:
     env = (os.environ.get("MSSP_DR_BACKUP_PASSPHRASE") or "").strip()
     if env:
@@ -625,7 +697,20 @@ def main() -> int:
     parser.add_argument(
         "--mount-smb",
         action="store_true",
-        help=f"Mount //{DEFAULT_SMB_HOST}/{DEFAULT_SMB_SHARE} before backup",
+        help=f"Mount //{DEFAULT_SMB_HOST}/{DEFAULT_SMB_SHARE} before backup (needs mount.cifs + sudo)",
+    )
+    parser.add_argument(
+        "--smb-push",
+        action="store_true",
+        help=(
+            f"After creating the archive locally, upload it to "
+            f"//{DEFAULT_SMB_HOST}/{DEFAULT_SMB_SHARE} via smbprotocol (no root required)"
+        ),
+    )
+    parser.add_argument(
+        "--smb-probe",
+        action="store_true",
+        help="Only test SMB login to the Windows USB share, then exit",
     )
     parser.add_argument("--passphrase-file", default=None, help="AES passphrase file path")
     parser.add_argument(
@@ -640,6 +725,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.smb_probe:
+        smb_probe()
+        return 0
+
     if args.mount_smb:
         backup_root = try_mount_smb(DEFAULT_MOUNT_POINT)
         # If share root is the backup folder itself
@@ -647,6 +736,13 @@ def main() -> int:
             nested = backup_root / "MSSP_Full_Backup"
             nested.mkdir(parents=True, exist_ok=True)
             backup_root = nested
+    elif args.smb_push:
+        # Build on local mirror, then push encrypted outputs to Windows USB share
+        backup_root = Path(
+            os.environ.get("MSSP_DR_BACKUP_ROOT")
+            or str(Path.home() / "MSSP_Full_Backup")
+        )
+        backup_root.mkdir(parents=True, exist_ok=True)
     else:
         backup_root = resolve_backup_root(args.backup_root)
 
@@ -696,10 +792,24 @@ def main() -> int:
         latest = backup_root / "LATEST_BACKUP.txt"
         latest.write_text(archive_path.name + "\n", encoding="utf-8")
 
+        if args.smb_push:
+            smb_probe()
+            smb_push_files(
+                backup_root,
+                [
+                    archive_path.name,
+                    f"{archive_path.name}.sha256",
+                    "infrastructure_manifest.json",
+                    "LATEST_BACKUP.txt",
+                ],
+            )
+
         _log("SUCCESS")
         _log(f"Encrypted archive: {archive_path}")
         _log(f"Checksum file:     {archive_path}.sha256")
         _log(f"Manifest:          {backup_root / 'infrastructure_manifest.json'}")
+        if args.smb_push:
+            _log(f"Also uploaded to //{DEFAULT_SMB_HOST}/{DEFAULT_SMB_SHARE}")
         return 0
     finally:
         # Always wipe passphrase from env copy references
