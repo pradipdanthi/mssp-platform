@@ -156,6 +156,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
       "Encrypted TLS certificate fingerprinting and DNS anomaly tracking",
       "East-west lateral movement detection across LAN traffic",
     ],
+    learnMorePath: "/ndr",
     requestable: true,
     scopeFields: ["endpoints", "notes"],
   },

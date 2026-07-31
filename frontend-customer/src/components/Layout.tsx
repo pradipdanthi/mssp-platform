@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: "/compliance", label: "Compliance" },
   { to: "/easm", label: "Attack Surface" },
   { to: "/itdr", label: "Cloud & Identity" },
+  { to: "/ndr", label: "Network Detection" },
   { to: "/recommendations", label: "Recommendations" },
   { to: "/reports", label: "Reports" },
   { to: "/notifications", label: "Notifications" },

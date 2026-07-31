@@ -1,7 +1,7 @@
 # Service Engine Development Roadmap
 
 Status: Living tracker for backend engines behind the 10-card Service Catalog.  
-Created: 2026-07-31 · **Phase 4 Vulnerability Management (VMaaS) — COMPLETE**
+Created: 2026-07-31 · **Phase 5 Network Detection & Response (NDR) — COMPLETE**
 
 **Conventions (this repo):**
 - Customer APIs: `/customer/{feature}/{short_code}/...` (nginx strips `/api` prefix).
@@ -18,49 +18,48 @@ Created: 2026-07-31 · **Phase 4 Vulnerability Management (VMaaS) — COMPLETE**
 | 1 | Log & Event Monitoring | `log_event_monitoring` | Wazuh Manager ingest → `security_alerts` | **LIVE** (core) |
 | 2 | Incident Response & Casework | `incident_response` | TheHive/Shuffle adapters → `incidents` | **LIVE** (core) |
 | 3 | Security Automation & Containment | `security_automation` | Wazuh Active Response / EDR isolate | **LIVE** (core) |
-| 4 | Vulnerability Management (VMaaS) | `vulnerability_management` | MSSP Internal Vulnerability Scanner (+ Nuclei/Vuls/Greenbone ingest on VM 109) | **PHASE 4 — COMPLETE** |
+| 4 | Vulnerability Management (VMaaS) | `vulnerability_management` | MSSP Internal Vulnerability Scanner (+ Nuclei/Vuls/Greenbone ingest) | **PHASE 4 — COMPLETE** |
 | 5 | Continuous Compliance & Hardening (CaaS) | `continuous_compliance` | Wazuh SCA policies/checks | **PHASE 1 — COMPLETE** |
-| 6 | Network Detection & Response (NDR) | `network_detection_response` | Suricata (VM 106) + Zeek (pending) | **PARTIAL** (Suricata live; Zeek pending) |
+| 6 | Network Detection & Response (NDR) | `network_detection_response` | MSSP Network Detection & Response Engine (Suricata + Zeek adapters) | **PHASE 5 — COMPLETE** |
 | 7 | Threat Intelligence & Enrichment | `threat_intelligence` | MISP (pending) + enrichment workers | **PLANNED** |
 | 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | Velociraptor + Canarytokens (pending) | **PLANNED** |
-| 9 | External Attack Surface (EASM) | `external_attack_surface` | MSSP External Surface Scanner (+ future Amass/Nuclei on VM 109) | **PHASE 2 — COMPLETE** |
-| 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | MSSP Cloud Identity Protection Engine (M365/Entra) | **PHASE 3 — COMPLETE** |
+| 9 | External Attack Surface (EASM) | `external_attack_surface` | MSSP External Surface Scanner | **PHASE 2 — COMPLETE** |
+| 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | MSSP Cloud Identity Protection Engine | **PHASE 3 — COMPLETE** |
 
 ---
 
 ## Phase tracker
 
-### Phase 1 — Continuous Compliance (CaaS) — COMPLETE
-### Phase 2 — External Attack Surface (EASM) — COMPLETE
-### Phase 3 — Cloud & Identity (ITDR) — COMPLETE
+### Phases 1–4 — COMPLETE
+CaaS, EASM, ITDR, VMaaS (see prior commits).
 
-### Phase 4 — Vulnerability Management (VMaaS) — COMPLETE (2026-07-31)
+### Phase 5 — Network Detection & Response (NDR) — COMPLETE (2026-07-31)
 
 **Delivered:**
-- Schema: `postgres/init/025_vulnerability_management_vmaas.sql` — `tenant_vulnerability_scans`, `tenant_vulnerability_findings`
-- Service: `backend-api/app/services/vmaas_service.py` — imports live `vulnerabilities` rows when present; otherwise analysis-adapter samples. Customer label: **MSSP Internal Vulnerability Scanner**. Existing `/integrations/vuln/*` ingest untouched.
+- Schema: `postgres/init/026_network_detection_response_ndr.sql` — `tenant_ndr_sensors`, `tenant_ndr_events`
+- Service: `backend-api/app/services/ndr_service.py` — imports network-tagged `security_alerts` when present; otherwise analysis-adapter samples (lateral movement, C2, DNS tunneling, TLS risk, port scan, exploit attempt). Customer label: **MSSP Network Detection & Response Engine**.
 - APIs:
-  - `GET /customer/vmaas/{short_code}/summary`
-  - `GET /customer/vmaas/{short_code}/findings`
-  - `GET /customer/vmaas/{short_code}/scans`
-  - `POST /customer/vmaas/{short_code}/scan`
-  - `POST /admin/vmaas/{tenant_ref}/sync`
-  - `GET /admin/vmaas/summary`
-- Customer UI: `/vulnerabilities` (+ `/vulnerability`) — posture gauge, KPI cards, CVE table + remediation, Schedule Internal Scan modal; upgrade form retained when not entitled
-- Catalog Card 4 → `ACTIVE` when VMaaS findings / entitlement present
-- Phases 1–3 regression: SCA / EASM / ITDR paths untouched
+  - `GET /customer/ndr/{short_code}/summary`
+  - `GET /customer/ndr/{short_code}/events`
+  - `GET /customer/ndr/{short_code}/sensors`
+  - `POST /admin/ndr/{tenant_ref}/sync`
+  - `GET /admin/ndr/summary`
+- Customer UI: `/ndr` (+ `/network`) — KPI cards, events table with ATT&CK + containment guidance, Sensor status & coverage tab
+- Customer APIs omit raw `source_ip` / `destination_ip` / `raw_details` (endpoint labels instead)
+- Catalog Card 6 → `ACTIVE` when NDR data / `zeek_enabled` entitlement present
+- Phases 1–4 regression paths untouched
 
-### Phase 5+ (next)
+### Phase 6+ (next)
 
 | Phase | Service | Notes |
 |---|---|---|
-| 5 | NDR completion | Zeek metadata + customer-safe NDR summary |
 | 6 | Threat Intelligence | MISP IOC enrichment |
 | 7 | Endpoint Forensics & Deception | Velociraptor + canaries |
+| Later | Live Zeek install | Named KB required; deepen metadata pull |
 
 ---
 
 ## Dependencies by phase
 
-- **Phase 4:** Prefer live findings from VM 109 sync into `vulnerabilities`; VMaaS tables are the customer dashboard projection. Queues `last_vuln_scan_at = NULL` so the existing scan-plan agent can pick up on-demand runs.
+- **Phase 5:** Suricata already on VM 106; Zeek still pending a named KB. Customer dashboard works via alert import + analysis adapter until Zeek is online.
 - **Later phases:** Do not install new VMs/tools unless a named KB approves it.

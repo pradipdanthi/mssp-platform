@@ -24,6 +24,7 @@ import VulnerabilitiesPage from "./pages/VulnerabilitiesPage";
 import CompliancePage from "./pages/CompliancePage";
 import EasmPage from "./pages/EasmPage";
 import ItdrPage from "./pages/ItdrPage";
+import NdrPage from "./pages/NdrPage";
 import ServicesPage from "./pages/ServicesPage";
 
 function RootRedirect() {
@@ -181,6 +182,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ItdrPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ndr"
+        element={
+          <ProtectedRoute>
+            <NdrPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/network"
+        element={
+          <ProtectedRoute>
+            <NdrPage />
           </ProtectedRoute>
         }
       />

@@ -644,6 +644,82 @@ export function requestVmaasScan(
   });
 }
 
+/** Network Detection & Response (NDR) — customer-safe. */
+export interface NdrSummary {
+  tenant: { short_code: string; name: string };
+  active_network_sensors: number;
+  total_sensors: number;
+  high_risk_network_alerts: number;
+  monitored_flows: number;
+  monitored_bytes: number;
+  protocol_anomaly_count: number;
+  lateral_movement_count?: number;
+  c2_beaconing_count?: number;
+  port_scan_count?: number;
+  open_events: number;
+  has_data: boolean;
+  engine_label?: string;
+}
+
+export interface NdrEvent {
+  id: string;
+  source_endpoint_label: string;
+  destination_endpoint_label: string;
+  source_port?: number | null;
+  destination_port?: number | null;
+  protocol: string;
+  event_category: string;
+  severity: string;
+  signature_title: string;
+  mitre_technique?: string | null;
+  flow_bytes?: number;
+  summary: string;
+  remediation: string;
+  detected_at?: string;
+}
+
+export interface NdrSensor {
+  id: string;
+  sensor_name: string;
+  sensor_status: string;
+  sensor_type_label: string;
+  capture_interface?: string | null;
+  flows_observed: number;
+  bytes_observed: number;
+  last_heartbeat?: string | null;
+}
+
+export function getNdrSummary(shortCode: string): Promise<NdrSummary> {
+  return request(`/customer/ndr/${encodeURIComponent(shortCode)}/summary`);
+}
+
+export function getNdrEvents(
+  shortCode: string,
+  opts?: {
+    severity?: string;
+    event_category?: string;
+    protocol?: string;
+    page?: number;
+    page_size?: number;
+  }
+): Promise<{
+  events: NdrEvent[];
+  pagination: { page: number; page_size: number; total_items: number; total_pages: number };
+}> {
+  const params = new URLSearchParams();
+  if (opts?.severity) params.set("severity", opts.severity);
+  if (opts?.event_category) params.set("event_category", opts.event_category);
+  if (opts?.protocol) params.set("protocol", opts.protocol);
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/ndr/${encodeURIComponent(shortCode)}/events${q}`);
+}
+
+export function getNdrSensors(shortCode: string): Promise<{ sensors: NdrSensor[] }> {
+  return request(`/customer/ndr/${encodeURIComponent(shortCode)}/sensors`);
+}
+
 /** Continuous Compliance & Hardening (CaaS) — customer-safe. */
 export interface ComplianceFrameworkScore {
   score_percentage: number;

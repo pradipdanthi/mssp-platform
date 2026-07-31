@@ -247,6 +247,10 @@ def _fetch_entitlements(tenant_id: UUID) -> Optional[Dict[str, Any]]:
                 SELECT 1 FROM tenant_vulnerability_findings vf
                 WHERE vf.tenant_id = e.tenant_id AND vf.status = 'OPEN'
             ) AS has_vmaas_data,
+            EXISTS (
+                SELECT 1 FROM tenant_ndr_events ne
+                WHERE ne.tenant_id = e.tenant_id AND ne.status = 'open'
+            ) AS has_ndr_data,
             e.roadmap_notes,
             e.updated_at::text
         FROM tenant_entitlements e
@@ -336,6 +340,7 @@ def get_customer_entitlements(
         base["has_easm_data"] = bool(row.get("has_easm_data"))
         base["has_itdr_data"] = bool(row.get("has_itdr_data"))
         base["has_vmaas_data"] = bool(row.get("has_vmaas_data"))
+        base["has_ndr_data"] = bool(row.get("has_ndr_data"))
         if row.get("updated_at") is not None:
             base["updated_at"] = row["updated_at"]
     else:
@@ -367,10 +372,18 @@ def get_customer_entitlements(
             """,
             (tenant["id"],),
         )
+        has_ndr = fetch_one(
+            """
+            SELECT 1 AS ok FROM tenant_ndr_events
+            WHERE tenant_id = %s::uuid AND status = 'open' LIMIT 1;
+            """,
+            (tenant["id"],),
+        )
         base["has_compliance_data"] = bool(has)
         base["has_easm_data"] = bool(has_easm)
         base["has_itdr_data"] = bool(has_itdr)
         base["has_vmaas_data"] = bool(has_vmaas)
+        base["has_ndr_data"] = bool(has_ndr)
     return CustomerEntitlementsPublic(**entitlements_row_to_customer_public(base))
 
 
