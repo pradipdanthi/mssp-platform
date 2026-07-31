@@ -10,12 +10,21 @@
 .PARAMETER ManagerIp
   Wazuh Manager IP allowed during isolation (default 192.168.0.211).
 
+.PARAMETER CallbackUrl
+  Control-plane EDR callback URL (KB-091). Written into mssp-ar.env.
+
+.PARAMETER CallbackKey
+  Shared callback key (same as SOC sync key until per-execution tokens land).
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\Install-MsspWindowsEdrAr.ps1
 #>
 [CmdletBinding()]
 param(
-  [string]$ManagerIp = "192.168.0.211"
+  [string]$ManagerIp = "192.168.0.211",
+  [string]$ControlPlaneIp = "192.168.0.201",
+  [string]$CallbackUrl = "http://192.168.0.201:8000/v1/edr/actions/callback",
+  [string]$CallbackKey = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -78,8 +87,20 @@ foreach ($f in $optionalCopy) {
 }
 
 $envOut = Join-Path $dest "mssp-ar.env"
-"WAZUH_MANAGER_IP=$ManagerIp" | Set-Content -LiteralPath $envOut -Encoding ASCII
-Write-Step "Wrote $envOut"
+$envLines = @(
+  "WAZUH_MANAGER_IP=$ManagerIp",
+  "MSSP_CONTROL_PLANE_IP=$ControlPlaneIp",
+  "MSSP_CALLBACK_URL=$CallbackUrl"
+)
+if ($CallbackKey) {
+  $envLines += "MSSP_CALLBACK_KEY=$CallbackKey"
+  $keyState = "present"
+} else {
+  Write-Step "WARNING: CallbackKey empty - isolate will stay Dispatched (no applied=true callback)."
+  $keyState = "MISSING"
+}
+$envLines | Set-Content -LiteralPath $envOut -Encoding ASCII
+Write-Step "Wrote $envOut (callback URL set; key=$keyState)"
 
 Write-Step "Restarting WazuhSvc..."
 Restart-Service -Name WazuhSvc -Force -ErrorAction SilentlyContinue

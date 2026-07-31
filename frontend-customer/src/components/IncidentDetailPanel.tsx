@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import type { DrawerIncident } from "./IncidentDrawer";
-import InvestigationGraph from "./InvestigationGraph";
 import SeverityPill from "./SeverityPill";
 
 type Props = {
@@ -10,8 +9,8 @@ type Props = {
 };
 
 /**
- * Inline selected-incident panel (Sentinel-style bottom-right):
- * details + entity graph + quick actions.
+ * Inline selected-incident panel (details + quick actions).
+ * Entity-mapping graph removed — it overlapped the incidents grid.
  */
 export default function IncidentDetailPanel({
   incident,
@@ -26,9 +25,8 @@ export default function IncidentDetailPanel({
             Incident details
           </h2>
           <p className="page-subtitle">
-            Select a row from the incidents list to inspect entities and run quick actions.
+            Select a row from the incidents list to review summary and open the full case.
           </p>
-          <InvestigationGraph title="Entity mapping (idle)" />
         </div>
       </aside>
     );
@@ -82,16 +80,6 @@ export default function IncidentDetailPanel({
           <dd className="drawer-summary">{incident.summary ?? "—"}</dd>
         </dl>
       </div>
-
-      <InvestigationGraph
-        title="Entity mapping"
-        entities={[
-          { id: "user", label: "User", kind: "user" },
-          { id: "host", label: "Host", kind: "host" },
-          { id: "proc", label: "Process", kind: "process" },
-          { id: "ip", label: mode === "admin" ? "IP" : "Net", kind: "network" },
-        ]}
-      />
 
       <div className="incident-detail-actions">
         {mode === "admin" ? (

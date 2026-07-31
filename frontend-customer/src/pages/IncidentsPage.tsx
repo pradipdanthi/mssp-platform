@@ -1,8 +1,15 @@
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { getCustomerIncidents } from "../api/customer";
+import { ApiError } from "../api/client";
+import {
+  ConsultationRequest,
+  getCustomerIncidents,
+  listConsultationRequests,
+} from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import ListToolbar from "../components/ListToolbar";
 import SeverityPill from "../components/SeverityPill";
+import { formatScopeSummary } from "../data/serviceCatalog";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
 
 const STATUS_OPTIONS = [
@@ -21,10 +28,13 @@ const SEVERITY_OPTIONS = [
   { value: "low", label: "Low" },
 ];
 
+type TabKey = "security" | "service-requests";
+
 export default function IncidentsPage() {
   const { user } = useAuth();
   const shortCode = user?.tenant_short_code ?? null;
   const [params, setParams] = useSearchParams();
+  const tab: TabKey = params.get("tab") === "service-requests" ? "service-requests" : "security";
   const statusFilter = params.get("status") ?? "";
   const severityFilter = params.get("severity") ?? "";
   const qFilter = params.get("q") ?? "";
@@ -32,6 +42,10 @@ export default function IncidentsPage() {
   const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
     ? Number(params.get("page_size"))
     : 25;
+
+  const [serviceRequests, setServiceRequests] = useState<ConsultationRequest[]>([]);
+  const [srLoading, setSrLoading] = useState(false);
+  const [srError, setSrError] = useState<string | null>(null);
 
   function patchParams(updates: Record<string, string | null>) {
     const next = new URLSearchParams(params);
@@ -51,9 +65,24 @@ export default function IncidentsPage() {
         ...(severityFilter ? { severity: severityFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    Boolean(shortCode),
-    [shortCode, statusFilter, severityFilter, qFilter, page, pageSize]
+    Boolean(shortCode) && tab === "security",
+    [shortCode, statusFilter, severityFilter, qFilter, page, pageSize, tab]
   );
+
+  useEffect(() => {
+    if (!shortCode || tab !== "service-requests") return;
+    setSrLoading(true);
+    listConsultationRequests(shortCode)
+      .then((res) => {
+        setServiceRequests(res.requests || []);
+        setSrError(null);
+      })
+      .catch((err) => {
+        if (err instanceof ApiError && typeof err.detail === "string") setSrError(err.detail);
+        else setSrError("Could not load service requests.");
+      })
+      .finally(() => setSrLoading(false));
+  }, [shortCode, tab]);
 
   if (!shortCode) {
     return (
@@ -83,81 +112,155 @@ export default function IncidentsPage() {
     <div>
       <h1 className="page-title">Incidents</h1>
       <p className="page-subtitle">
-        Read-only customer-visible incidents for your organization. Search and paginate when many
-        tickets are open.
+        Security cases and service / upgrade consultation tickets for your organization.
       </p>
 
-      <ListToolbar
-        searchPlaceholder="Search number, title, host, or summary…"
-        searchValue={qFilter}
-        onSearchChange={(q) => patchParams({ q, page: "1" })}
-        statusOptions={STATUS_OPTIONS}
-        statusValue={statusFilter}
-        onStatusChange={(status) => patchParams({ status, page: "1" })}
-        severityOptions={SEVERITY_OPTIONS}
-        severityValue={severityFilter}
-        onSeverityChange={(severity) => patchParams({ severity, page: "1" })}
-        pageSize={pageSize}
-        onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
-        meta={meta}
-        onPageChange={(p) => patchParams({ page: String(p) })}
-      />
+      <div className="subnav-tabs" role="tablist" aria-label="Incidents views">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "security"}
+          className={"subnav-tab" + (tab === "security" ? " is-active" : "")}
+          onClick={() => patchParams({ tab: null, page: "1" })}
+        >
+          Security Incidents
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "service-requests"}
+          className={"subnav-tab" + (tab === "service-requests" ? " is-active" : "")}
+          onClick={() => patchParams({ tab: "service-requests", page: null })}
+        >
+          Service Requests &amp; Upgrades
+        </button>
+      </div>
 
-      {status === "loading" && <div className="state-message">Loading incidents...</div>}
-      {status === "forbidden" && (
-        <div className="state-message state-error">Access denied for this customer portal view.</div>
-      )}
-      {(status === "error" || status === "not_found") && (
-        <div className="state-message state-error">{errorMessage}</div>
+      {tab === "security" && (
+        <>
+          <ListToolbar
+            searchPlaceholder="Search number, title, host, or summary…"
+            searchValue={qFilter}
+            onSearchChange={(q) => patchParams({ q, page: "1" })}
+            statusOptions={STATUS_OPTIONS}
+            statusValue={statusFilter}
+            onStatusChange={(st) => patchParams({ status: st, page: "1" })}
+            severityOptions={SEVERITY_OPTIONS}
+            severityValue={severityFilter}
+            onSeverityChange={(severity) => patchParams({ severity, page: "1" })}
+            pageSize={pageSize}
+            onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
+            meta={meta}
+            onPageChange={(p) => patchParams({ page: String(p) })}
+          />
+
+          {status === "loading" && <div className="state-message">Loading incidents...</div>}
+          {status === "forbidden" && (
+            <div className="state-message state-error">
+              Access denied for this customer portal view.
+            </div>
+          )}
+          {(status === "error" || status === "not_found") && (
+            <div className="state-message state-error">{errorMessage}</div>
+          )}
+
+          {status === "success" && data && (
+            incidents.length === 0 ? (
+              <div className="state-message">
+                No incidents{statusFilter ? ` matching “${statusFilter}”` : ""} in this view.
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Incident</th>
+                    <th>Title</th>
+                    <th>Asset</th>
+                    <th>Device</th>
+                    <th>Severity</th>
+                    <th>Status</th>
+                    <th>Summary</th>
+                    <th>Opened</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incidents.map((inc) => (
+                    <tr key={inc.incident_number}>
+                      <td className="cell-mono">
+                        <Link to={`/incidents/${encodeURIComponent(inc.incident_number)}`}>
+                          {inc.incident_number}
+                        </Link>
+                      </td>
+                      <td>
+                        <Link to={`/incidents/${encodeURIComponent(inc.incident_number)}`}>
+                          {inc.title}
+                        </Link>
+                      </td>
+                      <td className="cell-mono">{inc.hostname ?? "—"}</td>
+                      <td>{inc.device_type ?? "—"}</td>
+                      <td>
+                        <SeverityPill value={inc.severity} />
+                      </td>
+                      <td>
+                        <SeverityPill value={inc.status} kind="status" />
+                      </td>
+                      <td>{inc.customer_visible_summary ?? "—"}</td>
+                      <td className="cell-mono">{inc.opened_at ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )
+          )}
+        </>
       )}
 
-      {status === "success" && data && (
-        incidents.length === 0 ? (
-          <div className="state-message">
-            No incidents{statusFilter ? ` matching “${statusFilter}”` : ""} in this view.
-          </div>
-        ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Incident</th>
-                <th>Title</th>
-                <th>Asset</th>
-                <th>Device</th>
-                <th>Severity</th>
-                <th>Status</th>
-                <th>Summary</th>
-                <th>Opened</th>
-              </tr>
-            </thead>
-            <tbody>
-              {incidents.map((inc) => (
-                <tr key={inc.incident_number}>
-                  <td className="cell-mono">
-                    <Link to={`/incidents/${encodeURIComponent(inc.incident_number)}`}>
-                      {inc.incident_number}
-                    </Link>
-                  </td>
-                  <td>
-                    <Link to={`/incidents/${encodeURIComponent(inc.incident_number)}`}>
-                      {inc.title}
-                    </Link>
-                  </td>
-                  <td className="cell-mono">{inc.hostname ?? "—"}</td>
-                  <td>{inc.device_type ?? "—"}</td>
-                  <td>
-                    <SeverityPill value={inc.severity} />
-                  </td>
-                  <td>
-                    <SeverityPill value={inc.status} kind="status" />
-                  </td>
-                  <td>{inc.customer_visible_summary ?? "—"}</td>
-                  <td className="cell-mono">{inc.opened_at ?? "—"}</td>
+      {tab === "service-requests" && (
+        <>
+          <p className="page-subtitle">
+            Consultation and upgrade requests from the{" "}
+            <Link to="/services">Service Portfolio</Link>. Status updates come from your MSSP team.
+          </p>
+          {srLoading && <div className="state-message">Loading service requests…</div>}
+          {srError && <div className="state-message state-error">{srError}</div>}
+          {!srLoading && !srError && serviceRequests.length === 0 && (
+            <div className="state-message">
+              No service requests yet. Open the{" "}
+              <Link to="/services">Service Portfolio</Link> and use{" "}
+              <strong>Request for Consulting</strong> on an available service.
+            </div>
+          )}
+          {!srLoading && !srError && serviceRequests.length > 0 && (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Request ID</th>
+                  <th>Service Name</th>
+                  <th>Target Scope</th>
+                  <th>Status</th>
+                  <th>Timestamp</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )
+              </thead>
+              <tbody>
+                {serviceRequests.map((r) => (
+                  <tr key={r.id}>
+                    <td className="cell-mono" title={r.id}>
+                      {r.id.slice(0, 8)}…
+                    </td>
+                    <td>{r.service_name}</td>
+                    <td>{formatScopeSummary(r)}</td>
+                    <td>
+                      <span className={"pill-status pill-status--" + r.status.toLowerCase()}>
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="cell-mono">{r.created_at}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </div>
   );

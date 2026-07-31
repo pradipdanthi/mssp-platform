@@ -30,10 +30,10 @@ That is a **false-confidence / market-readiness failure**, not a cosmetic UI bug
 | C1 | Kill / block-hash marked success on dispatch only | **Mitigated (label honesty)** — endpoint callback still TODO |
 | C2 | UI “Success” for kill/block | **Fixed** → **Dispatched** |
 | C3 | Block-hash only appends a text file; no WDAC/AppLocker/ASR | **Documented in API message**; enforcement TODO |
-| C4 | AR scripts swallow errors; no control-plane callback | Open |
-| C5 | `/v1/edr/actions/callback` unused by AR scripts | Open |
+| C4 | AR scripts swallow errors; no control-plane callback | **Mitigated (isolate)** — Windows `mssp-isolate-host.ps1` POSTs `applied` to `/v1/edr/actions/callback` when `mssp-ar.env` is configured; kill/block-hash still open |
+| C5 | `/v1/edr/actions/callback` unused by AR scripts | **Mitigated (isolate path)** — still unused by kill/block-hash |
 | C6 | `get_agent_os` defaulted to linux | **Fixed** → `unknown` fail-closed |
-| C7 | Shared callback API key can forge success across tenants | Open |
+| C7 | Shared callback API key can forge success across tenants | Open — currently reuses SOC sync key via `MSSP_CALLBACK_KEY` |
 
 ## High gaps (production containment)
 
@@ -64,12 +64,12 @@ Search + server pagination exist for Alerts/Incidents (Admin+Customer). Still mi
 - Gap register (this doc).
 - Sync Windows AR pack copies + honesty validator.
 
-### Wave 1 — Prove containment (next, required before marketing “EDR response”)
+### Wave 1 — Prove containment (in progress)
 
-1. AR scripts POST real exit status to `/v1/edr/actions/callback` (per-execution token preferred).
-2. Live lab validator: isolate → gateway ping fails; kill → PID gone; only then PASS.
-3. Manager AR command preflight API + Admin warning if unregistered.
-4. Either wire real **Block hash** enforcement or hide/disable the button.
+1. **Control-plane + live Windows path done (006):** AR isolate POSTs `applied` / release POSTs `released` to `/v1/edr/actions/callback`. Quarantine allow-lists Manager **and** control-plane IP. Live proof on **006**: gateway ICMP blocked, `CALLBACK ok applied=True` → **verified**; auto-release restores pre-isolate firewall snapshot (profiles + rule Enabled states), `released=True` → DB **restored**. Restore order is profiles-first so outbound Allow returns before MSSP allow rules are removed (avoids stuck default-deny).
+2. Live lab validator packaging / kill-PID proof — optional follow-ups; isolate honesty + exact restore gate for Wave 1 is closed on 006.
+3. Manager AR command preflight API + Admin warning if unregistered — open.
+4. Either wire real **Block hash** enforcement or hide/disable the button — open.
 
 ### Wave 2 — Enterprise controls
 

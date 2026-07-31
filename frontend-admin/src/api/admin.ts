@@ -1396,3 +1396,80 @@ export function putTenantAssetServiceCoverage(
   );
 }
 
+/** Service Catalog consultation requests (global + on-behalf). */
+export type ConsultationRequestStatus =
+  | "PENDING_CONSULTATION"
+  | "UNDER_REVIEW"
+  | "APPROVED"
+  | "PROVISIONED"
+  | "DECLINED"
+  | "CLOSED";
+
+export interface ConsultationRequest {
+  id: string;
+  tenant_id: string;
+  tenant_name?: string | null;
+  short_code?: string | null;
+  service_key: string;
+  service_name: string;
+  pricing_tier?: string | null;
+  endpoint_count?: number | null;
+  m365_seat_count?: number | null;
+  target_domains: string[];
+  scope_notes: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  status: ConsultationRequestStatus | string;
+  admin_notes?: string | null;
+  email_dispatched_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+  requested_by_name?: string | null;
+}
+
+export interface ConsultationCreatePayload {
+  service_key: string;
+  service_name: string;
+  pricing_tier?: string | null;
+  endpoint_count?: number | null;
+  m365_seat_count?: number | null;
+  target_domains?: string[];
+  scope_notes?: string;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  tenant_short_code: string;
+}
+
+export function getConsultationSummary(): Promise<{
+  pending_consultation: number;
+  under_review: number;
+  unreviewed_total: number;
+  resend_configured: boolean;
+}> {
+  return request("/admin/service-consultation-requests/summary");
+}
+
+export function listConsultationRequests(status?: string): Promise<{ requests: ConsultationRequest[] }> {
+  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+  return request(`/admin/service-consultation-requests${q}`);
+}
+
+export function patchConsultationRequest(
+  requestId: string,
+  payload: { status?: ConsultationRequestStatus; admin_notes?: string }
+): Promise<ConsultationRequest> {
+  return request(`/admin/service-consultation-requests/${encodeURIComponent(requestId)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function createConsultationRequestOnBehalf(
+  payload: ConsultationCreatePayload
+): Promise<ConsultationRequest> {
+  return request("/admin/service-consultation-requests", {
+    method: "POST",
+    body: payload,
+  });
+}
+

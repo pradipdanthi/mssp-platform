@@ -243,7 +243,7 @@ def _update_execution(
 
 def verify_isolation_state(agent_id: str, *, expect_isolated: bool) -> Tuple[bool, str]:
     """
-    Soft connectivity check only — NOT proof that firewall isolation worked.
+    Soft connectivity check only - NOT proof that firewall isolation worked.
 
     Isolated hosts should still reach the manager (AR allows manager IP), so
     status=active is expected both before and after isolate. This cannot confirm
@@ -259,7 +259,7 @@ def verify_isolation_state(agent_id: str, *, expect_isolated: bool) -> Tuple[boo
             return (
                 True,
                 f"Agent still reachable via manager (status={status}); "
-                "firewall isolation not proven — confirm MSSP_ISOLATE_* rules on endpoint",
+                "firewall isolation not proven - confirm MSSP_ISOLATE_* rules on endpoint",
             )
         return True, f"Endpoint connectivity via manager OK (status={status})"
     return False, f"Endpoint not reachable for verification (status={status or 'unknown'})"
@@ -297,7 +297,42 @@ def apply_action_callback(
     verified = False
 
     aid = agent_id or row.get("target_agent_id")
-    if mapped == "success" and row["action_type"] in ("ISOLATE_HOST", "UNISOLATE_HOST") and aid:
+    applied = None
+    released = None
+    if isinstance(payload, dict):
+        if "applied" in payload:
+            applied = bool(payload.get("applied"))
+        if "released" in payload:
+            released = bool(payload.get("released"))
+
+    # Auto-release / explicit release callback: restore isolation row, keep prior verified.
+    if mapped == "success" and released is True and aid:
+        with db_transaction() as cur:
+            cur.execute(
+                """
+                UPDATE edr_endpoint_isolation
+                SET isolation_status = 'restored', released_at = now()
+                WHERE tenant_id = %s::uuid AND agent_id = %s;
+                """,
+                (row["tenant_id"], aid),
+            )
+        # Never downgrade a previously verified isolate execution on auto-release.
+        if row["action_type"] == "ISOLATE_HOST" and str(row.get("current_status") or "") == "verified":
+            final_status = "verified"
+            verified = True
+        elif row["action_type"] == "UNISOLATE_HOST":
+            final_status = "verified"
+            verified = True
+        detail = (detail or "Endpoint reported quarantine released; pre-isolate firewall restored").strip()
+    # Endpoint-reported applied=true is the only path to isolate Verified (KB-091 Wave 1).
+    elif mapped == "success" and row["action_type"] == "ISOLATE_HOST" and applied is True:
+        final_status = "verified"
+        verified = True
+        detail = (detail or "Endpoint reported quarantine applied=true").strip()
+    elif mapped == "success" and row["action_type"] == "ISOLATE_HOST" and applied is False:
+        final_status = "failed"
+        detail = (detail or "Endpoint reported quarantine applied=false").strip()
+    elif mapped == "success" and row["action_type"] in ("ISOLATE_HOST", "UNISOLATE_HOST") and aid:
         ok, verify_msg = verify_isolation_state(
             aid, expect_isolated=(row["action_type"] == "ISOLATE_HOST")
         )
@@ -309,13 +344,21 @@ def apply_action_callback(
         elif ok and row["action_type"] == "ISOLATE_HOST":
             # Do not promote isolate to verified on agent-online alone.
             detail = (
-                f"{detail} (dispatched only — confirm MSSP isolation firewall "
+                f"{detail} (dispatched only - confirm MSSP isolation firewall "
                 "policy on the endpoint; agent stay-online is expected)"
             )
         else:
             detail = f"{detail} (verification pending: {verify_msg})"
+    elif mapped == "success" and row["action_type"] == "UNISOLATE_HOST" and applied is True:
+        final_status = "verified"
+        verified = True
 
-    if mapped == "success" and row["action_type"] == "UNISOLATE_HOST" and aid:
+    if (
+        mapped == "success"
+        and row["action_type"] == "UNISOLATE_HOST"
+        and aid
+        and released is not True
+    ):
         with db_transaction() as cur:
             cur.execute(
                 """
@@ -326,7 +369,13 @@ def apply_action_callback(
                 (row["tenant_id"], aid),
             )
 
-    if mapped == "success" and row["action_type"] == "ISOLATE_HOST" and aid:
+    if (
+        mapped == "success"
+        and row["action_type"] == "ISOLATE_HOST"
+        and aid
+        and released is not True
+        and applied is not False
+    ):
         with db_transaction() as cur:
             cur.execute(
                 """
@@ -452,10 +501,11 @@ def execute_edr_action(
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for isolation")
             ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
+            # extra_args: [seconds, execution_id] - endpoint callbacks use execution_id (KB-091).
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ar_cmd,
-                arguments=[ISOLATE_SECONDS],
+                arguments=[ISOLATE_SECONDS, execution_id],
             )
             with db_transaction() as cur:
                 cur.execute(
@@ -490,7 +540,7 @@ def execute_edr_action(
             msg = (
                 f"Network quarantine command dispatched to agent {agent_id} "
                 f"(auto-release ~{ISOLATE_SECONDS}s). "
-                "This is default-deny all traffic except Manager/DHCP/loopback — not ICMP-only. "
+                "This is default-deny all traffic except Manager/DHCP/loopback - not ICMP-only. "
                 "Confirm on host log: QUARANTINE ACTIVE applied=true (or FAILED applied=false)."
             )
             _update_execution(
@@ -519,7 +569,7 @@ def execute_edr_action(
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ar_cmd,
-                arguments=["delete"],
+                arguments=["delete", execution_id],
             )
             with db_transaction() as cur:
                 cur.execute(
@@ -670,7 +720,7 @@ def execute_edr_action(
                 ar_msg = (
                     f"Hash record command dispatched to agent {agent_id}. "
                     "IMPORTANT: current endpoint script only appends to "
-                    "mssp_blocked_hashes.txt — it does NOT prevent execution "
+                    "mssp_blocked_hashes.txt - it does NOT prevent execution "
                     "(WDAC/AppLocker/ASR enforcement is not wired yet)."
                 )
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(

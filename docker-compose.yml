@@ -65,6 +65,10 @@ services:
       WAZUH_API_VERIFY_TLS: ${WAZUH_API_VERIFY_TLS:-false}
       # Empty = fail-closed (require agent group → tenant binding). Set only for emergency override.
       WAZUH_DEFAULT_TENANT_SHORT_CODE: ${WAZUH_DEFAULT_TENANT_SHORT_CODE:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-MSSP Control Plane <onboarding@resend.dev>}
+      SALES_NOTIFY_EMAIL: ${SALES_NOTIFY_EMAIL:-sales@keroxsys.com}
+      ADMIN_PORTAL_BASE_URL: ${ADMIN_PORTAL_BASE_URL:-http://192.168.0.201:3000}
       TZ: ${TZ}
     depends_on:
       postgres:

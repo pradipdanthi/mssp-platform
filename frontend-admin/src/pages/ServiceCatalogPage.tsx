@@ -3,16 +3,18 @@ import { Link } from "react-router-dom";
 import { ApiError } from "../api/client";
 import {
   ConsultationRequest,
-  CustomerEntitlements,
-  createConsultationRequest,
-  getCustomerEntitlements,
+  TenantEntitlements,
+  createConsultationRequestOnBehalf,
+  getTenantEntitlements,
+  getTenants,
   listConsultationRequests,
-} from "../api/customer";
-import { useAuth } from "../auth/AuthContext";
+  putTenantEntitlements,
+  type Tenant,
+} from "../api/admin";
+import { getStoredTenantFilter } from "../components/TenantSwitcher";
 import {
   SERVICE_CATALOG,
   ServiceCatalogItem,
-  formatScopeSummary,
   resolveServiceStatus,
   statusLabel,
 } from "../data/serviceCatalog";
@@ -33,10 +35,10 @@ const EMPTY_FORM: ConsultForm = {
 
 const OPEN_STATUSES = new Set(["PENDING_CONSULTATION", "UNDER_REVIEW"]);
 
-export default function ServicesPage() {
-  const { user } = useAuth();
-  const shortCode = user?.tenant_short_code ?? "";
-  const [ent, setEnt] = useState<CustomerEntitlements | null>(null);
+export default function ServiceCatalogPage() {
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [shortCode, setShortCode] = useState(getStoredTenantFilter() || "");
+  const [ent, setEnt] = useState<TenantEntitlements | null>(null);
   const [requests, setRequests] = useState<ConsultationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,68 +47,99 @@ export default function ServicesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [savingToggle, setSavingToggle] = useState<string | null>(null);
+
+  const selectedTenant = useMemo(
+    () => tenants.find((t) => t.short_code === shortCode) || null,
+    [tenants, shortCode]
+  );
 
   function refresh() {
-    if (!shortCode) return;
-    Promise.all([getCustomerEntitlements(shortCode), listConsultationRequests(shortCode)])
-      .then(([e, r]) => {
-        setEnt(e);
-        setRequests(r.requests || []);
+    const pTenants = getTenants({ page_size: 200 });
+    const pRequests = listConsultationRequests();
+    Promise.all([pTenants, pRequests])
+      .then(([tRes, rRes]) => {
+        const list = tRes.tenants || [];
+        setTenants(list);
+        setRequests(rRes.requests || []);
+        if (!shortCode && list.length) setShortCode(list[0].short_code);
         setError(null);
       })
       .catch((err) => {
         if (err instanceof ApiError && typeof err.detail === "string") setError(err.detail);
-        else setError("Could not load the service portfolio for your organization.");
+        else setError("Could not load service catalog.");
       })
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    if (!shortCode) {
-      setLoading(false);
-      setError("This account is not linked to a customer organization.");
-      return;
-    }
-    setLoading(true);
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shortCode]);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedTenant) {
+      setEnt(null);
+      return;
+    }
+    getTenantEntitlements(selectedTenant.id)
+      .then(setEnt)
+      .catch(() => setEnt(null));
+  }, [selectedTenant]);
 
   const openRequestKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const r of requests) {
-      if (OPEN_STATUSES.has(r.status)) keys.add(r.service_key);
+      if (r.short_code === shortCode && OPEN_STATUSES.has(r.status)) keys.add(r.service_key);
     }
     return keys;
-  }, [requests]);
+  }, [requests, shortCode]);
 
-  function openConsult(item: ServiceCatalogItem) {
-    setActiveItem(item);
-    setForm(EMPTY_FORM);
-    setFormError(null);
-    setSuccess(null);
+  async function toggleEntitlement(item: ServiceCatalogItem) {
+    if (!selectedTenant || !ent) return;
+    const patch: Partial<TenantEntitlements> = {};
+    if (item.serviceKey === "vulnerability_management")
+      patch.greenbone_enabled = !ent.greenbone_enabled;
+    else if (item.serviceKey === "network_detection_response")
+      patch.zeek_enabled = !ent.zeek_enabled;
+    else if (item.serviceKey === "threat_intelligence") patch.misp_enabled = !ent.misp_enabled;
+    else if (item.serviceKey === "endpoint_forensics_deception")
+      patch.velociraptor_enabled = !ent.velociraptor_enabled;
+    else if (item.serviceKey === "log_event_monitoring") patch.wazuh_siem = !ent.wazuh_siem;
+    else return;
+    setSavingToggle(item.id);
+    try {
+      const next = await putTenantEntitlements(selectedTenant.id, patch);
+      setEnt(next);
+      setSuccess(`Updated entitlements for ${selectedTenant.name}.`);
+    } catch (err) {
+      if (err instanceof ApiError && typeof err.detail === "string") setError(err.detail);
+      else setError("Could not update entitlements.");
+    } finally {
+      setSavingToggle(null);
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!shortCode || !activeItem) return;
+    if (!activeItem || !shortCode) {
+      setFormError("Select a customer tenant first.");
+      return;
+    }
     const notes = form.scope_notes.trim();
     if (notes.length < 8) {
-      setFormError("Please add a short note about what you need (at least 8 characters).");
+      setFormError("Add at least 8 characters of scope notes.");
       return;
     }
     const domains = form.target_domains
       .split(/[\s,;]+/)
       .map((d) => d.trim())
       .filter(Boolean);
-    if (activeItem.scopeFields.includes("domains") && domains.length === 0) {
-      setFormError("Enter at least one target domain for this service.");
-      return;
-    }
     setSubmitting(true);
     setFormError(null);
     try {
-      await createConsultationRequest(shortCode, {
+      await createConsultationRequestOnBehalf({
+        tenant_short_code: shortCode,
         service_key: activeItem.serviceKey,
         service_name: activeItem.name,
         pricing_tier: activeItem.pricing,
@@ -114,17 +147,13 @@ export default function ServicesPage() {
         m365_seat_count: form.m365_seat_count ? Number(form.m365_seat_count) : null,
         target_domains: domains,
         scope_notes: notes,
-        contact_name: user?.full_name || null,
-        contact_email: user?.email || null,
       });
-      setSuccess(
-        `Request submitted for ${activeItem.name}. Your MSSP team will follow up. Track it under Incidents → Service Requests & Upgrades.`
-      );
+      setSuccess(`Consultation request created for ${selectedTenant?.name || shortCode}.`);
       setActiveItem(null);
       refresh();
     } catch (err) {
       if (err instanceof ApiError && typeof err.detail === "string") setFormError(err.detail);
-      else setFormError("Could not submit the consultation request. Please try again.");
+      else setFormError("Could not submit consultation request.");
     } finally {
       setSubmitting(false);
     }
@@ -132,20 +161,46 @@ export default function ServicesPage() {
 
   return (
     <div>
-      <h1 className="page-title">Service Portfolio</h1>
+      <h1 className="page-title">Service Catalog</h1>
       <p className="page-subtitle">
-        Transparent package of core and optional services. Request consulting on available add-ons —
-        we capture scope, create a ticket, and notify our sales team.
+        Tenant-scoped portfolio view. Toggle supported entitlements and submit consulting requests on
+        behalf of a customer. Global queue:{" "}
+        <Link to="/service-requests">Service Requests</Link>.
       </p>
 
-      {loading && <div className="state-message">Loading portfolio…</div>}
+      <div className="form-grid" style={{ marginBottom: "1rem", maxWidth: 420 }}>
+        <label className="form-label">
+          Customer tenant
+          <select
+            className="form-input"
+            value={shortCode}
+            onChange={(e) => setShortCode(e.target.value)}
+          >
+            <option value="">Select tenant…</option>
+            {tenants.map((t) => (
+              <option key={t.id} value={t.short_code}>
+                {t.name} ({t.short_code})
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {loading && <div className="state-message">Loading catalog…</div>}
       {error && <div className="state-message state-error">{error}</div>}
       {success && <div className="state-message state-success">{success}</div>}
 
-      {!loading && !error && (
+      {!loading && (
         <div className="services-catalog">
           {SERVICE_CATALOG.map((item) => {
             const status = resolveServiceStatus(item, ent, openRequestKeys);
+            const canToggle = [
+              "log_event_monitoring",
+              "vulnerability_management",
+              "network_detection_response",
+              "threat_intelligence",
+              "endpoint_forensics_deception",
+            ].includes(item.serviceKey);
             return (
               <article key={item.id} className={"service-card glass-card service-card--" + status}>
                 <div className="service-card-top">
@@ -158,36 +213,36 @@ export default function ServicesPage() {
                   <strong>{item.pricing}</strong>
                   <span className="service-pricing-comp">{item.competitorValue}</span>
                 </div>
-                <p className="service-card-summary">
-                  <strong>What it achieves.</strong> {item.achieves}
-                </p>
-                <p className="service-card-summary">
-                  <strong>Where it fits.</strong> {item.whereItFits}
-                </p>
+                <p className="service-card-summary">{item.achieves}</p>
                 <ul className="service-benefits">
-                  {item.features.map((b) => (
+                  {item.features.slice(0, 3).map((b) => (
                     <li key={b}>{b}</li>
                   ))}
                 </ul>
                 <div className="service-card-actions">
-                  {item.learnMorePath && (status === "included" || status === "active") && (
-                    <Link className="btn btn-ghost" to={item.learnMorePath}>
-                      Open in portal
-                    </Link>
-                  )}
-                  {item.requestable && status === "available" && (
-                    <button className="btn btn-primary" type="button" onClick={() => openConsult(item)}>
-                      Request for Consulting
+                  {canToggle && selectedTenant && (
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      disabled={!!savingToggle}
+                      onClick={() => toggleEntitlement(item)}
+                    >
+                      {savingToggle === item.id ? "Saving…" : "Toggle entitlement"}
                     </button>
                   )}
-                  {status === "requested" && (
-                    <span className="service-card-note">
-                      Request received — track under{" "}
-                      <Link to="/incidents?tab=service-requests">Service Requests</Link>.
-                    </span>
-                  )}
-                  {(status === "included" || status === "active") && !item.learnMorePath && (
-                    <span className="service-card-note">Part of your active service package.</span>
+                  {item.requestable && status === "available" && (
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      disabled={!shortCode}
+                      onClick={() => {
+                        setActiveItem(item);
+                        setForm(EMPTY_FORM);
+                        setFormError(null);
+                      }}
+                    >
+                      Request for Consulting
+                    </button>
                   )}
                 </div>
               </article>
@@ -197,75 +252,69 @@ export default function ServicesPage() {
       )}
 
       {activeItem && (
-        <div className="modal-backdrop" role="presentation" onClick={() => !submitting && setActiveItem(null)}>
+        <div className="modal-backdrop" onClick={() => !submitting && setActiveItem(null)}>
           <form
-            className="modal-panel upgrade-request-form"
+            className="modal-panel"
             onSubmit={handleSubmit}
             onClick={(e) => e.stopPropagation()}
           >
             <h2 className="section-title" style={{ marginTop: 0 }}>
-              Request for Consulting — {activeItem.name}
+              On-behalf request — {activeItem.name}
             </h2>
-            <p className="page-subtitle" style={{ marginTop: 0 }}>
-              Tell us the target scope. We create a service ticket and notify sales. Enabling happens
-              only after commercial agreement.
+            <p className="page-subtitle">
+              Tenant: <strong>{selectedTenant?.name || shortCode}</strong>
             </p>
             <div className="form-grid">
               {activeItem.scopeFields.includes("endpoints") && (
                 <label className="form-label">
-                  Estimated endpoints / devices
+                  Endpoints
                   <input
                     className="form-input"
                     type="number"
                     min={0}
                     value={form.endpoint_count}
                     onChange={(e) => setForm({ ...form, endpoint_count: e.target.value })}
-                    placeholder="e.g. 50"
                   />
                 </label>
               )}
               {activeItem.scopeFields.includes("m365_seats") && (
                 <label className="form-label">
-                  Microsoft 365 / identity seats
+                  M365 seats
                   <input
                     className="form-input"
                     type="number"
                     min={0}
                     value={form.m365_seat_count}
                     onChange={(e) => setForm({ ...form, m365_seat_count: e.target.value })}
-                    placeholder="e.g. 120"
                   />
                 </label>
               )}
               {activeItem.scopeFields.includes("domains") && (
                 <label className="form-label" style={{ gridColumn: "1 / -1" }}>
-                  Target domains
+                  Domains
                   <input
                     className="form-input"
                     value={form.target_domains}
                     onChange={(e) => setForm({ ...form, target_domains: e.target.value })}
-                    placeholder="example.com, api.example.com"
-                    required
                   />
                 </label>
               )}
             </div>
             <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>
-              Notes / requirements
+              Notes
               <textarea
                 className="form-input"
                 required
                 minLength={8}
-                rows={5}
+                rows={4}
                 value={form.scope_notes}
                 onChange={(e) => setForm({ ...form, scope_notes: e.target.value })}
-                placeholder="Environment details, timeline, compliance drivers…"
               />
             </label>
             {formError && <div className="form-error">{formError}</div>}
             <div className="confirm-actions">
               <button className="btn btn-primary" type="submit" disabled={submitting}>
-                {submitting ? "Sending…" : "Submit request"}
+                {submitting ? "Sending…" : "Submit"}
               </button>
               <button
                 className="btn btn-ghost"
@@ -278,44 +327,6 @@ export default function ServicesPage() {
             </div>
           </form>
         </div>
-      )}
-
-      {!loading && requests.length > 0 && (
-        <section className="management-panel" style={{ marginTop: "1.25rem" }}>
-          <h2 className="section-title" style={{ marginTop: 0 }}>
-            Recent service requests
-          </h2>
-          <p className="page-subtitle" style={{ marginTop: 0 }}>
-            Full history lives under{" "}
-            <Link to="/incidents?tab=service-requests">Incidents → Service Requests & Upgrades</Link>.
-          </p>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Request ID</th>
-                <th>Service</th>
-                <th>Scope</th>
-                <th>Status</th>
-                <th>Submitted</th>
-              </tr>
-            </thead>
-            <tbody>
-              {requests.slice(0, 5).map((r) => (
-                <tr key={r.id}>
-                  <td className="cell-mono">{r.id.slice(0, 8)}…</td>
-                  <td>{r.service_name}</td>
-                  <td>{formatScopeSummary(r)}</td>
-                  <td>
-                    <span className={"service-status service-status--" + r.status.toLowerCase()}>
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="cell-mono">{r.created_at}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
       )}
     </div>
   );

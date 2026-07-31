@@ -2,14 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getCustomerDashboardV2 } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
-import DetectionStackPanel from "../components/DetectionStackPanel";
 import GeoActivityHeatmap, { hubsFromActivity } from "../components/GeoActivityHeatmap";
-import IncidentDetailPanel from "../components/IncidentDetailPanel";
-import type { DrawerIncident } from "../components/IncidentDrawer";
 import MiniSparkline from "../components/MiniSparkline";
 import RadialGauge from "../components/RadialGauge";
 import SeverityDonut from "../components/SeverityDonut";
-import SeverityPill from "../components/SeverityPill";
 import SocEfficiencyStrip from "../components/SocEfficiencyStrip";
 import TimelineChart, {
   buildHourlyBuckets,
@@ -38,14 +34,6 @@ function sparkFromTotal(n: number): number[] {
   );
 }
 
-function matchesSeverity(sev: string, filter: string | null): boolean {
-  if (!filter) return true;
-  const s = sev.toLowerCase();
-  const f = filter.toLowerCase();
-  if (f === "urgent") return s === "high" || s === "critical";
-  return s === f;
-}
-
 export default function DashboardPage() {
   const { user } = useAuth();
   const shortCode = user?.tenant_short_code ?? null;
@@ -70,7 +58,6 @@ export default function DashboardPage() {
     Boolean(shortCode),
     [shortCode]
   );
-  const [selected, setSelected] = useState<DrawerIncident | null>(null);
   const [feedSeverity, setFeedSeverity] = useState<string | null>(null);
   const [liveFeed, setLiveFeed] = useState(false);
   const [liveTick, setLiveTick] = useState(0);
@@ -81,10 +68,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelected(null);
-        setFeedSeverity(null);
-      }
+      if (e.key === "Escape") setFeedSeverity(null);
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
@@ -102,10 +86,6 @@ export default function DashboardPage() {
   }, [liveFeed, refetch]);
 
   const incidents = data?.recent_incidents ?? [];
-  const filteredIncidents = useMemo(
-    () => incidents.filter((i) => matchesSeverity(i.severity, feedSeverity)),
-    [incidents, feedSeverity]
-  );
   const buckets = useMemo(
     () => buildHourlyBuckets(incidents.map((i) => i.opened_at)),
     [incidents]
@@ -167,8 +147,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="page-title">Security overview</h1>
           <p className="page-subtitle">
-            Your organization&apos;s command view — KPIs, severity timelines, and regional
-            intensity (customer-safe data only).
+            Priority KPIs for your organization — open a tile to dig in.
           </p>
         </div>
         <div className="command-chip-row" role="toolbar" aria-label="Dashboard controls">
@@ -225,7 +204,7 @@ export default function DashboardPage() {
             >
               <div className="kpi-card-top">
                 <span className="kpi-label">Events monitored</span>
-                <MiniSparkline values={sparkFromTotal(eventsMonitored)} />
+                <MiniSparkline values={sparkFromTotal(eventsMonitored)} width={56} height={18} />
               </div>
               <div className="kpi-value kpi-value--accent">
                 {eventsMonitored >= 1000
@@ -233,7 +212,7 @@ export default function DashboardPage() {
                   : eventsMonitored.toLocaleString()}
               </div>
               <div className="kpi-foot">
-                Collectors online: {data.kpis.appliances_online} · click → alerts
+                Collectors online: {data.kpis.appliances_online} · alerts
               </div>
             </Link>
 
@@ -246,17 +225,26 @@ export default function DashboardPage() {
                 <span className="kpi-orb kpi-orb--high" aria-hidden="true" />
               </div>
               <div className="kpi-value kpi-value--high">{data.kpis.high_critical_alerts}</div>
-              <div className="kpi-foot">High / critical · click to filter</div>
+              <div className="kpi-foot">High / critical</div>
             </Link>
 
             <Link
-              className="kpi-card kpi-card--low card-surface kpi-card--link"
+              className="kpi-card kpi-card--low card-surface kpi-card--link kpi-card--gauge"
               to="/recommendations"
               aria-label="Open recommendations"
             >
               <div className="kpi-card-top">
                 <span className="kpi-label">Open recommendations</span>
+              </div>
+              <div className="kpi-card-metric-row">
+                <div>
+                  <div className="kpi-value kpi-value--low">
+                    {data.kpis.open_recommendations ?? 0}
+                  </div>
+                  <div className="kpi-foot">Open items</div>
+                </div>
                 <RadialGauge
+                  size={68}
                   percent={Math.min(
                     99,
                     Math.max(
@@ -264,11 +252,8 @@ export default function DashboardPage() {
                       100 - Math.min(90, (data.kpis.open_recommendations || 0) * 8)
                     )
                   )}
-                  label="Done"
+                  label="Readiness"
                 />
-              </div>
-              <div className="kpi-value kpi-value--low">
-                {data.kpis.open_recommendations ?? 0}
               </div>
               <div className="kpi-foot">Actions for your team · click to open</div>
             </Link>
@@ -309,94 +294,6 @@ export default function DashboardPage() {
               liveTick={liveTick}
               footnote="Aggregated overlay for your package — never raw IP locations."
             />
-          </div>
-
-          <DetectionStackPanel />
-
-          <div className="ops-split">
-            <div className="ops-split-main">
-              <div className="ops-grid-header">
-                <h2 className="section-title">Incidents</h2>
-                <div className="ops-grid-actions">
-                  {feedSeverity ? (
-                    <button
-                      type="button"
-                      className="filter-chip"
-                      onClick={() => setFeedSeverity(null)}
-                    >
-                      Isolated: {feedSeverity} ×
-                    </button>
-                  ) : null}
-                  <Link className="ops-grid-meta cell-mono" to="/incidents">
-                    {filteredIncidents.length}/{incidents.length} rows · view all
-                  </Link>
-                </div>
-              </div>
-
-              {filteredIncidents.length === 0 ? (
-                <div className="state-message">
-                  No incidents{feedSeverity ? ` matching “${feedSeverity}”` : ""} to show.
-                </div>
-              ) : (
-                <table className="data-table data-table--readable">
-                  <thead>
-                    <tr>
-                      <th>Incident ID</th>
-                      <th>Title / Rule Name</th>
-                      <th>Asset</th>
-                      <th>Device</th>
-                      <th>Severity</th>
-                      <th>Status</th>
-                      <th>Summary</th>
-                      <th>Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredIncidents.map((inc) => {
-                      const active = selected?.incident_number === inc.incident_number;
-                      return (
-                        <tr
-                          key={inc.incident_number}
-                          className={active ? "is-selected-row" : undefined}
-                          onClick={() =>
-                            setSelected({
-                              incident_number: inc.incident_number,
-                              title: inc.title,
-                              severity: inc.severity,
-                              status: inc.status,
-                              summary: inc.customer_visible_summary,
-                              business_impact: inc.business_impact,
-                              customer_action_required: inc.customer_action_required,
-                              opened_at: inc.opened_at,
-                              affected_entity: inc.hostname ?? "Protected asset",
-                              detailPath: `/incidents/${encodeURIComponent(inc.incident_number)}`,
-                            })
-                          }
-                        >
-                          <td className="cell-mono text-cyan">{inc.incident_number}</td>
-                          <td className="cell-truncate" title={inc.title}>
-                            {inc.title}
-                          </td>
-                          <td className="cell-mono">{inc.hostname ?? "—"}</td>
-                          <td>{inc.device_type ?? "—"}</td>
-                          <td>
-                            <SeverityPill value={inc.severity} onIsolate={(v) => setFeedSeverity(v)} />
-                          </td>
-                          <td>
-                            <SeverityPill value={inc.status} kind="status" filterBase="/incidents" />
-                          </td>
-                          <td className="cell-truncate" title={inc.customer_visible_summary ?? ""}>
-                            {inc.customer_visible_summary ?? "—"}
-                          </td>
-                          <td className="cell-mono">{inc.opened_at ?? "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            <IncidentDetailPanel incident={selected} mode="customer" />
           </div>
         </>
       )}

@@ -23,6 +23,10 @@ grep -q 'Dispatched' frontend-customer/src/api/edr.ts \
   || fail "customer EDR badges must use Dispatched"
 grep -q 'blockoutbound' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
   || fail "Windows isolate must use blockoutbound policy"
+grep -q 'Send-MsspEdrCallback' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows isolate must POST endpoint callback (KB-091 Wave 1)"
+grep -q 'applied is True' backend-api/app/services/edr_actions.py \
+  || fail "callback must promote isolate to verified only when applied=true"
 test -f docs/KB091_ENTERPRISE_CONTAINMENT_HONESTY_GAPS.md \
   || fail "gap register missing"
 

@@ -1,15 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDashboard, getIncidents, getTenants, type Incident } from "../api/admin";
+import { getDashboard, getIncidents, getTenants, getConsultationSummary, type Incident } from "../api/admin";
 import { getStoredTenantFilter } from "../components/TenantSwitcher";
-import DetectionStackPanel from "../components/DetectionStackPanel";
 import GeoActivityHeatmap, { hubsFromActivity } from "../components/GeoActivityHeatmap";
-import IncidentDetailPanel from "../components/IncidentDetailPanel";
-import type { DrawerIncident } from "../components/IncidentDrawer";
 import MiniSparkline from "../components/MiniSparkline";
 import RadialGauge from "../components/RadialGauge";
 import SeverityDonut from "../components/SeverityDonut";
-import SeverityPill from "../components/SeverityPill";
 import SocEfficiencyStrip from "../components/SocEfficiencyStrip";
 import TimelineChart, {
   buildHourlyBuckets,
@@ -40,14 +36,6 @@ function sparkFromTotal(n: number): number[] {
   );
 }
 
-function matchesSeverity(sev: string, filter: string | null): boolean {
-  if (!filter) return true;
-  const s = sev.toLowerCase();
-  const f = filter.toLowerCase();
-  if (f === "urgent") return s === "high" || s === "critical";
-  return s === f;
-}
-
 function withinWindow(iso: string | null | undefined, window: TimeWindow): boolean {
   if (!iso) return window === "7d";
   const t = Date.parse(iso);
@@ -56,30 +44,9 @@ function withinWindow(iso: string | null | undefined, window: TimeWindow): boole
   return t >= Date.now() - hours * 3600_000;
 }
 
-function toDrawer(inc: Incident): DrawerIncident {
-  return {
-    id: inc.id,
-    incident_number: inc.incident_number,
-    title: inc.title,
-    severity: inc.severity,
-    status: inc.status,
-    tenant_name: inc.tenant_name,
-    short_code: inc.short_code,
-    assigned_to: inc.assigned_to,
-    summary: inc.customer_visible_summary,
-    opened_at: inc.opened_at,
-    affected_entity: inc.tenant_name ? `${inc.short_code || "host"}-01` : "Pending enrichment",
-    source_ip: null,
-    target_ip: null,
-    rule_source: "SIEM → Incident Response",
-    detailPath: `/incidents/${inc.id}`,
-  };
-}
-
 export default function DashboardPage() {
   const dash = useAdminQuery(() => getDashboard(), []);
   const incidentsQ = useAdminQuery(() => getIncidents({ page: 1, page_size: 200 }), []);
-  const [selected, setSelected] = useState<DrawerIncident | null>(null);
   const [feedSeverity, setFeedSeverity] = useState<string | null>(null);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("24h");
   const [crossTenant, setCrossTenant] = useState(true);
@@ -89,6 +56,13 @@ export default function DashboardPage() {
   const [tenantCodeById, setTenantCodeById] = useState<Record<string, string>>({});
   const [edrMetrics, setEdrMetrics] = useState<EdrMetricsSummary | null>(null);
   const [edrLoading, setEdrLoading] = useState(true);
+  const [pendingServiceRequests, setPendingServiceRequests] = useState<number | null>(null);
+
+  useEffect(() => {
+    getConsultationSummary()
+      .then((s) => setPendingServiceRequests(s.unreviewed_total))
+      .catch(() => setPendingServiceRequests(null));
+  }, []);
 
   useEffect(() => {
     setEdrLoading(true);
@@ -104,10 +78,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setSelected(null);
-        setFeedSeverity(null);
-      }
+      if (e.key === "Escape") setFeedSeverity(null);
     };
     window.addEventListener("keydown", onEsc);
     return () => window.removeEventListener("keydown", onEsc);
@@ -169,11 +140,6 @@ export default function DashboardPage() {
     return rows;
   }, [incidents, timeWindow, crossTenant, tenantFilter, tenantCodeById]);
 
-  const filteredIncidents = useMemo(
-    () => scopedIncidents.filter((i) => matchesSeverity(i.severity, feedSeverity)),
-    [scopedIncidents, feedSeverity]
-  );
-
   const buckets = useMemo(
     () =>
       buildHourlyBuckets(
@@ -218,10 +184,6 @@ export default function DashboardPage() {
     [overview, scopedIncidents.length, liveTick]
   );
 
-  const selectIncident = useCallback((inc: Incident) => {
-    setSelected(toDrawer(inc));
-  }, []);
-
   const loading = dash.status === "loading" || incidentsQ.status === "loading";
   const forbidden = dash.status === "forbidden" || incidentsQ.status === "forbidden";
   const error =
@@ -241,7 +203,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="page-title">Security operations</h1>
           <p className="page-subtitle">
-            MSSP command center — KPIs, anomaly heatmap, and investigation workspace.
+            Priority KPIs and ops health — open a tile to dig in.
           </p>
         </div>
         <div className="command-chip-row" role="toolbar" aria-label="Dashboard controls">
@@ -305,7 +267,7 @@ export default function DashboardPage() {
 
       {overview && (
         <>
-          <div className="kpi-row-4">
+          <div className="kpi-row-5">
             <Link
               className="kpi-card kpi-card--critical card-surface kpi-card--link"
               to="/incidents?status=open"
@@ -328,7 +290,7 @@ export default function DashboardPage() {
             >
               <div className="kpi-card-top">
                 <span className="kpi-label">Events Collected</span>
-                <MiniSparkline values={sparkFromTotal(eventsMonitored)} />
+                <MiniSparkline values={sparkFromTotal(eventsMonitored)} width={56} height={18} />
               </div>
               <div className="kpi-value kpi-value--accent">
                 {eventsMonitored >= 1000
@@ -350,26 +312,43 @@ export default function DashboardPage() {
                 <span className="kpi-orb kpi-orb--high" aria-hidden="true" />
               </div>
               <div className="kpi-value kpi-value--high">{overview.high_or_critical_alerts}</div>
-              <div className="kpi-foot">High / critical · click to filter</div>
+              <div className="kpi-foot">High / critical</div>
             </Link>
 
             <Link
-              className="kpi-card kpi-card--low card-surface kpi-card--link"
+              className="kpi-card kpi-card--low card-surface kpi-card--link kpi-card--gauge"
               to="/appliances"
               aria-label="Open appliances / collectors"
             >
               <div className="kpi-card-top">
                 <span className="kpi-label">Collector health</span>
-                <RadialGauge percent={collectorCoverage} label="Online" />
               </div>
-              <div className="kpi-value kpi-value--low">{collectorCoverage}%</div>
-              <div className="kpi-foot">
-                {overview.online_appliances} online
-                {overview.offline_appliances
-                  ? ` · ${overview.offline_appliances} offline`
-                  : ""}{" "}
-                · click → appliances
+              <div className="kpi-card-metric-row">
+                <div>
+                  <div className="kpi-value kpi-value--low">{collectorCoverage}%</div>
+                  <div className="kpi-foot">
+                    {overview.online_appliances} online
+                    {overview.offline_appliances ? ` · ${overview.offline_appliances} off` : ""}
+                  </div>
+                </div>
+                <RadialGauge percent={collectorCoverage} label="Online" size={68} />
               </div>
+              <div className="kpi-foot">Click → appliances</div>
+            </Link>
+
+            <Link
+              className="kpi-card kpi-card--high card-surface kpi-card--link"
+              to="/service-requests"
+              aria-label="Open pending service requests"
+            >
+              <div className="kpi-card-top">
+                <span className="kpi-label">Pending Service Requests</span>
+                <span className="kpi-orb kpi-orb--high" aria-hidden="true" />
+              </div>
+              <div className="kpi-value kpi-value--high">
+                {pendingServiceRequests == null ? "—" : pendingServiceRequests}
+              </div>
+              <div className="kpi-foot">Unreviewed · manage</div>
             </Link>
           </div>
 
@@ -414,91 +393,6 @@ export default function DashboardPage() {
               title="Log Source Anomaly Heatmap"
               liveTick={liveTick}
             />
-          </div>
-
-          <DetectionStackPanel />
-
-          <div className="ops-split">
-            <div className="ops-split-main">
-              <div className="ops-grid-header">
-                <h2 className="section-title">Incidents</h2>
-                <div className="ops-grid-actions">
-                  {feedSeverity ? (
-                    <button
-                      type="button"
-                      className="filter-chip"
-                      onClick={() => setFeedSeverity(null)}
-                    >
-                      Isolated: {feedSeverity} ×
-                    </button>
-                  ) : null}
-                  {!crossTenant ? (
-                    <span className="filter-chip">Tenant scoped</span>
-                  ) : null}
-                  <Link className="ops-grid-meta cell-mono" to="/incidents">
-                    {filteredIncidents.length}/{scopedIncidents.length} rows · view all
-                  </Link>
-                </div>
-              </div>
-
-              {filteredIncidents.length === 0 ? (
-                <div className="state-message">
-                  No incidents
-                  {feedSeverity ? ` matching “${feedSeverity}”` : ""}
-                  {!crossTenant ? " in scoped tenant view" : ""}
-                  {` for ${timeWindow}`}.
-                </div>
-              ) : (
-                <table className="data-table data-table--readable">
-                  <thead>
-                    <tr>
-                      <th>Incident ID</th>
-                      <th>Title / Rule Name</th>
-                      <th>Severity</th>
-                      <th>Status</th>
-                      <th>Assignee</th>
-                      <th>Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredIncidents.slice(0, 40).map((inc) => {
-                      const active = selected?.id === inc.id;
-                      return (
-                        <tr
-                          key={inc.id}
-                          className={active ? "is-selected-row" : undefined}
-                          onClick={() => selectIncident(inc)}
-                        >
-                          <td className="cell-mono text-cyan">{inc.incident_number}</td>
-                          <td className="cell-truncate" title={inc.title}>
-                            {inc.title}
-                            {crossTenant ? (
-                              <div className="row-submeta">{inc.tenant_name}</div>
-                            ) : null}
-                          </td>
-                          <td>
-                            <SeverityPill
-                              value={inc.severity}
-                              onIsolate={(v) => setFeedSeverity(v)}
-                            />
-                          </td>
-                          <td>
-                            <SeverityPill
-                              value={inc.status}
-                              kind="status"
-                              filterBase="/incidents"
-                            />
-                          </td>
-                          <td>{inc.assigned_to ?? "—"}</td>
-                          <td className="cell-mono">{inc.opened_at ?? "—"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            <IncidentDetailPanel incident={selected} mode="admin" />
           </div>
         </>
       )}

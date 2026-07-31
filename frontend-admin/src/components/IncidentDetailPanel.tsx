@@ -1,7 +1,6 @@
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import type { DrawerIncident } from "./IncidentDrawer";
-import InvestigationGraph from "./InvestigationGraph";
 import SeverityPill from "./SeverityPill";
 import { getEdrDeepDive, type EdrDeepDive } from "../api/edr";
 import { useAuth } from "../auth/AuthContext";
@@ -16,8 +15,8 @@ type Props = {
 };
 
 /**
- * Inline selected-incident panel (Sentinel-style bottom-right):
- * details + entity graph + quick actions.
+ * Inline selected-incident panel (details + EDR controls).
+ * Entity-mapping graph removed — it overlapped the incidents grid.
  */
 export default function IncidentDetailPanel({
   incident,
@@ -49,9 +48,8 @@ export default function IncidentDetailPanel({
             Incident details
           </h2>
           <p className="page-subtitle">
-            Select a row from the incidents list to inspect entities and run quick actions.
+            Select a row from the incidents list to review summary and run response actions.
           </p>
-          <InvestigationGraph title="Entity mapping (idle)" />
         </div>
       </aside>
     );
@@ -99,16 +97,6 @@ export default function IncidentDetailPanel({
           <dd className="drawer-summary">{incident.summary ?? "—"}</dd>
         </dl>
       </div>
-
-      <InvestigationGraph
-        title="Entity mapping"
-        entities={[
-          { id: "user", label: "User", kind: "user" },
-          { id: "host", label: "Host", kind: "host" },
-          { id: "proc", label: "Process", kind: "process" },
-          { id: "ip", label: mode === "admin" ? "IP" : "Net", kind: "network" },
-        ]}
-      />
 
       {mode === "admin" && edr ? (
         <>

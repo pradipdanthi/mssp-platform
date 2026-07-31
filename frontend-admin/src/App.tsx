@@ -18,6 +18,8 @@ import ReportsPage from "./pages/ReportsPage";
 import AssetsPage from "./pages/AssetsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import AuditLogDetailPage from "./pages/AuditLogDetailPage";
+import ServiceCatalogPage from "./pages/ServiceCatalogPage";
+import ServiceRequestsPage from "./pages/ServiceRequestsPage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -150,6 +152,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AuditLogDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/services"
+        element={
+          <ProtectedRoute>
+            <ServiceCatalogPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/service-requests"
+        element={
+          <ProtectedRoute>
+            <ServiceRequestsPage />
           </ProtectedRoute>
         }
       />

@@ -2,12 +2,16 @@
 export default function MiniSparkline({
   values,
   stroke = "#00AEEF",
+  width = 88,
+  height = 28,
 }: {
   values: number[];
   stroke?: string;
+  width?: number;
+  height?: number;
 }) {
-  const w = 88;
-  const h = 28;
+  const w = width;
+  const h = height;
   const max = Math.max(...values, 1);
   const min = Math.min(...values, 0);
   const span = Math.max(max - min, 1);

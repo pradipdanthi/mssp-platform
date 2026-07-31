@@ -16,7 +16,7 @@ const COLORS = {
 
 const Y_MAX = 20;
 const CHART_W = 560;
-const CHART_H = 168;
+const CHART_H = 120;
 const PAD_L = 36;
 const PAD_R = 12;
 const PAD_T = 12;

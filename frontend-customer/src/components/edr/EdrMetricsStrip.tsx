@@ -30,14 +30,14 @@ export default function EdrMetricsStrip({
         <h2 className="section-title" style={{ margin: 0 }}>
           Endpoint response metrics
         </h2>
-        <p className="page-subtitle" style={{ margin: "0.25rem 0 0" }}>
-          How quickly hosts are contained and how much endpoint activity is being monitored.
-          To isolate or release a host, open an <strong>incident</strong> below and use the
-          containment controls.
-        </p>
+        <Link className="edr-metrics-open-link" to="/incidents">
+          Open incidents →
+        </Link>
       </div>
       {loading ? (
-        <p className="muted">Loading endpoint metrics…</p>
+        <p className="muted" style={{ margin: "0.35rem 0 0" }}>
+          Loading endpoint metrics…
+        </p>
       ) : (
         <div className="kpi-row-3 edr-metrics-kpis">
           <div className="kpi-card card-surface">
@@ -56,7 +56,7 @@ export default function EdrMetricsStrip({
             <div className="kpi-value">
               {(metrics?.telemetry_events_processed ?? 0).toLocaleString()}
             </div>
-            <div className="kpi-foot">Monitored events · click → alerts</div>
+            <div className="kpi-foot">Monitored events · alerts</div>
           </Link>
           <Link
             className="kpi-card card-surface kpi-card--link"
@@ -67,15 +67,10 @@ export default function EdrMetricsStrip({
             <div className="kpi-value kpi-value--critical">
               {metrics?.isolated_endpoints_count ?? 0}
             </div>
-            <div className="kpi-foot">Hosts in quarantine · click → incidents</div>
+            <div className="kpi-foot">In quarantine · incidents</div>
           </Link>
         </div>
       )}
-      <p style={{ marginTop: "0.75rem" }}>
-        <Link className="btn btn-ghost" to="/incidents">
-          Open incidents →
-        </Link>
-      </p>
     </section>
   );
 }

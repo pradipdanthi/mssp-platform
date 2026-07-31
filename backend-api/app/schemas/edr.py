@@ -96,6 +96,10 @@ class EdrActionCallbackRequest(BaseModel):
     error_log: Optional[str] = Field(default=None, max_length=8000)
     agent_id: Optional[str] = Field(default=None, max_length=64)
     external_ref: Optional[str] = Field(default=None, max_length=255)
+    # Endpoint-proven quarantine flag (KB-091 Wave 1). True → isolate Verified.
+    applied: Optional[bool] = None
+    # Auto-release / unisolate callback: clear edr_endpoint_isolation to restored.
+    released: Optional[bool] = None
 
 
 class EdrForensicsCompleteRequest(BaseModel):

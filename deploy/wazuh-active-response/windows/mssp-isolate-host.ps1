@@ -32,15 +32,36 @@ $Log = $LogCandidates | Where-Object { Test-Path (Split-Path $_ -Parent) } | Sel
 if (-not $Log) { $Log = $LogCandidates[0] }
 
 $Manager = "192.168.0.211"
+$ControlPlane = "192.168.0.201"
 $StateFile = Join-Path $env:ProgramData "mssp-edr-isolate-state.json"
 $MarkerFile = Join-Path $env:ProgramData "mssp-edr-quarantine.active"
+$CallbackUrl = ""
+$CallbackKey = ""
 $envFile = Join-Path $PSScriptRoot "mssp-ar.env"
 if (Test-Path -LiteralPath $envFile) {
   Get-Content -LiteralPath $envFile | ForEach-Object {
     if ($_ -match '^\s*WAZUH_MANAGER_IP\s*=\s*(.+)\s*$') {
       $Manager = $Matches[1].Trim()
     }
+    if ($_ -match '^\s*MSSP_CONTROL_PLANE_IP\s*=\s*(.+)\s*$') {
+      $ControlPlane = $Matches[1].Trim()
+    }
+    if ($_ -match '^\s*MSSP_CALLBACK_URL\s*=\s*(.+)\s*$') {
+      $CallbackUrl = $Matches[1].Trim()
+    }
+    if ($_ -match '^\s*MSSP_CALLBACK_KEY\s*=\s*(.+)\s*$') {
+      $CallbackKey = $Matches[1].Trim()
+    }
   }
+}
+# Prefer callback URL host when set (KB-091: quarantine must still reach control plane).
+if ($CallbackUrl) {
+  try {
+    $cbHost = ([Uri]$CallbackUrl).Host
+    if ($cbHost -and $cbHost -match '^\d{1,3}(\.\d{1,3}){3}$') {
+      $ControlPlane = $cbHost
+    }
+  } catch {}
 }
 
 function Write-ArLog([string]$Message) {
@@ -64,6 +85,45 @@ function Write-ArLog([string]$Message) {
   }
 }
 
+function Send-MsspEdrCallback {
+  param(
+    [string]$ExecutionId,
+    [string]$Status,
+    [string]$Message,
+    [bool]$Applied,
+    [bool]$Released = $false,
+    [string]$AgentId = ""
+  )
+  if (-not $ExecutionId) {
+    Write-ArLog "CALLBACK skip: no execution_id"
+    return
+  }
+  if (-not $CallbackUrl) {
+    Write-ArLog "CALLBACK skip: MSSP_CALLBACK_URL not set in mssp-ar.env"
+    return
+  }
+  $bodyObj = @{
+    execution_id = $ExecutionId
+    status       = $Status
+    message      = $Message
+    agent_id     = $AgentId
+    applied      = $Applied
+    released     = $Released
+  }
+  $json = $bodyObj | ConvertTo-Json -Compress
+  try {
+    $headers = @{}
+    if ($CallbackKey) {
+      $headers["X-SOC-Sync-Key"] = $CallbackKey
+      $headers["X-EDR-Callback-Key"] = $CallbackKey
+    }
+    Invoke-RestMethod -Method Post -Uri $CallbackUrl -Body $json -ContentType "application/json" -Headers $headers -TimeoutSec 15 | Out-Null
+    Write-ArLog "CALLBACK ok status=$Status applied=$Applied released=$Released exec=$ExecutionId"
+  } catch {
+    Write-ArLog "CALLBACK failed: $($_.Exception.Message)"
+  }
+}
+
 function Invoke-Netsh([string[]]$NetshArgs) {
   $info = New-Object System.Diagnostics.ProcessStartInfo
   $info.FileName = "netsh.exe"
@@ -83,6 +143,8 @@ function Clear-MsspAllowRules {
   foreach ($name in @(
     "MSSP_QUAR_ALLOW_MANAGER_OUT",
     "MSSP_QUAR_ALLOW_MANAGER_IN",
+    "MSSP_QUAR_ALLOW_CTRLPLANE_OUT",
+    "MSSP_QUAR_ALLOW_CTRLPLANE_IN",
     "MSSP_QUAR_ALLOW_DHCP",
     "MSSP_QUAR_ALLOW_LOOPBACK_OUT",
     "MSSP_QUAR_ALLOW_LOOPBACK_IN",
@@ -94,6 +156,8 @@ function Clear-MsspAllowRules {
     "MSSP_QUAR_BLOCK_RPC_IN",
     "MSSP_QUAR_BLOCK_SSH_IN",
     "MSSP_QUAR_BLOCK_SSH_OUT",
+    "MSSP_QUAR_BLOCK_ICMP_IN",
+    "MSSP_QUAR_BLOCK_ICMP_OUT",
     # legacy names from earlier iterations
     "MSSP_ISOLATE_ALLOW_MANAGER_OUT",
     "MSSP_ISOLATE_ALLOW_MANAGER_IN",
@@ -112,8 +176,9 @@ function Clear-MsspAllowRules {
 
 function Disable-MsspLateralAllowRules {
   # Default-deny alone is NOT enough: Windows keeps explicit ALLOW rules for
-  # Remote Desktop / SMB / WinRM. Those still permit traffic (and established
-  # RDP sessions keep flowing). Disable those allows during quarantine.
+  # Remote Desktop / SMB / WinRM / File Sharing. Those still permit traffic (and
+  # established RDP sessions keep flowing). Disable those allows during quarantine
+  # and remember EXACT prior Enabled state for restore.
   $saved = @()
   $patterns = @(
     "*Remote Desktop*",
@@ -123,10 +188,11 @@ function Disable-MsspLateralAllowRules {
     "*WinRM*",
     "*Remote Event Log*",
     "*Remote Service Management*",
-    "*Remote Scheduled Tasks*"
+    "*Remote Scheduled Tasks*",
+    "*Echo Request*"
   )
   try {
-    $rules = Get-NetFirewallRule -Enabled True -ErrorAction SilentlyContinue |
+    $rules = Get-NetFirewallRule -ErrorAction SilentlyContinue |
       Where-Object {
         $dn = [string]$_.DisplayName
         $dg = [string]$_.DisplayGroup
@@ -136,28 +202,53 @@ function Disable-MsspLateralAllowRules {
         return $false
       }
     foreach ($rule in $rules) {
-      $saved += $rule.Name
-      try {
-        Disable-NetFirewallRule -Name $rule.Name -ErrorAction Stop
-        Write-ArLog "Disabled allow rule name=$($rule.Name) display=$($rule.DisplayName)"
-      } catch {
-        Write-ArLog "WARN disable rule $($rule.Name): $($_.Exception.Message)"
+      $wasEnabled = [bool]($rule.Enabled -eq "True" -or $rule.Enabled -eq $true)
+      $saved += [ordered]@{
+        name        = [string]$rule.Name
+        display     = [string]$rule.DisplayName
+        was_enabled = $wasEnabled
+      }
+      if ($wasEnabled) {
+        try {
+          Disable-NetFirewallRule -Name $rule.Name -ErrorAction Stop
+          Write-ArLog "Disabled allow rule name=$($rule.Name) display=$($rule.DisplayName)"
+        } catch {
+          Write-ArLog "WARN disable rule $($rule.Name): $($_.Exception.Message)"
+        }
       }
     }
   } catch {
     Write-ArLog "WARN enumerating lateral allow rules: $($_.Exception.Message)"
   }
-  return $saved
+  return @($saved)
 }
 
-function Enable-MsspLateralAllowRules([object]$SavedNames) {
-  if (-not $SavedNames) { return }
-  foreach ($name in @($SavedNames)) {
+function Restore-MsspLateralAllowRules([object]$SavedRules) {
+  if (-not $SavedRules) { return }
+  foreach ($item in @($SavedRules)) {
+    $name = $null
+    $wasEnabled = $true
+    if ($item -is [string]) {
+      # legacy state format: bare rule name list
+      $name = $item
+      $wasEnabled = $true
+    } else {
+      try { $name = [string]$item.name } catch { $name = $null }
+      try {
+        if ($null -ne $item.was_enabled) { $wasEnabled = [bool]$item.was_enabled }
+      } catch {}
+    }
+    if (-not $name) { continue }
     try {
-      Enable-NetFirewallRule -Name $name -ErrorAction Stop
-      Write-ArLog "Re-enabled allow rule name=$name"
+      if ($wasEnabled) {
+        Enable-NetFirewallRule -Name $name -ErrorAction Stop
+        Write-ArLog "Restored ENABLED allow rule name=$name"
+      } else {
+        Disable-NetFirewallRule -Name $name -ErrorAction SilentlyContinue
+        Write-ArLog "Restored DISABLED allow rule name=$name"
+      }
     } catch {
-      Write-ArLog ("WARN re-enable rule ${name}: " + $_.Exception.Message)
+      Write-ArLog ("WARN restore rule ${name}: " + $_.Exception.Message)
     }
   }
 }
@@ -172,7 +263,10 @@ function Add-LateralBlockRules {
     @{ Name = "MSSP_QUAR_BLOCK_WINRM_IN"; Dir = "in"; Extra = @("protocol=tcp", "localport=5985,5986") },
     @{ Name = "MSSP_QUAR_BLOCK_RPC_IN"; Dir = "in"; Extra = @("protocol=tcp", "localport=135") },
     @{ Name = "MSSP_QUAR_BLOCK_SSH_IN"; Dir = "in"; Extra = @("protocol=tcp", "localport=22") },
-    @{ Name = "MSSP_QUAR_BLOCK_SSH_OUT"; Dir = "out"; Extra = @("protocol=tcp", "remoteport=22") }
+    @{ Name = "MSSP_QUAR_BLOCK_SSH_OUT"; Dir = "out"; Extra = @("protocol=tcp", "remoteport=22") },
+    # Explicit ICMP blocks (in addition to profile default-deny) for complete containment.
+    @{ Name = "MSSP_QUAR_BLOCK_ICMP_IN"; Dir = "in"; Extra = @("protocol=icmpv4:8,any") },
+    @{ Name = "MSSP_QUAR_BLOCK_ICMP_OUT"; Dir = "out"; Extra = @("protocol=icmpv4:8,any") }
   )
   foreach ($b in $blocks) {
     $args = @(
@@ -238,18 +332,23 @@ function Set-FirewallDefaultActions([string]$Inbound, [string]$Outbound) {
 }
 
 function Get-FirewallStateObject {
+  # Full pre-quarantine snapshot so lift restores the host exactly.
   $state = [ordered]@{
-    saved_at   = (Get-Date).ToUniversalTime().ToString("o")
-    manager    = $Manager
-    domain_in  = "Block"; domain_out  = "Allow"
-    private_in = "Block"; private_out = "Allow"
-    public_in  = "Block"; public_out  = "Allow"
+    saved_at           = (Get-Date).ToUniversalTime().ToString("o")
+    manager            = $Manager
+    control_plane      = $ControlPlane
+    execution_id       = ""
+    domain_in          = "Block"; domain_out  = "Allow"; domain_enabled  = $true
+    private_in         = "Block"; private_out = "Allow"; private_enabled = $true
+    public_in          = "Block"; public_out  = "Allow"; public_enabled  = $true
+    disabled_allow_rules = @()
   }
   try {
     foreach ($p in Get-NetFirewallProfile -Profile Domain, Private, Public -ErrorAction Stop) {
       $key = $p.Name.ToLowerInvariant()
       $state["${key}_in"] = [string]$p.DefaultInboundAction
       $state["${key}_out"] = [string]$p.DefaultOutboundAction
+      $state["${key}_enabled"] = [bool]($p.Enabled -eq "True" -or $p.Enabled -eq $true)
     }
   } catch {
     Write-ArLog "Get-NetFirewallProfile failed: $($_.Exception.Message)"
@@ -304,66 +403,123 @@ function Test-QuarantineEffect {
   return $effective
 }
 
+function Convert-ToMsspBool($Value, [bool]$Default = $true) {
+  if ($null -eq $Value) { return $Default }
+  if ($Value -is [bool]) { return $Value }
+  $s = ([string]$Value).Trim().ToLowerInvariant()
+  if ($s -in @("true", "1", "yes")) { return $true }
+  if ($s -in @("false", "0", "no")) { return $false }
+  return $Default
+}
+
 function Remove-IsolationRules {
-  Clear-MsspAllowRules
-  $disabledRules = @()
+  # IMPORTANT order:
+  # 1) Restore profile defaults FIRST (outbound Allow) while Manager/control-plane
+  #    allow rules still exist — otherwise default-deny + clearing allows traps the host
+  #    and the release callback cannot reach the control plane.
+  # 2) Restore prior Enabled state for lateral/ICMP rules we touched.
+  # 3) Remove temporary MSSP_* quarantine rules.
+  # 4) Clear marker.
+  $savedRules = @()
+  $executionIdFromState = ""
+  $restoredProfiles = $false
   if (Test-Path -LiteralPath $StateFile) {
     try {
       $state = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
+      try { $executionIdFromState = [string]$state.execution_id } catch { $executionIdFromState = "" }
       foreach ($name in @("Domain", "Private", "Public")) {
         $key = $name.ToLowerInvariant()
         $inA = $state."${key}_in"; if (-not $inA) { $inA = "Block" }
         $outA = $state."${key}_out"; if (-not $outA) { $outA = "Allow" }
+        $en = Convert-ToMsspBool $state."${key}_enabled" $true
         try {
-          Set-NetFirewallProfile -Profile $name -DefaultInboundAction $inA -DefaultOutboundAction $outA -ErrorAction Stop | Out-Null
+          Set-NetFirewallProfile -Profile $name `
+            -DefaultInboundAction $inA `
+            -DefaultOutboundAction $outA `
+            -Enabled $en `
+            -ErrorAction Stop | Out-Null
+          Write-ArLog "restore profile $name in=$inA out=$outA enabled=$en"
+          $restoredProfiles = $true
         } catch {
-          Write-ArLog "restore $name failed: $($_.Exception.Message)"
+          Write-ArLog "restore $name Set-NetFirewallProfile failed: $($_.Exception.Message)"
+          $inPart = if ($inA -eq "Block") { "blockinbound" } else { "allowinbound" }
+          $outPart = if ($outA -eq "Block") { "blockoutbound" } else { "allowoutbound" }
+          $prof = switch ($name) {
+            "Domain" { "domainprofile" }
+            "Private" { "privateprofile" }
+            default { "publicprofile" }
+          }
+          $r = Invoke-Netsh @("advfirewall", "set", $prof, "firewallpolicy", "$inPart,$outPart")
+          Write-ArLog "restore $name netsh rc=$($r.ExitCode)"
+          if ($r.ExitCode -eq 0) { $restoredProfiles = $true }
         }
       }
       if ($state.disabled_allow_rules) {
-        $disabledRules = @($state.disabled_allow_rules)
+        $savedRules = @($state.disabled_allow_rules)
       }
       Remove-Item -LiteralPath $StateFile -Force -ErrorAction SilentlyContinue
-      Write-ArLog "QUARANTINE lift - profiles restored from state"
+      Write-ArLog "QUARANTINE lift - snapshot applied (profiles first)"
     } catch {
       Write-ArLog "QUARANTINE lift - state parse failed: $($_.Exception.Message)"
+    }
+  }
+  if (-not $restoredProfiles) {
+    [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
+    Write-ArLog "QUARANTINE lift - fallback inbound=Block outbound=Allow"
+  }
+
+  # Verify outbound actually restored; retry fallback if still blocked.
+  try {
+    $stillBlocked = @(Get-NetFirewallProfile -Profile Domain, Private, Public -ErrorAction Stop |
+      Where-Object { $_.DefaultOutboundAction -eq "Block" }).Count
+    if ($stillBlocked -gt 0) {
+      Write-ArLog "WARN outbound still Block on $stillBlocked/3 profiles — forcing Allow"
       [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
     }
-  } else {
+  } catch {
+    Write-ArLog "WARN post-restore profile check failed: $($_.Exception.Message)"
     [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
-    Write-ArLog "QUARANTINE lift - default allow-outbound restored"
   }
-  Enable-MsspLateralAllowRules -SavedNames $disabledRules
+
+  Restore-MsspLateralAllowRules -SavedRules $savedRules
+  Clear-MsspAllowRules
   Remove-Item -LiteralPath $MarkerFile -Force -ErrorAction SilentlyContinue
+  return $executionIdFromState
 }
 
-function Add-IsolationRules([int]$Seconds) {
-  Write-ArLog "QUARANTINE begin manager=$Manager seconds=$Seconds (full default-deny + block RDP/SMB/WinRM)"
+function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
+  Write-ArLog "QUARANTINE begin manager=$Manager control_plane=$ControlPlane seconds=$Seconds exec=$ExecutionId"
   Clear-MsspAllowRules
 
+  # Snapshot BEFORE mutating anything so lift returns to exact prior state.
   $state = Get-FirewallStateObject
   $state["seconds"] = $Seconds
-  $disabled = Disable-MsspLateralAllowRules
-  $state["disabled_allow_rules"] = @($disabled)
+  $state["execution_id"] = $ExecutionId
+  $state["disabled_allow_rules"] = @(Disable-MsspLateralAllowRules)
 
   try {
     $dir = Split-Path $StateFile -Parent
     if (-not (Test-Path -LiteralPath $dir)) {
       New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
-    ($state | ConvertTo-Json -Compress) | Set-Content -LiteralPath $StateFile -Encoding ASCII
+    ($state | ConvertTo-Json -Compress -Depth 6) | Set-Content -LiteralPath $StateFile -Encoding ASCII
+    Write-ArLog ("STATE saved rules=" + @($state.disabled_allow_rules).Count)
   } catch {
     Write-ArLog "WARN state file: $($_.Exception.Message)"
   }
 
   # SOC continuity allow-list BEFORE default-deny
+  # Control plane must stay reachable for applied=true callback (else UI never Verified).
   $allowSpecs = @(
     @{ Name = "MSSP_QUAR_ALLOW_MANAGER_OUT"; Dir = "out"; Extra = @("remoteip=$Manager") },
     @{ Name = "MSSP_QUAR_ALLOW_MANAGER_IN"; Dir = "in"; Extra = @("remoteip=$Manager") },
+    @{ Name = "MSSP_QUAR_ALLOW_CTRLPLANE_OUT"; Dir = "out"; Extra = @("remoteip=$ControlPlane") },
+    @{ Name = "MSSP_QUAR_ALLOW_CTRLPLANE_IN"; Dir = "in"; Extra = @("remoteip=$ControlPlane") },
     @{ Name = "MSSP_QUAR_ALLOW_DHCP"; Dir = "out"; Extra = @("protocol=udp", "remoteport=67,68") },
     @{ Name = "MSSP_QUAR_ALLOW_LOOPBACK_OUT"; Dir = "out"; Extra = @("remoteip=127.0.0.1") },
     @{ Name = "MSSP_QUAR_ALLOW_LOOPBACK_IN"; Dir = "in"; Extra = @("remoteip=127.0.0.1") }
   )
+  Write-ArLog "allow-list manager=$Manager control_plane=$ControlPlane"
   foreach ($spec in $allowSpecs) {
     $args = @(
       "advfirewall", "firewall", "add", "rule",
@@ -390,18 +546,25 @@ function Add-IsolationRules([int]$Seconds) {
 
   if ($effective) {
     "active manager=$Manager since=$(Get-Date -Format o)" | Set-Content -LiteralPath $MarkerFile -Encoding ASCII
-    Write-ArLog "QUARANTINE ACTIVE applied=true (default-deny + RDP/SMB/WinRM blocked; interactive sessions reset)"
+    Write-ArLog "QUARANTINE ACTIVE applied=true (default-deny + RDP/SMB/WinRM/ICMP blocked; sessions reset)"
   } else {
     Write-ArLog "QUARANTINE FAILED applied=false -- host NOT contained; do not trust UI dispatch alone"
   }
 
-  $releaseCmd = @"
+  # Auto-release must pass execution_id so control plane clears isolation_status.
+  if ($Seconds -gt 0) {
+    $exeEsc = $ExecutionId -replace "'", "''"
+    $releaseCmd = @"
 Start-Sleep -Seconds $Seconds
-& '$PSCommandPath' delete
+& '$PSCommandPath' delete '$exeEsc'
 "@
-  Start-Process -FilePath "powershell.exe" -ArgumentList @(
-    "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", $releaseCmd
-  ) -WindowStyle Hidden | Out-Null
+    Start-Process -FilePath "powershell.exe" -ArgumentList @(
+      "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", $releaseCmd
+    ) -WindowStyle Hidden | Out-Null
+    Write-ArLog "auto-release armed seconds=$Seconds exec=$ExecutionId"
+  }
+
+  return [bool]$effective
 }
 
 function Convert-ArArgToRaw([object]$Value) {
@@ -417,11 +580,15 @@ function Convert-ArArgToRaw([object]$Value) {
 }
 
 $raw = ""
+$executionId = ""
 Write-ArLog "STARTED args=$($args.Count)"
 if ($args.Count -gt 0) {
   $a0 = Convert-ArArgToRaw $args[0]
   if (@("delete", "remove", "unisolate") -contains $a0.ToLowerInvariant()) {
-    Remove-IsolationRules
+    $executionId = if ($args.Count -gt 1) { [string](Convert-ArArgToRaw $args[1]) } else { "" }
+    $fromState = Remove-IsolationRules
+    if (-not $executionId -and $fromState) { $executionId = $fromState }
+    Send-MsspEdrCallback -ExecutionId $executionId -Status "success" -Message "QUARANTINE RELEASED applied=true" -Applied $true -Released $true
     exit 0
   }
   if ($a0 -match '[\{\[]') {
@@ -444,17 +611,27 @@ if ($j) {
 }
 if ($extra.Count -gt 0 -and @("delete", "remove", "unisolate") -contains ([string]$extra[0]).ToLowerInvariant()) {
   $cmd = "delete"
+  if ($extra.Count -gt 1) { $executionId = [string]$extra[1] }
 }
 $seconds = 120
 if ($extra.Count -gt 0 -and $cmd -ne "delete") {
   try { $seconds = [int]$extra[0] } catch { $seconds = 120 }
+  if ($extra.Count -gt 1) { $executionId = [string]$extra[1] }
 }
 if ($seconds -lt 30) { $seconds = 30 }
 if ($seconds -gt 600) { $seconds = 600 }
+Write-ArLog "execution_id=$executionId cmd=$cmd seconds=$seconds"
 
 if (@("delete", "remove") -contains $cmd.ToLowerInvariant()) {
-  Remove-IsolationRules
+  $fromState = Remove-IsolationRules
+  if (-not $executionId -and $fromState) { $executionId = $fromState }
+  Send-MsspEdrCallback -ExecutionId $executionId -Status "success" -Message "QUARANTINE RELEASED applied=true" -Applied $true -Released $true
 } else {
-  Add-IsolationRules -Seconds $seconds
+  $applied = [bool](Add-IsolationRules -Seconds $seconds -ExecutionId $executionId)
+  if ($applied) {
+    Send-MsspEdrCallback -ExecutionId $executionId -Status "success" -Message "QUARANTINE ACTIVE applied=true" -Applied $true -Released $false
+  } else {
+    Send-MsspEdrCallback -ExecutionId $executionId -Status "failed" -Message "QUARANTINE FAILED applied=false" -Applied $false -Released $false
+  }
 }
 exit 0
