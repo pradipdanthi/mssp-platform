@@ -42,7 +42,7 @@ DEFAULT_LINUX_RESOLVED = DEFAULT_MOUNT_POINT / "MSSP_Full_Backup"
 
 # Critical remote nodes must succeed for a "complete" backup.
 # VM 112 (Ansible automation controller) is required for post-restore operations.
-CRITICAL_REMOTE_VM_IDS = {101, 102, 106, 109, 112}
+CRITICAL_REMOTE_VM_IDS = {101, 102, 106, 108, 109, 110, 112}
 
 INFRASTRUCTURE: List[Dict[str, Any]] = [
     {
@@ -112,11 +112,25 @@ INFRASTRUCTURE: List[Dict[str, Any]] = [
         "extra_tar_args": [],
     },
     {
+        "vm_id": 108,
+        "hostname": "misp",
+        "ip": "192.168.0.218",
+        "role": "threat_intel",
+        "services": ["misp_rest_bridge"],
+        "ports": [8080],
+        "ssh_user": "secadmin",
+        "ssh_key": str(Path.home() / ".ssh/id_ed25519_misp"),
+        "use_sudo": True,
+        "capture_paths": [
+            "/opt/mssp-misp",
+        ],
+    },
+    {
         "vm_id": 109,
         "hostname": "greenbone-vuln-free",
         "ip": "192.168.0.219",
         "role": "vulnerability",
-        "services": ["greenbone-ce", "nuclei", "vuls"],
+        "services": ["greenbone-ce", "nuclei", "vuls", "amass_easm"],
         "ports": [443, 9392],
         "ssh_user": "secadmin",
         "ssh_key": str(Path.home() / ".ssh/id_ed25519_greenbone"),
@@ -125,6 +139,7 @@ INFRASTRUCTURE: List[Dict[str, Any]] = [
             "/opt/mssp-greenbone/community",
             "/opt/mssp-vuln-free/secrets",
             "/opt/mssp-vuln-free/bin",
+            "/opt/mssp-easm-agent",
         ],
         "docker_volumes_light": [
             "greenbone-community-edition_nginx_config_vol",
@@ -145,6 +160,22 @@ INFRASTRUCTURE: List[Dict[str, Any]] = [
             "/opt/mssp-vuln-free/vuls",
             "/opt/mssp-vuln-free/nuclei-templates",
         ],
+    },
+    {
+        "vm_id": 110,
+        "hostname": "velociraptor",
+        "ip": "192.168.0.220",
+        "role": "dfir",
+        "services": ["velociraptor", "mssp_velociraptor_bridge"],
+        "ports": [8000, 8001, 8002, 8889],
+        "ssh_user": "secadmin",
+        "ssh_key": str(Path.home() / ".ssh/id_ed25519_velociraptor"),
+        "use_sudo": True,
+        "capture_paths": [
+            "/etc/velociraptor",
+            "/opt/mssp-velociraptor",
+        ],
+        "exclude_globs": ["*/clients/*/collections/*", "*/filestore/*"],
     },
     {
         "vm_id": 112,
