@@ -12,18 +12,16 @@ If Proxmox is formatted: reinstall Proxmox → recreate bridges → Path A.
 
 ## Does Ansible VM (112) have to exist?
 
-**No.** Inventory lists VM 112 as automation controller, but recovery can run Ansible **from restored VM 100** (or from Cursor’s SSH session on VM 100) using:
+**Yes — required for a complete restore.** VM 112 (`automation` / `192.168.0.222`) is the dedicated Ansible controller. Path A backups include it (`remote/vm112_*` in the encrypted archive: `mssp-automation` tree + controller SSH keys).
 
-- playbooks/roles in `mssp-control/ansible/`
-- inventory `ansible/inventory/hosts.yml`
-- SSH keys (must be available — preferably stored encrypted next to the DR package)
+Recreate VM 112 with the other core guests, then restore those captured paths before running playbooks from 112.
 
-Rebuild VM 112 later if you want a dedicated controller again.
+Emergency fallback only: playbooks also exist under restored `/opt/mssp-control/ansible` on VM 100 if 112 is temporarily down — but the supported DR end-state is **112 online and working**.
 
 ## Clean-system sequence
 
 1. Install Proxmox on bare metal.
 2. Configure LAN bridge (same subnet `192.168.0.0/24` recommended).
 3. Add Ubuntu Server LTS ISO to Proxmox storage.
-4. Prompt Cursor: Path A from `MSSP_Full_Backup`.
-5. Cursor creates VMs 100/101/102/106/109/(112), restores control plane + DB, runs ansible for engines.
+4. Prompt Cursor: Path A from the complete backup folder (or Drive tar).
+5. Cursor creates VMs **100 / 101 / 102 / 106 / 109 / 112**, restores control plane + DB, restores VM 112 Ansible tree/keys, redeploys engines.

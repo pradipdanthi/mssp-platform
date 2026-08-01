@@ -13,7 +13,7 @@ Prefer restoring with the same guest IPs so Cursor can use ansible inventory + .
 | 102 | thehive-shuffle / thehive_shuffle | thehiveshuffle | 192.168.0.212 | TheHive 4 + Shuffle (+ Tenzir observed on this host) |
 | 106 | suricata-sensor | suricata-sensor | 192.168.0.216 | Suricata IDS + Wazuh agent; Zeek co-located (KB-047) |
 | 109 | greenbone | greenbone | 192.168.0.219 | Greenbone CE + Nuclei + Vuls (/opt/mssp-vuln-free) |
-| 112 | automation | automation | 192.168.0.222 | Ansible automation controller |
+| 112 | automation | automation | 192.168.0.222 | **Required** Ansible automation controller (included in DR backup) |
 
 ## Endpoint / lab VMs
 

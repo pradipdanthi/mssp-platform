@@ -11,8 +11,16 @@ This file exists so the operator can forget details and still get a full rebuild
 
 ## Operator one-liner (expected)
 
-> Path A: Restore the entire MSSP stack from `<path-to-MSSP_Full_Backup>`.  
+> Path A: Restore the entire MSSP stack from `<COMPLETE_BACKUP_FOLDER>`.  
 > Proxmox was wiped / reinstalled. Bring everything back online.
+
+`<COMPLETE_BACKUP_FOLDER>` is **one** folder that already contains everything below.  
+Examples (any **one** complete package — do not mix folders):
+
+- `/home/secadmin/MSSP_Backups/LATEST` (recommended local pointer)
+- `/home/secadmin/MSSP_Backups/2026-08-01_093514Z` (any dated full run)
+- Extracted Google Drive archive: `MSSP/MSSP_Backups/<timestamp>/<timestamp>.tar.gz` → extract → use that folder
+- Older USB copy: `/home/secadmin/MSSP_Full_Backup` **only if** it still has the required files listed below
 
 Also accept: “rebuild from backup”, “disaster recovery”, “bare metal restore”.
 
@@ -20,19 +28,29 @@ Also accept: “rebuild from backup”, “disaster recovery”, “bare metal r
 
 ## What the operator must bring
 
-Remind them to have **all** of these (WinSCP/USB/offsite copies):
+**One complete package folder** (not scattered files from different dates):
 
-| Item | Why |
+| Item inside that folder | Why |
 |---|---|
-| Entire `MSSP_Full_Backup/` folder | Code tree + DB archive + inventory + SSH keys |
-| `MSSP_FULL_STACK_BACKUP_*.sql.gz.enc` (~231 MB+) | Database + engine configs |
-| Matching `.sha256` | Integrity |
-| `mssp-control/` cold copy | Full `/opt/mssp-control` including `.env` / `.secrets` / ansible |
-| `ssh_keys_secadmin.tar.gz.enc` | Deploy keys to talk to engine VMs after rebuild |
+| `READ_ME_FIRST_RESTORE.txt` | Operator orientation |
+| `MSSP_FULL_STACK_BACKUP_*.sql.gz.enc` + `.sha256` | Database + engine configs |
+| `mssp-control/` | Full `/opt/mssp-control` including `.env` / `.secrets` / ansible |
+| `ssh_keys_secadmin.tar.gz.enc` + `.sha256` | Deploy keys for engine VMs |
 | `MSSP_IP_PROXMOX_INVENTORY.md` | Guest IPs / hostnames / VMIDs |
-| Decrypt passphrase | Inside `mssp-control/.secrets/dr_backup_passphrase` (same passphrase unlocks DB archive **and** SSH keys archive) |
+| `CURSOR_DISASTER_MEMORY.md` | This checklist |
+| Decrypt passphrase | `mssp-control/.secrets/dr_backup_passphrase` (unlocks DB archive **and** SSH keys) |
 
 **Never print** passphrase, `.env`, or private keys in chat.
+
+### Anti-confusion rules (mandatory)
+
+1. **Never mix** archives from date A with `mssp-control/` from date B.  
+2. **Ignore** any `.old_backups/` leftovers — they are not part of restore (delete if found).  
+3. Google Drive holds the **same** package as a single `<timestamp>.tar.gz` inside a dated folder — extract first, then treat like local.  
+4. Nightly jobs create a **new** dated folder each time; they do not overwrite the previous complete package.  
+5. `/home/secadmin/MSSP_Backups/LATEST` always points at the newest complete local package.
+
+Scheduled backup details: `DOCS/DR_GOOGLE_DRIVE_BACKUP_SETUP.md`.
 
 ---
 
@@ -43,10 +61,10 @@ Remind them to have **all** of these (WinSCP/USB/offsite copies):
 3. **Guest VM IPs and hostnames should stay the SAME** (see inventory table).  
 4. **Ubuntu Server LTS ISO** must be in Proxmox storage (download/upload if missing).  
 5. **Same LAN subnet** `192.168.0.0/24` strongly preferred.  
-6. **VM 112 (Ansible controller) is NOT required** to start recovery — run Ansible from restored VM 100.  
+6. **VM 112 (Ansible automation controller) is REQUIRED** — recreate and restore it with the other core VMs (backed up in the encrypted archive as `remote/vm112_*`).  
 7. **Heavy Greenbone feeds** may re-download for hours; MSSP portals can go live before feeds finish.  
-8. Re-copy USB after any new cold-copy / key packing.  
-9. After restore: smoke Admin `:3000`, Customer `:3001`, API `:8000` `/health`.
+8. Re-copy USB / confirm Google Drive after any new cold-copy / key packing.  
+9. After restore: smoke Admin `:3000`, Customer `:3001`, API `:8000` `/health`, and Ansible on VM 112.
 
 ---
 
@@ -75,8 +93,8 @@ sha256sum -c "<BACKUP>/"*.sha256
 | 102 | thehive-shuffle / thehiveshuffle | 192.168.0.212 | TheHive + Shuffle (+ Tenzir if present) |
 | 106 | suricata-sensor | 192.168.0.216 | Suricata + Zeek (co-located) |
 | 109 | greenbone | 192.168.0.219 | Greenbone CE + Nuclei + Vuls |
-| 112 | automation | 192.168.0.222 | Optional Ansible controller (later OK) |
-| 104 | windows-endpoint-lab | 192.168.0.214 | Optional test endpoint |
+| 112 | automation | 192.168.0.222 | **Required** Ansible automation controller |
+| 104 | windows-endpoint-lab | 192.168.0.214 | Optional test endpoint (not required for core MSSP) |
 
 ### Phase 3 — Restore VM 100 control plane
 1. Install Docker + Compose on VM 100.  
@@ -107,6 +125,7 @@ From VM 100, using `/opt/mssp-control/ansible` + restored SSH keys, redeploy/con
 | 102 | TheHive + Shuffle (and Tenzir if was present) |
 | 106 | Suricata + Zeek co-located + Wazuh agent |
 | 109 | Greenbone CE + Nuclei + Vuls |
+| 112 | Ansible controller: restore `/home/secadmin/mssp-automation` + `/home/secadmin/.ssh` (controller deploy keys) from `remote/vm112_*` |
 
 Apply overlays from decrypted archive `remote/` and `remote/vm*_volumes/` when present.
 

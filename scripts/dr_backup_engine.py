@@ -41,7 +41,8 @@ DEFAULT_MOUNT_POINT = Path("/mnt/mssp-dr-usb")
 DEFAULT_LINUX_RESOLVED = DEFAULT_MOUNT_POINT / "MSSP_Full_Backup"
 
 # Critical remote nodes must succeed for a "complete" backup.
-CRITICAL_REMOTE_VM_IDS = {101, 102, 106, 109}
+# VM 112 (Ansible automation controller) is required for post-restore operations.
+CRITICAL_REMOTE_VM_IDS = {101, 102, 106, 109, 112}
 
 INFRASTRUCTURE: List[Dict[str, Any]] = [
     {
@@ -143,6 +144,23 @@ INFRASTRUCTURE: List[Dict[str, Any]] = [
         "heavy_paths_optional": [
             "/opt/mssp-vuln-free/vuls",
             "/opt/mssp-vuln-free/nuclei-templates",
+        ],
+    },
+    {
+        "vm_id": 112,
+        "hostname": "automation",
+        "ip": "192.168.0.222",
+        "role": "ansible_controller",
+        "services": ["ansible"],
+        "ports": [22],
+        "ssh_user": "secadmin",
+        "ssh_key": str(Path.home() / ".ssh/id_ed25519_automation"),
+        "use_sudo": False,
+        # Tree + controller SSH keys used to reach engine VMs after restore
+        "capture_paths": [
+            "/home/secadmin/mssp-automation",
+            "/home/secadmin/.ssh",
+            "/home/secadmin/.ansible",
         ],
     },
 ]
@@ -482,17 +500,19 @@ def stream_remote_capture(
     excludes = node.get("exclude_globs") or []
     excl_flags = " ".join(f"--exclude={shlex.quote(x)}" for x in excludes)
     test_bin = "sudo -n test" if node.get("use_sudo") else "test"
-    path_checks = " ".join(
-        f"{test_bin} -e {shlex.quote(p)} && set -- \"$@\" {shlex.quote(p)};" for p in paths
+    # Avoid `set -- "$@"` here: on some hosts a bare/misparsed `set` dumps the
+    # environment to stdout and corrupts the tar.gz stream.
+    path_append = " ".join(
+        f'{test_bin} -e {shlex.quote(p)} && paths="$paths {shlex.quote(p)}";' for p in paths
     )
 
     # Docker volume tarballs appended into same stream via temporary dirs on remote? 
     # Better: separate volume archives streamed in a second SSH to keep scripts simple.
     remote_script = (
-        "set -e; set --; "
-        + path_checks
-        + f' if [ "$#" -eq 0 ]; then echo NO_PATHS >&2; exit 2; fi; '
-        f"{sudo}tar -czf - {excl_flags} \"$@\""
+        "set -e; paths=; "
+        + path_append
+        + ' if [ -z "$paths" ]; then echo NO_PATHS >&2; exit 2; fi; '
+        f"{sudo}tar -czf - {excl_flags} $paths"
     )
 
     with open(out_file, "wb") as out:
@@ -508,9 +528,8 @@ def stream_remote_capture(
                 "-o",
                 "ConnectTimeout=12",
                 f"{user}@{ip}",
-                "bash",
-                "-lc",
-                remote_script,
+                # ssh joins argv with spaces — quote the entire -c payload
+                f"bash --noprofile --norc -c {shlex.quote(remote_script)}",
             ],
             stdout=out,
             stderr=subprocess.PIPE,
@@ -529,6 +548,15 @@ def stream_remote_capture(
     if result["bytes"] < 100:
         result["status"] = "capture_empty"
         _log(f"Remote capture suspiciously small for {ip}")
+        return result
+    # Reject corrupted captures (e.g. shell `set` env dump mixed into stdout)
+    with open(out_file, "rb") as fh:
+        magic = fh.read(2)
+    if magic != b"\x1f\x8b":
+        out_file.unlink(missing_ok=True)
+        result["status"] = "capture_corrupt"
+        result["error"] = f"expected gzip magic, got {magic!r}"
+        _log(f"Remote path capture CORRUPT for {ip}: {result['error']}")
         return result
 
     # Docker volumes (light always; heavy only with flag)
@@ -566,9 +594,7 @@ def stream_remote_capture(
                     "-o",
                     "ConnectTimeout=12",
                     f"{user}@{ip}",
-                    "bash",
-                    "-lc",
-                    remote_vol,
+                    f"bash --noprofile --norc -c {shlex.quote(remote_vol)}",
                 ],
                 stdout=out,
                 stderr=subprocess.PIPE,
