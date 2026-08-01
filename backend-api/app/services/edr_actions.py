@@ -352,6 +352,13 @@ def apply_action_callback(
     elif mapped == "success" and row["action_type"] == "UNISOLATE_HOST" and applied is True:
         final_status = "verified"
         verified = True
+    elif mapped == "success" and row["action_type"] == "KILL_PROCESS" and applied is True:
+        final_status = "verified"
+        verified = True
+        detail = (detail or "Endpoint reported process kill applied=true").strip()
+    elif mapped == "success" and row["action_type"] == "KILL_PROCESS" and applied is False:
+        final_status = "failed"
+        detail = (detail or "Endpoint reported process kill applied=false").strip()
 
     if (
         mapped == "success"
@@ -618,10 +625,11 @@ def execute_edr_action(
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for kill")
             ar_cmd = _resolve_ar_command(KILL_AR_COMMAND, WIN_KILL_AR_COMMAND, agent_id)
+            # Pass execution_id so AR scripts can POST applied proof to callback_url.
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ar_cmd,
-                arguments=[str(body.pid)],
+                arguments=[str(body.pid), str(execution_id), callback_url],
             )
             shuffle_edr_client.post_edr_workflow(
                 {
@@ -636,22 +644,21 @@ def execute_edr_action(
             )
             msg = (
                 f"Kill process command dispatched to agent {agent_id} pid={body.pid}. "
-                "Not confirmed: verify process is gone on the endpoint "
-                "(tasklist / Get-Process) and active-responses.log."
+                "Status remains Dispatched until endpoint callback reports applied=true."
             )
-            _update_execution(execution_id, "success", msg)
+            _update_execution(execution_id, "executing", msg)
             _audit_success(
                 user,
                 action_type=body.action_type,
                 execution_id=execution_id,
                 tenant_id=tenant_id,
-                status="success",
+                status="executing",
                 message=msg,
                 agent_id=agent_id,
                 incident_number=body.incident_number or (incident or {}).get("incident_number"),
                 tenant_short_code=body.tenant_short_code,
             )
-            return execution_id, "success", msg, None, None
+            return execution_id, "executing", msg, None, None
 
         if body.action_type == "COLLECT_FORENSICS":
             artifact = _create_forensic_artifact(
@@ -659,6 +666,56 @@ def execute_edr_action(
                 execution_id=execution_id,
                 agent_id=agent_id,
             )
+            vr_msg = ""
+            vr_ok = False
+            try:
+                from app.services import velociraptor_client as vr
+
+                if vr.configured():
+                    host_label = agent_id or body.tenant_short_code or "endpoint"
+                    vr_job = vr.collect_artifacts(
+                        hostname=str(host_label),
+                        tenant_id=tenant_id,
+                        execution_id=execution_id,
+                    )
+                    vr_ok = True
+                    vr_msg = (
+                        f"Velociraptor job {vr_job.get('job_id')} "
+                        f"package={vr_job.get('package_id')} queued on DFIR bridge."
+                    )
+                    # Customer-safe collection metadata for /forensics
+                    try:
+                        from app.db.session import execute as _exec
+
+                        _exec(
+                            """
+                            INSERT INTO tenant_forensics_collections (
+                                tenant_id, collection_name, host_label, collection_scope,
+                                status, package_size_bytes, download_available, summary,
+                                related_event_title, requested_at, completed_at
+                            ) VALUES (
+                                %s::uuid, %s, %s, 'TRIAGE', 'RUNNING', 0, false, %s,
+                                'SOC forensics collection', now(), NULL
+                            );
+                            """,
+                            (
+                                tenant_id,
+                                f"Live DFIR package {vr_job.get('package_id', '')}"[:200],
+                                str(host_label)[:120],
+                                (
+                                    vr_job.get("customer_safe_summary")
+                                    or "Endpoint forensics collection started on DFIR engine."
+                                )[:2000],
+                            ),
+                        )
+                    except Exception:
+                        logger.exception("Failed writing forensics collection metadata")
+                else:
+                    vr_msg = "Velociraptor bridge not configured; Shuffle/upload path only."
+            except Exception as exc:  # noqa: BLE001
+                vr_msg = f"Velociraptor bridge error: {exc}"[:240]
+                logger.warning("Velociraptor collect failed: %s", exc)
+
             payload = {
                 "action": "COLLECT_FORENSICS",
                 "workflow": shuffle_edr_client.forensics_workflow_name(),
@@ -675,23 +732,21 @@ def execute_edr_action(
                 "upload_url": artifact["upload_url"],
                 "upload_method": artifact["upload_method"],
                 "upload_expires_at_epoch": artifact["expires_at_epoch"],
-                "mode": "direct_object_upload",
+                "mode": "velociraptor_bridge_and_upload" if vr_ok else "direct_object_upload",
                 "velociraptor_server": shuffle_edr_client.velociraptor_server_url() or None,
             }
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(payload)
-            status = "executing" if ok else "failed"
+            status = "executing" if (ok or vr_ok) else "failed"
             msg = (
-                f"Forensics collection started; upload URL issued. {shuffle_msg}"
-                if ok
-                else shuffle_msg
-            )
-            _update_execution(execution_id, status if ok else "failed", msg)
+                f"Forensics collection started. {vr_msg} {shuffle_msg}"
+            ).strip()
+            _update_execution(execution_id, status if (ok or vr_ok) else "failed", msg)
             _audit_success(
                 user,
                 action_type=body.action_type,
                 execution_id=execution_id,
                 tenant_id=tenant_id,
-                status=status if ok else "failed",
+                status=status if (ok or vr_ok) else "failed",
                 message=msg,
                 agent_id=agent_id,
                 incident_number=body.incident_number or (incident or {}).get("incident_number"),
@@ -699,10 +754,10 @@ def execute_edr_action(
             )
             return (
                 execution_id,
-                status if ok else "failed",
+                status if (ok or vr_ok) else "failed",
                 msg,
-                artifact["upload_url"] if ok else None,
-                artifact["artifact_id"] if ok else None,
+                artifact["upload_url"] if (ok or vr_ok) else None,
+                artifact["artifact_id"] if (ok or vr_ok) else None,
             )
 
         if body.action_type == "BLOCK_HASH":

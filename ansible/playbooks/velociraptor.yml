@@ -1,0 +1,11 @@
+---
+# KB-110 style: Velociraptor DFIR on VM 110.
+# Safe default is preflight. Live install requires approval flags.
+
+- name: Velociraptor DFIR preflight or install
+  hosts: dfir
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: velociraptor

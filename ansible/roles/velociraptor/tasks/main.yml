@@ -1,0 +1,214 @@
+---
+# Velociraptor DFIR on VM 110 only. No secrets in Git.
+
+- name: Validate velociraptor execution controls
+  ansible.builtin.assert:
+    that:
+      - velociraptor_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: >-
+      velociraptor_execution_mode must be preflight, install, or validate.
+
+- name: Validate inventory identity
+  ansible.builtin.assert:
+    that:
+      - deployment_role == "velociraptor"
+      - (vm_id | int) == 110
+    fail_msg: >-
+      velociraptor role may target only VM 110 (192.168.0.220).
+      Do not install DFIR server on the control plane (VM 100).
+
+- name: Validate supported OS and resources
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in velociraptor_supported_linux_distributions
+      - ansible_distribution_version in velociraptor_supported_ubuntu_releases
+      - (ansible_memtotal_mb | int) >= (velociraptor_minimum_memory_mb | int)
+      - (ansible_processor_vcpus | int) >= (velociraptor_minimum_vcpus | int)
+    fail_msg: >-
+      Target host must use approved Ubuntu with enough RAM/CPU for Velociraptor.
+
+- name: Resolve root filesystem size
+  ansible.builtin.set_fact:
+    velociraptor_root_disk_bytes: >-
+      {{
+        (
+          ansible_mounts
+          | selectattr("mount", "equalto", "/")
+          | map(attribute="size_total")
+          | first
+        )
+        | int
+      }}
+
+- name: Validate minimum root filesystem size
+  ansible.builtin.assert:
+    that:
+      - >-
+        (velociraptor_root_disk_bytes | int) >=
+        ((velociraptor_minimum_root_disk_gb | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      Host requires at least {{ velociraptor_minimum_root_disk_gb }} GB on root.
+
+- name: Explain the preflight-only result
+  ansible.builtin.debug:
+    msg: >-
+      Velociraptor preflight passed for {{ inventory_hostname }}.
+      Approve live install with velociraptor_execution_mode=install and
+      velociraptor_live_install_approved=true.
+  when: velociraptor_execution_mode == "preflight"
+
+- name: Check install marker
+  ansible.builtin.stat:
+    path: "{{ velociraptor_install_marker }}"
+  register: velociraptor_marker
+
+- name: Install Velociraptor server and control-plane bridge
+  when:
+    - velociraptor_execution_mode == "install"
+    - not velociraptor_marker.stat.exists
+  block:
+    - name: Enforce explicit live-install approval
+      ansible.builtin.assert:
+        that:
+          - velociraptor_live_install_approved | bool
+        fail_msg: Live Velociraptor install blocked until approved.
+
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - openssl
+          - python3
+          - jq
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create install directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ velociraptor_install_root }}"
+        - "{{ velociraptor_install_root }}/bin"
+        - "{{ velociraptor_install_root }}/secrets"
+        - "{{ velociraptor_install_root }}/clients"
+        - "{{ velociraptor_install_root }}/artifacts"
+        - "{{ velociraptor_config_dir }}"
+        - "{{ velociraptor_state_directory }}"
+
+    - name: Download Velociraptor binary
+      ansible.builtin.get_url:
+        url: "{{ velociraptor_download_url }}"
+        dest: "{{ velociraptor_install_root }}/bin/velociraptor"
+        mode: "0755"
+        timeout: 120
+
+    - name: Generate initial server config if missing
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if [ ! -f {{ velociraptor_config_dir }}/server.config.yaml ]; then
+          {{ velociraptor_install_root }}/bin/velociraptor config generate \
+            > {{ velociraptor_config_dir }}/server.config.yaml
+        fi
+      args:
+        creates: "{{ velociraptor_config_dir }}/server.config.yaml"
+
+    - name: Bind Frontend / GUI / API-friendly addresses in server config
+      ansible.builtin.replace:
+        path: "{{ velociraptor_config_dir }}/server.config.yaml"
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      loop:
+        - { regexp: 'bind_address: 127.0.0.1', replace: 'bind_address: 0.0.0.0' }
+        - { regexp: 'gw_address: 127.0.0.1', replace: 'gw_address: 0.0.0.0' }
+      ignore_errors: true
+
+    - name: Generate bridge API key if missing
+      ansible.builtin.shell: |
+        set -euo pipefail
+        KEYFILE="{{ velociraptor_bridge_api_key_file }}"
+        if [ ! -s "$KEYFILE" ]; then
+          openssl rand -hex 32 > "$KEYFILE"
+          chmod 0600 "$KEYFILE"
+        fi
+      args:
+        creates: "{{ velociraptor_bridge_api_key_file }}"
+
+    - name: Install control-plane HTTP/gRPC bridge
+      ansible.builtin.copy:
+        src: mssp_velociraptor_bridge.py
+        dest: "{{ velociraptor_install_root }}/bin/mssp_velociraptor_bridge.py"
+        mode: "0755"
+
+    - name: Install client enrollment README
+      ansible.builtin.copy:
+        dest: "{{ velociraptor_install_root }}/clients/README.md"
+        mode: "0644"
+        content: |
+          # Velociraptor client enrollment (lab)
+
+          ## Windows (VM 104)
+          1. On the server: generate a Windows MSI/client config via Velociraptor GUI
+             or `velociraptor --config /etc/velociraptor/server.config.yaml config client`.
+          2. Install on Windows endpoint; label client with tenant_id / short_code.
+          3. Control plane triggers collections via bridge :{{ velociraptor_bridge_port }}.
+
+          ## Linux
+          1. Generate Linux client config from the same server config.
+          2. Install as systemd user/service; label with tenant metadata.
+          3. Never ship enrollment secrets in Git or customer portals.
+
+    - name: Install systemd units
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "0644"
+      loop:
+        - src: velociraptor.service.j2
+          dest: /etc/systemd/system/velociraptor.service
+        - src: mssp-velociraptor-bridge.service.j2
+          dest: /etc/systemd/system/mssp-velociraptor-bridge.service
+      notify: Reload systemd
+
+    - name: Enable and start Velociraptor + bridge
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - velociraptor
+        - mssp-velociraptor-bridge
+
+    - name: Write install marker
+      ansible.builtin.copy:
+        dest: "{{ velociraptor_install_marker }}"
+        content: "installed {{ ansible_date_time.iso8601 }}\n"
+        mode: "0640"
+
+- name: Validate Velociraptor services
+  when: velociraptor_execution_mode in ["install", "validate"]
+  block:
+    - name: Check velociraptor binary
+      ansible.builtin.command:
+        argv: ["{{ velociraptor_install_root }}/bin/velociraptor", "version"]
+      register: vr_ver
+      changed_when: false
+
+    - name: Check bridge health port
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ velociraptor_bridge_port }}/health"
+        return_content: true
+        status_code: 200
+      register: bridge_health
+
+    - name: Show validate result
+      ansible.builtin.debug:
+        msg: >-
+          Velociraptor validate OK on {{ inventory_hostname }}:
+          version={{ vr_ver.stdout | default('') | truncate(80) }},
+          bridge={{ bridge_health.json | default({}) }}.

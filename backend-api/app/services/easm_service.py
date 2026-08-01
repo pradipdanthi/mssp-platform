@@ -597,8 +597,75 @@ def _scan_host(
 
 def run_tenant_scan(tenant_id: str, *, target_domain: Optional[str] = None) -> Dict[str, Any]:
     """
-    Execute perimeter discovery for one primary domain/IP (or all primaries).
+    Queue or execute perimeter discovery.
+    Default: remote VM 109 Amass/Nuclei agent via scan-plan (EASM_DISPATCH_MODE=remote|hybrid).
+    Local stdlib probes only when mode=local or hybrid fallback.
     """
+    import os
+
+    mode = (os.getenv("EASM_DISPATCH_MODE") or "remote").strip().lower()
+    tid = str(tenant_id)
+
+    if target_domain:
+        register_primary_target(tid, target_domain)
+
+    if mode in ("remote", "hybrid"):
+        # Ensure primaries exist so VM 109 scan-plan can pick them up.
+        assets = [
+            a
+            for a in list_assets(tid)
+            if a["asset_type"] in ("PRIMARY_DOMAIN", "PUBLIC_IP")
+        ]
+        if not assets and not target_domain:
+            return {
+                "tenant_id": tid,
+                "scan_status": "FAILED",
+                "message": "No registered primary domains or public IPs to scan",
+                "dispatch_mode": mode,
+            }
+        # Mark entitlement so agent includes this tenant.
+        execute(
+            """
+            UPDATE tenant_entitlements
+            SET external_attack_surface_enabled = true, updated_at = now()
+            WHERE tenant_id = %s::uuid;
+            """,
+            (tid,),
+        )
+        queued = []
+        for a in assets or (
+            [{"domain_or_ip": normalize_target(target_domain)[0]}] if target_domain else []
+        ):
+            name = a["domain_or_ip"]
+            scan = fetch_one_write(
+                """
+                INSERT INTO tenant_easm_scans (
+                    tenant_id, target_domain, scan_status, executed_at
+                ) VALUES (%s::uuid, %s, 'PENDING', now())
+                RETURNING id::text;
+                """,
+                (tid, name),
+            )
+            queued.append({"scan_id": (scan or {}).get("id"), "target": name})
+        if mode == "remote":
+            return {
+                "tenant_id": tid,
+                "scan_status": "PENDING",
+                "message": (
+                    "Queued for deep recon on vulnerability/EASM engine (Amass/Nuclei). "
+                    "Results appear after the next agent cycle (~20 min) or force sync."
+                ),
+                "dispatch_mode": "remote",
+                "queued": queued,
+                "engine_label": CUSTOMER_SCANNER_LABEL,
+            }
+        # hybrid continues into local probe below for immediate MVP signal
+
+    # Local stdlib path (legacy / hybrid / explicit local)
+    return _run_tenant_scan_local(tid, target_domain=target_domain)
+
+
+def _run_tenant_scan_local(tenant_id: str, *, target_domain: Optional[str] = None) -> Dict[str, Any]:
     tid = str(tenant_id)
     if target_domain:
         targets = [
@@ -608,7 +675,6 @@ def run_tenant_scan(tenant_id: str, *, target_domain: Optional[str] = None) -> D
                 "asset_type": normalize_target(target_domain)[1],
             }
         ]
-        # ensure registered
         register_primary_target(tid, target_domain)
         assets = list_assets(tid)
         for a in assets:

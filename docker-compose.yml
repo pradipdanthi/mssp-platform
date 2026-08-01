@@ -55,6 +55,10 @@ services:
       WAZUH_INGRESS_TOKEN_FILE: /run/secrets/wazuh_ingress_token
       SHUFFLE_WEBHOOK_URL_FILE: /run/secrets/shuffle_webhook_url
       VULN_SYNC_API_KEY_FILE: /run/secrets/vuln_sync_api_key
+      EASM_SYNC_API_KEY_FILE: /run/secrets/easm_sync_api_key
+      EASM_DISPATCH_MODE: ${EASM_DISPATCH_MODE:-remote}
+      VELOCIRAPTOR_SERVER_URL: ${VELOCIRAPTOR_SERVER_URL:-http://192.168.0.220:8001}
+      VELOCIRAPTOR_BRIDGE_API_KEY_FILE: /run/secrets/velociraptor_bridge_api_key
       THEHIVE_URL: ${THEHIVE_URL:-http://192.168.0.212:9000}
       THEHIVE_USER: ${THEHIVE_USER:-admin@thehive.local}
       THEHIVE_PASSWORD_FILE: /run/secrets/thehive_password
@@ -82,6 +86,8 @@ services:
       - ./.secrets/wazuh_ingress_token:/run/secrets/wazuh_ingress_token:ro
       - ./.secrets/shuffle_webhook_url:/run/secrets/shuffle_webhook_url:ro
       - ./.secrets/vuln_sync_api_key:/run/secrets/vuln_sync_api_key:ro
+      - ./.secrets/easm_sync_api_key:/run/secrets/easm_sync_api_key:ro
+      - ./.secrets/velociraptor_bridge_api_key:/run/secrets/velociraptor_bridge_api_key:ro
       - ./.secrets/thehive_password:/run/secrets/thehive_password:ro
       - ./.secrets/wazuh_api_user:/run/secrets/wazuh_api_user:ro
       - ./.secrets/wazuh_api_password:/run/secrets/wazuh_api_password:ro

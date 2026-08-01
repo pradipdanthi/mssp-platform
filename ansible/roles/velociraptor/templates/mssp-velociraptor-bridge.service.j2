@@ -1,0 +1,19 @@
+[Unit]
+Description=MSSP Velociraptor control-plane bridge (HTTP :{{ velociraptor_bridge_port }})
+After=network-online.target velociraptor.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=VR_BIN={{ velociraptor_install_root }}/bin/velociraptor
+Environment=VR_CONFIG={{ velociraptor_config_dir }}/server.config.yaml
+Environment=BRIDGE_API_KEY_FILE={{ velociraptor_bridge_api_key_file }}
+Environment=BRIDGE_BIND=0.0.0.0
+Environment=BRIDGE_PORT={{ velociraptor_bridge_port }}
+Environment=ARTIFACT_STORE={{ velociraptor_install_root }}/artifacts
+ExecStart=/usr/bin/python3 {{ velociraptor_install_root }}/bin/mssp_velociraptor_bridge.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

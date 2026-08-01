@@ -1,0 +1,11 @@
+---
+# Deep EASM recon (Amass + Nuclei) on VM 109.
+# Safe default is preflight. Live install requires approval flags.
+
+- name: EASM recon stack preflight or install
+  hosts: easm_recon_stack
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: easm_recon_stack

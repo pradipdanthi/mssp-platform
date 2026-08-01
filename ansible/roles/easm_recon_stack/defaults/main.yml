@@ -1,0 +1,31 @@
+---
+# Deep EASM recon (Amass + Nuclei templates) on VM 109 only.
+
+easm_execution_mode: "preflight"
+easm_live_install_approved: false
+
+easm_install_root: /opt/mssp-easm-agent
+easm_state_directory: /var/lib/mssp/easm-agent
+easm_install_marker: "{{ easm_state_directory }}/installed"
+
+# Prefer co-located Nuclei from vuln-free stack when present.
+easm_nuclei_bin: /opt/mssp-vuln-free/bin/nuclei
+easm_nuclei_templates: /opt/mssp-vuln-free/nuclei-templates
+
+easm_amass_version: "4.2.0"
+easm_amass_arch: "linux_amd64"
+easm_amass_tarball: "amass_Linux_amd64.zip"
+# OWASP Amass release asset naming varies; URL overridden in tasks if needed.
+easm_amass_url: >-
+  https://github.com/owasp-amass/amass/releases/download/v{{ easm_amass_version }}/amass_Linux_amd64.zip
+
+easm_control_plane_url: "http://192.168.0.201:8000"
+easm_sync_api_key_file: "{{ easm_install_root }}/secrets/easm_sync_api_key"
+
+easm_supported_linux_distributions:
+  - Ubuntu
+easm_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+easm_minimum_memory_mb: 3500
+easm_minimum_vcpus: 2

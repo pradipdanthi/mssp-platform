@@ -1,0 +1,17 @@
+[Unit]
+Description=MSSP EASM deep recon agent (Amass/Nuclei → control plane)
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=CONTROL_PLANE_URL={{ easm_control_plane_url }}
+Environment=EASM_SYNC_API_KEY_FILE={{ easm_sync_api_key_file }}
+Environment=AMASS_BIN={{ easm_install_root }}/bin/amass
+Environment=NUCLEI_BIN={{ easm_nuclei_bin }}
+Environment=NUCLEI_TEMPLATES={{ easm_nuclei_templates }}
+Environment=EASM_WORK={{ easm_install_root }}/work
+ExecStart=/usr/bin/python3 {{ easm_install_root }}/bin/mssp_easm_scan_agent.py
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

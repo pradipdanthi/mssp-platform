@@ -1,0 +1,14 @@
+[Unit]
+Description=Velociraptor DFIR Server (MSSP VM 110)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart={{ velociraptor_install_root }}/bin/velociraptor --config {{ velociraptor_config_dir }}/server.config.yaml frontend -v
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

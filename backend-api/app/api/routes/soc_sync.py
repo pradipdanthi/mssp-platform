@@ -300,22 +300,13 @@ def _forward_to_shuffle(raw_body: bytes) -> None:
     if not url:
         logger.warning("Shuffle webhook URL not configured; skip forward")
         return
-    req = urllib.request.Request(
-        url,
-        data=raw_body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            resp.read()
-            logger.info(
-                "Forwarded Wazuh alert to Shuffle webhook status=%s",
-                getattr(resp, "status", "?"),
-            )
-    except Exception:
-        logger.exception("Failed forwarding Wazuh alert to Shuffle webhook")
+    from app.services.shuffle_retry_queue import enqueue_shuffle_post
 
+    enqueue_shuffle_post(
+        url=url,
+        body=raw_body,
+        meta={"source": "wazuh_instant_ingress"},
+    )
 
 @router.post(
     "/sync",

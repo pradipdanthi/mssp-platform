@@ -1,0 +1,170 @@
+---
+# Amass + EASM agent on VM 109 (co-located with Greenbone / Nuclei).
+
+- name: Validate easm execution controls
+  ansible.builtin.assert:
+    that:
+      - easm_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: easm_execution_mode must be preflight, install, or validate.
+
+- name: Validate inventory identity
+  ansible.builtin.assert:
+    that:
+      - (vm_id | int) == 109
+      - deployment_role in ["easm_recon_stack", "vuln_free_stack", "greenbone"]
+    fail_msg: >-
+      easm_recon_stack may only target VM 109. Do not install Amass on VM 100.
+
+- name: Validate supported OS and resources
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in easm_supported_linux_distributions
+      - ansible_distribution_version in easm_supported_ubuntu_releases
+      - (ansible_memtotal_mb | int) >= (easm_minimum_memory_mb | int)
+      - (ansible_processor_vcpus | int) >= (easm_minimum_vcpus | int)
+    fail_msg: Target host does not meet EASM recon resource requirements.
+
+- name: Explain the preflight-only result
+  ansible.builtin.debug:
+    msg: >-
+      EASM recon preflight passed for {{ inventory_hostname }}.
+      Approve with easm_execution_mode=install easm_live_install_approved=true.
+  when: easm_execution_mode == "preflight"
+
+- name: Check install marker
+  ansible.builtin.stat:
+    path: "{{ easm_install_marker }}"
+  register: easm_marker
+
+- name: Install Amass and EASM sync agent
+  when:
+    - easm_execution_mode == "install"
+    - not easm_marker.stat.exists
+  block:
+    - name: Enforce live-install approval
+      ansible.builtin.assert:
+        that:
+          - easm_live_install_approved | bool
+        fail_msg: Live EASM recon install blocked until approved.
+
+    - name: Install packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - unzip
+          - jq
+          - python3
+          - openssl
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Create directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ easm_install_root }}"
+        - "{{ easm_install_root }}/bin"
+        - "{{ easm_install_root }}/secrets"
+        - "{{ easm_install_root }}/work"
+        - "{{ easm_state_directory }}"
+
+    - name: Download Amass zip
+      ansible.builtin.get_url:
+        url: "{{ easm_amass_url }}"
+        dest: "/tmp/{{ easm_amass_tarball }}"
+        mode: "0644"
+        timeout: 120
+
+    - name: Unpack Amass
+      ansible.builtin.unarchive:
+        src: "/tmp/{{ easm_amass_tarball }}"
+        dest: /tmp
+        remote_src: true
+
+    - name: Locate and install Amass binary
+      ansible.builtin.shell: |
+        set -euo pipefail
+        BIN=$(find /tmp -type f -name amass 2>/dev/null | head -1)
+        if [ -z "$BIN" ]; then
+          echo "amass binary not found after unpack" >&2
+          exit 1
+        fi
+        install -m 0755 "$BIN" {{ easm_install_root }}/bin/amass
+        {{ easm_install_root }}/bin/amass -version || true
+      args:
+        creates: "{{ easm_install_root }}/bin/amass"
+
+    - name: Ensure Nuclei available (reuse vuln-free or fail soft)
+      ansible.builtin.stat:
+        path: "{{ easm_nuclei_bin }}"
+      register: nuclei_bin_stat
+
+    - name: Warn if Nuclei missing
+      ansible.builtin.debug:
+        msg: >-
+          Nuclei binary missing at {{ easm_nuclei_bin }}.
+          EASM agent will still run Amass enumeration; Nuclei HTTP templates skipped.
+      when: not nuclei_bin_stat.stat.exists
+
+    - name: Generate EASM sync API key if missing
+      ansible.builtin.shell: |
+        set -euo pipefail
+        KEYFILE="{{ easm_sync_api_key_file }}"
+        if [ ! -s "$KEYFILE" ]; then
+          openssl rand -hex 32 > "$KEYFILE"
+          chmod 0600 "$KEYFILE"
+        fi
+      args:
+        creates: "{{ easm_sync_api_key_file }}"
+
+    - name: Install EASM agent script
+      ansible.builtin.copy:
+        src: mssp_easm_scan_agent.py
+        dest: "{{ easm_install_root }}/bin/mssp_easm_scan_agent.py"
+        mode: "0755"
+
+    - name: Install systemd units
+      ansible.builtin.template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: "0644"
+      loop:
+        - src: mssp-easm-scan-agent.service.j2
+          dest: /etc/systemd/system/mssp-easm-scan-agent.service
+        - src: mssp-easm-scan-agent.timer.j2
+          dest: /etc/systemd/system/mssp-easm-scan-agent.timer
+      notify: Reload systemd
+
+    - name: Enable EASM agent timer
+      ansible.builtin.systemd:
+        name: mssp-easm-scan-agent.timer
+        enabled: true
+        state: started
+
+    - name: Write install marker
+      ansible.builtin.copy:
+        dest: "{{ easm_install_marker }}"
+        content: "installed {{ ansible_date_time.iso8601 }}\n"
+        mode: "0640"
+
+- name: Validate EASM recon
+  when: easm_execution_mode in ["install", "validate"]
+  block:
+    - name: Amass version
+      ansible.builtin.command:
+        argv: ["{{ easm_install_root }}/bin/amass", "-version"]
+      register: amass_ver
+      changed_when: false
+      failed_when: false
+
+    - name: Show validate
+      ansible.builtin.debug:
+        msg: >-
+          EASM recon validate on {{ inventory_hostname }}:
+          amass={{ amass_ver.stdout | default(amass_ver.stderr) | truncate(120) }}

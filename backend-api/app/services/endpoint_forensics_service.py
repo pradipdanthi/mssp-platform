@@ -511,6 +511,67 @@ def list_collections(tenant_id: str) -> List[Dict[str, Any]]:
 
 def sync_tenant_forensics(tenant_id: str) -> Dict[str, Any]:
     tid = str(tenant_id)
+    live_collections = 0
+    try:
+        from app.services import velociraptor_client as vr
+
+        if vr.configured():
+            health = vr.health()
+            if health.get("status") == "ok":
+                # Prefer live DFIR bridge: keep existing tripwire seeds for deception UX,
+                # but do not wipe live collections when bridge is healthy.
+                existing = fetch_one(
+                    """
+                    SELECT count(*)::int AS n FROM tenant_forensics_collections
+                    WHERE tenant_id = %s::uuid;
+                    """,
+                    (tid,),
+                ) or {}
+                live_collections = int(existing.get("n") or 0)
+                if live_collections == 0:
+                    # Seed one placeholder pointing at live engine readiness
+                    execute(
+                        """
+                        INSERT INTO tenant_forensics_collections (
+                            tenant_id, collection_name, host_label, collection_scope,
+                            status, package_size_bytes, download_available, summary,
+                            related_event_title, requested_at, completed_at
+                        ) VALUES (
+                            %s::uuid, 'DFIR engine online', 'Managed endpoints', 'TRIAGE',
+                            'READY', 0, false,
+                            'Endpoint forensics engine is connected. SOC can collect live packages.',
+                            NULL, now(), now()
+                        )
+                        ON CONFLICT (tenant_id, collection_name) DO NOTHING;
+                        """,
+                        (tid,),
+                    )
+                    live_collections = 1
+                bridged = _import_edr_collections(tid)
+                _enable_entitlement(tid)
+                # Ensure deception tripwires exist without wiping live collections
+                tw = fetch_one(
+                    "SELECT count(*)::int AS n FROM tenant_deception_tripwires WHERE tenant_id=%s::uuid;",
+                    (tid,),
+                ) or {}
+                if int(tw.get("n") or 0) == 0:
+                    tw_ids = _seed_tripwires(tid)
+                    _seed_events(tid, tw_ids)
+                return {
+                    "tenant_id": tid,
+                    "sync_status": "ok",
+                    "source": "velociraptor_bridge+edr_bridge",
+                    "tripwires_created": int(tw.get("n") or 0),
+                    "events_created": 0,
+                    "collections_created": live_collections + bridged,
+                    "message": "Live DFIR bridge healthy; forensics posture refreshed",
+                    "engine_label": ENGINE_LABEL,
+                    "summary": get_summary(tid),
+                    "bridge_health": health,
+                }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Live Velociraptor sync path unavailable: %s", exc)
+
     execute(
         "DELETE FROM tenant_deception_events WHERE tenant_id = %s::uuid;",
         (tid,),

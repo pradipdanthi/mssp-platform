@@ -41,6 +41,7 @@ from app.api.routes.entitlements import router as entitlements_router
 from app.api.routes.service_catalog import router as service_catalog_router
 from app.api.routes.compliance import router as compliance_router
 from app.api.routes.easm import router as easm_router
+from app.api.routes.easm_sync import router as easm_sync_router
 from app.api.routes.itdr import router as itdr_router
 from app.api.routes.vmaas import router as vmaas_router
 from app.api.routes.ndr import router as ndr_router
@@ -115,6 +116,7 @@ app.include_router(soc_sync_router)
 
 # KB-069: Greenbone → control plane vulnerability ingest + admin management.
 app.include_router(vuln_sync_router)
+app.include_router(easm_sync_router)
 app.include_router(vulnerability_management_router)
 
 # KB-071: tenant entitlements + audit event write.
@@ -152,6 +154,7 @@ app.include_router(delegated_user_management_v1_router)
 # ---------------------------------------------------------------------------
 import asyncio
 from app.services.edr_sweeper import edr_sweeper_loop
+from app.services.shuffle_retry_queue import start_shuffle_retry_worker
 
 _sweeper_task = None
 
@@ -159,6 +162,7 @@ _sweeper_task = None
 async def _start_background_tasks():
     global _sweeper_task
     _sweeper_task = asyncio.create_task(edr_sweeper_loop())
+    start_shuffle_retry_worker()
 
 @app.on_event("shutdown")
 async def _stop_background_tasks():

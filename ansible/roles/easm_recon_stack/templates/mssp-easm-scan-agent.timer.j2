@@ -1,0 +1,11 @@
+[Unit]
+Description=Run MSSP EASM recon agent every 20 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=20min
+Persistent=true
+Unit=mssp-easm-scan-agent.service
+
+[Install]
+WantedBy=timers.target

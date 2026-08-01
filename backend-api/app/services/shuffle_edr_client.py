@@ -53,7 +53,8 @@ def velociraptor_server_url() -> str:
 
 def post_edr_workflow(payload: Dict[str, Any]) -> tuple[bool, str]:
     """
-    Post structured EDR action to Shuffle. Fail-safe: never raises to caller.
+    Post structured EDR action to Shuffle via durable Redis retry queue.
+    Fail-safe: never raises to caller.
     """
     url = shuffle_webhook_url()
     if not url:
@@ -65,20 +66,18 @@ def post_edr_workflow(payload: Dict[str, Any]) -> tuple[bool, str]:
         "velociraptor_server": velociraptor_server_url() or None,
         **payload,
     }
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(body).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    raw = json.dumps(body).encode("utf-8")
     try:
-        with urllib.request.urlopen(req, timeout=25) as resp:
-            resp.read()
-            return True, f"Shuffle acknowledged (HTTP {getattr(resp, 'status', 200)})"
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")[:300]
-        logger.warning("Shuffle EDR webhook HTTP %s: %s", exc.code, detail)
-        return False, f"Shuffle webhook failed (HTTP {exc.code})"
+        from app.services.shuffle_retry_queue import enqueue_shuffle_post
+
+        ok = enqueue_shuffle_post(
+            url=url,
+            body=raw,
+            meta={"source": "edr", "action": payload.get("action")},
+        )
+        if ok:
+            return True, "Shuffle delivery queued (durable retry)"
+        return False, "Shuffle delivery failed"
     except Exception as exc:
         logger.exception("Shuffle EDR webhook error")
         return False, f"Shuffle webhook error: {exc}"

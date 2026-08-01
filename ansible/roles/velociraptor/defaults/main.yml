@@ -1,0 +1,33 @@
+---
+# Velociraptor DFIR server (VM 110). Safe default: preflight.
+# Live install requires velociraptor_live_install_approved=true.
+
+velociraptor_execution_mode: "preflight"
+velociraptor_live_install_approved: false
+
+velociraptor_install_root: /opt/mssp-velociraptor
+velociraptor_state_directory: /var/lib/mssp/velociraptor
+velociraptor_install_marker: "{{ velociraptor_state_directory }}/installed"
+velociraptor_config_dir: /etc/velociraptor
+velociraptor_bridge_port: 8001
+velociraptor_gui_port: 8889
+velociraptor_frontend_port: 8000
+
+# Pin a known release (linux amd64). Override on upgrade.
+velociraptor_version: "0.77.1"
+velociraptor_arch: "linux-amd64"
+velociraptor_bin_name: "velociraptor-v{{ velociraptor_version }}-{{ velociraptor_arch }}"
+velociraptor_download_url: >-
+  https://github.com/Velocidex/velociraptor/releases/download/v{{ velociraptor_version }}/{{ velociraptor_bin_name }}
+
+velociraptor_supported_linux_distributions:
+  - Ubuntu
+velociraptor_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+velociraptor_minimum_memory_mb: 3500
+velociraptor_minimum_root_disk_gb: 40
+velociraptor_minimum_vcpus: 2
+
+# Control-plane bridge shared key path (generated on host; never in Git).
+velociraptor_bridge_api_key_file: "{{ velociraptor_install_root }}/secrets/bridge_api_key"
