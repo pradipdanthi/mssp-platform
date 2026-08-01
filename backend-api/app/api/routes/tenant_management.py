@@ -19,7 +19,6 @@ from app.core.security import hash_password
 from app.db.session import fetch_all, fetch_one, fetch_one_write
 from app.schemas.users import UserPasswordUpdateRequest
 from app.schemas.tenants import (
-    DEFAULT_CREATE_ENTITLEMENTS,
     OnboardResult,
     TenantCreateRequest,
     TenantDetail,
@@ -597,11 +596,19 @@ def create_tenant(
         )
 
     tenant_id = created["id"]
-    ent_payload = (
-        payload.entitlements.model_dump()
-        if payload.entitlements
-        else dict(DEFAULT_CREATE_ENTITLEMENTS)
+    from app.services.tenant_entitlement_defaults import (
+        entitlements_for_new_tenant,
+        is_demo_full_entitlement_tenant,
     )
+
+    if is_demo_full_entitlement_tenant(payload.short_code):
+        # Alpha-Win / demo QA — always full 10-service catalog
+        ent_payload = entitlements_for_new_tenant(payload.short_code)
+    elif payload.entitlements:
+        # Admin may contract add-ons at create; unset fields stay core-only via DEFAULTS merge
+        ent_payload = payload.entitlements.model_dump()
+    else:
+        ent_payload = entitlements_for_new_tenant(payload.short_code)
     entitlements_saved = False
     try:
         upsert_tenant_entitlements(

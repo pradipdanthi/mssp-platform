@@ -50,16 +50,21 @@ PROFILE_OPTIONAL_FIELDS = (
 
 COMMERCIAL_DATE_FIELDS = ("contract_start_date", "contract_end_date")
 
+# Core-only onboarding defaults (add-ons AVAILABLE until consulting approved).
+# Alpha-Win demo short code is forced to full catalog in create_tenant.
 DEFAULT_CREATE_ENTITLEMENTS = {
     "wazuh_siem": True,
     "wazuh_retention_days": 90,
     "thehive_mode": "full",
-    "greenbone_enabled": True,
+    "greenbone_enabled": False,
     "greenbone_cadence": "monthly",
-    "shuffle_mode": "standard",
+    "shuffle_mode": "off",
     "zeek_enabled": False,
     "misp_enabled": False,
     "velociraptor_enabled": False,
+    "continuous_compliance_enabled": False,
+    "external_attack_surface_enabled": False,
+    "cloud_identity_protection_enabled": False,
     "roadmap_notes": None,
 }
 
@@ -97,12 +102,15 @@ class EntitlementsOnCreate(BaseModel):
     wazuh_siem: bool = True
     wazuh_retention_days: int = Field(default=90, ge=30, le=365)
     thehive_mode: Literal["full", "read_only", "off"] = "full"
-    greenbone_enabled: bool = True
+    greenbone_enabled: bool = False
     greenbone_cadence: Literal["weekly", "monthly", "off"] = "monthly"
-    shuffle_mode: Literal["standard", "custom", "off"] = "standard"
+    shuffle_mode: Literal["standard", "custom", "off"] = "off"
     zeek_enabled: bool = False
     misp_enabled: bool = False
     velociraptor_enabled: bool = False
+    continuous_compliance_enabled: bool = False
+    external_attack_surface_enabled: bool = False
+    cloud_identity_protection_enabled: bool = False
     roadmap_notes: Optional[str] = Field(default=None, max_length=2000)
 
 

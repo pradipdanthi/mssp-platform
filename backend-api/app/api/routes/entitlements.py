@@ -79,7 +79,7 @@ class CustomerEntitlementsPublic(BaseModel):
     continuous_compliance_enabled: bool = False
     external_attack_surface_enabled: bool = False
     cloud_identity_protection_enabled: bool = False
-    security_automation: str = "included"
+    security_automation: str = "not_included"
     network_traffic_analysis_enabled: bool = False
     threat_intelligence_enabled: bool = False
     endpoint_forensics_enabled: bool = False
@@ -110,13 +110,15 @@ class AuditEventCreate(BaseModel):
     details: Dict[str, Any] = Field(default_factory=dict)
 
 
+# Fallback when no row exists — core-only (log monitoring + incident response).
+# New tenants get the same shape via tenant_entitlement_defaults.CORE_ONLY_CREATE_ENTITLEMENTS.
 DEFAULTS = {
     "wazuh_siem": True,
-    "wazuh_retention_days": 30,
+    "wazuh_retention_days": 90,
     "thehive_mode": "full",
     "greenbone_enabled": False,
     "greenbone_cadence": "monthly",
-    "shuffle_mode": "standard",
+    "shuffle_mode": "off",
     "zeek_enabled": False,
     "misp_enabled": False,
     "velociraptor_enabled": False,
@@ -280,6 +282,9 @@ def get_tenant_entitlements(
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> EntitlementsOut:
     _ensure_tenant(tenant_id)
+    from app.services.tenant_entitlement_defaults import ensure_demo_tenant_full_entitlements
+
+    ensure_demo_tenant_full_entitlements(str(tenant_id))
     row = _fetch_entitlements(tenant_id)
     if not row:
         return EntitlementsOut(tenant_id=str(tenant_id), **DEFAULTS)
@@ -330,7 +335,7 @@ def get_customer_entitlements(
     ),
 ) -> CustomerEntitlementsPublic:
     tenant = fetch_one(
-        "SELECT id::text FROM tenants WHERE upper(short_code) = upper(%s);",
+        "SELECT id::text, short_code FROM tenants WHERE upper(short_code) = upper(%s);",
         (short_code,),
     )
     if not tenant:
@@ -339,6 +344,9 @@ def get_customer_entitlements(
         user_tenant = current_user.get("tenant_id")
         if not user_tenant or str(user_tenant) != tenant["id"]:
             raise HTTPException(status_code=404, detail="Not found")
+    from app.services.tenant_entitlement_defaults import ensure_demo_tenant_full_entitlements
+
+    ensure_demo_tenant_full_entitlements(tenant["id"], tenant.get("short_code"))
     row = _fetch_entitlements(UUID(tenant["id"]))
     base = {**DEFAULTS, "tenant_id": tenant["id"]}
     if row:
@@ -984,16 +992,21 @@ def approve_and_enable_service_upgrade(
         entitlements_updated = True
     elif service_key in (
         "network_traffic_analysis",
+        "network_detection_response",
         "threat_intelligence",
         "endpoint_forensics",
+        "endpoint_forensics_deception",
         "security_automation",
+        "continuous_compliance",
+        "external_attack_surface",
+        "cloud_identity_protection",
     ):
         current_ent = _fetch_entitlements(UUID(tenant_id)) or dict(DEFAULTS)
         merged = {
             **DEFAULTS,
             **{k: current_ent.get(k) for k in DEFAULTS if k in current_ent},
         }
-        if service_key == "network_traffic_analysis":
+        if service_key in ("network_traffic_analysis", "network_detection_response"):
             merged["zeek_enabled"] = True
             next_steps.append(
                 "Network monitoring is now entitled. Complete sensor onboarding for this customer "
@@ -1004,7 +1017,7 @@ def approve_and_enable_service_upgrade(
             next_steps.append(
                 "Threat intelligence is now entitled. Confirm feed sharing scope with the customer."
             )
-        elif service_key == "endpoint_forensics":
+        elif service_key in ("endpoint_forensics", "endpoint_forensics_deception"):
             merged["velociraptor_enabled"] = True
             next_steps.append(
                 "Endpoint forensics is now entitled. Deploy collectors only after change approval."
@@ -1014,11 +1027,32 @@ def approve_and_enable_service_upgrade(
             next_steps.append(
                 "Security automation is now entitled. Review playbooks before enabling auto-actions."
             )
+        elif service_key == "continuous_compliance":
+            merged["continuous_compliance_enabled"] = True
+            next_steps.append(
+                "Continuous compliance is now entitled. SCA sync will refresh hardening scores."
+            )
+        elif service_key == "external_attack_surface":
+            merged["external_attack_surface_enabled"] = True
+            next_steps.append(
+                "External attack surface is now entitled. Run an EASM scan for this customer."
+            )
+        elif service_key == "cloud_identity_protection":
+            merged["cloud_identity_protection_enabled"] = True
+            next_steps.append(
+                "Cloud identity protection is now entitled. Connect the identity tenant if needed."
+            )
         upsert_tenant_entitlements(
             tenant_id,
             merged,
             actor_user_id=current_user.get("id"),
         )
+        try:
+            from app.services.tenant_entitlement_defaults import trigger_post_enable_sync
+
+            trigger_post_enable_sync(tenant_id, service_key)
+        except Exception:
+            pass
         if chosen_ids:
             replace_coverage(
                 tenant_id=tenant_id,

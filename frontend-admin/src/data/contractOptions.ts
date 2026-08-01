@@ -60,16 +60,19 @@ export const PREFERRED_LANGUAGE_OPTIONS: { value: string; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 
-/** Default contracted services for a new MSSP customer (core MDR stack on). */
+/** Default contracted services for a new MSSP customer (core package only). */
 export const DEFAULT_CREATE_ENTITLEMENTS = {
   wazuh_siem: true,
   wazuh_retention_days: 90,
   thehive_mode: "full",
-  greenbone_enabled: true,
+  greenbone_enabled: false,
   greenbone_cadence: "monthly",
-  shuffle_mode: "standard",
+  shuffle_mode: "off",
   zeek_enabled: false,
   misp_enabled: false,
   velociraptor_enabled: false,
+  continuous_compliance_enabled: false,
+  external_attack_surface_enabled: false,
+  cloud_identity_protection_enabled: false,
   roadmap_notes: null as string | null,
 };

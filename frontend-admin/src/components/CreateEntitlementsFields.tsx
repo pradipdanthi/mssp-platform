@@ -10,6 +10,9 @@ export type CreateEntitlementsState = {
   zeek_enabled: boolean;
   misp_enabled: boolean;
   velociraptor_enabled: boolean;
+  continuous_compliance_enabled?: boolean;
+  external_attack_surface_enabled?: boolean;
+  cloud_identity_protection_enabled?: boolean;
   roadmap_notes: string;
 };
 
@@ -25,8 +28,9 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
         Contracted services
       </p>
       <p className="page-subtitle" style={{ marginTop: 0 }}>
-        Select the services in this customer&apos;s contract. Matching backend slots are
-        provisioned automatically where the platform supports it.
+        New customers start with core only (log monitoring + incident response). Turn on
+        add-ons only when they are in the contract; otherwise customers request consulting
+        from the portal and Kerox sales approves in Admin.
       </p>
 
       <label className="entitlement-row">

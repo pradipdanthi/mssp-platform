@@ -81,8 +81,8 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     id: "security_automation",
     serviceKey: "security_automation",
     name: "Security Automation & Containment",
-    statusHint: "active",
-    pricing: "Included in Core Plan",
+    statusHint: "available",
+    pricing: "Available — request consulting",
     competitorValue: "Competitor value: ~$2,000 / month SOAR engine",
     achieves:
       "Executes automated active-response playbooks to isolate infected hosts and stop malicious processes within milliseconds.",
@@ -94,7 +94,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
       "Automated malicious file-hash blocking across connected endpoints",
       "Background state verification to confirm containment completed",
     ],
-    requestable: false,
+    requestable: true,
     scopeFields: ["endpoints", "notes"],
   },
   {
@@ -252,9 +252,9 @@ export function resolveServiceStatus(
     case "log_event_monitoring":
       return ent?.wazuh_siem === false ? "available" : "included";
     case "incident_response":
-      return ent?.thehive_mode === "not_included" ? "available" : "included";
+      return ent?.thehive_mode === "off" ? "available" : "included";
     case "security_automation":
-      return ent?.shuffle_mode && ent.shuffle_mode !== "not_included" ? "active" : "active";
+      return ent?.shuffle_mode && ent.shuffle_mode !== "off" ? "active" : "available";
     case "vulnerability_management":
       return ent?.greenbone_enabled ? "active" : "available";
     case "continuous_compliance":

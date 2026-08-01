@@ -374,7 +374,10 @@ def admin_patch_consultation(
     current_user: Dict[str, Any] = Depends(require_roles("platform_admin", "soc_manager")),
 ) -> ConsultationOut:
     existing = fetch_one(
-        "SELECT id::text FROM service_consultation_requests WHERE id = %s::uuid;",
+        """
+        SELECT id::text, tenant_id::text, service_key, status
+        FROM service_consultation_requests WHERE id = %s::uuid;
+        """,
         (str(request_id),),
     )
     if not existing:
@@ -401,6 +404,30 @@ def admin_patch_consultation(
                 """,
                 (body.admin_notes, str(request_id)),
             )
+
+    entitlement_sync: Dict[str, Any] = {}
+    if body.status == "APPROVED":
+        from app.services.tenant_entitlement_defaults import (
+            enable_entitlement_for_catalog_key,
+            trigger_post_enable_sync,
+        )
+
+        enabled = enable_entitlement_for_catalog_key(
+            existing["tenant_id"],
+            existing["service_key"],
+        )
+        if enabled is not None:
+            entitlement_sync = trigger_post_enable_sync(
+                existing["tenant_id"],
+                existing["service_key"],
+            )
+            entitlement_sync["entitlement_enabled"] = True
+        else:
+            entitlement_sync = {
+                "entitlement_enabled": False,
+                "note": "No auto-entitlement mapping for this service key",
+            }
+
     write_audit_event(
         action="service_catalog.consultation_updated",
         entity_type="service_consultation_request",
@@ -408,7 +435,13 @@ def admin_patch_consultation(
         actor_user_id=current_user.get("id"),
         actor_email=current_user.get("email"),
         actor_role=current_user.get("role"),
-        details={"status": body.status, "has_notes": body.admin_notes is not None},
+        tenant_id=existing.get("tenant_id"),
+        details={
+            "status": body.status,
+            "service_key": existing.get("service_key"),
+            "has_notes": body.admin_notes is not None,
+            "entitlement_sync": entitlement_sync or None,
+        },
         action_status="SUCCESS",
         resource_type="service_consultation_request",
         resource_id=str(request_id),
