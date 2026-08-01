@@ -1,0 +1,13 @@
+---
+- name: Ensure MISP bridge install directory exists
+  ansible.builtin.file:
+    path: "{{ misp_install_dir }}"
+    state: directory
+    mode: "0755"
+
+- name: Hint — prefer scripts/kb108_install_misp_direct.sh for first install
+  ansible.builtin.debug:
+    msg: >-
+      Deploy MISP-compatible threat-intel bridge via
+      /opt/mssp-control/scripts/kb108_install_misp_direct.sh on {{ inventory_hostname }}.
+      Role reserves inventory/group for automation follow-up.

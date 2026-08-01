@@ -431,6 +431,46 @@ def _seed_events_for_config(tenant_id: str, cfg: Dict[str, Any]) -> int:
     return len(samples)
 
 
+def _import_graph_events_for_config(tenant_id: str, cfg: Dict[str, Any]) -> int:
+    """Pull live Microsoft Graph sign-ins / directory audits into ITDR events."""
+    from app.services import itdr_graph_client as graph
+
+    if not graph.configured():
+        return 0
+    config_id = cfg["id"]
+    domain = cfg["tenant_domain"]
+    try:
+        sign_ins = graph.fetch_sign_ins(top=40)
+        audits = graph.fetch_directory_audits(top=40)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Graph fetch failed for %s: %s", domain, exc)
+        return 0
+    events = graph.normalize_graph_events(domain=domain, sign_ins=sign_ins, audits=audits)
+    if not events:
+        return 0
+    execute(
+        """
+        DELETE FROM tenant_cloud_identity_events
+        WHERE tenant_id = %s::uuid AND config_id = %s::uuid AND status = 'open';
+        """,
+        (tenant_id, config_id),
+    )
+    now = _utcnow()
+    for sample in events[:25]:
+        _insert_event(
+            tenant_id=tenant_id,
+            config_id=config_id,
+            upn=sample["upn"],
+            event_type=sample["event_type"],
+            location_country=sample["country"],
+            location_city=sample["city"],
+            source_ip=sample["ip"],
+            detected_at=now - timedelta(hours=int(sample.get("hours_ago") or 1)),
+            raw=sample.get("raw") or {},
+        )
+    return min(len(events), 25)
+
+
 def sync_tenant_itdr(tenant_id: str) -> Dict[str, Any]:
     """Sync identity analysis for all connected configs under a tenant."""
     tid = str(tenant_id)
@@ -449,9 +489,16 @@ def sync_tenant_itdr(tenant_id: str) -> Dict[str, Any]:
         }
 
     total_events = 0
+    sources: List[str] = []
     for cfg in configs:
         try:
-            total_events += _seed_events_for_config(tid, cfg)
+            live = _import_graph_events_for_config(tid, cfg)
+            if live > 0:
+                total_events += live
+                sources.append("microsoft_graph")
+            else:
+                total_events += _seed_events_for_config(tid, cfg)
+                sources.append("analysis_adapter")
             execute(
                 """
                 UPDATE tenant_cloud_identity_configs
@@ -471,12 +518,14 @@ def sync_tenant_itdr(tenant_id: str) -> Dict[str, Any]:
             }
 
     _enable_entitlement(tid)
+    source = "+".join(sorted(set(sources))) if sources else "none"
     return {
         "tenant_id": tid,
         "sync_status": "ok",
         "message": "Cloud identity analysis refreshed",
         "events_created": total_events,
         "configs_synced": len(configs),
+        "source": source,
         "summary": get_summary(tid),
         "engine_label": ENGINE_LABEL,
     }

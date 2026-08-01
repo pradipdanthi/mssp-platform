@@ -13,15 +13,16 @@ Prefer restoring with the same guest IPs so Cursor can use ansible inventory + .
 | 102 | thehive-shuffle / thehive_shuffle | thehiveshuffle | 192.168.0.212 | TheHive 4 + Shuffle (+ Tenzir observed on this host) |
 | 106 | suricata-sensor | suricata-sensor | 192.168.0.216 | Suricata IDS + Wazuh agent; Zeek co-located (KB-047) |
 | 109 | greenbone | greenbone | 192.168.0.219 | Greenbone CE + Nuclei + Vuls (`/opt/mssp-vuln-free`) + **Amass EASM agent** (`/opt/mssp-easm-agent`) |
-| 110 | velociraptor | velociraptor | 192.168.0.220 | **Velociraptor DFIR + MSSP bridge :8001** |
+| 110 | velociraptor | velociraptor | 192.168.0.220 | **Velociraptor DFIR** (frontend `:8000`, API `:8002`) + **MSSP bridge `:8001`** |
+| 108 | misp | misp | 192.168.0.218 | **MISP-compatible threat-intel REST bridge `:8080`** (not full upstream MISP UI) |
 | 112 | automation | automation | 192.168.0.222 | **Required** Ansible automation controller (included in DR backup) |
 
 ## Endpoint / lab VMs
 
 | Proxmox VMID | Name | IP | Status |
 |---:|---|---|---|
-| 104 | windows-endpoint-lab | 192.168.0.214 | Windows test endpoint (Wazuh agent) |
-| 105 | linux-endpoint-lab | 192.168.0.215 | Removed — reinstall later if needed |
+| 104 | windows-endpoint-lab | 192.168.0.214 | Windows test endpoint (Wazuh agent); VR client pack in `deploy/velociraptor-client/` |
+| 105 | linux-endpoint-lab | 192.168.0.215 | **LIVE** — Ubuntu lab + Velociraptor client enrolled to VM 110 |
 
 ## Planned placeholders (not live dedicated VMs)
 
@@ -29,7 +30,6 @@ Prefer restoring with the same guest IPs so Cursor can use ansible inventory + .
 |---:|---|---|---|
 | 103 | shuffle standalone | — | Not used — Shuffle on VM 102 |
 | 107 | zeek standalone | — | Not used — Zeek on VM 106 |
-| 108 | misp | 192.168.0.218 | Planned — MISP not deployed yet |
 | 111 | monitoring | 192.168.0.221 | Planned — Prometheus/Grafana |
 
 ## Control-plane service engines (NOT separate Proxmox VMs)

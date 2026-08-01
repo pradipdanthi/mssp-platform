@@ -359,6 +359,13 @@ def apply_action_callback(
     elif mapped == "success" and row["action_type"] == "KILL_PROCESS" and applied is False:
         final_status = "failed"
         detail = (detail or "Endpoint reported process kill applied=false").strip()
+    elif mapped == "success" and row["action_type"] == "BLOCK_HASH" and applied is True:
+        final_status = "verified"
+        verified = True
+        detail = (detail or "Endpoint reported block-hash applied=true").strip()
+    elif mapped == "success" and row["action_type"] == "BLOCK_HASH" and applied is False:
+        final_status = "failed"
+        detail = (detail or "Endpoint reported block-hash applied=false").strip()
 
     if (
         mapped == "success"
@@ -764,19 +771,22 @@ def execute_edr_action(
             h = (body.file_hash_sha256 or "").strip().lower()
             if not re.fullmatch(r"[a-f0-9]{64}", h):
                 raise ValueError("file_hash_sha256 must be 64 hex characters")
-            ar_msg = "Endpoint hash record skipped (no agent)"
+            ar_msg = "Endpoint hash block skipped (no agent)"
             if agent_id and wazuh_client.credentials_configured():
                 ar_cmd = _resolve_ar_command(BLOCK_HASH_AR_COMMAND, WIN_BLOCK_HASH_AR_COMMAND, agent_id)
+                cb = (callback_url or "").strip()
+                args = [h, execution_id]
+                if cb:
+                    args.append(cb)
                 wazuh_client.run_active_response(
                     agent_id=agent_id,
                     command=ar_cmd,
-                    arguments=[h],
+                    arguments=args,
                 )
                 ar_msg = (
-                    f"Hash record command dispatched to agent {agent_id}. "
-                    "IMPORTANT: current endpoint script only appends to "
-                    "mssp_blocked_hashes.txt - it does NOT prevent execution "
-                    "(WDAC/AppLocker/ASR enforcement is not wired yet)."
+                    f"Hash block command dispatched to agent {agent_id} "
+                    f"(denylist + AppLocker/WDAC attempt when available; "
+                    f"awaiting endpoint applied=true/false callback)."
                 )
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(
                 {
@@ -789,8 +799,8 @@ def execute_edr_action(
                     "status": "executing",
                 }
             )
-            # Dispatch accepted is "success" in lifecycle terms, but UI must label Dispatched.
-            status = "success" if (agent_id and wazuh_client.credentials_configured()) or ok else "failed"
+            # Stay executing until endpoint callback proves applied=true|false.
+            status = "executing" if (agent_id and wazuh_client.credentials_configured()) or ok else "failed"
             if not agent_id and not ok:
                 status = "failed"
             msg = f"{ar_msg}; orchestration: {shuffle_msg}"

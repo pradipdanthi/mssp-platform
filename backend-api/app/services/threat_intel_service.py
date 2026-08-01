@@ -192,6 +192,19 @@ def _extract_indicators(text: str) -> List[Tuple[str, str]]:
 
 def _lookup_reputation(ioc_type: str, ioc_value: str) -> Optional[Dict[str, Any]]:
     norm = _normalize_ioc_value(ioc_value, ioc_type)
+    # Prefer live MISP corpus when available
+    try:
+        from app.services import misp_client
+
+        if misp_client.configured() and misp_client.health().get("status") == "ok":
+            for entry in misp_client.list_iocs(limit=500):
+                if entry["ioc_type"] == ioc_type and _normalize_ioc_value(
+                    entry["ioc_value"], ioc_type
+                ) == norm:
+                    return entry
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("MISP lookup skipped: %s", exc)
+
     for entry in _REPUTATION_DB:
         if entry["ioc_type"] == ioc_type and _normalize_ioc_value(entry["ioc_value"], ioc_type) == norm:
             return entry
@@ -200,6 +213,40 @@ def _lookup_reputation(ioc_type: str, ioc_value: str) -> Optional[Dict[str, Any]
             if _normalize_ioc_value(entry["ioc_value"], "DOMAIN") == norm:
                 return entry
     return None
+
+
+def _import_from_misp(tenant_id: str) -> int:
+    """Pull active IOCs from VM 108 MISP into tenant enrichment tables."""
+    try:
+        from app.services import misp_client
+
+        if not misp_client.configured():
+            return 0
+        if misp_client.health().get("status") != "ok":
+            return 0
+        count = 0
+        for entry in misp_client.list_iocs(limit=500):
+            _upsert_ioc(
+                tenant_id,
+                ioc_value=entry["ioc_value"],
+                ioc_type=entry["ioc_type"],
+                threat_actor=entry.get("threat_actor") or "Unknown",
+                confidence_score=int(entry.get("confidence_score") or 80),
+                reputation_status=entry.get("reputation_status") or "MALICIOUS",
+                mitre_tactics=list(entry.get("mitre_tactics") or []),
+                mitre_techniques=list(entry.get("mitre_techniques") or []),
+                summary=entry.get("summary") or "Threat indicator from MISP",
+                recommended_action=entry.get("recommended_action")
+                or "Block or monitor this indicator.",
+                related_alert_count=0,
+                last_seen=_utcnow(),
+                raw={"source": "misp", "feed": "vm108"},
+            )
+            count += 1
+        return count
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("MISP import failed: %s", exc)
+        return 0
 
 
 def _upsert_ioc(
@@ -566,9 +613,16 @@ def sync_tenant_threat_intel(tenant_id: str) -> Dict[str, Any]:
         (tid,),
     )
     try:
-        imported = _import_from_alerts(tid)
-        source = "live_alerts"
-        if imported == 0:
+        misp_count = _import_from_misp(tid)
+        alert_count = _import_from_alerts(tid)
+        imported = misp_count + alert_count
+        if misp_count > 0:
+            source = "misp_vm108"
+            if alert_count:
+                source = "misp_vm108+live_alerts"
+        elif alert_count > 0:
+            source = "live_alerts"
+        else:
             imported = _seed_sample_enrichment(tid)
             source = "analysis_adapter"
         campaigns = _seed_campaigns(tid)
@@ -578,6 +632,8 @@ def sync_tenant_threat_intel(tenant_id: str) -> Dict[str, Any]:
             "sync_status": "ok",
             "source": source,
             "iocs_created": imported,
+            "misp_iocs": misp_count,
+            "alert_matches": alert_count,
             "campaigns_created": campaigns,
             "message": "Threat intelligence enrichment refreshed",
             "engine_label": ENGINE_LABEL,

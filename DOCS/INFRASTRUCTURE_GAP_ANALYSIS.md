@@ -8,15 +8,21 @@
 
 ---
 
-## 0. Remediation update (2026-08-01)
+## 0. Remediation update (2026-08-01 → continued)
 
 | Item | Result |
 |---|---|
-| **VM 110 Velociraptor** | **LIVE** — Proxmox VM created (`192.168.0.220`); Velociraptor + HTTP bridge on `:8001`; control plane `velociraptor_client.py` smoke-tested (`collect_artifacts` → job RUNNING) |
-| **VM 109 Amass EASM** | **LIVE** — `/opt/mssp-easm-agent` + timer; APIs `/integrations/easm/scan-plan` + `/sync`; Amass v4.2.0 installed |
-| **Shuffle durability** | **LIVE** — Redis-backed `shuffle_retry_queue` (replaces fire-and-forget for Wazuh ingress + EDR webhooks) |
-| **Kill-process honesty** | **Improved** — dispatch stays `executing` until endpoint `applied` callback; Linux AR script posts callback |
-| **Still open** | VM 108 MISP; ITDR live IdP connectors; Velociraptor **endpoint client enrollment**; real canary sensors; block-hash enforcement |
+| **VM 110 Velociraptor** | **LIVE** — server `192.168.0.220`; frontend `:8000`; gRPC API `:8002`; HTTP bridge `:8001` (bridge owns 8001 — do not bind VR API there) |
+| **VM 105 Linux VR client** | **LIVE** — `velociraptor-client` enrolled (`C.6067f0379dff636c` → `https://192.168.0.220:8000/`) |
+| **VM 104 Windows VR client** | **Pack ready** — `deploy/velociraptor-client/` (manual Admin install; no SSH to 104) |
+| **VM 109 Amass EASM** | **LIVE** — `/opt/mssp-easm-agent` + `/integrations/easm/*` |
+| **VM 108 MISP** | **LIVE (bridge)** — Proxmox VM `192.168.0.218`; MISP-compatible REST on `:8080` (`scripts/kb108_install_misp_direct.sh`); control-plane `misp_client.py` + `threat_intel` MISP-first sync. **Not** full upstream MISP UI/docker stack. |
+| **ITDR Microsoft Graph** | **Code-ready** — `itdr_graph_client.py` wired; live import when `AZURE_TENANT_ID` / `CLIENT_ID` / `CLIENT_SECRET` set; otherwise seeded fallback remains. |
+| **Shuffle durability** | **LIVE** — Redis `shuffle_retry_queue` |
+| **Kill / block-hash honesty** | **Improved** — dispatch stays `executing` until endpoint `applied` callback; Linux + Windows AR updated (denylist + AppLocker attempt on Windows SKUs that support it) |
+| **Remaining (honest)** | Full upstream MISP UI optional; Azure Graph secrets for live ITDR; Windows VR install on 104; real deception canaries; AppLocker may fail on non-Enterprise Windows |
+
+**Infrastructure closure for the 10 catalog engines:** engine VMs + adapters are in place for production-path demos. Graph live telemetry and Windows VR remain operator credential / manual steps — not silent gaps.
 
 ---
 
@@ -33,13 +39,13 @@ The control plane on **VM 100** (`192.168.0.201`) already presents a full **10-c
 
 **Largest remaining infrastructure gaps:**
 
-1. **VM 108 (MISP)** — not created; Threat Intelligence still uses curated reputation + alert IOC extraction.  
-2. **ITDR** — no live Microsoft Graph / Entra / AWS IAM connector yet (seeded identity events).  
-3. **Velociraptor clients** — server LIVE; Windows/Linux agents not yet enrolled for deep host collections.  
-4. **Real deception sensors** — tripwires may still seed when no live canary feed exists.  
-5. **Block-hash enforcement** — still honesty-limited (text denylist, not WDAC/AppLocker).
+1. **ITDR live Graph** — connector code shipped; needs Azure app credentials in `.secrets` / compose env.  
+2. **Windows Velociraptor client (VM 104)** — installer pack ready; manual Admin install.  
+3. **Full upstream MISP UI** — optional; REST bridge already feeds TI.  
+4. **Real deception canaries** — tripwires may still seed when no live canary feed exists.  
+5. **Block-hash OS enforcement** — denylist + callback proof live; AppLocker/WDAC depends on Windows SKU.
 
-**Already production-path engines:** Wazuh (101), TheHive+Shuffle (102), Suricata+Zeek (106), Greenbone CE + Nuclei + Vuls + **Amass EASM** (109), **Velociraptor** (110), Ansible controller (112).
+**Already production-path engines:** Wazuh (101), TheHive+Shuffle (102), Suricata+Zeek (106), Greenbone CE + Nuclei + Vuls + **Amass EASM** (109), **Velociraptor** (110) + Linux client (105), **MISP bridge** (108), Ansible controller (112).
 
 ---
 
@@ -53,10 +59,10 @@ The control plane on **VM 100** (`192.168.0.201`) already presents a full **10-c
 | 4 | Vulnerability Management (VMaaS) | `vulnerability_management` | **External VM 109** — Nuclei/Vuls agent pulls scan-plan / pushes sync; Greenbone CE also feeds `vulnerabilities`. Control plane: `vmaas_service` + `vuln_sync` | Same (Greenbone Enterprise optional later — KB-077) | **Low** (seeded samples only when no live findings) |
 | 5 | Continuous Compliance (CaaS) | `continuous_compliance` | **VM 100 adapter → VM 101** — live Wazuh SCA API (`sca_compliance_service` / `wazuh_client`) | Same | **Low** |
 | 6 | Network Detection & Response (NDR) | `network_detection_response` | **External VM 106** Suricata (+ Zeek co-located) → alerts into control plane; `ndr_service` imports matching alerts, else **seeds samples** | Same + real flow counters (not fabricated sensor metrics) | **Medium** |
-| 7 | Threat Intelligence | `threat_intelligence` | **VM 100 analysis adapter** — extract IOCs from alerts + hardcoded `_REPUTATION_DB`; **no MISP client** | **VM 108 MISP** (+ optional OTX/AbuseIPDB) via adapter | **High** |
-| 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | **External VM 110** Velociraptor bridge `:8001` + EDR artifacts; deception tripwires may still seed | Same + enrolled clients + real canaries | **Low–Medium** (server live; clients pending) |
+| 7 | Threat Intelligence | `threat_intelligence` | **External VM 108** MISP-compatible REST bridge + `misp_client` (MISP-first sync; seed only if empty) | Full MISP UI optional + OTX/AbuseIPDB | **Low–Medium** (bridge live; full MISP optional) |
+| 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | **External VM 110** + Linux client **VM 105**; bridge `:8001`; Windows pack for **104** | Same + Windows enroll + real canaries | **Low** (Linux client live; Windows manual) |
 | 9 | External Attack Surface (EASM) | `external_attack_surface` | **External VM 109** Amass/Nuclei agent via `/integrations/easm/*` (remote default) | Same | **Low** |
-| 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | **VM 100 analysis adapter** — `itdr_service.py` registers domain + **seeds** identity events (no Graph/Entra API) | Live IdP connectors (Entra/M365/AWS IAM) via adapter | **High** |
+| 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | **VM 100** `itdr_graph_client` → Graph when Azure secrets set; else seed | Live IdP when credentials provided | **Medium** (code-ready; credentials pending) |
 
 ### Legend (backend class)
 

@@ -1,0 +1,4 @@
+---
+misp_bind_host: "0.0.0.0"
+misp_port: 8080
+misp_install_dir: /opt/mssp-misp

@@ -59,6 +59,13 @@ services:
       EASM_DISPATCH_MODE: ${EASM_DISPATCH_MODE:-remote}
       VELOCIRAPTOR_SERVER_URL: ${VELOCIRAPTOR_SERVER_URL:-http://192.168.0.220:8001}
       VELOCIRAPTOR_BRIDGE_API_KEY_FILE: /run/secrets/velociraptor_bridge_api_key
+      MISP_URL: ${MISP_URL:-http://192.168.0.218:8080}
+      MISP_API_KEY_FILE: /run/secrets/misp_api_key
+      MISP_VERIFY_TLS: ${MISP_VERIFY_TLS:-false}
+      AZURE_TENANT_ID: ${AZURE_TENANT_ID:-}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:-}
+      AZURE_CLIENT_SECRET: ${AZURE_CLIENT_SECRET:-}
+      AZURE_GRAPH_BASE_URL: ${AZURE_GRAPH_BASE_URL:-https://graph.microsoft.com/v1.0}
       THEHIVE_URL: ${THEHIVE_URL:-http://192.168.0.212:9000}
       THEHIVE_USER: ${THEHIVE_USER:-admin@thehive.local}
       THEHIVE_PASSWORD_FILE: /run/secrets/thehive_password
@@ -88,6 +95,7 @@ services:
       - ./.secrets/vuln_sync_api_key:/run/secrets/vuln_sync_api_key:ro
       - ./.secrets/easm_sync_api_key:/run/secrets/easm_sync_api_key:ro
       - ./.secrets/velociraptor_bridge_api_key:/run/secrets/velociraptor_bridge_api_key:ro
+      - ./.secrets/misp_api_key:/run/secrets/misp_api_key:ro
       - ./.secrets/thehive_password:/run/secrets/thehive_password:ro
       - ./.secrets/wazuh_api_user:/run/secrets/wazuh_api_user:ro
       - ./.secrets/wazuh_api_password:/run/secrets/wazuh_api_password:ro
