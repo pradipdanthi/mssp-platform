@@ -1,13 +1,13 @@
 # Service Engine Development Roadmap
 
 Status: Living tracker for backend engines behind the 10-card Service Catalog.  
-Created: 2026-07-31 · **Phase 6 Threat Intelligence & Enrichment — COMPLETE**
+Created: 2026-07-31 · **Phase 7 Endpoint Forensics & Deception — COMPLETE (control-plane)**
 
 **Conventions (this repo):**
 - Customer APIs: `/customer/{feature}/{short_code}/...` (nginx strips `/api` prefix).
 - Admin APIs: `/admin/{feature}/...`
 - Customer UI: capability labels only — **no** third-party engine brand names in `frontend-customer/`.
-- Engines live on VMs 101–109; control plane (VM 100) is adapter-only.
+- Engines live on VMs 101–109 (+ future DFIR VM); control plane (VM 100) is adapter-only.
 
 ---
 
@@ -22,7 +22,7 @@ Created: 2026-07-31 · **Phase 6 Threat Intelligence & Enrichment — COMPLETE**
 | 5 | Continuous Compliance & Hardening (CaaS) | `continuous_compliance` | Wazuh SCA policies/checks | **PHASE 1 — COMPLETE** |
 | 6 | Network Detection & Response (NDR) | `network_detection_response` | MSSP Network Detection & Response Engine (Suricata + Zeek adapters) | **PHASE 5 — COMPLETE** |
 | 7 | Threat Intelligence & Enrichment | `threat_intelligence` | MSSP Global Threat Intelligence Engine (MISP/OTX/AbuseIPDB adapters) | **PHASE 6 — COMPLETE** |
-| 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | Velociraptor + Canarytokens (pending) | **PLANNED** |
+| 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | MSSP Endpoint Forensics & Deception Engine (Velociraptor/canary adapters pending live install) | **PHASE 7 — COMPLETE** |
 | 9 | External Attack Surface (EASM) | `external_attack_surface` | MSSP External Surface Scanner | **PHASE 2 — COMPLETE** |
 | 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | MSSP Cloud Identity Protection Engine | **PHASE 3 — COMPLETE** |
 
@@ -30,35 +30,37 @@ Created: 2026-07-31 · **Phase 6 Threat Intelligence & Enrichment — COMPLETE**
 
 ## Phase tracker
 
-### Phases 1–5 — COMPLETE
-CaaS, EASM, ITDR, VMaaS, NDR (see prior commits).
+### Phases 1–6 — COMPLETE
+CaaS, EASM, ITDR, VMaaS, NDR, Threat Intelligence (see prior commits).
 
-### Phase 6 — Threat Intelligence & Enrichment — COMPLETE (2026-07-31)
+### Phase 7 — Endpoint Forensics & Deception — COMPLETE (2026-08-01)
 
-**Delivered:**
-- Schema: `postgres/init/027_threat_intelligence_enrichment.sql` — `tenant_threat_intel_iocs`, `tenant_threat_intel_campaigns`
-- Service: `backend-api/app/services/threat_intel_service.py` — matches alert indicators against curated reputation corpus; seeds campaign bulletins when live feed adapters are offline. Customer label: **MSSP Global Threat Intelligence Engine**.
+**Delivered (control plane; no new DFIR VM installed):**
+- Schema: `postgres/init/028_endpoint_forensics_deception.sql` — `tenant_deception_tripwires`, `tenant_deception_events`, `tenant_forensics_collections`
+- Service: `backend-api/app/services/endpoint_forensics_service.py` — seeds tripwires/events/collections; optional bridge from `edr_forensic_artifacts`. Customer label: **MSSP Endpoint Forensics & Deception Engine**.
 - APIs:
-  - `GET /customer/threat-intel/{short_code}/summary`
-  - `GET /customer/threat-intel/{short_code}/iocs`
-  - `GET /customer/threat-intel/{short_code}/campaigns`
-  - `POST /admin/threat-intel/{tenant_ref}/sync`
-  - `GET /admin/threat-intel/summary`
-- Customer UI: `/threat-intel` — KPI cards, IOC table (reputation + confidence + actor + ATT&CK), campaign bulletins tab
-- Catalog Card 7 → `ACTIVE` when TI data / `misp_enabled` entitlement present
-- Customer APIs omit vendor feed brand names (MISP/OTX/AbuseIPDB)
-- Phases 1–5 regression paths untouched
+  - `GET /customer/forensics/{short_code}/summary`
+  - `GET /customer/forensics/{short_code}/tripwires`
+  - `GET /customer/forensics/{short_code}/events`
+  - `GET /customer/forensics/{short_code}/collections`
+  - `POST /admin/forensics/{tenant_ref}/sync`
+  - `GET /admin/forensics/summary`
+- Customer UI: `/forensics` — KPIs + events / tripwires / collections tabs
+- Catalog Card 8 → `ACTIVE` when forensics data / `velociraptor_enabled` entitlement present
+- Customer APIs omit vendor brand names (Velociraptor / Canarytokens)
+- Existing KB-083/084 EDR forensics pipeline remains for incident-response deep dives
 
-### Phase 7+ (next)
+### Later (optional deepen)
 
-| Phase | Service | Notes |
-|---|---|---|
-| 7 | Endpoint Forensics & Deception | Velociraptor + canaries |
-| Later | Live MISP install | Named KB required; deepen live IOC pull |
+| Item | Notes |
+|---|---|
+| Live Velociraptor VM | Named KB required before install |
+| Live canary/deception deployment | Named KB; wire trip events from real sensors |
+| Live MISP install | Named KB; deepen Phase 6 IOC pull |
 
 ---
 
 ## Dependencies by phase
 
-- **Phase 6:** MISP still pending a named KB. Customer dashboard works via alert-indicator matching + analysis adapter until MISP is online.
+- **Phase 7:** Dashboard works via analysis adapter + optional EDR artifact bridge until Velociraptor/canaries are online.
 - **Later phases:** Do not install new VMs/tools unless a named KB approves it.

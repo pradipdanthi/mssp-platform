@@ -26,6 +26,7 @@ import EasmPage from "./pages/EasmPage";
 import ItdrPage from "./pages/ItdrPage";
 import NdrPage from "./pages/NdrPage";
 import ThreatIntelPage from "./pages/ThreatIntelPage";
+import ForensicsPage from "./pages/ForensicsPage";
 import ServicesPage from "./pages/ServicesPage";
 
 function RootRedirect() {
@@ -207,6 +208,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ThreatIntelPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/forensics"
+        element={
+          <ProtectedRoute>
+            <ForensicsPage />
           </ProtectedRoute>
         }
       />

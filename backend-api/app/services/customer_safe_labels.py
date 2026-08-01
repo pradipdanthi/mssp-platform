@@ -77,6 +77,8 @@ def entitlements_row_to_customer_public(row: Dict[str, Any]) -> Dict[str, Any]:
         "threat_intelligence_enabled": bool(
             row.get("misp_enabled") or row.get("has_threat_intel_data")
         ),
-        "endpoint_forensics_enabled": bool(row.get("velociraptor_enabled")),
+        "endpoint_forensics_enabled": bool(
+            row.get("velociraptor_enabled") or row.get("has_forensics_data")
+        ),
         "updated_at": row.get("updated_at"),
     }

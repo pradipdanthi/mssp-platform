@@ -197,6 +197,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     ],
     requestable: true,
     scopeFields: ["endpoints", "notes"],
+    learnMorePath: "/forensics",
   },
   {
     id: "external_attack_surface",

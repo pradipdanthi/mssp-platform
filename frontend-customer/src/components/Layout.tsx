@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { to: "/itdr", label: "Cloud & Identity" },
   { to: "/ndr", label: "Network Detection" },
   { to: "/threat-intel", label: "Threat Intel" },
+  { to: "/forensics", label: "Forensics" },
   { to: "/recommendations", label: "Recommendations" },
   { to: "/reports", label: "Reports" },
   { to: "/notifications", label: "Notifications" },

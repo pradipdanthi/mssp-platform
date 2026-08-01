@@ -798,6 +798,92 @@ export function getThreatIntelCampaigns(
   return request(`/customer/threat-intel/${encodeURIComponent(shortCode)}/campaigns`);
 }
 
+/** Endpoint Forensics & Deception — customer-safe. */
+export interface ForensicsSummary {
+  tenant: { short_code: string; name: string };
+  active_tripwires: number;
+  auto_isolate_tripwires?: number;
+  open_deception_events: number;
+  high_severity_events?: number;
+  isolation_actions?: number;
+  forensics_collections?: number;
+  ready_downloads: number;
+  has_data: boolean;
+  engine_label?: string;
+}
+
+export interface ForensicsTripwire {
+  id: string;
+  tripwire_name: string;
+  tripwire_type: string;
+  host_label: string;
+  deployment_status: string;
+  sensitivity: string;
+  auto_isolate_on_trip: boolean;
+  summary: string;
+  planted_at?: string;
+  last_verified_at?: string;
+}
+
+export interface ForensicsEvent {
+  id: string;
+  event_title: string;
+  severity: string;
+  actor_label: string;
+  host_label: string;
+  isolation_status: string;
+  summary: string;
+  recommended_action: string;
+  tripwire_name?: string | null;
+  detected_at?: string;
+  status?: string;
+}
+
+export interface ForensicsCollection {
+  id: string;
+  collection_name: string;
+  host_label: string;
+  collection_scope: string;
+  status: string;
+  package_size_bytes: number;
+  download_available: boolean;
+  summary: string;
+  related_event_title?: string | null;
+  requested_at?: string;
+  completed_at?: string;
+}
+
+export function getForensicsSummary(shortCode: string): Promise<ForensicsSummary> {
+  return request(`/customer/forensics/${encodeURIComponent(shortCode)}/summary`);
+}
+
+export function getForensicsTripwires(
+  shortCode: string
+): Promise<{ tripwires: ForensicsTripwire[] }> {
+  return request(`/customer/forensics/${encodeURIComponent(shortCode)}/tripwires`);
+}
+
+export function getForensicsEvents(
+  shortCode: string,
+  opts?: { severity?: string; page?: number; page_size?: number }
+): Promise<{
+  events: ForensicsEvent[];
+  pagination: { page: number; page_size: number; total_items: number; total_pages: number };
+}> {
+  const params = new URLSearchParams();
+  if (opts?.severity) params.set("severity", opts.severity);
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/forensics/${encodeURIComponent(shortCode)}/events${q}`);
+}
+
+export function getForensicsCollections(
+  shortCode: string
+): Promise<{ collections: ForensicsCollection[] }> {
+  return request(`/customer/forensics/${encodeURIComponent(shortCode)}/collections`);
+}
+
 /** Continuous Compliance & Hardening (CaaS) — customer-safe. */
 export interface ComplianceFrameworkScore {
   score_percentage: number;
