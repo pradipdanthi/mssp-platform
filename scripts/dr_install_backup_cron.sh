@@ -8,9 +8,9 @@ SCRIPT="$REPO_ROOT/scripts/dr_scheduled_backup.sh"
 CONFIG_DIR="${HOME}/.config/mssp-dr"
 CONFIG="$CONFIG_DIR/backup.env"
 UNIT_DIR="${HOME}/.config/systemd/user"
-# Default: daily 02:15 local time (OnCalendar)
-ON_CALENDAR="${MSSP_DR_ON_CALENDAR:-*-*-* 02:15:00}"
-CRON_EXPR="${MSSP_DR_CRON_EXPR:-15 2 * * *}"
+# Default: daily 20:00 local time (8 PM)
+ON_CALENDAR="${MSSP_DR_ON_CALENDAR:-*-*-* 20:00:00}"
+CRON_EXPR="${MSSP_DR_CRON_EXPR:-0 20 * * *}"
 
 chmod +x "$SCRIPT" "$REPO_ROOT/scripts/dr_cold_copy_control_plane.sh" || true
 mkdir -p "$CONFIG_DIR" "$HOME/MSSP_Backups/logs" "$UNIT_DIR"
@@ -26,10 +26,17 @@ MSSP_DR_BACKUP_PASSPHRASE_FILE=/opt/mssp-control/.secrets/dr_backup_passphrase
 # Google Drive via rclone (set to 1 after rclone remote is ready)
 MSSP_DR_ENABLE_GDRIVE=0
 MSSP_DR_RCLONE_REMOTE=gdrive
-MSSP_DR_RCLONE_PATH=MSSP_Backups
+MSSP_DR_RCLONE_PATH=MSSP/MSSP_Backups
 EOF
   chmod 600 "$CONFIG"
   echo "Created $CONFIG (edit ENABLE_GDRIVE=1 after rclone setup)"
+fi
+
+# Refresh schedule defaults on every install (preserve other env keys)
+if grep -q '^MSSP_DR_RCLONE_PATH=' "$CONFIG" 2>/dev/null; then
+  sed -i 's|^MSSP_DR_RCLONE_PATH=.*|MSSP_DR_RCLONE_PATH=MSSP/MSSP_Backups|' "$CONFIG"
+else
+  echo 'MSSP_DR_RCLONE_PATH=MSSP/MSSP_Backups' >> "$CONFIG"
 fi
 
 # --- systemd user timer (preferred; cron package often missing) ---
@@ -56,7 +63,8 @@ Description=Daily MSSP DR backup timer
 [Timer]
 OnCalendar=$ON_CALENDAR
 Persistent=true
-RandomizedDelaySec=5m
+# Keep close to 20:00; small jitter only to avoid exact-second pileups
+RandomizedDelaySec=30
 
 [Install]
 WantedBy=timers.target

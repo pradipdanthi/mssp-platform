@@ -1,0 +1,20 @@
+---
+description: Monitor MSSP daily DR backup status for the operator
+alwaysApply: true
+---
+
+# DR backup monitoring (operator)
+
+When the user asks whether backup is running, backup status, last backup, or Google Drive backup:
+
+1. Run immediately (do not guess):
+
+```bash
+/opt/mssp-control/scripts/dr_backup_status.sh
+```
+
+2. Reply in plain English with: **RUNNING** or **IDLE**, next scheduled time, last success/fail, local `LATEST` path, and Drive folder `gdrive:MSSP/MSSP_Backups/`.
+
+3. Schedule truth: daily **20:00** local time via systemd user timer `mssp-dr-backup.timer` (script `scripts/dr_scheduled_backup.sh`). Config: `~/.config/mssp-dr/backup.env` (never print secrets).
+
+4. Do not start a backup unless the user explicitly asks. If RUNNING, do not start a second run.

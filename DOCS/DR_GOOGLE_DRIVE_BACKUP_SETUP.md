@@ -2,8 +2,8 @@
 
 Status: Operator setup guide for automated dated backups.  
 Local path: `/home/secadmin/MSSP_Backups/<YYYY-MM-DD_HHMMSSZ>/`  
-Remote path: Google Drive → `MSSP_Backups/<same timestamp>/`  
-Scripts: `scripts/dr_scheduled_backup.sh`, `scripts/dr_install_backup_cron.sh`
+Remote path: Google Drive → `MSSP/MSSP_Backups/<same timestamp>/`  
+Scripts: `scripts/dr_scheduled_backup.sh`, `scripts/dr_install_backup_cron.sh`, `scripts/dr_backup_status.sh`
 
 Backups **never overwrite** a previous run — each run creates a new timestamp folder.
 
@@ -18,9 +18,17 @@ Provide / complete these (no passwords in chat if you can avoid it):
 | 1 | **Google account** with enough Drive free space | Same account you want backups in |
 | 2 | **rclone access** (one-time browser login) **or** a **Google Cloud service account JSON** | See options below |
 | 3 | **Drive folder name** | Default: `MSSP_Backups` (created automatically) |
-| 4 | **Schedule preference** | Default: every day at **02:15** server time |
+| 4 | **Schedule preference** | Default: every day at **20:00** (8 PM) local server time |
 | 5 | **How many local copies to keep** | Default: **7** dated folders on the control plane |
 | 6 | Confirm passphrase file still exists | `/opt/mssp-control/.secrets/dr_backup_passphrase` |
+
+Remote path (single place): Google Drive → `MSSP/MSSP_Backups/<timestamp>/`
+
+Check whether a backup is running (Cursor will use this too):
+
+```bash
+/opt/mssp-control/scripts/dr_backup_status.sh
+```
 
 You do **not** need to share your Google password with Cursor if you use Option A (interactive rclone) on the server yourself.
 

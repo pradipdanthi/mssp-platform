@@ -19,15 +19,72 @@ fi
 LOCAL_ROOT="${MSSP_DR_LOCAL_ROOT:-$HOME/MSSP_Backups}"
 KEEP_LOCAL="${MSSP_DR_KEEP_LOCAL:-7}"
 RCLONE_REMOTE="${MSSP_DR_RCLONE_REMOTE:-gdrive}"
-RCLONE_PATH="${MSSP_DR_RCLONE_PATH:-MSSP_Backups}"
+# One place on Google Drive (under the MSSP folder).
+RCLONE_PATH="${MSSP_DR_RCLONE_PATH:-MSSP/MSSP_Backups}"
 ENABLE_GDRIVE="${MSSP_DR_ENABLE_GDRIVE:-0}"
 PASSFILE="${MSSP_DR_BACKUP_PASSPHRASE_FILE:-$REPO_ROOT/.secrets/dr_backup_passphrase}"
 LOG_DIR="${MSSP_DR_LOG_DIR:-$HOME/MSSP_Backups/logs}"
+STATUS_FILE="${MSSP_DR_STATUS_FILE:-$LOCAL_ROOT/STATUS.json}"
+LOCK_FILE="${MSSP_DR_LOCK_FILE:-$LOCAL_ROOT/BACKUP_RUNNING.lock}"
 TS="$(date -u +%Y-%m-%d_%H%M%SZ)"
 DEST="$LOCAL_ROOT/$TS"
 LOG_FILE="$LOG_DIR/backup_${TS}.log"
 
 mkdir -p "$LOCAL_ROOT" "$LOG_DIR" "$DEST"
+
+write_status() {
+  local state="$1"
+  local message="${2:-}"
+  local finished_at=""
+  if [[ "$state" != "running" ]]; then
+    finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  fi
+  cat > "$STATUS_FILE" <<EOF
+{
+  "state": "$state",
+  "message": $(python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$message"),
+  "timestamp_utc": "$TS",
+  "started_at_utc": "${STARTED_AT_UTC:-}",
+  "finished_at_utc": "$finished_at",
+  "pid": $$,
+  "local_path": "$DEST",
+  "log_file": "$LOG_FILE",
+  "gdrive_enabled": "$ENABLE_GDRIVE",
+  "gdrive_path": "${RCLONE_REMOTE}:${RCLONE_PATH%/}/$TS",
+  "host": "$(hostname)"
+}
+EOF
+  chmod 644 "$STATUS_FILE" 2>/dev/null || true
+}
+
+cleanup_lock() {
+  rm -f "$LOCK_FILE" 2>/dev/null || true
+}
+
+on_exit() {
+  local rc=$?
+  trap - EXIT
+  if [[ $rc -eq 0 ]]; then
+    write_status "success" "Backup finished successfully"
+  else
+    write_status "failed" "Backup failed (exit $rc) — see $LOG_FILE"
+  fi
+  cleanup_lock
+}
+
+if [[ -f "$LOCK_FILE" ]]; then
+  old_pid="$(awk '{print $1}' "$LOCK_FILE" 2>/dev/null || true)"
+  if [[ -n "${old_pid:-}" ]] && kill -0 "$old_pid" 2>/dev/null; then
+    echo "BACKUP ALREADY RUNNING (pid=$old_pid). See $STATUS_FILE"
+    exit 0
+  fi
+  rm -f "$LOCK_FILE"
+fi
+
+STARTED_AT_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "$$ $STARTED_AT_UTC $TS" > "$LOCK_FILE"
+write_status "running" "Full DR backup in progress"
+trap on_exit EXIT
 
 exec > >(tee -a "$LOG_FILE") 2>&1
 
@@ -109,7 +166,7 @@ Do NOT mix files from different dated folders.
 Do NOT use leftover .old_backups or partial uploads.
 
 If restoring from Google Drive:
-  Download $TS.tar.gz from MSSP/MSSP_Backups/$TS/
+  Download $TS.tar.gz from gdrive:MSSP/MSSP_Backups/$TS/
   tar -xzf $TS.tar.gz
   then use the extracted folder as this package.
 EOF
