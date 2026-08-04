@@ -30,6 +30,22 @@ Created: 2026-07-31 · **Updated 2026-08-04 — KB-094 Customer Boundary Hardeni
 
 ## Phase tracker
 
+### KB-095: Threat Intel Admin Ops + Catalog Label Sync — 2026-08-04
+
+Closes remaining Anomali-style Threat Intelligence / ThreatLens gaps.
+
+**Delivered:**
+- Admin **Threat Intel** console (`:3000/threat-intel`): cross-tenant IOC/campaign summary, tenant detail, Sync, **STIX 2.1 paste ingest**, **TAXII 2.x pull** (form or `JUNEXIS_TAXII_*` env feed).
+- Backend: `GET/POST /admin/threat-intel/{tenant_ref}/…` detail/iocs/campaigns/taxii-pull; static `/admin/threat-intel/summary` registered before path params.
+- Customer Detection Stack panel now uses the same 10 catalog names/descriptions as Service Portfolio.
+- Admin Subscription / Create Customer entitlement labels already aligned to Service Catalog (prior fix in this session).
+
+**Env (optional TAXII defaults — never commit secrets):**
+- `JUNEXIS_TAXII_API_ROOT`
+- `JUNEXIS_TAXII_COLLECTION_ID`
+- `JUNEXIS_TAXII_USERNAME`
+- `JUNEXIS_TAXII_PASSWORD`
+
 ### KB-094: Customer Boundary Hardening — 2026-08-04
 
 Hardens the 3 Golden Rules of MSSP separation between `:3001` (customer) and `:3000` (admin/SOC).

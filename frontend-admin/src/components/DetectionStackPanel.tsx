@@ -1,3 +1,5 @@
+import { catalogDisplayName, catalogShortHint } from "../data/serviceCatalog";
+
 export type StackModule = {
   id: string;
   name: string;
@@ -12,45 +14,63 @@ type Props = {
 
 const DEFAULT_ADMIN: StackModule[] = [
   {
-    id: "siem",
-    name: "SIEM & Log Management",
-    blurb: "Central detection & retention",
+    id: "log_event_monitoring",
+    name: catalogDisplayName("log_event_monitoring"),
+    blurb: catalogShortHint("log_event_monitoring"),
     status: "active",
   },
   {
-    id: "ir",
-    name: "Incident Response",
-    blurb: "Casework & investigation",
+    id: "incident_response",
+    name: catalogDisplayName("incident_response"),
+    blurb: catalogShortHint("incident_response"),
     status: "active",
   },
   {
-    id: "soar",
-    name: "Security Automation",
-    blurb: "Playbook-driven response",
+    id: "security_automation",
+    name: catalogDisplayName("security_automation"),
+    blurb: catalogShortHint("security_automation"),
     status: "active",
   },
   {
-    id: "vuln",
-    name: "Vulnerability Management",
-    blurb: "CVE discovery & guidance",
-    status: "active",
-  },
-  {
-    id: "nta",
-    name: "Network Traffic Analysis",
-    blurb: "Optional — enable via customer subscription",
+    id: "vulnerability_management",
+    name: catalogDisplayName("vulnerability_management"),
+    blurb: catalogShortHint("vulnerability_management"),
     status: "optional",
   },
   {
-    id: "ti",
-    name: "Threat Intelligence Sharing",
-    blurb: "Optional — enable via customer subscription",
+    id: "continuous_compliance",
+    name: catalogDisplayName("continuous_compliance"),
+    blurb: catalogShortHint("continuous_compliance"),
     status: "optional",
   },
   {
-    id: "edf",
-    name: "Endpoint Forensics & Hunting",
-    blurb: "Optional — enable via customer subscription",
+    id: "network_detection_response",
+    name: catalogDisplayName("network_detection_response"),
+    blurb: catalogShortHint("network_detection_response"),
+    status: "optional",
+  },
+  {
+    id: "threat_intelligence",
+    name: catalogDisplayName("threat_intelligence"),
+    blurb: catalogShortHint("threat_intelligence"),
+    status: "optional",
+  },
+  {
+    id: "endpoint_forensics_deception",
+    name: catalogDisplayName("endpoint_forensics_deception"),
+    blurb: catalogShortHint("endpoint_forensics_deception"),
+    status: "optional",
+  },
+  {
+    id: "external_attack_surface",
+    name: catalogDisplayName("external_attack_surface"),
+    blurb: catalogShortHint("external_attack_surface"),
+    status: "optional",
+  },
+  {
+    id: "cloud_identity_protection",
+    name: catalogDisplayName("cloud_identity_protection"),
+    blurb: catalogShortHint("cloud_identity_protection"),
     status: "optional",
   },
 ];
@@ -67,7 +87,7 @@ export default function DetectionStackPanel({
           {title}
         </h2>
         <p className="page-subtitle" style={{ margin: 0 }}>
-          Active services and optional add-ons. Optional modules activate from subscription
+          Same names as the Service Catalog. Optional modules activate from subscription
           entitlements and platform capacity.
         </p>
       </div>

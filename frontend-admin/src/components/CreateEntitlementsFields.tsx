@@ -1,4 +1,8 @@
-/** Compact contracted-services matrix for Add Customer (KB-075). */
+/** Compact contracted-services matrix for Add Customer (KB-075).
+ * Labels match Admin Service Catalog (`data/serviceCatalog.ts`).
+ */
+
+import { catalogDisplayName, catalogShortHint } from "../data/serviceCatalog";
 
 export type CreateEntitlementsState = {
   wazuh_siem: boolean;
@@ -28,10 +32,12 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
         Contracted services
       </p>
       <p className="page-subtitle" style={{ marginTop: 0 }}>
-        New customers start with core only (log monitoring + incident response). Turn on
-        add-ons only when they are in the contract; otherwise customers request consulting
-        from the portal and Kerox sales approves in Admin.
+        Same names as the Service Catalog. New customers start with Core (log monitoring + incident
+        response). Turn on add-ons only when they are in the contract; otherwise customers request
+        consulting from the portal and Junexis sales approves in Admin.
       </p>
+
+      <div className="entitlement-section-label">Core (included)</div>
 
       <label className="entitlement-row">
         <input
@@ -40,7 +46,8 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
           onChange={(e) => onChange({ ...value, wazuh_siem: e.target.checked })}
         />
         <span>
-          <strong>SIEM &amp; Log Management</strong>
+          <strong>{catalogDisplayName("log_event_monitoring")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("log_event_monitoring")}</span>
           <select
             className="form-input entitlement-inline"
             value={value.wazuh_retention_days}
@@ -57,30 +64,38 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
       </label>
 
       <label className="entitlement-row">
-        <span className="entitlement-label">Incident Response &amp; Casework</span>
+        <span className="entitlement-label">
+          <strong>{catalogDisplayName("incident_response")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("incident_response")}</span>
+        </span>
         <select
           className="form-input"
           value={value.thehive_mode}
           onChange={(e) => onChange({ ...value, thehive_mode: e.target.value })}
         >
-          <option value="full">Full Auto-SOC</option>
-          <option value="read_only">Read-Only Alerts</option>
+          <option value="full">Full managed SOC</option>
+          <option value="read_only">Read-only case visibility</option>
           <option value="off">Off</option>
         </select>
       </label>
 
       <label className="entitlement-row">
-        <span className="entitlement-label">Security Automation (SOAR)</span>
+        <span className="entitlement-label">
+          <strong>{catalogDisplayName("security_automation")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("security_automation")}</span>
+        </span>
         <select
           className="form-input"
           value={value.shuffle_mode}
           onChange={(e) => onChange({ ...value, shuffle_mode: e.target.value })}
         >
-          <option value="standard">Standard Playbooks</option>
-          <option value="custom">Custom Playbooks</option>
+          <option value="standard">Standard containment playbooks</option>
+          <option value="custom">Custom playbooks</option>
           <option value="off">Off</option>
         </select>
       </label>
+
+      <div className="entitlement-section-label">Optional add-ons</div>
 
       <label className="entitlement-row">
         <input
@@ -89,7 +104,8 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
           onChange={(e) => onChange({ ...value, greenbone_enabled: e.target.checked })}
         />
         <span>
-          <strong>Vulnerability Management (Nuclei + Vuls)</strong>
+          <strong>{catalogDisplayName("vulnerability_management")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("vulnerability_management")}</span>
           <select
             className="form-input entitlement-inline"
             value={value.greenbone_cadence}
@@ -106,12 +122,26 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
       <label className="entitlement-row">
         <input
           type="checkbox"
+          checked={Boolean(value.continuous_compliance_enabled)}
+          onChange={(e) =>
+            onChange({ ...value, continuous_compliance_enabled: e.target.checked })
+          }
+        />
+        <span>
+          <strong>{catalogDisplayName("continuous_compliance")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("continuous_compliance")}</span>
+        </span>
+      </label>
+
+      <label className="entitlement-row">
+        <input
+          type="checkbox"
           checked={value.zeek_enabled}
           onChange={(e) => onChange({ ...value, zeek_enabled: e.target.checked })}
         />
         <span>
-          <strong>Network Traffic Analysis</strong>
-          <span className="entitlement-hint">Optional add-on</span>
+          <strong>{catalogDisplayName("network_detection_response")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("network_detection_response")}</span>
         </span>
       </label>
 
@@ -122,8 +152,8 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
           onChange={(e) => onChange({ ...value, misp_enabled: e.target.checked })}
         />
         <span>
-          <strong>Threat Intelligence Sharing</strong>
-          <span className="entitlement-hint">Optional add-on</span>
+          <strong>{catalogDisplayName("threat_intelligence")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("threat_intelligence")}</span>
         </span>
       </label>
 
@@ -134,8 +164,38 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
           onChange={(e) => onChange({ ...value, velociraptor_enabled: e.target.checked })}
         />
         <span>
-          <strong>Endpoint Forensics &amp; Hunting</strong>
-          <span className="entitlement-hint">Optional add-on</span>
+          <strong>{catalogDisplayName("endpoint_forensics_deception")}</strong>
+          <span className="entitlement-hint">
+            {catalogShortHint("endpoint_forensics_deception")}
+          </span>
+        </span>
+      </label>
+
+      <label className="entitlement-row">
+        <input
+          type="checkbox"
+          checked={Boolean(value.external_attack_surface_enabled)}
+          onChange={(e) =>
+            onChange({ ...value, external_attack_surface_enabled: e.target.checked })
+          }
+        />
+        <span>
+          <strong>{catalogDisplayName("external_attack_surface")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("external_attack_surface")}</span>
+        </span>
+      </label>
+
+      <label className="entitlement-row">
+        <input
+          type="checkbox"
+          checked={Boolean(value.cloud_identity_protection_enabled)}
+          onChange={(e) =>
+            onChange({ ...value, cloud_identity_protection_enabled: e.target.checked })
+          }
+        />
+        <span>
+          <strong>{catalogDisplayName("cloud_identity_protection")}</strong>
+          <span className="entitlement-hint">{catalogShortHint("cloud_identity_protection")}</span>
         </span>
       </label>
 

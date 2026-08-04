@@ -21,6 +21,7 @@ import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 import ServiceCatalogPage from "./pages/ServiceCatalogPage";
 import ServiceRequestsPage from "./pages/ServiceRequestsPage";
 import RetrospectiveHuntsPage from "./pages/RetrospectiveHuntsPage";
+import ThreatIntelAdminPage from "./pages/ThreatIntelAdminPage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -177,6 +178,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <RetrospectiveHuntsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/threat-intel"
+        element={
+          <ProtectedRoute>
+            <ThreatIntelAdminPage />
           </ProtectedRoute>
         }
       />

@@ -254,6 +254,23 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
   },
 ];
 
+export function getCatalogItem(serviceKey: ConsultationServiceKey): ServiceCatalogItem | undefined {
+  return SERVICE_CATALOG.find((item) => item.serviceKey === serviceKey);
+}
+
+/** Short admin UI hint — first sentence of achieves (catalog is source of truth). */
+export function catalogShortHint(serviceKey: ConsultationServiceKey): string {
+  const item = getCatalogItem(serviceKey);
+  if (!item) return "";
+  const text = item.achieves.trim();
+  const stop = text.search(/[.!?]\s/);
+  return stop >= 0 ? text.slice(0, stop + 1) : text;
+}
+
+export function catalogDisplayName(serviceKey: ConsultationServiceKey): string {
+  return getCatalogItem(serviceKey)?.name ?? serviceKey.replace(/_/g, " ");
+}
+
 export function resolveServiceStatus(
   item: ServiceCatalogItem,
   ent: TenantEntitlements | null,

@@ -8,6 +8,7 @@ import {
   putTenantEntitlements,
 } from "../api/admin";
 import { ApiError } from "../api/client";
+import { catalogDisplayName, catalogShortHint } from "../data/serviceCatalog";
 
 type Props = {
   tenantId: string;
@@ -21,12 +22,14 @@ function errMsg(err: unknown): string {
   return "Could not save subscription entitlements.";
 }
 
+function boolField(form: TenantEntitlements, key: keyof TenantEntitlements, fallback = false): boolean {
+  const v = form[key];
+  return typeof v === "boolean" ? v : fallback;
+}
+
 /**
- * Admin service catalog — labels use capability names only
- * (never third-party engine brand names in the UI).
- *
- * Primary use for Vulnerability Management: MSSP enables after offline contract /
- * emailed host list when the customer will not self-request in the portal.
+ * Admin subscription matrix — names/descriptions match Service Catalog
+ * (`frontend-admin/src/data/serviceCatalog.ts`). Capability names only.
  */
 export default function SubscriptionEntitlementsPanel({
   tenantId,
@@ -54,7 +57,12 @@ export default function SubscriptionEntitlementsPanel({
     ])
       .then(([row, cov]) => {
         if (cancelled) return;
-        setForm(row);
+        setForm({
+          ...row,
+          continuous_compliance_enabled: Boolean(row.continuous_compliance_enabled),
+          external_attack_surface_enabled: Boolean(row.external_attack_surface_enabled),
+          cloud_identity_protection_enabled: Boolean(row.cloud_identity_protection_enabled),
+        });
         setCoverageAssets(cov.assets || []);
         setSelectedAssetIds(cov.covered_asset_ids || []);
       })
@@ -139,9 +147,17 @@ export default function SubscriptionEntitlementsPanel({
         zeek_enabled: form.zeek_enabled,
         misp_enabled: form.misp_enabled,
         velociraptor_enabled: form.velociraptor_enabled,
+        continuous_compliance_enabled: boolField(form, "continuous_compliance_enabled"),
+        external_attack_surface_enabled: boolField(form, "external_attack_surface_enabled"),
+        cloud_identity_protection_enabled: boolField(form, "cloud_identity_protection_enabled"),
         roadmap_notes: form.roadmap_notes,
       });
-      setForm(saved);
+      setForm({
+        ...saved,
+        continuous_compliance_enabled: Boolean(saved.continuous_compliance_enabled),
+        external_attack_surface_enabled: Boolean(saved.external_attack_surface_enabled),
+        cloud_identity_protection_enabled: Boolean(saved.cloud_identity_protection_enabled),
+      });
 
       if (form.greenbone_enabled) {
         const cov = await putTenantAssetServiceCoverage(tenantId, {
@@ -182,9 +198,9 @@ export default function SubscriptionEntitlementsPanel({
         Subscription / enable services — {tenantName}
       </h2>
       <p className="page-subtitle" style={{ marginBottom: "12px" }}>
-        Use this when the customer signed a contract offline (email / paper) and asked you to enable
-        services from the MSSP side — they do not need to click Request in their portal. Turn on
-        Vulnerability Management, select the servers from their list, then Save.
+        Names match the Admin <strong>Service Catalog</strong>. Use this when the customer signed
+        offline and you enable coverage from the MSSP side — they do not need to click Request in
+        their portal.
       </p>
 
       {loading && <div className="state-message">Loading entitlements…</div>}
@@ -193,6 +209,8 @@ export default function SubscriptionEntitlementsPanel({
 
       {form && !loading && (
         <div className="entitlement-matrix">
+          <div className="entitlement-section-label">Core (included)</div>
+
           <label className="entitlement-row">
             <input
               type="checkbox"
@@ -200,8 +218,8 @@ export default function SubscriptionEntitlementsPanel({
               onChange={(e) => setForm({ ...form, wazuh_siem: e.target.checked })}
             />
             <span>
-              <strong>SIEM &amp; Log Management</strong>
-              <span className="entitlement-hint">Log retention &amp; detection correlation</span>
+              <strong>{catalogDisplayName("log_event_monitoring")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("log_event_monitoring")}</span>
               <select
                 className="form-input entitlement-inline"
                 value={form.wazuh_retention_days}
@@ -218,32 +236,38 @@ export default function SubscriptionEntitlementsPanel({
           </label>
 
           <label className="entitlement-row">
-            <span className="entitlement-label">Incident Response &amp; Casework</span>
+            <span className="entitlement-label">
+              <strong>{catalogDisplayName("incident_response")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("incident_response")}</span>
+            </span>
             <select
               className="form-input"
               value={form.thehive_mode}
               onChange={(e) => setForm({ ...form, thehive_mode: e.target.value })}
             >
-              <option value="full">Full Auto-SOC</option>
-              <option value="read_only">Read-Only Alerts</option>
+              <option value="full">Full managed SOC</option>
+              <option value="read_only">Read-only case visibility</option>
               <option value="off">Off</option>
             </select>
           </label>
 
           <label className="entitlement-row">
-            <span className="entitlement-label">Security Automation (SOAR)</span>
+            <span className="entitlement-label">
+              <strong>{catalogDisplayName("security_automation")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("security_automation")}</span>
+            </span>
             <select
               className="form-input"
               value={form.shuffle_mode}
               onChange={(e) => setForm({ ...form, shuffle_mode: e.target.value })}
             >
-              <option value="standard">Standard Playbooks</option>
-              <option value="custom">Custom Playbooks</option>
+              <option value="standard">Standard containment playbooks</option>
+              <option value="custom">Custom playbooks</option>
               <option value="off">Off</option>
             </select>
           </label>
 
-          <div className="entitlement-section-label">Core + optional services</div>
+          <div className="entitlement-section-label">Optional add-ons</div>
 
           <label className="entitlement-row">
             <input
@@ -252,10 +276,8 @@ export default function SubscriptionEntitlementsPanel({
               onChange={(e) => setForm({ ...form, greenbone_enabled: e.target.checked })}
             />
             <span>
-              <strong>Vulnerability Management</strong>
-              <span className="entitlement-hint">
-                Enable after contract — cover only the hosts on the customer’s list
-              </span>
+              <strong>{catalogDisplayName("vulnerability_management")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("vulnerability_management")}</span>
               <select
                 className="form-input entitlement-inline"
                 value={form.greenbone_cadence}
@@ -338,12 +360,26 @@ export default function SubscriptionEntitlementsPanel({
           <label className="entitlement-row">
             <input
               type="checkbox"
+              checked={boolField(form, "continuous_compliance_enabled")}
+              onChange={(e) =>
+                setForm({ ...form, continuous_compliance_enabled: e.target.checked })
+              }
+            />
+            <span>
+              <strong>{catalogDisplayName("continuous_compliance")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("continuous_compliance")}</span>
+            </span>
+          </label>
+
+          <label className="entitlement-row">
+            <input
+              type="checkbox"
               checked={form.zeek_enabled}
               onChange={(e) => setForm({ ...form, zeek_enabled: e.target.checked })}
             />
             <span>
-              <strong>Network Traffic Analysis</strong>
-              <span className="entitlement-hint">Optional add-on</span>
+              <strong>{catalogDisplayName("network_detection_response")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("network_detection_response")}</span>
             </span>
           </label>
 
@@ -354,8 +390,8 @@ export default function SubscriptionEntitlementsPanel({
               onChange={(e) => setForm({ ...form, misp_enabled: e.target.checked })}
             />
             <span>
-              <strong>Threat Intelligence Sharing</strong>
-              <span className="entitlement-hint">Optional add-on</span>
+              <strong>{catalogDisplayName("threat_intelligence")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("threat_intelligence")}</span>
             </span>
           </label>
 
@@ -366,8 +402,40 @@ export default function SubscriptionEntitlementsPanel({
               onChange={(e) => setForm({ ...form, velociraptor_enabled: e.target.checked })}
             />
             <span>
-              <strong>Endpoint Forensics &amp; Hunting</strong>
-              <span className="entitlement-hint">Optional add-on</span>
+              <strong>{catalogDisplayName("endpoint_forensics_deception")}</strong>
+              <span className="entitlement-hint">
+                {catalogShortHint("endpoint_forensics_deception")}
+              </span>
+            </span>
+          </label>
+
+          <label className="entitlement-row">
+            <input
+              type="checkbox"
+              checked={boolField(form, "external_attack_surface_enabled")}
+              onChange={(e) =>
+                setForm({ ...form, external_attack_surface_enabled: e.target.checked })
+              }
+            />
+            <span>
+              <strong>{catalogDisplayName("external_attack_surface")}</strong>
+              <span className="entitlement-hint">{catalogShortHint("external_attack_surface")}</span>
+            </span>
+          </label>
+
+          <label className="entitlement-row">
+            <input
+              type="checkbox"
+              checked={boolField(form, "cloud_identity_protection_enabled")}
+              onChange={(e) =>
+                setForm({ ...form, cloud_identity_protection_enabled: e.target.checked })
+              }
+            />
+            <span>
+              <strong>{catalogDisplayName("cloud_identity_protection")}</strong>
+              <span className="entitlement-hint">
+                {catalogShortHint("cloud_identity_protection")}
+              </span>
             </span>
           </label>
 

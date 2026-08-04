@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { catalogDisplayName, catalogShortHint } from "../data/serviceCatalog";
 
 export type StackModule = {
   id: string;
@@ -12,41 +13,66 @@ type Props = {
   title?: string;
 };
 
+/** Keep in lockstep with Admin/Customer Service Catalog names. */
 const DEFAULT_CUSTOMER: StackModule[] = [
   {
-    id: "log_monitoring",
-    name: "Log & event monitoring",
-    blurb: "Included — Junexis Data Lake retention up to 365+ days",
+    id: "log_event_monitoring",
+    name: catalogDisplayName("log_event_monitoring"),
+    blurb: catalogShortHint("log_event_monitoring"),
     status: "active",
   },
   {
-    id: "ir",
-    name: "Incident Response",
-    blurb: "Cases + AI executive summaries in this portal",
+    id: "incident_response",
+    name: catalogDisplayName("incident_response"),
+    blurb: catalogShortHint("incident_response"),
     status: "active",
   },
   {
-    id: "vuln",
-    name: "Vulnerability Management",
-    blurb: "See Vulnerabilities — entitlement controlled",
+    id: "security_automation",
+    name: catalogDisplayName("security_automation"),
+    blurb: catalogShortHint("security_automation"),
     status: "active",
   },
   {
-    id: "nta",
-    name: "Network Detection & Response",
-    blurb: "Optional — ask your MSSP via Service Portfolio",
+    id: "vulnerability_management",
+    name: catalogDisplayName("vulnerability_management"),
+    blurb: catalogShortHint("vulnerability_management"),
     status: "optional",
   },
   {
-    id: "ti",
-    name: "Threat Intelligence",
-    blurb: "Optional — includes 90-day retrospective sweeps",
+    id: "continuous_compliance",
+    name: catalogDisplayName("continuous_compliance"),
+    blurb: catalogShortHint("continuous_compliance"),
     status: "optional",
   },
   {
-    id: "edf",
-    name: "Endpoint Forensics & ThreatLens",
-    blurb: "Optional — deception, forensics, IOC extraction",
+    id: "network_detection_response",
+    name: catalogDisplayName("network_detection_response"),
+    blurb: catalogShortHint("network_detection_response"),
+    status: "optional",
+  },
+  {
+    id: "threat_intelligence",
+    name: catalogDisplayName("threat_intelligence"),
+    blurb: catalogShortHint("threat_intelligence"),
+    status: "optional",
+  },
+  {
+    id: "endpoint_forensics_deception",
+    name: catalogDisplayName("endpoint_forensics_deception"),
+    blurb: catalogShortHint("endpoint_forensics_deception"),
+    status: "optional",
+  },
+  {
+    id: "external_attack_surface",
+    name: catalogDisplayName("external_attack_surface"),
+    blurb: catalogShortHint("external_attack_surface"),
+    status: "optional",
+  },
+  {
+    id: "cloud_identity_protection",
+    name: catalogDisplayName("cloud_identity_protection"),
+    blurb: catalogShortHint("cloud_identity_protection"),
     status: "optional",
   },
 ];
@@ -54,7 +80,7 @@ const DEFAULT_CUSTOMER: StackModule[] = [
 /** Detection / service stack coverage — capability names only (no engine brands). */
 export default function DetectionStackPanel({
   modules = DEFAULT_CUSTOMER,
-  title = "Your subscribed services",
+  title = "Service stack coverage",
 }: Props) {
   return (
     <section className="detection-stack card-surface" aria-label={title}>
@@ -63,8 +89,8 @@ export default function DetectionStackPanel({
           {title}
         </h2>
         <p className="page-subtitle" style={{ margin: 0 }}>
-          Services included in your package and optional add-ons. Browse the full catalog and request
-          upgrades from <Link to="/services">Services</Link>.
+          Same names as your Service Portfolio. Optional modules activate when your MSSP enables
+          them or after an approved request.
         </p>
       </div>
       <div className="detection-stack-grid">
@@ -84,6 +110,11 @@ export default function DetectionStackPanel({
           </div>
         ))}
       </div>
+      <p className="page-subtitle" style={{ marginTop: "0.85rem" }}>
+        <Link to="/services">Open Service Portfolio →</Link>
+        {" · "}
+        <Link to="/threatlens">Open ThreatLens →</Link>
+      </p>
     </section>
   );
 }

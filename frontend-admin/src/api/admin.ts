@@ -1526,3 +1526,89 @@ export function getRetrospectiveHunts(opts?: {
   return request(`/admin/retrospective-hunts${q}`);
 }
 
+/** Threat Intelligence & Enrichment — admin ops (STIX / TAXII / IOC console). */
+export interface ThreatIntelTenantSummary {
+  tenant_id?: string;
+  short_code: string;
+  tenant_name: string;
+  ioc_count: number;
+  malicious_count: number;
+  campaign_count: number;
+  last_ioc_seen?: string | null;
+}
+
+export interface ThreatIntelIoc {
+  id?: string;
+  ioc_value: string;
+  ioc_type: string;
+  reputation_status?: string | null;
+  confidence_score?: number | null;
+  threat_actor?: string | null;
+  summary?: string | null;
+  mitre_tactic?: string | null;
+  last_seen_in_tenant?: string | null;
+}
+
+export interface ThreatIntelCampaign {
+  id?: string;
+  name: string;
+  summary?: string | null;
+  threat_actor?: string | null;
+  status?: string | null;
+}
+
+export function getThreatIntelAdminSummary(): Promise<{ tenants: ThreatIntelTenantSummary[] }> {
+  return request("/admin/threat-intel/summary");
+}
+
+export function syncThreatIntelTenant(tenantRef: string): Promise<Record<string, unknown>> {
+  return request(`/admin/threat-intel/${encodeURIComponent(tenantRef)}/sync`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export function getThreatIntelTenantIocs(
+  tenantRef: string,
+  opts?: { ioc_type?: string; reputation_status?: string; page_size?: number }
+): Promise<{ iocs: ThreatIntelIoc[]; pagination?: Record<string, number> }> {
+  const params = new URLSearchParams();
+  if (opts?.ioc_type) params.set("ioc_type", opts.ioc_type);
+  if (opts?.reputation_status) params.set("reputation_status", opts.reputation_status);
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/admin/threat-intel/${encodeURIComponent(tenantRef)}/iocs${q}`);
+}
+
+export function getThreatIntelTenantCampaigns(
+  tenantRef: string
+): Promise<{ campaigns: ThreatIntelCampaign[] }> {
+  return request(`/admin/threat-intel/${encodeURIComponent(tenantRef)}/campaigns`);
+}
+
+export function ingestStixBundle(
+  tenantRef: string,
+  bundle: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  return request(`/admin/threat-intel/${encodeURIComponent(tenantRef)}/stix-ingest`, {
+    method: "POST",
+    body: { bundle },
+  });
+}
+
+export function pullTaxiiFeed(
+  tenantRef: string,
+  payload: {
+    api_root?: string;
+    collection_id?: string;
+    username?: string;
+    password?: string;
+    use_configured_feed?: boolean;
+  }
+): Promise<Record<string, unknown>> {
+  return request(`/admin/threat-intel/${encodeURIComponent(tenantRef)}/taxii-pull`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
