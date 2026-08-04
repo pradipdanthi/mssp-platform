@@ -47,6 +47,7 @@ from app.api.routes.itdr import router as itdr_router
 from app.api.routes.vmaas import router as vmaas_router
 from app.api.routes.ndr import router as ndr_router
 from app.api.routes.threat_intel import router as threat_intel_router
+from app.api.routes.threatlens import router as threatlens_router
 from app.api.routes.endpoint_forensics import router as endpoint_forensics_router
 from app.api.routes.vuln_sync import router as vuln_sync_router
 from app.api.routes.vulnerability_management import router as vulnerability_management_router
@@ -134,6 +135,7 @@ app.include_router(itdr_router)
 app.include_router(vmaas_router)
 app.include_router(ndr_router)
 app.include_router(threat_intel_router)
+app.include_router(threatlens_router)
 app.include_router(endpoint_forensics_router)
 app.include_router(edr_router)
 

@@ -1476,3 +1476,53 @@ export function createConsultationRequestOnBehalf(
   });
 }
 
+/** Junexis Retrospective Engine + appliance command tile */
+export interface ApplianceCommandSummary {
+  engine: string;
+  appliances: {
+    total: number;
+    online: number;
+    offline: number;
+    disk_used_gb_total: number;
+    log_ingest_rate_total: number;
+  };
+  hunts: {
+    running: number;
+    pending: number;
+    last_24h: number;
+  };
+}
+
+export interface RetrospectiveHuntJob {
+  id: string;
+  tenant_id: string;
+  short_code?: string;
+  tenant_name?: string;
+  execution_mode: string;
+  status: string;
+  lookback_days?: number;
+  matches_count?: number;
+  source?: string;
+  created_at?: string | null;
+  completed_at?: string | null;
+}
+
+export function getApplianceCommandSummary(): Promise<ApplianceCommandSummary> {
+  return request("/admin/appliances/command-summary");
+}
+
+export function getRetrospectiveHunts(opts?: {
+  status?: string;
+  tenant_id?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ jobs: RetrospectiveHuntJob[]; engine?: string }> {
+  const params = new URLSearchParams();
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.tenant_id) params.set("tenant_id", opts.tenant_id);
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/admin/retrospective-hunts${q}`);
+}
+

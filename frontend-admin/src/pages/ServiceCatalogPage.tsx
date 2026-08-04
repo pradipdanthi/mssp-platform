@@ -215,7 +215,7 @@ export default function ServiceCatalogPage() {
                 </div>
                 <p className="service-card-summary">{item.achieves}</p>
                 <ul className="service-benefits">
-                  {item.features.slice(0, 3).map((b) => (
+                  {item.features.slice(0, 5).map((b) => (
                     <li key={b}>{b}</li>
                   ))}
                 </ul>

@@ -26,6 +26,7 @@ import EasmPage from "./pages/EasmPage";
 import ItdrPage from "./pages/ItdrPage";
 import NdrPage from "./pages/NdrPage";
 import ThreatIntelPage from "./pages/ThreatIntelPage";
+import ThreatLensPage from "./pages/ThreatLensPage";
 import ForensicsPage from "./pages/ForensicsPage";
 import ServicesPage from "./pages/ServicesPage";
 
@@ -208,6 +209,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ThreatIntelPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/threatlens"
+        element={
+          <ProtectedRoute>
+            <ThreatLensPage />
           </ProtectedRoute>
         }
       />

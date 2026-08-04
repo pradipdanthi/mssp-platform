@@ -659,3 +659,177 @@ def tenant_has_threat_intel_data(tenant_id: str) -> bool:
         (tenant_id,),
     )
     return bool(row)
+
+
+# ---------------------------------------------------------------------------
+# STIX 2.1 / TAXII feed parsing (Junexis Threat Intelligence Engine)
+# ---------------------------------------------------------------------------
+
+_STIX_TYPE_MAP = {
+    "ipv4-addr": "IP",
+    "ipv6-addr": "IP",
+    "domain-name": "DOMAIN",
+    "url": "URL",
+    "file": "FILE_HASH",
+    "vulnerability": "CVE",  # via name
+}
+
+
+def parse_stix_bundle(bundle: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Normalize a STIX 2.x bundle into IOC dicts (deduplicated)."""
+    objects = bundle.get("objects") or []
+    if not isinstance(objects, list):
+        objects = []
+    out: List[Dict[str, Any]] = []
+    seen = set()
+
+    def _add(ioc_type: str, value: str, extra: Optional[Dict[str, Any]] = None) -> None:
+        if not value:
+            return
+        norm_type = ioc_type if ioc_type in {"IP", "DOMAIN", "FILE_HASH", "URL"} else None
+        # CVEs stored as DOMAIN-safe? Keep as FILE_HASH skip — store CVE in summary only
+        if ioc_type == "CVE":
+            # Map CVE into URL-like advisory placeholder is wrong; skip table insert type
+            # We keep CVE in returned list with type CVE for ThreatLens sweeps
+            key = ("CVE", value.upper())
+            if key in seen:
+                return
+            seen.add(key)
+            out.append({"ioc_type": "CVE", "ioc_value": value.upper(), **(extra or {})})
+            return
+        if not norm_type:
+            return
+        val = _normalize_ioc_value(value, norm_type)
+        key = (norm_type, val)
+        if key in seen:
+            return
+        seen.add(key)
+        out.append({"ioc_type": norm_type, "ioc_value": val, **(extra or {})})
+
+    for obj in objects:
+        if not isinstance(obj, dict):
+            continue
+        otype = (obj.get("type") or "").lower()
+        if otype == "indicator":
+            pattern = obj.get("pattern") or ""
+            for typ, val in _extract_indicators(pattern):
+                _add(typ, val, {"threat_actor": "STIX Indicator", "reputation_status": "SUSPICIOUS"})
+            # STIX pattern literals
+            for m in re.finditer(r"ipv4-addr:value\s*=\s*'([^']+)'", pattern):
+                _add("IP", m.group(1), {"reputation_status": "MALICIOUS", "threat_actor": "STIX"})
+            for m in re.finditer(r"domain-name:value\s*=\s*'([^']+)'", pattern, re.I):
+                _add("DOMAIN", m.group(1), {"reputation_status": "MALICIOUS", "threat_actor": "STIX"})
+            for m in re.finditer(r"file:hashes\.'?(?:SHA-256|MD5|SHA-1)'?\s*=\s*'([^']+)'", pattern, re.I):
+                _add("FILE_HASH", m.group(1), {"reputation_status": "MALICIOUS", "threat_actor": "STIX"})
+        elif otype in _STIX_TYPE_MAP:
+            mapped = _STIX_TYPE_MAP[otype]
+            if otype == "file":
+                hashes = obj.get("hashes") or {}
+                for algo in ("SHA-256", "SHA256", "MD5", "SHA-1", "SHA1"):
+                    if hashes.get(algo):
+                        _add("FILE_HASH", hashes[algo], {"reputation_status": "MALICIOUS", "threat_actor": "STIX"})
+            elif otype == "vulnerability":
+                name = obj.get("name") or ""
+                m = re.search(r"CVE-\d{4}-\d{4,7}", name, re.I)
+                if m:
+                    _add("CVE", m.group(0))
+            else:
+                _add(mapped, obj.get("value") or "", {"reputation_status": "SUSPICIOUS", "threat_actor": "STIX"})
+        elif otype == "malware" or otype == "attack-pattern":
+            for typ, val in _extract_indicators(json.dumps(obj)):
+                _add(typ, val, {"threat_actor": obj.get("name") or "STIX", "reputation_status": "SUSPICIOUS"})
+    return out
+
+
+def ingest_stix_bundle_for_tenant(tenant_id: str, bundle: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse STIX, upsert IOCs into tenant_threat_intel_iocs (non-CVE types only)."""
+    parsed = parse_stix_bundle(bundle)
+    created = 0
+    for item in parsed:
+        ioc_type = item.get("ioc_type")
+        if ioc_type not in {"IP", "DOMAIN", "FILE_HASH", "URL"}:
+            continue
+        execute(
+            """
+            INSERT INTO tenant_threat_intel_iocs (
+                tenant_id, ioc_value, ioc_type, threat_actor, confidence_score,
+                reputation_status, summary, recommended_action, raw_details, status
+            ) VALUES (
+                %s::uuid, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, 'active'
+            )
+            ON CONFLICT (tenant_id, ioc_type, ioc_value) DO UPDATE SET
+                threat_actor = EXCLUDED.threat_actor,
+                reputation_status = EXCLUDED.reputation_status,
+                raw_details = EXCLUDED.raw_details,
+                updated_at = now(),
+                status = 'active';
+            """,
+            (
+                tenant_id,
+                item["ioc_value"],
+                ioc_type,
+                item.get("threat_actor") or "STIX",
+                int(item.get("confidence_score") or 75),
+                item.get("reputation_status") or "SUSPICIOUS",
+                "Ingested from Junexis STIX 2.1 threat feed.",
+                "Hunt historically with Junexis Retrospective Engine.",
+                json.dumps({"source": "stix2", "stix": True}),
+            ),
+        )
+        created += 1
+    _enable_entitlement(tenant_id)
+    return {
+        "engine_label": ENGINE_LABEL,
+        "parsed": len(parsed),
+        "iocs_upserted": created,
+        "iocs": parsed,
+    }
+
+
+def pull_taxii_collection(
+    api_root: str,
+    collection_id: str,
+    *,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Pull STIX objects from a TAXII 2.x collection.
+    Prefers taxii2-client when installed; falls back to HTTPS GET of /objects/.
+    """
+    try:
+        from taxii2client.v21 import Collection  # type: ignore
+
+        coll = Collection(
+            f"{api_root.rstrip('/')}/collections/{collection_id}/",
+            user=username,
+            password=password,
+        )
+        bundle = {"type": "bundle", "objects": []}
+        for obj in coll.get_objects().get("objects", []):
+            bundle["objects"].append(obj)
+        return bundle
+    except ImportError:
+        pass
+    except Exception as exc:
+        logger.warning("taxii2-client pull failed: %s", exc)
+
+    # Fallback: raw TAXII 2 objects endpoint
+    import base64
+    from urllib.request import Request, urlopen
+
+    url = f"{api_root.rstrip('/')}/collections/{collection_id}/objects/"
+    headers = {
+        "Accept": "application/taxii+json;version=2.1",
+        "User-Agent": "Junexis-ThreatIntel/1.0",
+    }
+    if username:
+        token = base64.b64encode(f"{username}:{password or ''}".encode()).decode()
+        headers["Authorization"] = f"Basic {token}"
+    req = Request(url, headers=headers)
+    with urlopen(req, timeout=20) as resp:  # noqa: S310
+        raw = json.loads(resp.read().decode("utf-8") or "{}")
+    if raw.get("type") == "bundle":
+        return raw
+    return {"type": "bundle", "id": "bundle--junexis", "objects": raw.get("objects") or []}
+

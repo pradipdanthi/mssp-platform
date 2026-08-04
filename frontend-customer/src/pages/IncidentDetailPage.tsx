@@ -7,6 +7,7 @@ import { useCustomerQuery } from "../hooks/useCustomerQuery";
 import EdrControlPanel from "../components/edr/EdrControlPanel";
 import MitreBadges from "../components/edr/MitreBadges";
 import ProcessTreeWidget from "../components/edr/ProcessTreeWidget";
+import AiExecutiveSummary from "../components/AiExecutiveSummary";
 
 export default function IncidentDetailPage() {
   const { user } = useAuth();
@@ -68,6 +69,18 @@ export default function IncidentDetailPage() {
 
       {status === "success" && data && (
         <>
+          <AiExecutiveSummary
+            whatHappened={data.incident.customer_visible_summary}
+            businessImpact={data.incident.business_impact}
+            actionTaken={
+              data.incident.resolution_summary ||
+              (typeof data.incident.customer_action_required === "string"
+                ? data.incident.customer_action_required
+                : data.primary_alert?.recommended_action) ||
+              null
+            }
+          />
+
           <table className="data-table">
             <tbody>
               <tr>

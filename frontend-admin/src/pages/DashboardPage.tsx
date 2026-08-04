@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDashboard, getIncidents, getTenants, getConsultationSummary, type Incident } from "../api/admin";
+import { getDashboard, getIncidents, getTenants, getConsultationSummary, getApplianceCommandSummary, type Incident, type ApplianceCommandSummary } from "../api/admin";
 import { getStoredTenantFilter } from "../components/TenantSwitcher";
 import GeoActivityHeatmap, { hubsFromActivity } from "../components/GeoActivityHeatmap";
 import MiniSparkline from "../components/MiniSparkline";
@@ -57,12 +57,19 @@ export default function DashboardPage() {
   const [edrMetrics, setEdrMetrics] = useState<EdrMetricsSummary | null>(null);
   const [edrLoading, setEdrLoading] = useState(true);
   const [pendingServiceRequests, setPendingServiceRequests] = useState<number | null>(null);
+  const [applianceCmd, setApplianceCmd] = useState<ApplianceCommandSummary | null>(null);
 
   useEffect(() => {
     getConsultationSummary()
       .then((s) => setPendingServiceRequests(s.unreviewed_total))
       .catch(() => setPendingServiceRequests(null));
   }, []);
+
+  useEffect(() => {
+    getApplianceCommandSummary()
+      .then(setApplianceCmd)
+      .catch(() => setApplianceCmd(null));
+  }, [liveTick]);
 
   useEffect(() => {
     setEdrLoading(true);
@@ -267,6 +274,48 @@ export default function DashboardPage() {
 
       {overview && (
         <>
+          {applianceCmd ? (
+            <div className="kpi-row-5" style={{ marginBottom: "1rem" }}>
+              <Link
+                className="kpi-card card-surface kpi-card--link"
+                to="/appliances"
+                aria-label="Open appliances"
+              >
+                <div className="kpi-card-top">
+                  <span className="kpi-label">Edge appliances</span>
+                </div>
+                <div className="kpi-value">
+                  {applianceCmd.appliances.online}/{applianceCmd.appliances.total}
+                </div>
+                <div className="kpi-foot">
+                  Online · {applianceCmd.appliances.offline} offline
+                </div>
+              </Link>
+              <div className="kpi-card card-surface">
+                <div className="kpi-card-top">
+                  <span className="kpi-label">Data Lake volume</span>
+                </div>
+                <div className="kpi-value">
+                  {Number(applianceCmd.appliances.disk_used_gb_total || 0).toFixed(1)} GB
+                </div>
+                <div className="kpi-foot">Aggregate appliance storage</div>
+              </div>
+              <Link
+                className="kpi-card card-surface kpi-card--link"
+                to="/retrospective-hunts"
+                aria-label="Open retrospective hunts"
+              >
+                <div className="kpi-card-top">
+                  <span className="kpi-label">Retrospective hunts</span>
+                </div>
+                <div className="kpi-value">{applianceCmd.hunts.running}</div>
+                <div className="kpi-foot">
+                  Running · {applianceCmd.hunts.pending} pending · {applianceCmd.hunts.last_24h} / 24h
+                </div>
+              </Link>
+            </div>
+          ) : null}
+
           <div className="kpi-row-5">
             <Link
               className="kpi-card kpi-card--critical card-surface kpi-card--link"

@@ -20,6 +20,7 @@ import AuditLogsPage from "./pages/AuditLogsPage";
 import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 import ServiceCatalogPage from "./pages/ServiceCatalogPage";
 import ServiceRequestsPage from "./pages/ServiceRequestsPage";
+import RetrospectiveHuntsPage from "./pages/RetrospectiveHuntsPage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -168,6 +169,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ServiceRequestsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/retrospective-hunts"
+        element={
+          <ProtectedRoute>
+            <RetrospectiveHuntsPage />
           </ProtectedRoute>
         }
       />

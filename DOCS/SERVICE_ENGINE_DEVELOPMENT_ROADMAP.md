@@ -1,7 +1,7 @@
 # Service Engine Development Roadmap
 
 Status: Living tracker for backend engines behind the 10-card Service Catalog.  
-Created: 2026-07-31 · **Updated 2026-08-01 — VM 110 Velociraptor LIVE + VM 109 Amass EASM LIVE**
+Created: 2026-07-31 · **Updated 2026-08-04 — ThreatLens + Retrospective Engine + STIX/TAXII**
 
 **Conventions (this repo):**
 - Customer APIs: `/customer/{feature}/{short_code}/...` (nginx strips `/api` prefix).
@@ -15,14 +15,14 @@ Created: 2026-07-31 · **Updated 2026-08-01 — VM 110 Velociraptor LIVE + VM 10
 
 | # | Catalog card | `service_key` | Backend engines (adapters) | Status |
 |---|---|---|---|---|
-| 1 | Log & Event Monitoring | `log_event_monitoring` | Wazuh Manager ingest → `security_alerts` | **LIVE** (core) |
-| 2 | Incident Response & Casework | `incident_response` | TheHive/Shuffle adapters → `incidents` | **LIVE** (core) |
+| 1 | Log & Event Monitoring | `log_event_monitoring` | Wazuh Manager ingest → `security_alerts` + **Junexis Data Lake** (local/cloud Parquet retention) | **LIVE** (core) |
+| 2 | Incident Response & Casework | `incident_response` | TheHive/Shuffle adapters → `incidents` + **AI Executive Summary** on customer incident detail | **LIVE** (core) |
 | 3 | Security Automation & Containment | `security_automation` | Wazuh Active Response / EDR isolate + durable Shuffle queue | **LIVE** (core) |
 | 4 | Vulnerability Management (VMaaS) | `vulnerability_management` | MSSP Internal Vulnerability Scanner (+ Nuclei/Vuls/Greenbone ingest) | **PHASE 4 — COMPLETE** |
 | 5 | Continuous Compliance & Hardening (CaaS) | `continuous_compliance` | Wazuh SCA policies/checks | **PHASE 1 — COMPLETE** |
 | 6 | Network Detection & Response (NDR) | `network_detection_response` | MSSP Network Detection & Response Engine (Suricata + Zeek adapters) | **PHASE 5 — COMPLETE** |
-| 7 | Threat Intelligence & Enrichment | `threat_intelligence` | MSSP Global Threat Intelligence Engine (MISP/OTX/AbuseIPDB adapters) | **PHASE 6 — COMPLETE** (MISP VM still pending) |
-| 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | **VM 110 Velociraptor** bridge `:8001` + EDR artifact bridge | **LIVE (VM 110)** |
+| 7 | Threat Intelligence & Enrichment | `threat_intelligence` | Global Threat Intel Engine + **STIX 2.1 / TAXII** + **90-day Junexis Retrospective Engine** | **PHASE 6 — COMPLETE** (+ STIX/Retro 2026-08-04) |
+| 8 | Endpoint Forensics & Deception | `endpoint_forensics_deception` | **VM 110 Velociraptor** + **Junexis ThreatLens** (IOC extraction / advisory analysis) | **LIVE (VM 110)** + ThreatLens |
 | 9 | External Attack Surface (EASM) | `external_attack_surface` | **VM 109 Amass + Nuclei** agent → `/integrations/easm/*` | **LIVE (VM 109 deep recon)** |
 | 10 | Cloud & Identity Protection (ITDR) | `cloud_identity_protection` | MSSP Cloud Identity Protection Engine | **PHASE 3 — COMPLETE** |
 
@@ -32,6 +32,17 @@ Created: 2026-07-31 · **Updated 2026-08-01 — VM 110 Velociraptor LIVE + VM 10
 
 ### Phases 1–6 — COMPLETE
 CaaS, EASM (stdlib MVP), ITDR, VMaaS, NDR, Threat Intelligence (see prior commits).
+
+### Universal Retrospective + ThreatLens — 2026-08-04
+
+**Delivered (control plane):**
+- Schema: `postgres/init/029_threatlens_retrospective.sql` (`retrospective_hunt_jobs`, `tenant_appliances` view, appliance disk/ingest columns). Note: prompt’s `025_*` filename was already VMaaS.
+- **Junexis ThreatLens** NLP extract + 90-day sweep APIs (`/customer/threatlens/...` and `/api/v1/customer/threatlens/...`)
+- **Junexis Retrospective Engine** dual-route: `LOCAL_APPLIANCE` (Modes 2/4 → appliance hunt API + telemetry callback) vs `CLOUD_SOC` (Modes 1/3 → DuckDB/Parquet under `JUNEXIS_CLOUD_DATALAKE_ROOT`)
+- **STIX 2.1 / TAXII** parse + ingest helpers in `threat_intel_service.py` (`stix2`, `taxii2-client`, DuckDB in requirements)
+- Customer portal `:3001/threatlens` + AI Executive Summary on incident detail
+- Admin `:3000` appliance command tile + `/retrospective-hunts` monitor
+- Marketing site copy for Cards 1/7/8 and Mode 1 vs Mode 4 deployments
 
 ### Phase 7 — Endpoint Forensics & Deception — LIVE on VM 110 (2026-08-01)
 
@@ -55,10 +66,7 @@ CaaS, EASM (stdlib MVP), ITDR, VMaaS, NDR, Threat Intelligence (see prior commit
 | Live canary/deception sensors | Named KB; replace seeded tripwires with real sensor ingest |
 | Live MISP install (VM 108) | Named KB; deepen Phase 6 IOC pull |
 | Velociraptor endpoint clients | Enroll Windows/Linux lab agents for full host VQL collections |
+| Redis-backed hunt job queue | Upgrade from BackgroundTasks to durable Redis list (Shuffle pattern) |
+| Cloud Parquet writers | Populate `JUNEXIS_CLOUD_DATALAKE_ROOT` for Modes 1/3 cold storage |
 
 ---
-
-## Dependencies by phase
-
-- **Phase 7:** Live bridge on VM 110; enroll Velociraptor clients for deeper host collections.
-- **Later phases:** Do not install new VMs/tools unless a named KB approves it.

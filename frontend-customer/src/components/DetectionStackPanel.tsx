@@ -16,13 +16,13 @@ const DEFAULT_CUSTOMER: StackModule[] = [
   {
     id: "log_monitoring",
     name: "Log & event monitoring",
-    blurb: "Included with your package",
+    blurb: "Included — Junexis Data Lake retention up to 365+ days",
     status: "active",
   },
   {
     id: "ir",
     name: "Incident Response",
-    blurb: "Cases you can track in this portal",
+    blurb: "Cases + AI executive summaries in this portal",
     status: "active",
   },
   {
@@ -33,20 +33,20 @@ const DEFAULT_CUSTOMER: StackModule[] = [
   },
   {
     id: "nta",
-    name: "Network Traffic Analysis",
-    blurb: "Optional — ask your MSSP via subscription",
+    name: "Network Detection & Response",
+    blurb: "Optional — ask your MSSP via Service Portfolio",
     status: "optional",
   },
   {
     id: "ti",
-    name: "Threat Intelligence Sharing",
-    blurb: "Optional — ask your MSSP via subscription",
+    name: "Threat Intelligence",
+    blurb: "Optional — includes 90-day retrospective sweeps",
     status: "optional",
   },
   {
     id: "edf",
-    name: "Endpoint Forensics & Hunting",
-    blurb: "Optional — ask your MSSP via subscription",
+    name: "Endpoint Forensics & ThreatLens",
+    blurb: "Optional — deception, forensics, IOC extraction",
     status: "optional",
   },
 ];

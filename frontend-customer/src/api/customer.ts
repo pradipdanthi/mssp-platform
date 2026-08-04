@@ -798,6 +798,88 @@ export function getThreatIntelCampaigns(
   return request(`/customer/threat-intel/${encodeURIComponent(shortCode)}/campaigns`);
 }
 
+/** Junexis ThreatLens + Retrospective Engine */
+export interface ThreatLensIoc {
+  type: string;
+  value: string;
+}
+
+export interface ThreatLensExtractResult {
+  engine: string;
+  counts: {
+    ips: number;
+    domains: number;
+    hashes: number;
+    cves: number;
+    urls: number;
+    total: number;
+  };
+  iocs: ThreatLensIoc[];
+  ioc_values: string[];
+}
+
+export interface ThreatLensJob {
+  id: string;
+  status: string;
+  execution_mode: string;
+  matches_count?: number;
+  matched_details?: unknown[];
+  iocs?: string[] | unknown;
+  created_at?: string | null;
+  error_message?: string | null;
+}
+
+export function extractThreatLensIocs(
+  shortCode: string,
+  body: { text?: string; url?: string }
+): Promise<ThreatLensExtractResult> {
+  return request(`/customer/threatlens/${encodeURIComponent(shortCode)}/extract`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function runThreatLensSweep(
+  shortCode: string,
+  body: {
+    text?: string;
+    url?: string;
+    iocs?: string[];
+    lookback_days?: number;
+  }
+): Promise<{
+  accepted: boolean;
+  job_id: string;
+  execution_mode: string;
+  status: string;
+  engine: string;
+}> {
+  return request(`/customer/threatlens/${encodeURIComponent(shortCode)}/sweep`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function getThreatLensJob(
+  shortCode: string,
+  jobId: string
+): Promise<{ job: ThreatLensJob }> {
+  return request(
+    `/customer/threatlens/${encodeURIComponent(shortCode)}/jobs/${encodeURIComponent(jobId)}`
+  );
+}
+
+export function getThreatLensJobs(
+  shortCode: string,
+  opts?: { page?: number; page_size?: number }
+): Promise<{ jobs: ThreatLensJob[] }> {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.page_size) params.set("page_size", String(opts.page_size));
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/customer/threatlens/${encodeURIComponent(shortCode)}/jobs${q}`);
+}
+
 /** Endpoint Forensics & Deception — customer-safe. */
 export interface ForensicsSummary {
   tenant: { short_code: string; name: string };

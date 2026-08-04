@@ -175,6 +175,12 @@ export default function ServicesPage() {
                       Open in portal
                     </Link>
                   )}
+                  {(status === "included" || status === "active") &&
+                    (item.extraLinks || []).map((link) => (
+                      <Link key={link.path} className="btn btn-ghost" to={link.path}>
+                        {link.label}
+                      </Link>
+                    ))}
                   {item.requestable && status === "available" && (
                     <button className="btn btn-primary" type="button" onClick={() => openConsult(item)}>
                       Request for Consulting
@@ -186,7 +192,9 @@ export default function ServicesPage() {
                       <Link to="/incidents?tab=service-requests">Service Requests</Link>.
                     </span>
                   )}
-                  {(status === "included" || status === "active") && !item.learnMorePath && (
+                  {(status === "included" || status === "active") &&
+                    !item.learnMorePath &&
+                    !(item.extraLinks && item.extraLinks.length) && (
                     <span className="service-card-note">Part of your active service package.</span>
                   )}
                 </div>
