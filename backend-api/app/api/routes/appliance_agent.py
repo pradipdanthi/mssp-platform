@@ -276,7 +276,10 @@ def appliance_heartbeat(
     source_ip = request.client.host if request.client else None
     local_ip_text = str(payload.local_ip) if payload.local_ip is not None else None
     health_status = payload.health_status or "unknown"
-    health_snapshot = Jsonb(payload.health_snapshot) if payload.health_snapshot is not None else None
+    snapshot_dict: Dict[str, Any] = dict(payload.health_snapshot or {})
+    if payload.enabled_services is not None:
+        snapshot_dict["enabled_services"] = list(payload.enabled_services)
+    health_snapshot = Jsonb(snapshot_dict) if snapshot_dict else None
 
     try:
         with db_transaction() as cur:

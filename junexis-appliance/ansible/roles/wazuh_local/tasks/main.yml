@@ -1,5 +1,188 @@
 ---
-# Role: wazuh_local — scaffold (KB-093). Implement in follow-on build KBs.
-- name: Placeholder — wazuh_local not yet implemented
+# Role: wazuh_local — install local Manager + Fluent Bit (+ NDR pkgs), leave idle
+- name: Skip when disabled
+  ansible.builtin.meta: end_role
+  when: not (wazuh_local_enabled | bool)
+
+- name: Assert case-management packages must never be installed
+  ansible.builtin.shell: |
+    set -e
+    if dpkg -l 2>/dev/null | grep -qiE 'thehive|cortex|shuffle'; then
+      echo "FORBIDDEN: case/SOAR packages present on appliance" >&2
+      exit 1
+    fi
+    echo OK
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: wazuh_local_forbid_case_packages | bool
+
+- name: Install common collector packages
+  ansible.builtin.apt:
+    name:
+      - curl
+      - gnupg
+      - apt-transport-https
+      - lsb-release
+    state: present
+    update_cache: true
+
+- name: Add Wazuh APT key
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL "{{ wazuh_local_repo_key_url }}" | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+    chmod 644 /usr/share/keyrings/wazuh.gpg
+  args:
+    creates: /usr/share/keyrings/wazuh.gpg
+  when: wazuh_local_install_manager | bool
+
+- name: Add Wazuh APT repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/wazuh.list
+    mode: "0644"
+    content: |
+      deb [signed-by=/usr/share/keyrings/wazuh.gpg] {{ wazuh_local_repo_url }} stable main
+  when: wazuh_local_install_manager | bool
+
+- name: Install wazuh-manager (idle until license)
+  ansible.builtin.apt:
+    name: wazuh-manager
+    state: present
+    update_cache: true
+  when: wazuh_local_install_manager | bool
+  register: wazuh_mgr_install
+  failed_when: false
+
+- name: Note when wazuh-manager package missing (use offline pool later)
   ansible.builtin.debug:
-    msg: "Role wazuh_local is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"
+    msg: >-
+      wazuh-manager not installed from network apt — for airgap ISO, place debs under
+      junexis-appliance/iso/offline-packages/ and extend firstboot. Firstboot will retry
+      when bootstrap network is available.
+  when:
+    - wazuh_local_install_manager | bool
+    - not (wazuh_mgr_install is changed or wazuh_mgr_install is success)
+
+- name: Stop and disable wazuh-manager until entitlement
+  ansible.builtin.systemd:
+    name: wazuh-manager
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: wazuh_local_install_manager | bool
+
+- name: Add Fluent Bit APT keyring (Treasure Data / Fluent Bit)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    curl -fsSL https://packages.fluentbit.io/fluentbit.key | gpg --dearmor -o /usr/share/keyrings/fluentbit.gpg
+    chmod 644 /usr/share/keyrings/fluentbit.gpg
+  args:
+    creates: /usr/share/keyrings/fluentbit.gpg
+  when: wazuh_local_install_fluent_bit | bool
+  failed_when: false
+
+- name: Add Fluent Bit APT repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/fluent-bit.list
+    mode: "0644"
+    content: |
+      deb [signed-by=/usr/share/keyrings/fluentbit.gpg] https://packages.fluentbit.io/ubuntu/noble noble main
+  when: wazuh_local_install_fluent_bit | bool
+
+- name: Install Fluent Bit (appliance-side collector — never on endpoints)
+  ansible.builtin.apt:
+    name: "{{ fluent_bit_apt_package }}"
+    state: present
+    update_cache: true
+  when: wazuh_local_install_fluent_bit | bool
+  register: fb_install
+  failed_when: false
+
+- name: Deploy minimal Fluent Bit config (idle)
+  ansible.builtin.copy:
+    dest: /etc/fluent-bit/fluent-bit.conf
+    mode: "0644"
+    force: false
+    content: |
+      [SERVICE]
+          Flush        5
+          Daemon       Off
+          Log_Level    info
+
+      [INPUT]
+          Name         syslog
+          Mode         udp
+          Listen       0.0.0.0
+          Port         5140
+          Parser       syslog-rfc5424
+          Tag          syslog.*
+
+      [OUTPUT]
+          Name         file
+          Match        *
+          Path         /var/log/junexis
+          File         fluent-bit-idle.out
+  when: wazuh_local_install_fluent_bit | bool
+  failed_when: false
+
+- name: Stop and disable Fluent Bit until entitlement
+  ansible.builtin.systemd:
+    name: fluent-bit
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: wazuh_local_install_fluent_bit | bool
+
+- name: Install Suricata for NDR idle slot (svc-06)
+  ansible.builtin.apt:
+    name: suricata
+    state: present
+    update_cache: true
+  when: wazuh_local_install_suricata | bool
+  register: suri_install
+  failed_when: false
+
+- name: Stop and disable Suricata until entitlement
+  ansible.builtin.systemd:
+    name: suricata
+    state: stopped
+    enabled: false
+  failed_when: false
+  when: wazuh_local_install_suricata | bool
+
+- name: Ensure service stub directories exist
+  ansible.builtin.file:
+    path: "/opt/junexis/services/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - 01-log-event
+    - 02-ir-worker
+    - 03-automation
+    - 04-vmaas
+    - 05-compliance
+    - 06-ndr
+    - 07-threat-intel
+    - 08-forensics
+    - 09-easm
+    - 10-itdr
+
+- name: Stage idle engine marker files under /opt/junexis/services
+  ansible.builtin.copy:
+    dest: "/opt/junexis/services/{{ item }}/IDLE"
+    mode: "0644"
+    content: |
+      installed_or_staged=true
+      enabled=false
+      enable_via=junexis-cli license apply
+  loop:
+    - 01-log-event
+    - 02-ir-worker
+    - 03-automation
+    - 04-vmaas
+    - 05-compliance
+    - 06-ndr
+    - 07-threat-intel
+    - 08-forensics
+    - 09-easm
+    - 10-itdr

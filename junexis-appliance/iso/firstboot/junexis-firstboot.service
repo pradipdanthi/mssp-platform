@@ -1,0 +1,14 @@
+[Unit]
+Description=Junexis appliance first-boot provision
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=!/var/lib/junexis/firstboot.done
+
+[Service]
+Type=oneshot
+ExecStart=/opt/junexis/payload/junexis-firstboot.sh
+RemainAfterExit=yes
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

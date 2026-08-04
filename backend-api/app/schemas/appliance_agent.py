@@ -31,7 +31,7 @@ Design notes:
   app/schemas/appliances.py already uses for token_hash.
 """
 
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress
 
@@ -87,6 +87,8 @@ class ApplianceHeartbeatRequest(BaseModel):
     cpu_percent: Optional[float] = Field(default=None, ge=0, le=100)
     memory_percent: Optional[float] = Field(default=None, ge=0, le=100)
     disk_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    # KB-093G: catalogue services currently enabled on this appliance
+    enabled_services: Optional[List[str]] = Field(default=None, max_length=32)
 
     # Deliberately absent: appliance_api_key, appliance_api_key_hash,
     # token_hash, activation_token, tenant_id. Credentials for this

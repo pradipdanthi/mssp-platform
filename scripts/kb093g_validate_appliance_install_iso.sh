@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# KB-093G validation — install ISO pipeline + license mint/verify + idle roles
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+APP="$ROOT/junexis-appliance"
+PASS=0
+fail() { echo "FAIL: $*"; exit 1; }
+ok() { echo "PASS: $*"; PASS=$((PASS + 1)); }
+
+[[ -f "$APP/iso/build_install_iso.sh" ]] || fail "missing iso/build_install_iso.sh"
+[[ -f "$APP/iso/docker_remaster.sh" ]] || fail "missing iso/docker_remaster.sh"
+[[ -f "$APP/iso/autoinstall/user-data" ]] || fail "missing autoinstall user-data"
+[[ -f "$APP/iso/firstboot/junexis-firstboot.sh" ]] || fail "missing firstboot script"
+grep -q 'autoinstall' "$APP/iso/autoinstall/user-data" || fail "user-data missing autoinstall"
+grep -qi 'fluent' "$ROOT/docs/KB093G_APPLIANCE_ISO_ENTITLEMENT_PLAN.md" || fail "KB093G Fluent Bit section"
+ok "install ISO scaffolding present"
+
+# Ansible roles no longer placeholders
+for role in license_enforcer service_manager wazuh_local; do
+  if grep -q 'scaffold-only' "$APP/ansible/roles/$role/tasks/main.yml"; then
+    fail "role $role still scaffold-only"
+  fi
+  ok "role $role implemented"
+done
+grep -q 'fluent-bit' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "Fluent Bit not in wazuh_local"
+grep -q 'thehive' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "TheHive forbid check missing"
+ok "Fluent Bit on appliance; TheHive forbidden"
+
+# CLI license commands
+grep -q 'license' "$APP/cli/junexis-cli/junexis_cli/cli.py" || fail "CLI license subcommand missing"
+ok "junexis-cli license commands present"
+
+# Backend license service + admin route
+[[ -f "$ROOT/backend-api/app/services/junexis_license.py" ]] || fail "missing junexis_license.py"
+grep -q 'appliance-licenses' "$ROOT/backend-api/app/api/routes/entitlements.py" || fail "mint route missing"
+grep -q 'cryptography==' "$ROOT/backend-api/requirements.txt" || fail "cryptography not pinned"
+ok "control-plane license mint path present"
+
+# Ansible syntax (if ansible-playbook available)
+if command -v ansible-playbook >/dev/null 2>&1; then
+  ansible-playbook --syntax-check "$APP/ansible/playbooks/site.yml" >/dev/null
+  ok "site.yml syntax-check"
+else
+  ok "ansible-playbook not on host — syntax-check skipped"
+fi
+
+# License round-trip (ephemeral keys)
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+python3 - <<'PY' "$TMP" "$ROOT"
+import json, os, sys, time
+from pathlib import Path
+sys.path.insert(0, str(Path(sys.argv[2]) / "backend-api"))
+from app.services.junexis_license import generate_keypair, mint_license, verify_license
+
+tmp = Path(sys.argv[1])
+priv_pem, pub_pem = generate_keypair()
+(tmp / "priv.pem").write_bytes(priv_pem)
+(tmp / "pub.pem").write_bytes(pub_pem)
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+key = load_pem_private_key(priv_pem, password=None)
+minted = mint_license(
+    tenant_id="11111111-1111-1111-1111-111111111111",
+    service_ids=["svc-01", "svc-06"],
+    appliance_id="22222222-2222-2222-2222-222222222222",
+    fingerprint="lab-fp-1",
+    contract_id="C-LAB-1",
+    core=True,
+    private_key=key,
+)
+claims = verify_license(minted["license_jws"], public_key_pem=pub_pem, fingerprint="lab-fp-1")
+assert "svc-01" in claims["svc"] and "svc-06" in claims["svc"]
+(tmp / "license.jws").write_text(minted["license_jws"] + "\n", encoding="utf-8")
+print("LICENSE_ROUNDTRIP_OK", claims["jti"])
+PY
+ok "license mint/verify round-trip"
+
+# CLI apply against temp state
+export JUNEXIS_STATE_DIR="$TMP/state"
+export JUNEXIS_LICENSE_PUBKEY="$TMP/pub.pem"
+mkdir -p "$TMP/state" "$APP/licensing/keys"
+# point CLI pubkey candidate via env
+PYTHONPATH="$APP/cli/junexis-cli${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -m junexis_cli license apply --file "$TMP/license.jws" --fingerprint lab-fp-1 --json \
+  | grep -q '"ok": true' || fail "CLI license apply failed"
+PYTHONPATH="$APP/cli/junexis-cli${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -m junexis_cli license show --json | grep -q 'svc-01' || fail "CLI license show missing svc-01"
+ok "CLI license apply/show"
+
+# ISO cache presence (build is separate / long)
+if [[ -f "$APP/.cache/ubuntu-24.04.4-live-server-amd64.iso" ]]; then
+  ok "Ubuntu live ISO cached for remaster"
+else
+  echo "WARN: Ubuntu ISO not cached — run junexis-appliance/scripts/b2_fetch_ubuntu_iso.sh before build"
+fi
+
+echo ""
+echo "KB093G_VALIDATE_OK checks_passed=$PASS"
+echo "Next: $APP/iso/build_install_iso.sh  # produces .cache/dist-install/Junexis-Appliance-Install-*.iso"

@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from junexis_cli import __version__, bootstrap, network, state
+from junexis_cli import __version__, bootstrap, license_ops, network, state
 
 
 def _out(data: Any, as_json: bool) -> None:
@@ -157,6 +157,29 @@ def cmd_network(args: argparse.Namespace) -> int:
     return 1
 
 
+def cmd_license(args: argparse.Namespace) -> int:
+    if args.license_cmd == "show":
+        _out(license_ops.show_license(), args.json)
+        return 0
+    if args.license_cmd == "apply":
+        if not args.file:
+            print("error: --file is required", file=sys.stderr)
+            return 1
+        path = Path(args.file)
+        if not path.is_file():
+            print(f"error: file not found: {path}", file=sys.stderr)
+            return 1
+        try:
+            result = license_ops.apply_license_file(path, fingerprint=args.fingerprint or "")
+        except Exception as exc:  # noqa: BLE001
+            print(f"error: {exc}", file=sys.stderr)
+            return 4
+        _out(result, args.json)
+        return 0
+    print("usage: junexis-cli license {show|apply}", file=sys.stderr)
+    return 1
+
+
 def cmd_doctor(args: argparse.Namespace) -> int:
     payload = {
         "state_dir": str(state.state_root()),
@@ -218,6 +241,13 @@ def build_parser() -> argparse.ArgumentParser:
     net_unlock.add_argument("--confirm", default="")
     net_unlock.add_argument("--dry-run", action="store_true")
 
+    lic = sub.add_parser("license", help="Apply / show Junexis-signed license", parents=[common])
+    lic_sub = lic.add_subparsers(dest="license_cmd", required=True)
+    lic_sub.add_parser("show", parents=[common])
+    lic_apply = lic_sub.add_parser("apply", parents=[common])
+    lic_apply.add_argument("--file", required=True, help="Path to .jws license file")
+    lic_apply.add_argument("--fingerprint", default="", help="Expected appliance fingerprint")
+
     return p
 
 
@@ -230,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         "setup": cmd_setup,
         "bootstrap": cmd_bootstrap,
         "network": cmd_network,
+        "license": cmd_license,
         "doctor": cmd_doctor,
     }
     return handlers[args.command](args)

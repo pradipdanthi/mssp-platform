@@ -2,10 +2,23 @@
 
 **Brand:** Junexis (MSSP platform, cloud SOC, licensing, `junexis-cli`)  
 **Base OS:** Ubuntu Server LTS (not rebranded)  
-**Artifact:** `Junexis-Appliance-vX.Y.iso`  
-**Control plane home:** `/opt/mssp-control` (KB-016 registration/heartbeat; KB-058 template; KB-073 deployment modes)
+**Customer media:** bootable **install ISO** `Junexis-Appliance-Install-vX.Y.iso` (bare metal / hypervisor / cloud VM)  
+**Control plane home:** `/opt/mssp-control` (KB-016 registration/heartbeat; KB-093G licensing)
 
-This tree is the **appliance software lifecycle** repo: ISO build, OS minimization, hardening, modular 10-service packaging, outbound channel agent, OTA staging, and local CLI.
+This tree is the **appliance software lifecycle** repo: install-ISO remaster, OS minimization, hardening, modular 10-service packaging (idle until Junexis license), outbound channel agent, OTA staging, and local CLI.
+
+### Build the install ISO (customer media)
+
+```bash
+cd /opt/mssp-control
+./junexis-appliance/scripts/b2_fetch_ubuntu_iso.sh   # once
+./junexis-appliance/iso/build_install_iso.sh
+# → junexis-appliance/.cache/dist-install/Junexis-Appliance-Install-v*.iso
+./scripts/kb093g_validate_appliance_install_iso.sh
+```
+
+Plan: `/opt/mssp-control/docs/KB093G_APPLIANCE_ISO_ENTITLEMENT_PLAN.md`  
+Default install user `junexis` / password `ChangeMeNow!` — rotate after setup.
 
 ## What this is
 
@@ -36,8 +49,9 @@ Local DuckDB/Parquet lake, anonymizing telemetry, retrospective hunt:
 
 | Path | Purpose |
 |------|---------|
-| `packer/` | Packer + Ubuntu Subiquity autoinstall → minimal ISO |
-| `ansible/` | Debloat, CIS L2 hardening, runtime, services |
+| `iso/` | **Bootable install ISO** remaster (autoinstall + firstboot + payload) |
+| `packer/` | Legacy/CI nested Packer path (not customer media) |
+| `ansible/` | Debloat, CIS L2 hardening, runtime, idle engines, license enforcer |
 | `hardening/` | CIS baselines, AppArmor, nftables, auditd assets |
 | `services/01–10/` | Modular microservice definitions (systemd/quadlet) |
 | `channel/` | Outbound mTLS WebSocket/NATS protocol schemas |

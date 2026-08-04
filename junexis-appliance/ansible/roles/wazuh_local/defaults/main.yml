@@ -1,3 +1,12 @@
 ---
-# Defaults for role wazuh_local (scaffold)
 wazuh_local_enabled: true
+# Install Manager + Fluent Bit then leave them stopped until license reconcile
+wazuh_local_install_manager: true
+wazuh_local_install_fluent_bit: true
+wazuh_local_install_suricata: "{{ junexis_install_idle_engines | default(true) | bool }}"
+wazuh_local_manager_version: "4.9.2"
+wazuh_local_repo_key_url: "https://packages.wazuh.com/key/GPG-KEY-WAZUH"
+wazuh_local_repo_url: "https://packages.wazuh.com/4.x/apt/"
+fluent_bit_apt_package: fluent-bit
+# Never install TheHive / Shuffle
+wazuh_local_forbid_case_packages: true

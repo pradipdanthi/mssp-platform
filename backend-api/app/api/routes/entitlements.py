@@ -1269,3 +1269,92 @@ def put_admin_asset_service_coverage(
             + (" Vulnerability Management entitlement enabled." if entitlements_updated else "")
         ),
     }
+
+
+# ---------------------------------------------------------------------------
+# KB-093G: Junexis-signed appliance license keys (Admin / platform_admin only)
+# ---------------------------------------------------------------------------
+
+
+class ApplianceLicenseMintRequest(BaseModel):
+    service_ids: List[str] = Field(min_length=1)
+    appliance_id: Optional[str] = None
+    fingerprint: Optional[str] = Field(default=None, max_length=256)
+    contract_id: Optional[str] = Field(default=None, max_length=128)
+    core: bool = False
+    min_term_years: int = Field(default=1, ge=1, le=10)
+    ttl_days: int = Field(default=365, ge=1, le=3660)
+
+
+class ApplianceLicenseMintResponse(BaseModel):
+    tenant_id: str
+    license_jws: str
+    claims: Dict[str, Any]
+    message: str
+
+
+@router.post(
+    "/admin/tenants/{tenant_id}/appliance-licenses",
+    response_model=ApplianceLicenseMintResponse,
+)
+def mint_appliance_license(
+    tenant_id: UUID,
+    payload: ApplianceLicenseMintRequest,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(require_roles(*PLATFORM_ADMIN)),
+) -> ApplianceLicenseMintResponse:
+    """Mint a customer-bound license JWS. Only Junexis control plane can do this."""
+    _ensure_tenant(tenant_id)
+    if payload.appliance_id:
+        ap = fetch_one(
+            """
+            SELECT id::text FROM appliances
+            WHERE id = %s::uuid AND tenant_id = %s::uuid;
+            """,
+            (payload.appliance_id, str(tenant_id)),
+        )
+        if not ap:
+            raise HTTPException(status_code=404, detail="Appliance not found for tenant")
+
+    from app.services.junexis_license import LicenseSigningError, mint_license
+
+    try:
+        minted = mint_license(
+            tenant_id=str(tenant_id),
+            service_ids=payload.service_ids,
+            appliance_id=payload.appliance_id,
+            fingerprint=payload.fingerprint,
+            contract_id=payload.contract_id,
+            core=payload.core,
+            min_term_years=payload.min_term_years,
+            ttl_seconds=int(payload.ttl_days) * 86400,
+        )
+    except LicenseSigningError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    write_audit_event(
+        action="tenant.appliance_license_minted",
+        entity_type="tenant",
+        entity_id=str(tenant_id),
+        tenant_id=str(tenant_id),
+        actor_user_id=current_user.get("id"),
+        source_ip=request.client.host if request.client else None,
+        details={
+            "jti": minted["claims"].get("jti"),
+            "svc": minted["claims"].get("svc"),
+            "aid": minted["claims"].get("aid"),
+            "core": minted["claims"].get("core"),
+            "exp": minted["claims"].get("exp"),
+            "contract": minted["claims"].get("contract"),
+            # never audit the raw JWS token
+        },
+    )
+    return ApplianceLicenseMintResponse(
+        tenant_id=str(tenant_id),
+        license_jws=minted["license_jws"],
+        claims=minted["claims"],
+        message=(
+            "License minted. Deliver online via channel or offline with "
+            "`junexis-cli license apply --file …`. Only Junexis can mint keys."
+        ),
+    )

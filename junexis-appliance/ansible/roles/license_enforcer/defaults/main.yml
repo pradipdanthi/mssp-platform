@@ -1,3 +1,9 @@
 ---
-# Defaults for role license_enforcer (scaffold)
 license_enforcer_enabled: true
+license_enforcer_state_dir: /var/lib/junexis
+license_enforcer_trust_dir: /etc/junexis/trust
+license_enforcer_pubkeys_dir: /etc/junexis/trust/keys
+license_enforcer_entitlements_path: /var/lib/junexis/entitlements.json
+license_enforcer_license_path: /var/lib/junexis/license.jws
+# Source pubkey from payload (ISO) or role files/
+license_enforcer_pubkey_src: "{{ junexis_payload_root | default(playbook_dir + '/../../licensing') }}/keys/licensing-ed25519-v1.pub"

@@ -1,5 +1,148 @@
 ---
-# Role: license_enforcer — scaffold (KB-093). Implement in follow-on build KBs.
-- name: Placeholder — license_enforcer not yet implemented
-  ansible.builtin.debug:
-    msg: "Role license_enforcer is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"
+# Role: license_enforcer — verify Junexis-signed license JWS; write entitlements.json
+- name: Skip when disabled
+  ansible.builtin.meta: end_role
+  when: not (license_enforcer_enabled | bool)
+
+- name: Ensure trust and state directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: junexis
+    mode: "0750"
+  loop:
+    - "{{ license_enforcer_state_dir }}"
+    - "{{ license_enforcer_trust_dir }}"
+    - "{{ license_enforcer_pubkeys_dir }}"
+
+- name: Install license verify helper
+  ansible.builtin.copy:
+    dest: /usr/lib/junexis/license_verify.py
+    mode: "0755"
+    content: |
+      #!/usr/bin/env python3
+      """Verify Junexis Ed25519 license JWS and write entitlements.json."""
+      from __future__ import annotations
+      import argparse, base64, json, sys, time
+      from pathlib import Path
+
+      try:
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+          from cryptography.hazmat.primitives.serialization import load_pem_public_key
+      except ImportError:
+          print("cryptography required", file=sys.stderr)
+          sys.exit(2)
+
+      def b64url_decode(s: str) -> bytes:
+          pad = "=" * (-len(s) % 4)
+          return base64.urlsafe_b64decode(s + pad)
+
+      def load_pub(path: Path) -> Ed25519PublicKey:
+          data = path.read_bytes()
+          if b"BEGIN" in data:
+              return load_pem_public_key(data)  # type: ignore[return-value]
+          # raw 32-byte or base64
+          try:
+              raw = base64.b64decode(data.strip())
+          except Exception:
+              raw = data.strip()
+          return Ed25519PublicKey.from_public_bytes(raw)
+
+      def verify_jws(token: str, pub: Ed25519PublicKey) -> dict:
+          parts = token.strip().split(".")
+          if len(parts) != 3:
+              raise ValueError("not a compact JWS")
+          signing_input = f"{parts[0]}.{parts[1]}".encode()
+          sig = b64url_decode(parts[2])
+          pub.verify(sig, signing_input)
+          header = json.loads(b64url_decode(parts[0]))
+          if header.get("alg") != "EdDSA":
+              raise ValueError("unsupported alg")
+          payload = json.loads(b64url_decode(parts[1]))
+          now = int(time.time())
+          if int(payload.get("nbf", 0)) > now + 300:
+              raise ValueError("not yet valid")
+          if int(payload.get("exp", 0)) < now - 300:
+              raise ValueError("expired")
+          if payload.get("iss") != "junexis-license":
+              raise ValueError("bad issuer")
+          return payload
+
+      def main() -> int:
+          ap = argparse.ArgumentParser()
+          ap.add_argument("--token-file", required=True)
+          ap.add_argument("--pubkey", required=True)
+          ap.add_argument("--out", required=True)
+          ap.add_argument("--fingerprint", default="")
+          args = ap.parse_args()
+          token = Path(args.token_file).read_text(encoding="utf-8").strip()
+          pub = load_pub(Path(args.pubkey))
+          claims = verify_jws(token, pub)
+          if args.fingerprint and claims.get("fp") and claims["fp"] != args.fingerprint:
+              print("fingerprint mismatch", file=sys.stderr)
+              return 3
+          ents = {
+              "service_ids": list(claims.get("svc") or []),
+              "core": bool(claims.get("core", False)),
+              "tenant_id": claims.get("sub"),
+              "appliance_id": claims.get("aid"),
+              "fingerprint": claims.get("fp"),
+              "contract_id": claims.get("contract"),
+              "jti": claims.get("jti"),
+              "exp": claims.get("exp"),
+              "raw_claims": claims,
+              "verified_at": int(time.time()),
+          }
+          out = Path(args.out)
+          out.parent.mkdir(parents=True, exist_ok=True)
+          tmp = out.with_suffix(".tmp")
+          tmp.write_text(json.dumps(ents, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          tmp.replace(out)
+          print(json.dumps({"ok": True, "service_ids": ents["service_ids"]}))
+          return 0
+
+      if __name__ == "__main__":
+          raise SystemExit(main())
+
+- name: Install cryptography for license verify
+  ansible.builtin.apt:
+    name:
+      - python3-cryptography
+    state: present
+    update_cache: true
+
+- name: Check for shipped public key
+  ansible.builtin.stat:
+    path: "{{ license_enforcer_pubkey_src }}"
+  register: junexis_lic_pub
+
+- name: Install Junexis license public key when present
+  ansible.builtin.copy:
+    src: "{{ license_enforcer_pubkey_src }}"
+    dest: "{{ license_enforcer_pubkeys_dir }}/licensing-ed25519-v1.pub"
+    mode: "0644"
+    remote_src: true
+  when: junexis_lic_pub.stat.exists | default(false)
+
+- name: Seed empty entitlements (idle — no services until license)
+  ansible.builtin.copy:
+    dest: "{{ license_enforcer_entitlements_path }}"
+    content: |
+      {
+        "service_ids": [],
+        "core": false,
+        "note": "No license applied — engines remain idle"
+      }
+    mode: "0640"
+    owner: root
+    group: junexis
+    force: false
+
+- name: Install license reconcile helper unit path marker
+  ansible.builtin.copy:
+    dest: /etc/junexis/trust/README
+    mode: "0644"
+    content: |
+      Place Junexis licensing-ed25519-v1.pub here.
+      Apply licenses with: junexis-cli license apply --file <token.jws>

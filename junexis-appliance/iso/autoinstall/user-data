@@ -1,0 +1,42 @@
+#cloud-config
+# Junexis Appliance — Ubuntu 24.04 autoinstall (Subiquity)
+# Remastered onto the live ISO; ds=nocloud;s=/cdrom/nocloud/
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  identity:
+    hostname: junexis-appliance
+    username: junexis
+    # Default install password: ChangeMeNow! — rotate via junexis-cli after setup
+    password: "$6$JxLabSalt9$WvtEY0IcWpnN06bXNUlDbQ6JBlfj8WlE2nKFQBhwelYs9qzt9MFcBKEyO2JDz1yBJrWDmKz4koypzl.t45D9R."
+  ssh:
+    install-server: true
+    allow-pw: true
+  storage:
+    layout:
+      name: lvm
+  packages:
+    - python3
+    - python3-pip
+    - python3-venv
+    - curl
+    - ca-certificates
+    - nftables
+    - jq
+    - rsync
+    - ansible-core
+  user-data:
+    disable_root: true
+    package_update: true
+    package_upgrade: false
+  late-commands:
+    # Copy Junexis payload from install media onto the target
+    - curtin in-target --target=/target -- bash -c 'mkdir -p /opt/junexis/payload /var/lib/junexis /etc/junexis'
+    - cp -a /cdrom/junexis-payload/. /target/opt/junexis/payload/
+    - cp -a /cdrom/nocloud/meta-data /target/opt/junexis/payload/iso-meta-data || true
+    - curtin in-target --target=/target -- bash -c 'chmod +x /opt/junexis/payload/junexis-firstboot.sh || true'
+    - curtin in-target --target=/target -- bash -c 'cp /opt/junexis/payload/junexis-firstboot.service /etc/systemd/system/junexis-firstboot.service && systemctl enable junexis-firstboot.service'
+    - curtin in-target --target=/target -- bash -c 'echo bootstrap > /var/lib/junexis/network_mode'
+  shutdown: reboot
