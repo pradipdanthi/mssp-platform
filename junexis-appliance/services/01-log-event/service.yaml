@@ -1,0 +1,4 @@
+id: svc-01
+path: 01-log-event
+entitlement_required: false
+endpoint_agent: wazuh-agent

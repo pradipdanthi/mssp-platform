@@ -1,0 +1,11 @@
+# Junexis Appliance — future topology (always apply)
+
+When designing or implementing appliance channel, CA, OTA/WPK, registration edge, or high-volume appliance ingress:
+
+1. **Lab/interim:** may temporarily use APIs on `mssp-control` (VM 100) — KB-016 bridge only.
+2. **Production:** **Appliance Management must run on a separate server/cluster** from `mssp-control`. Do not permanently host `junexis-channeld` gateway, appliance CA, or OTA repos on the control-plane host.
+3. Control plane keeps Admin/Customer portals + system of record; it calls Appliance Management over internal APIs.
+4. Customer appliance never runs TheHive; ticketing stays in Cloud SOC.
+5. Single ISO; bootstrap Internet then LOCKED (LAN + SOC channel only).
+
+Canonical detail: `docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md` §12.

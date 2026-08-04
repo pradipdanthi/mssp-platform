@@ -1,0 +1,3 @@
+---
+# Defaults for role apparmor_profiles (scaffold)
+apparmor_profiles_enabled: true

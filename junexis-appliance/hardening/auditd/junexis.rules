@@ -1,0 +1,4 @@
+## Junexis appliance audit rules (scaffold)
+-w /etc/junexis -p wa -k junexis_config
+-w /var/lib/junexis/secrets -p rwa -k junexis_secrets
+-w /usr/bin/junexis-cli -p x -k junexis_cli

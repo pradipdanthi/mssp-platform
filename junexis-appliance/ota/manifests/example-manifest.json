@@ -1,0 +1,9 @@
+{
+  "version": "0.1.0-dev",
+  "component": "junexis-appliance-meta",
+  "sha256": "REPLACE_AT_BUILD",
+  "signature": "REPLACE_AT_SIGN",
+  "disruptive": false,
+  "min_from_version": "0.0.0",
+  "notes": "Example OTA manifest — not for production"
+}

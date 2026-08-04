@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: container_runtime
+  description: Junexis appliance role container_runtime (scaffold)
+  license: proprietary
+dependencies: []

@@ -15,6 +15,7 @@ from app.api.routes.alert_incident_triage import router as alert_incident_triage
 from app.api.routes.appliance_agent import router as appliance_agent_router
 from app.api.routes.appliance_alert_ingest import router as appliance_alert_ingest_router
 from app.api.routes.appliance_management import router as appliance_management_router
+from app.api.routes.telemetry_ingest import router as telemetry_ingest_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.customer import router as customer_router
 from app.api.routes.health import router as health_router
@@ -110,6 +111,11 @@ app.include_router(appliance_agent_router)
 
 # KB-057: authenticated appliance alert ingestion with normalized safe fields.
 app.include_router(appliance_alert_ingest_router)
+
+# KB-093E: Junexis Edge telemetry ingest + hunt-result callback
+# (/api/v1/telemetry/*). Same appliance API-key auth; may move to Appliance
+# Management plane in production.
+app.include_router(telemetry_ingest_router)
 
 # KB-061: Shuffle/TheHive → control plane normalized sync (X-SOC-Sync-Key).
 app.include_router(soc_sync_router)

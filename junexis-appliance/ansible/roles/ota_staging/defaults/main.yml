@@ -1,0 +1,3 @@
+---
+# Defaults for role ota_staging (scaffold)
+ota_staging_enabled: true

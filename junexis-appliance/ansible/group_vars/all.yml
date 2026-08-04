@@ -1,0 +1,10 @@
+---
+junexis_appliance_version: "0.1.0-dev"
+junexis_config_root: /etc/junexis
+junexis_data_root: /var/lib/junexis
+junexis_channel_url: "wss://soc.junexis.com/appliance/v1/channel"
+junexis_control_plane_url: "https://soc.junexis.com"
+# Prefer podman; docker alternate SKU documented in role defaults
+junexis_container_runtime: podman
+junexis_core_services:
+  - svc-01

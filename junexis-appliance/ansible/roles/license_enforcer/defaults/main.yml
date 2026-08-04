@@ -1,0 +1,3 @@
+---
+# Defaults for role license_enforcer (scaffold)
+license_enforcer_enabled: true

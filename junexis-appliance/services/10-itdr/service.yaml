@@ -1,0 +1,4 @@
+id: svc-10
+path: 10-itdr
+entitlement_required: true
+endpoint_agent: wazuh-agent

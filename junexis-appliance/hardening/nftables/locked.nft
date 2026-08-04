@@ -1,0 +1,54 @@
+#!/usr/sbin/nft -f
+# Junexis Appliance — LOCKED posture (production steady state)
+# Applied by: junexis-cli network lock
+# No general Internet. LAN/VPC agent ingest (INPUT rules added by setup).
+# OUTPUT: only DNS (optional) + SOC secure channel.
+
+flush ruleset
+
+table inet junexis_filter {
+  set junexis_soc_addr4 {
+    type ipv4_addr
+    flags interval
+  }
+
+  set junexis_lan_addr4 {
+    type ipv4_addr
+    flags interval
+  }
+
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif lo accept
+    ct state established,related accept
+    ct state invalid drop
+    ip protocol icmp limit rate 5/second accept
+    ip6 nexthdr icmpv6 limit rate 5/second accept
+
+    # Agent / syslog from customer LAN or VPC (set filled by setup)
+    ip saddr @junexis_lan_addr4 tcp dport { 1514, 1515, 514, 6514 } accept
+    ip saddr @junexis_lan_addr4 udp dport { 514, 1514 } accept
+  }
+
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority 0; policy drop;
+    oif lo accept
+    ct state established,related accept
+
+    # DNS — tighten to customer DNS IPs in production apply
+    udp dport 53 accept
+    tcp dport 53 accept
+
+    # NTP optional after chrony synced; allow briefly
+    udp dport 123 accept
+
+    # SOC secure channel only (HTTPS/WSS)
+    tcp dport 443 accept
+    # Prefer: ip daddr @junexis_soc_addr4 tcp dport 443 accept
+    # CLI should rewrite to pinned SOC set when resolvers known
+  }
+}

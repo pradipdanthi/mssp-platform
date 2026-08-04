@@ -1,0 +1,5 @@
+---
+# Role: channel_agent — scaffold (KB-093). Implement in follow-on build KBs.
+- name: Placeholder — channel_agent not yet implemented
+  ansible.builtin.debug:
+    msg: "Role channel_agent is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"

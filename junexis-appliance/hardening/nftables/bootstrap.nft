@@ -1,0 +1,35 @@
+#!/usr/sbin/nft -f
+# Junexis Appliance — BOOTSTRAP posture (temporary first-time updates)
+# Applied by: junexis-cli bootstrap / network unlock
+# Allows outbound Internet for Ubuntu security + approved engine mirrors + SOC.
+# INPUT still default-drop except lo/established and optional mgmt SSH (configured at setup).
+
+flush ruleset
+
+table inet junexis_filter {
+  set junexis_soc_addr4 {
+    type ipv4_addr
+    flags interval
+    # Populated/replaced at apply-time by CLI with resolved soc.junexis.com — placeholder empty OK in scaffold
+  }
+
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif lo accept
+    ct state established,related accept
+    ct state invalid drop
+    ip protocol icmp limit rate 5/second accept
+    ip6 nexthdr icmpv6 limit rate 5/second accept
+    # Optional: tcp dport 22 ip saddr @mgmt_lan accept — inserted by setup
+  }
+
+  chain forward {
+    type filter hook forward priority 0; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority 0; policy accept;
+    # BOOTSTRAP: permissive egress so apt/engines can reach mirrors.
+    # LOCKED profile replaces this with deny-by-default + SOC allow.
+  }
+}

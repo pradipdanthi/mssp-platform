@@ -1,0 +1,4 @@
+id: svc-07
+path: 07-threat-intel
+entitlement_required: true
+endpoint_agent: wazuh-agent

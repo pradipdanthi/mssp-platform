@@ -1,0 +1,5 @@
+---
+# Role: service_manager — scaffold (KB-093). Implement in follow-on build KBs.
+- name: Placeholder — service_manager not yet implemented
+  ansible.builtin.debug:
+    msg: "Role service_manager is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"

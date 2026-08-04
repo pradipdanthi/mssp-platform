@@ -1,0 +1,3 @@
+---
+# Defaults for role junexis_runtime (scaffold)
+junexis_runtime_enabled: true

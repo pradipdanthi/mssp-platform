@@ -1,0 +1,3 @@
+---
+# Defaults for role wazuh_local (scaffold)
+wazuh_local_enabled: true

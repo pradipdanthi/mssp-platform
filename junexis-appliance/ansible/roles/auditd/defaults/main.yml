@@ -1,0 +1,3 @@
+---
+# Defaults for role auditd (scaffold)
+auditd_enabled: true

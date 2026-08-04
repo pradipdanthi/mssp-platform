@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://junexis.com/schemas/appliance/license-push-v1.json",
+  "title": "JunexisLicensePushV1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["appliance_id", "service_ids", "not_before", "not_after", "jti"],
+  "properties": {
+    "appliance_id": { "type": "string", "format": "uuid" },
+    "service_ids": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^svc-(0[1-9]|10)$"
+      },
+      "uniqueItems": true
+    },
+    "not_before": { "type": "string", "format": "date-time" },
+    "not_after": { "type": "string", "format": "date-time" },
+    "jti": { "type": "string", "minLength": 8 },
+    "fingerprint_hash": { "type": "string" },
+    "features": { "type": "object", "additionalProperties": true }
+  }
+}

@@ -1,0 +1,4 @@
+id: svc-08
+path: 08-forensics
+entitlement_required: true
+endpoint_agent: wazuh-agent

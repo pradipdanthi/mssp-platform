@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: channel_agent
+  description: Junexis appliance role channel_agent (scaffold)
+  license: proprietary
+dependencies: []

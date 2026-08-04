@@ -1,0 +1,3 @@
+# CIS Level 2 exceptions register (scaffold)
+# Every exception needs: control ID, rationale, compensating control, owner, review date.
+exceptions: []

@@ -1,0 +1,3 @@
+---
+# Defaults for role harden_cis (scaffold)
+harden_cis_enabled: true

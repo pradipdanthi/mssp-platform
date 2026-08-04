@@ -1,0 +1,3 @@
+duckdb>=1.1.0,<2
+# stdlib urllib used for HTTP; optional richer stack:
+# fastapi/uvicorn not required — local API uses http.server

@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: wazuh_local
+  description: Junexis appliance role wazuh_local (scaffold)
+  license: proprietary
+dependencies: []

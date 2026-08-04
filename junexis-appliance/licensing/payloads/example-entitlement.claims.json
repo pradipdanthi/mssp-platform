@@ -1,0 +1,10 @@
+{
+  "iss": "junexis-licensing",
+  "sub": "00000000-0000-0000-0000-000000000000",
+  "aud": "junexis-appliance",
+  "iat": 0,
+  "exp": 0,
+  "jti": "example-jti-not-for-production",
+  "svc": ["svc-01", "svc-06"],
+  "fp": "sha256:example"
+}

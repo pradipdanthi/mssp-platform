@@ -1,0 +1,3 @@
+---
+# Defaults for role service_manager (scaffold)
+service_manager_enabled: true

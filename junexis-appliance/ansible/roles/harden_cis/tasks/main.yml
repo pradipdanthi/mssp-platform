@@ -1,0 +1,5 @@
+---
+# Role: harden_cis — scaffold (KB-093). Implement in follow-on build KBs.
+- name: Placeholder — harden_cis not yet implemented
+  ansible.builtin.debug:
+    msg: "Role harden_cis is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"

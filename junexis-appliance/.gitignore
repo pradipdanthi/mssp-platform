@@ -1,0 +1,17 @@
+.cache/
+.tools/
+output-*/
+*.qcow2
+packer_cache/
+**/packer-manifest.json
+__pycache__/
+*.pyc
+
+# Never commit appliance secrets
+**/secrets/**
+**/*.pem
+**/*.key
+!licensing/keys/README.md
+packer/vars/*.pkrvars.hcl
+!packer/vars/*.example
+!packer/vars/b2-docker.pkrvars.hcl

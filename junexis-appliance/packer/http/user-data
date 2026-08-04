@@ -1,0 +1,38 @@
+#cloud-config
+# Ubuntu 24.04 Subiquity autoinstall — Junexis Appliance (B2)
+# Build-time identity password is a known disposable hash (rotate after first boot in field).
+# Never commit real customer secrets.
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  identity:
+    hostname: junexis-appliance
+    username: junexis
+    # password: JunexisBuildOnlyChangeMe (BUILD ONLY — change on handoff)
+    password: "$6$vdfmvwRlqEnpYSbw$JbhJlK2CNCn89QU0AqluK7MwiNVsmcs.kHMen3XwIXUuS0v/4SSNccnAuEk05Qgqh7CW7runifEVAmqbscqs71"
+  storage:
+    layout:
+      name: lvm
+  ssh:
+    install-server: true
+    allow-pw: true
+  packages:
+    - openssh-server
+    - qemu-guest-agent
+    - python3
+    - sudo
+    - ca-certificates
+    - curl
+    - nftables
+  late-commands:
+    - curtin in-target -- target=/target -- systemctl enable ssh
+    - curtin in-target -- target=/target -- systemctl enable qemu-guest-agent || true
+    - echo 'junexis ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/junexis
+    - chmod 440 /target/etc/sudoers.d/junexis
+  user-data:
+    disable_root: true
+    package_update: true
+    package_upgrade: true
+    timezone: UTC
