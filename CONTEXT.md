@@ -24,6 +24,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | Shared TheHive org | `THEHIVE_DEFAULT_ORG` default **`MSSP`** (override in `.env` if existing org name differs) |
 | Cloud | Same architecture; migrate later — do not invent a second product |
 | **Appliance Management (production)** | **Separate server** from VM 100 — channel/CA/OTA must not stay permanently on `mssp-control` (KB-093 §12) |
+| **Junexis appliance image build** | **Proxmox factory VM 113** (`junexis-appliance-build`, `192.168.0.223`) — KB-093F; nested Packer on VM 100 is legacy only |
 
 **Do not** treat this platform as a lab prototype in planning, user-facing copy, dashboards, or runtime defaults. Lab shortcuts need explicit user acceptance + upgrade plan.
 

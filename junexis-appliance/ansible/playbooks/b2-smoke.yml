@@ -30,6 +30,15 @@
       register: jx_ver
       changed_when: false
 
+    - name: Assert appliance engine importable (datalake + hunt)
+      ansible.builtin.shell: |
+        set -e
+        export PYTHONPATH=/opt/junexis/appliance-src
+        python3 -c "from appliance.datalake import DataLakeArchiver, QueryEngine; from appliance.telemetry import TelemetryForwarder; from appliance.hunting import RetrospectiveSweeper; print('ENGINE_OK')"
+      args:
+        executable: /bin/bash
+      changed_when: false
+
     - name: Show junexis-cli version
       ansible.builtin.debug:
         var: jx_ver.stdout_lines

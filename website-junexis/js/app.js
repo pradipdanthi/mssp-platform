@@ -124,4 +124,41 @@
   document.querySelectorAll("[data-year]").forEach(function (el) {
     el.textContent = String(new Date().getFullYear());
   });
+
+  /* Mega-menu: click/tap + keyboard; hover still works via CSS on desktop */
+  document.querySelectorAll(".has-mega").forEach(function (item) {
+    const trigger = item.querySelector(".mega-trigger");
+    if (!trigger) return;
+
+    trigger.addEventListener("click", function (e) {
+      e.preventDefault();
+      const open = item.classList.toggle("is-open");
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      document.querySelectorAll(".has-mega").forEach(function (other) {
+        if (other !== item) {
+          other.classList.remove("is-open");
+          const t = other.querySelector(".mega-trigger");
+          if (t) t.setAttribute("aria-expanded", "false");
+        }
+      });
+    });
+  });
+
+  document.addEventListener("click", function (e) {
+    if (e.target.closest(".has-mega")) return;
+    document.querySelectorAll(".has-mega.is-open").forEach(function (item) {
+      item.classList.remove("is-open");
+      const t = item.querySelector(".mega-trigger");
+      if (t) t.setAttribute("aria-expanded", "false");
+    });
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    document.querySelectorAll(".has-mega.is-open").forEach(function (item) {
+      item.classList.remove("is-open");
+      const t = item.querySelector(".mega-trigger");
+      if (t) t.setAttribute("aria-expanded", "false");
+    });
+  });
 })();

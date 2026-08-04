@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Services | Junexis MSSP Portfolio</title>
-  <meta name="description" content="Junexis service portfolio: click any service for full details, limitations, and who should buy it." />
+  <title>Services | Junexis Managed Security</title>
+  <meta name="description" content="Junexis managed security services: core monitoring and incident response, plus optional add-ons. Subscribe to protection — not a software license." />
   <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,11 +15,39 @@
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html"><img class="brand-mark" src="assets/mark.svg" alt="" /><img class="brand-logo" src="assets/logo.svg" alt="Junexis" width="150" height="22" /></a>
-            <ul class="nav-links">
+                  <ul class="nav-links">
         <li><a class="nav-ai" href="index.html#ai">AI</a></li>
-        <li><a href="services.html">Services</a></li>
+        <li class="has-mega">
+          <button type="button" class="mega-trigger" aria-expanded="false" aria-haspopup="true">Platform &amp; Services</button>
+          <div class="mega-panel" role="region" aria-label="Platform and services">
+            <div class="mega-grid">
+              <div class="mega-col">
+                <h4>Core Platform <span class="badge badge-core">Included</span></h4>
+                <a class="mega-item" href="services/log-event-monitoring.html"><strong>🛡 Log &amp; Event Monitoring</strong><span>Zero-cloud-tax Data Lake retention (365+ days local/cloud).</span></a>
+                <a class="mega-item" href="services/incident-response.html"><strong>⚡ Incident Response &amp; Casework</strong><span>24/7 analyst-led triage with AI-assisted executive summaries.</span></a>
+                <a class="mega-item" href="services/security-automation.html"><strong>🔒 Security Automation &amp; Containment</strong><span>Active host isolation (ISOLATE_HOST) in milliseconds.</span></a>
+              </div>
+              <div class="mega-col">
+                <h4>Advanced Threat Modules <span class="badge badge-addon">Add-ons</span></h4>
+                <a class="mega-item" href="services/threat-intelligence.html"><strong>🔎 Threat Intelligence &amp; Enrichment</strong><span>Automated 90-day retrospective zero-day sweeps.</span></a>
+                <a class="mega-item" href="services/endpoint-forensics-deception.html"><strong>🎯 Endpoint Forensics &amp; Deception (ThreatLens)</strong><span>AI NLP advisory parser &amp; canary traps.</span></a>
+                <a class="mega-item" href="services/external-attack-surface.html"><strong>🌐 External Attack Surface (EASM)</strong><span>Continuous perimeter domain &amp; SSL exposure discovery.</span></a>
+                <a class="mega-item" href="services/cloud-identity-protection.html"><strong>☁ Cloud &amp; Identity Protection (ITDR)</strong><span>M365 impossible travel &amp; rogue mail rule tracking.</span></a>
+              </div>
+              <div class="mega-col">
+                <h4>Risk &amp; Posture Modules <span class="badge badge-addon">Add-ons</span></h4>
+                <a class="mega-item" href="services/continuous-compliance.html"><strong>📈 Continuous Compliance &amp; Hardening (CaaS)</strong><span>CIS benchmark readiness scoring (Windows/Linux).</span></a>
+                <a class="mega-item" href="services/vulnerability-management.html"><strong>🎯 Vulnerability Management (VMaaS)</strong><span>Continuous CVE prioritization and patch guidance.</span></a>
+                <a class="mega-item" href="services/network-detection-response.html"><strong>📡 Network Detection &amp; Response (NDR)</strong><span>Packet-level Suricata &amp; Zeek inspection.</span></a>
+              </div>
+            </div>
+            <div class="mega-foot">
+              <a href="services.html">Explore all services →</a>
+              <a href="platform.html">Customer portal overview →</a>
+            </div>
+          </div>
+        </li>
         <li><a href="index.html#deployments">Deployments</a></li>
-        <li><a href="platform.html">Platform</a></li>
         <li><a href="solutions.html">Solutions</a></li>
         <li><a href="contact.html">Contact</a></li>
       </ul>
@@ -32,32 +60,32 @@
   </header>
   <main>
     <section class="page-hero"><div class="container">
-      <span class="section-label">Services</span>
-      <h1>Click any service for full detail.</h1>
-      <p>Each page covers what it offers, honest limitations, and who should choose it — same names as your Junexis dashboard.</p>
+      <span class="section-label">Managed services</span>
+      <h1>Choose the coverage your business needs.</h1>
+      <p>Each page explains what Junexis delivers as a managed service, honest limits, and who it fits — so you can subscribe with clarity.</p>
     </div></section>
     <section><div class="container">
       <div class="svc-block">
-        <div class="svc-block-head"><h3>Core platform</h3><span class="badge badge-core">Included</span></div>
-        <div class="grid-2">
-          <a class="card-link" href="services/log-event-monitoring.html"><article class="card"><span class="badge badge-core">Core</span><h3>Log &amp; Event Monitoring</h3><p>24/7 monitoring plus Zero-Cloud-Tax Data Retention (up to 365+ days local/cloud Parquet).</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/incident-response.html"><article class="card"><span class="badge badge-core">Core</span><h3>Incident Response &amp; Casework</h3><p>Investigation, timelines, SOC collaboration, and audit-ready evidence.</p><span class="card-cta">View full details →</span></article></a>
+        <div class="svc-block-head"><h3>Core Platform (included)</h3><span class="badge badge-core">Included</span></div>
+        <div class="grid-3">
+          <a class="card-link" href="services/log-event-monitoring.html"><article class="card"><span class="badge badge-core">Core</span><h3>Log &amp; Event Monitoring</h3><p>Zero-cloud-tax Data Lake retention (365+ days local/cloud).</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/incident-response.html"><article class="card"><span class="badge badge-core">Core</span><h3>Incident Response &amp; Casework</h3><p>24/7 analyst-led triage with AI-assisted executive summaries.</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/security-automation.html"><article class="card"><span class="badge badge-core">Core</span><h3>Security Automation &amp; Containment</h3><p>Active host isolation (<code>ISOLATE_HOST</code>) in milliseconds under SOC approval.</p><span class="card-cta">View full details →</span></article></a>
         </div>
       </div>
       <div class="svc-block">
-        <div class="svc-block-head"><h3>Modular add-ons</h3><span class="badge badge-addon">Available</span></div>
+        <div class="svc-block-head"><h3>Optional add-ons</h3><span class="badge badge-addon">Available</span></div>
         <div class="grid-4">
-          <a class="card-link" href="services/security-automation.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Security Automation &amp; Containment</h3><p>Isolate hosts, terminate malicious processes, block bad hashes.</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/vulnerability-management.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Vulnerability Management (VMaaS)</h3><p>CVE discovery, prioritization, remediation guidance.</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/continuous-compliance.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Continuous Compliance &amp; Hardening (CaaS)</h3><p>Configuration readiness scorecards and auditor-friendly exports.</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/network-detection-response.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Network Detection &amp; Response (NDR)</h3><p>Network behavior for lateral movement and beaconing patterns.</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/threat-intelligence.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Threat Intelligence &amp; Enrichment</h3><p>Reputation context plus 90-day retrospective threat hunting / zero-day retro-sweeps.</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/endpoint-forensics-deception.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Endpoint Forensics &amp; Deception Hunting</h3><p>Deception, forensics, and Junexis ThreatLens AI-assisted IOC extraction.</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/external-attack-surface.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>External Attack Surface Management (EASM)</h3><p>Public perimeter discovery and exposure monitoring.</p><span class="card-cta">View full details →</span></article></a>
-          <a class="card-link" href="services/cloud-identity-protection.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Cloud &amp; Identity Protection (ITDR)</h3><p>SaaS identity threats: travel anomalies, MFA abuse, rogue admins.</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/vulnerability-management.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Vulnerability Management (VMaaS)</h3><p>Continuous CVE prioritization and patch guidance.</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/continuous-compliance.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Continuous Compliance &amp; Hardening (CaaS)</h3><p>CIS benchmark readiness scoring (Windows/Linux).</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/network-detection-response.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Network Detection &amp; Response (NDR)</h3><p>Packet-level Suricata &amp; Zeek inspection.</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/threat-intelligence.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Threat Intelligence &amp; Enrichment</h3><p>Automated 90-day retrospective zero-day sweeps.</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/endpoint-forensics-deception.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Endpoint Forensics &amp; Deception (ThreatLens)</h3><p>AI NLP advisory parser &amp; canary traps.</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/external-attack-surface.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>External Attack Surface (EASM)</h3><p>Continuous perimeter domain &amp; SSL exposure discovery.</p><span class="card-cta">View full details →</span></article></a>
+          <a class="card-link" href="services/cloud-identity-protection.html"><article class="card"><span class="badge badge-addon">Add-on</span><h3>Cloud &amp; Identity Protection (ITDR)</h3><p>M365 impossible travel &amp; rogue mail rule tracking.</p><span class="card-cta">View full details →</span></article></a>
         </div>
       </div>
-      <div class="cta-band"><h2>Need a recommendation?</h2><p>We’ll map Core + add-ons to your risk and deployment mode.</p><a class="btn btn-primary" href="index.html#demo">Request Executive Demo</a></div>
+      <div class="cta-band"><h2>Need a recommendation?</h2><p>We’ll map Core + add-ons to your risk and whether you need cloud or Edge Appliance residency.</p><a class="btn btn-primary" href="index.html#demo">Request Executive Demo</a></div>
     </div></section>
   </main>
   <footer class="site-footer"><div class="container">

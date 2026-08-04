@@ -20,7 +20,9 @@ table inet junexis_filter {
     ct state invalid drop
     ip protocol icmp limit rate 5/second accept
     ip6 nexthdr icmpv6 limit rate 5/second accept
-    # Optional: tcp dport 22 ip saddr @mgmt_lan accept — inserted by setup
+    # Bootstrap management SSH from private LANs (factory + first-time setup).
+    # LOCKED profile removes general SSH; production mgmt is inserted by junexis-cli setup.
+    ip saddr { 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16 } tcp dport 22 accept
   }
 
   chain forward {

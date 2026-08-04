@@ -9,3 +9,5 @@ When designing or implementing appliance channel, CA, OTA/WPK, registration edge
 5. Single ISO; bootstrap Internet then LOCKED (LAN + SOC channel only).
 
 Canonical detail: `docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md` §12.
+
+**Image build default:** Proxmox build VM 113 (`docs/KB093F_PROXMOX_APPLIANCE_BUILD_VM.md`, scripts `b2_proxmox_*.sh`). Do not start nested Packer on VM 100 unless the user explicitly asks.

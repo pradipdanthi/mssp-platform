@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
+# LEGACY — nested Packer/QEMU inside VM 100.
+# Default path is Proxmox build VM 113 — see docs/KB093F_PROXMOX_APPLIANCE_BUILD_VM.md
+# and scripts/b2_proxmox_create_build_vm.sh. Only use this if explicitly requested.
+#
 # Full B2 Packer QEMU build (disposable guest). Requires KVM + downloaded ISO.
 # Runs inside Docker builder; does not modify mssp-control host packages.
 set -euo pipefail
+echo "WARNING: nested Packer on VM 100 is legacy. Prefer b2_proxmox_* scripts (KB-093F)." >&2
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE="${JUNEXIS_B2_BUILDER_IMAGE:-junexis-appliance-b2-builder:local}"
 CACHE="$ROOT/.cache"

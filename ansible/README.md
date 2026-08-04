@@ -1,76 +1,72 @@
 # MSSP Platform — Ansible Deployment Automation
 
-Status: KB-039 scaffolding plus KB-041 Wazuh automation preparation. No live
-infrastructure execution without separate approval.
+Status: Live controller on **VM 112**. Source of truth for playbooks/roles is
+`/opt/mssp-control/ansible` on VM 100; sync to the controller before runs.
 
 ## Purpose
 
-Ansible layout for deploying and validating the enterprise SOC stack defined in `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`.
+Ansible layout for deploying and validating the enterprise SOC stack defined in
+`docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`.
 
-## Directory layout
+**Junexis edge appliance image builds** use a separate tree (`junexis-appliance/`)
+and Proxmox factory VM 113 — see `docs/KB093F_PROXMOX_APPLIANCE_BUILD_VM.md`.
+Those roles are **not** mixed into SOC stack install playbooks.
+
+## Controller (VM 112)
+
+| Item | Value |
+|------|--------|
+| Host | `automation` / `192.168.0.222` |
+| Ansible | Core **2.16.3** |
+| Working copy | `/home/secadmin/mssp-automation/ansible` |
+| Sync from VM 100 | `./scripts/sync_ansible_controller.sh` |
+
+### Keep the controller current
+
+```bash
+cd /opt/mssp-control
+./scripts/sync_ansible_controller.sh
+```
+
+This rsyncs playbooks/roles/inventory, aligns SSH key names on the controller,
+syntax-checks playbooks, and pings known-live hosts. It does **not** install or
+upgrade any SOC component.
+
+## Can this redeploy the whole stack?
+
+**Partially — by component, with approval — not one blind “redeploy all” button.**
+
+| Area | Playbook | Notes |
+|------|----------|--------|
+| Wazuh | `playbooks/wazuh-stack-install.yml` | Defaults to preflight; live install needs explicit flags + snapshot |
+| TheHive/Shuffle | `playbooks/case-soar.yml` | Co-located VM 102 |
+| Suricata | `playbooks/suricata-sensor.yml` (+ wazuh forward) | VM 106 |
+| Greenbone | `playbooks/greenbone.yml` | VM 109 |
+| Nuclei/Vuls | `playbooks/vuln-free-stack.yml` | VM 109 |
+| Velociraptor / MISP / Zeek / EASM | respective playbooks | Only when that KB is approved |
+
+There is **no** single playbook that tears down and rebuilds every VM safely.
+Treat “full stack redeploy” as: sync controller → snapshot targets → run each
+approved playbook in dependency order.
+
+## Directory layout (VM 100 source)
 
 ```text
 ansible/
 ├── ansible.cfg
-├── inventory/hosts.yml      # Deployed VMs 100/101/112 + VM 102–111 placeholders
-├── group_vars/all.yml       # placeholder vars — no secrets
-├── playbooks/
-│   ├── bootstrap.yml             # KB-039 stub
-│   └── wazuh-stack-install.yml   # KB-041; preflight-safe by default
+├── inventory/hosts.yml
+├── group_vars/all.yml
+├── playbooks/          # one playbook per component
 └── roles/
-    └── wazuh_stack/              # KB-041 install/validate role
-```
-
-## Controller
-
-The dedicated controller is **VM 112 `automation`** (`192.168.0.222`):
-
-- Ubuntu 24.04.4 LTS
-- Ansible Core 2.16.3
-- Git and rsync
-- Snapshot `kb112-ansible-ready`
-- Working copy: `/home/secadmin/mssp-automation/`
-
-The controller is outside the original VM 100–111 SOC layout and exists only
-to manage approved automation runs. It is not a customer-facing service.
-
-## Prerequisites
-
-- Ansible 2.14+ (VM 112 currently has 2.16.3)
-- SSH access to target VMs (keys via Vault — not in Git)
-- Approved KB module before running any playbook against live hosts
-
-## KB-041 safe Wazuh preparation
-
-The Wazuh role pins expected package version `4.14.6` and defaults to:
-
-```yaml
-wazuh_execution_mode: preflight
-wazuh_live_install_approved: false
-```
-
-Do not change both controls or supply an installer digest until the user
-separately approves live deployment to VM 101 and confirms a pre-install
-snapshot. Static validation does not contact inventory hosts:
-
-```bash
-cd /opt/mssp-control
-./scripts/kb041_validate_wazuh_stack_installation_validation.sh
 ```
 
 ## Security
 
-- **Never commit secrets** to this tree.
-- Use Ansible Vault or runtime env for credentials.
-- Customer portal safety rules apply to all ingested data — see KB-036 §9.
+- Never commit secrets.
+- Controller SSH keys live under `secadmin` on VM 112.
+- Do not run install playbooks against live inventory without explicit approval.
 
-## Related KB modules
+## Related
 
-- KB-037 — Cluster registry planning
-- KB-038 — Tenant deployment mode (`cloud` / `on_prem` / `hybrid`)
-- KB-040+ — Wazuh, Suricata, and subsequent stack deployment
-
-## Deferred execution
-
-Do **not** run playbooks against live inventory until the target VM exists,
-rollback is ready, and that exact execution is explicitly approved.
+- KB-039 / KB-041 — automation foundation / Wazuh
+- KB-093F — Junexis Proxmox build VM (factory, separate from SOC stack)

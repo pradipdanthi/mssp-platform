@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Platform | Junexis Customer Portal</title>
-  <meta name="description" content="The Junexis customer portal: scorecards, incidents, recommendations, reports — tenant-isolated and executive-ready." />
+  <title>Customer Portal | Junexis</title>
+  <meta name="description" content="Your Junexis customer portal: see protection status, incidents, and recommendations while our managed SOC does the security operations work." />
   <link rel="icon" href="assets/mark.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,11 +15,39 @@
   <header class="site-header">
     <div class="container nav">
       <a class="brand" href="index.html"><img class="brand-mark" src="assets/mark.svg" alt="" /><img class="brand-logo" src="assets/logo.svg" alt="Junexis" width="150" height="22" /></a>
-            <ul class="nav-links">
+                  <ul class="nav-links">
         <li><a class="nav-ai" href="index.html#ai">AI</a></li>
-        <li><a href="services.html">Services</a></li>
+        <li class="has-mega">
+          <button type="button" class="mega-trigger" aria-expanded="false" aria-haspopup="true">Platform &amp; Services</button>
+          <div class="mega-panel" role="region" aria-label="Platform and services">
+            <div class="mega-grid">
+              <div class="mega-col">
+                <h4>Core Platform <span class="badge badge-core">Included</span></h4>
+                <a class="mega-item" href="services/log-event-monitoring.html"><strong>🛡 Log &amp; Event Monitoring</strong><span>Zero-cloud-tax Data Lake retention (365+ days local/cloud).</span></a>
+                <a class="mega-item" href="services/incident-response.html"><strong>⚡ Incident Response &amp; Casework</strong><span>24/7 analyst-led triage with AI-assisted executive summaries.</span></a>
+                <a class="mega-item" href="services/security-automation.html"><strong>🔒 Security Automation &amp; Containment</strong><span>Active host isolation (ISOLATE_HOST) in milliseconds.</span></a>
+              </div>
+              <div class="mega-col">
+                <h4>Advanced Threat Modules <span class="badge badge-addon">Add-ons</span></h4>
+                <a class="mega-item" href="services/threat-intelligence.html"><strong>🔎 Threat Intelligence &amp; Enrichment</strong><span>Automated 90-day retrospective zero-day sweeps.</span></a>
+                <a class="mega-item" href="services/endpoint-forensics-deception.html"><strong>🎯 Endpoint Forensics &amp; Deception (ThreatLens)</strong><span>AI NLP advisory parser &amp; canary traps.</span></a>
+                <a class="mega-item" href="services/external-attack-surface.html"><strong>🌐 External Attack Surface (EASM)</strong><span>Continuous perimeter domain &amp; SSL exposure discovery.</span></a>
+                <a class="mega-item" href="services/cloud-identity-protection.html"><strong>☁ Cloud &amp; Identity Protection (ITDR)</strong><span>M365 impossible travel &amp; rogue mail rule tracking.</span></a>
+              </div>
+              <div class="mega-col">
+                <h4>Risk &amp; Posture Modules <span class="badge badge-addon">Add-ons</span></h4>
+                <a class="mega-item" href="services/continuous-compliance.html"><strong>📈 Continuous Compliance &amp; Hardening (CaaS)</strong><span>CIS benchmark readiness scoring (Windows/Linux).</span></a>
+                <a class="mega-item" href="services/vulnerability-management.html"><strong>🎯 Vulnerability Management (VMaaS)</strong><span>Continuous CVE prioritization and patch guidance.</span></a>
+                <a class="mega-item" href="services/network-detection-response.html"><strong>📡 Network Detection &amp; Response (NDR)</strong><span>Packet-level Suricata &amp; Zeek inspection.</span></a>
+              </div>
+            </div>
+            <div class="mega-foot">
+              <a href="services.html">Explore all services →</a>
+              <a href="platform.html">Customer portal overview →</a>
+            </div>
+          </div>
+        </li>
         <li><a href="index.html#deployments">Deployments</a></li>
-        <li><a href="platform.html">Platform</a></li>
         <li><a href="solutions.html">Solutions</a></li>
         <li><a href="contact.html">Contact</a></li>
       </ul>
@@ -32,22 +60,22 @@
   </header>
   <main>
     <section class="page-hero"><div class="container">
-      <span class="section-label">Platform</span>
-      <h1>Your security status — without the overwhelm.</h1>
-      <p>portal.junexis.com gives IT and leadership a clear view: scorecards, incidents, recommendations, and service upgrades — never raw engine dumps.</p>
+      <span class="section-label">Customer portal</span>
+      <h1>Visibility for your leaders — operations for our SOC.</h1>
+      <p>portal.junexis.com is how you follow what Junexis is doing for you: scorecards, incidents, recommendations, and requests to expand coverage. AI drafts plain-English summaries; our analysts validate before you see them. It is not a DIY SOC console.</p>
     </div></section>
     <section><div class="container">
       <div class="grid-3">
-        <article class="card"><h3>Dashboard</h3><p>Open alerts, incidents, and latest report at a glance.</p></article>
-        <article class="card"><h3>Incidents &amp; alerts</h3><p>Plain-English status with SOC-owned timelines.</p></article>
+        <article class="card"><h3>Overview</h3><p>Open alerts, incidents, and latest report at a glance.</p></article>
+        <article class="card"><h3>Incidents &amp; alerts</h3><p>Plain-English status with timelines owned by the Junexis SOC.</p></article>
         <article class="card"><h3>Compliance scorecards</h3><p>Readiness percentages your auditors and board understand.</p></article>
         <article class="card"><h3>Recommendations</h3><p>Concrete actions for your IT team.</p></article>
-        <article class="card"><h3>Service Portfolio</h3><p>Same ten services as this website — request add-ons in one click.</p></article>
+        <article class="card"><h3>Service menu</h3><p>Same services as this website — request add-ons in one click.</p></article>
         <article class="card"><h3>Reports</h3><p>Published monthly summaries you can share internally.</p></article>
       </div>
       <div class="cta-band" style="margin-top:2rem;">
         <h2>Existing customer?</h2>
-        <p>Sign in to your tenant-isolated portal. SOC admin consoles are not linked from this public site.</p>
+        <p>Sign in to your tenant-isolated portal. This is your view into the managed service — not a place to run engines yourself.</p>
         <a class="btn btn-primary" data-customer-portal href="https://portal.junexis.com">Customer Login</a>
       </div>
     </div></section>

@@ -5,14 +5,29 @@
     name: junexis
     system: true
 
-- name: Ensure junexis system user
+# Cloud-init / build VM already has login user "junexis". Do not usermod an
+# active session (system/home/shell changes fail with "currently used by process").
+- name: Check whether junexis user already exists
+  ansible.builtin.command: id -u junexis
+  register: junexis_id
+  changed_when: false
+  failed_when: false
+
+- name: Create junexis login user when missing
   ansible.builtin.user:
     name: junexis
     group: junexis
-    system: true
-    shell: /usr/sbin/nologin
-    home: /var/lib/junexis
-    create_home: false
+    shell: /bin/bash
+    home: /home/junexis
+    create_home: true
+  when: junexis_id.rc != 0
+
+- name: Ensure existing junexis user is in junexis group
+  ansible.builtin.user:
+    name: junexis
+    groups: junexis
+    append: true
+  when: junexis_id.rc == 0
 
 - name: Create junexis directories
   ansible.builtin.file:
@@ -55,11 +70,47 @@
     mode: "0644"
     directory_mode: "0755"
 
-- name: Install engine requirements marker
+- name: Install engine requirements file
   ansible.builtin.copy:
     src: "{{ playbook_dir }}/../../requirements-engine.txt"
     dest: /opt/junexis/requirements-engine.txt
     mode: "0644"
+
+- name: Install DuckDB for local Parquet lake (KB-093E)
+  ansible.builtin.pip:
+    requirements: /opt/junexis/requirements-engine.txt
+    extra_args: --break-system-packages
+  # Ubuntu 24.04 PEP 668 — appliance image is dedicated, break-system-packages OK
+
+- name: Install appliance engine module path helper
+  ansible.builtin.copy:
+    dest: /etc/profile.d/junexis-appliance-engine.sh
+    mode: "0644"
+    content: |
+      export PYTHONPATH=/opt/junexis/appliance-src${PYTHONPATH:+:$PYTHONPATH}
+
+- name: Install junexis-engine-api wrapper
+  ansible.builtin.copy:
+    dest: /usr/bin/junexis-engine-api
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      export PYTHONPATH=/opt/junexis/appliance-src${PYTHONPATH:+:$PYTHONPATH}
+      export JUNEXIS_STATE_DIR=${JUNEXIS_STATE_DIR:-/var/lib/junexis}
+      export JUNEXIS_LOG_DIR=${JUNEXIS_LOG_DIR:-/var/log/junexis}
+      exec python3 -m appliance.api.local_app "$@"
+
+- name: Install engine systemd unit
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/systemd/junexis-appliance-engine.service"
+    dest: /etc/systemd/system/junexis-appliance-engine.service
+    mode: "0644"
+
+- name: Enable junexis-appliance-engine (loopback job API)
+  ansible.builtin.systemd:
+    name: junexis-appliance-engine.service
+    enabled: true
+    daemon_reload: true
 
 - name: Seed default network mode bootstrap
   ansible.builtin.copy:

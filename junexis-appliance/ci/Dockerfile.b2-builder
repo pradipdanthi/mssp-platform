@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl unzip git python3 python3-pip python3-apt \
       qemu-system-x86 qemu-utils ovmf openssh-client \
+      xorriso genisoimage \
       ansible-core \
     && rm -rf /var/lib/apt/lists/*
 

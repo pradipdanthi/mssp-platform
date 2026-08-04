@@ -443,7 +443,8 @@ KB-093 JUNEXIS HARDENED ON-PREM APPLIANCE ARCHITECTURE VALIDATION PASSED
 |-------|--------|--------|
 | **B0** | Docs + scaffold + bootstrap/lock design + production split note | Done (KB-093) |
 | **B1** | `junexis-cli` stub + network mode state + nftables profiles + Ansible `minimize` | Done |
-| **B2** | Packer/Subiquity + Docker/KVM builder + disposable qcow2 smoke (`b2-smoke.yml`) | **Done (validate gate)** — full qcow2 via `JUNEXIS_B2_FULL=1` when ISO cached |
+| **B2** | Packer/Subiquity + Docker/KVM builder + disposable qcow2 smoke (`b2-smoke.yml`) | Validate gate done; **nested Packer on VM 100 retired as default** |
+| **B2F / 093F** | **Proxmox build VM 113** factory (create → Ansible provision → export qcow2/raw/ISO) | **Active default** — `docs/KB093F_PROXMOX_APPLIANCE_BUILD_VM.md` |
 | **B2E / 093E** | DuckDB/Parquet data lake, anonymizing telemetry router, retrospective hunter | **Done** — `scripts/kb093e_validate_appliance_engine.sh` |
 | **B3** | Channeld stub + mock Appliance Mgmt gateway (separate process; not permanent on VM 100) | Later |
 | **B4** | Production Appliance Management server cutover plan | Before GA |

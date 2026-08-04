@@ -5,11 +5,11 @@ packer {
   required_version = ">= 1.9.0"
   required_plugins {
     qemu = {
-      version = ">= 1.1.0"
+      version = "= 1.1.3"
       source  = "github.com/hashicorp/qemu"
     }
     ansible = {
-      version = ">= 1.1.0"
+      version = "= 1.1.3"
       source  = "github.com/hashicorp/ansible"
     }
   }
@@ -82,20 +82,33 @@ source "qemu" "ubuntu_lts" {
   headless         = var.headless
   qemu_binary      = "qemu-system-x86_64"
 
+  # Seed ISO is more reliable than nocloud-net HTTP for Subiquity autoinstall.
+  # Live installer may open SSH early with unrelated credentials; Packer must not
+  # abort on those auth failures before the installed system reboots.
+  cd_files = [
+    "./http/meta-data",
+    "./http/user-data"
+  ]
+  cd_label = "cidata"
+
   http_directory = "http"
   http_port_min  = 8200
   http_port_max  = 8299
 
   ssh_username     = var.ssh_username
   ssh_password     = var.ssh_password
-  ssh_timeout      = "45m"
-  ssh_handshake_attempts = 100
+  ssh_private_key_file = "/work/.tools/build-ssh/junexis_packer"
+  ssh_clear_authorized_keys = false
+  ssh_timeout      = "60m"
+  # Live-ISO SSH rejects our key/password every few seconds; 100 ≈ 17m abort.
+  ssh_handshake_attempts = 1200
 
   boot_wait = "8s"
   boot_command = [
     "e<wait>",
     "<down><down><down><end>",
-    " autoinstall ds=nocloud-net\\;s=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ ---",
+    # cloud-init finds the Packer-generated volume labeled cidata
+    " autoinstall ds=nocloud ---",
     "<f10>"
   ]
 
@@ -109,8 +122,8 @@ build {
   provisioner "shell" {
     execute_command = "echo '${var.ssh_password}' | {{ .Vars }} sudo -S -E bash -eux '{{ .Path }}'"
     scripts = [
-      "scripts/00-minimize-bootstrap.sh",
-      "scripts/10-wait-cloud-init.sh"
+      "scripts/10-wait-cloud-init.sh",
+      "scripts/00-minimize-bootstrap.sh"
     ]
   }
 
@@ -140,6 +153,9 @@ build {
       "test -f /var/lib/junexis/network_mode",
       "grep -q bootstrap /var/lib/junexis/network_mode",
       "command -v nft",
+      "test -d /opt/junexis/appliance-src/appliance/datalake",
+      "test -d /var/log/junexis/datalake",
+      "export PYTHONPATH=/opt/junexis/appliance-src; python3 -c 'from appliance.datalake import DataLakeArchiver; print(DataLakeArchiver)'",
       "! dpkg -l | grep -qi thehive",
       "echo B2_SMOKE_GUEST_OK"
     ]
