@@ -1,7 +1,7 @@
 # Service Engine Development Roadmap
 
 Status: Living tracker for backend engines behind the 10-card Service Catalog.  
-Created: 2026-07-31 · **Updated 2026-08-04 — ThreatLens + Retrospective Engine + STIX/TAXII**
+Created: 2026-07-31 · **Updated 2026-08-04 — KB-094 Customer Boundary Hardening**
 
 **Conventions (this repo):**
 - Customer APIs: `/customer/{feature}/{short_code}/...` (nginx strips `/api` prefix).
@@ -29,6 +29,26 @@ Created: 2026-07-31 · **Updated 2026-08-04 — ThreatLens + Retrospective Engin
 ---
 
 ## Phase tracker
+
+### KB-094: Customer Boundary Hardening — 2026-08-04
+
+Hardens the 3 Golden Rules of MSSP separation between `:3001` (customer) and `:3000` (admin/SOC).
+
+**Delivered:**
+- **API leak fix:** `_customer_safe_incident_row()` is now an explicit whitelist (no `dict(row)` copy). Dashboard + incident list SQL no longer select `sa.raw_event`. Engine ids remapped via `customer_safe_alert_source()`.
+- **Customer audit scrub:** customer audit responses drop `source_ip` and nested detail blobs; UI shows localized action labels (no raw JSON `<pre>` dumps).
+- **Executive UI:** Incident detail leads with `AiExecutiveSummary` (“Action Taken by Junexis SOC”); EDR process tree is a **collapsed-by-default** accordion titled “Technical Forensic Details (EDR Execution Tree)”.
+- **Copy hygiene:** Sysmon empty-state → “Junexis Endpoint Telemetry”.
+- **Dead code removed:** unused admin-flavored `IncidentDetailPanel` / `IncidentDrawer` purged from `frontend-customer`.
+
+**Verify:**
+```bash
+# After rebuild — no raw_event in customer incident list JSON
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  "http://127.0.0.1:8000/customer/incidents/ALPHAWINCORP-6VS2?page=1&page_size=5" \
+  | jq 'paths | select(.[-1]=="raw_event")'
+# expect empty
+```
 
 ### Phases 1–6 — COMPLETE
 CaaS, EASM (stdlib MVP), ITDR, VMaaS, NDR, Threat Intelligence (see prior commits).

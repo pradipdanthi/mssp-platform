@@ -59,8 +59,24 @@ def _customer_safe_alert_detail_row(row: Optional[Dict[str, Any]]) -> Optional[D
 
 
 def _customer_safe_incident_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    safe = dict(row)
+    """
+    KB-094: Explicit whitelist for customer incident list/dashboard rows.
+    Never copy dict(row) — that previously leaked sa.raw_event and engine ids.
+    """
     alert = _customer_safe_alert_detail_row(row)
+    safe: Dict[str, Any] = {
+        "incident_number": row.get("incident_number"),
+        "title": row.get("title"),
+        "severity": row.get("severity"),
+        "status": row.get("status"),
+        "customer_visible_summary": row.get("customer_visible_summary"),
+        "business_impact": row.get("business_impact"),
+        "customer_action_required": row.get("customer_action_required"),
+        "resolution_summary": row.get("resolution_summary"),
+        "opened_at": row.get("opened_at"),
+        "resolved_at": row.get("resolved_at"),
+        "closed_at": row.get("closed_at"),
+    }
     if alert:
         safe["hostname"] = alert.get("hostname")
         safe["asset_category"] = alert.get("asset_category")
@@ -70,6 +86,24 @@ def _customer_safe_incident_row(row: Dict[str, Any]) -> Dict[str, Any]:
         safe["recommended_action"] = alert.get("recommended_action")
         safe["likely_attack_type"] = alert.get("likely_attack_type")
         safe["criticality"] = alert.get("criticality")
+        # Optional list-card helpers from related primary alert (already sanitized).
+        if alert.get("alert_id"):
+            safe["alert_id"] = alert.get("alert_id")
+        if alert.get("title"):
+            safe["alert_title"] = alert.get("title")
+        if alert.get("source"):
+            safe["source"] = alert.get("source")
+        if alert.get("summary"):
+            safe["summary"] = alert.get("summary")
+        if alert.get("description"):
+            safe["description"] = alert.get("description")
+        if alert.get("detected_at"):
+            safe["detected_at"] = alert.get("detected_at")
+    else:
+        # Fallback hostname from join aliases without touching raw_event.
+        safe["hostname"] = row.get("hostname") or row.get("asset_hostname") or row.get("destination_host")
+        if row.get("source") or row.get("source_tool"):
+            safe["source"] = customer_safe_alert_source(row.get("source") or row.get("source_tool"))
     return safe
 
 
@@ -146,9 +180,11 @@ def customer_dashboard(
             pa.asset_type,
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
-            sa.raw_event,
             sa.ai_recommended_action,
-            sa.ai_likely_attack_type
+            sa.ai_likely_attack_type,
+            sa.ai_business_impact,
+            sa.ai_plain_summary,
+            sa.alert_description
         FROM incidents i
         LEFT JOIN security_alerts sa ON sa.id = i.primary_alert_id AND sa.customer_visible = true
         LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
@@ -307,9 +343,11 @@ def customer_incidents(
             pa.asset_type,
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
-            sa.raw_event,
             sa.ai_recommended_action,
-            sa.ai_likely_attack_type
+            sa.ai_likely_attack_type,
+            sa.ai_business_impact,
+            sa.ai_plain_summary,
+            sa.alert_description
         FROM incidents i
         LEFT JOIN security_alerts sa ON sa.id = i.primary_alert_id AND sa.customer_visible = true
         LEFT JOIN protected_assets pa ON pa.id = sa.asset_id

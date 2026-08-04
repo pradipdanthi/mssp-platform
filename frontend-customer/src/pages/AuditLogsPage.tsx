@@ -17,7 +17,6 @@ interface AuditRow {
   resource_type?: string | null;
   resource_id?: string | null;
   action_status?: string;
-  source_ip?: string | null;
   details?: Record<string, unknown> | null;
 }
 
@@ -132,8 +131,8 @@ export default function AuditLogsPage() {
                   </td>
                   <td>
                     <div>{r.summary || r.action_label || r.action}</div>
-                    <div className="muted cell-mono" style={{ fontSize: "0.85em" }}>
-                      {r.action}
+                    <div className="muted" style={{ fontSize: "0.85em" }}>
+                      {r.action_label || r.action.replace(/_/g, " ")}
                     </div>
                   </td>
                   <td>{r.action_status || "SUCCESS"}</td>

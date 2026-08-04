@@ -34,7 +34,7 @@ export default function AiExecutiveSummary({
           <p>{impact}</p>
         </li>
         <li>
-          <strong>Action taken</strong>
+          <strong>Action Taken by Junexis SOC</strong>
           <p>{action}</p>
         </li>
       </ol>

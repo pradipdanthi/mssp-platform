@@ -3157,6 +3157,40 @@ button.command-chip {
 .ai-exec-list strong {
   color: #f8fafc;
 }
+
+.forensic-accordion {
+  margin: 1.5rem 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.forensic-accordion > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 0.95rem 1.15rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.65);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.forensic-accordion > summary::-webkit-details-marker {
+  display: none;
+}
+
+.forensic-accordion > summary::before {
+  content: "▸ ";
+  color: #38bdf8;
+  margin-right: 0.35rem;
+}
+
+.forensic-accordion[open] > summary::before {
+  content: "▾ ";
+}
+
+.forensic-accordion-body {
+  padding: 1rem 1.15rem 1.25rem;
+}
 .ai-exec-list p {
   margin: 0.25rem 0 0;
   color: #94a3b8;

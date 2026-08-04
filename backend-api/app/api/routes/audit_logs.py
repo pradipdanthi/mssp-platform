@@ -59,17 +59,30 @@ def _enrich_row(row: Dict[str, Any], *, scrub: bool = False) -> Dict[str, Any]:
     item = dict(row)
     details = item.get("details") if isinstance(item.get("details"), dict) else {}
     if scrub:
+        # KB-094: customer portal — drop secrets, IPs, nested blobs; keep plain labels.
         details = {
             k: v
             for k, v in details.items()
-            if k not in ("password", "password_hash", "token", "token_hash", "api_key")
+            if k
+            not in (
+                "password",
+                "password_hash",
+                "token",
+                "token_hash",
+                "api_key",
+                "source_ip",
+                "raw_event",
+                "raw_json",
+            )
+            and not isinstance(v, (dict, list))
         }
+        item.pop("source_ip", None)
     action = str(item.get("action") or "")
     summary = details.get("summary") if isinstance(details.get("summary"), str) else None
     if not summary:
         summary = ACTION_LABELS.get(action, action.replace("_", " ").title())
     item["details"] = details
-    item["action_label"] = ACTION_LABELS.get(action, action)
+    item["action_label"] = ACTION_LABELS.get(action, action.replace("_", " ").title())
     item["summary"] = summary
     item["portal"] = details.get("portal")
     return item

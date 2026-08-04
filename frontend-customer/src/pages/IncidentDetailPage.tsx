@@ -264,35 +264,43 @@ export default function IncidentDetailPage() {
                 MITRE ATT&amp;CK
               </h2>
               <MitreBadges tactics={edr.mitre.tactics} techniques={edr.mitre.techniques} />
-              <h2 className="page-subtitle" style={{ marginTop: "1.5rem" }}>
-                Process execution tree
-              </h2>
-              <ProcessTreeWidget
-                root={edr.process_tree.root}
-                message={edr.process_tree.message}
-              />
-              {edr.forensic_artifacts && edr.forensic_artifacts.length > 0 ? (
-                <div className="edr-forensics-list card-surface" style={{ marginTop: "1rem" }}>
-                  <h2 className="page-subtitle">Forensic collections</h2>
-                  <ul>
-                    {edr.forensic_artifacts.map((a) => (
-                      <li key={a.artifact_id}>
-                        <span className="muted">{a.status}</span>
-                        {a.download_url ? (
-                          <>
-                            {" — "}
-                            <a href={a.download_url} target="_blank" rel="noreferrer">
-                              Download package
-                            </a>
-                          </>
-                        ) : (
-                          <span className="muted"> — awaiting upload</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
+
+              <details className="forensic-accordion card-surface">
+                <summary>Technical Forensic Details (EDR Execution Tree)</summary>
+                <div className="forensic-accordion-body">
+                  <p className="muted" style={{ marginTop: 0 }}>
+                    Optional technical detail for your security contacts. Leaders can stay with the
+                    AI Executive Summary above — Junexis SOC owns the investigation.
+                  </p>
+                  <ProcessTreeWidget
+                    root={edr.process_tree.root}
+                    message={edr.process_tree.message}
+                  />
+                  {edr.forensic_artifacts && edr.forensic_artifacts.length > 0 ? (
+                    <div className="edr-forensics-list" style={{ marginTop: "1rem" }}>
+                      <h3 className="page-subtitle">Forensic collections</h3>
+                      <ul>
+                        {edr.forensic_artifacts.map((a) => (
+                          <li key={a.artifact_id}>
+                            <span className="muted">{a.status}</span>
+                            {a.download_url ? (
+                              <>
+                                {" — "}
+                                <a href={a.download_url} target="_blank" rel="noreferrer">
+                                  Download package
+                                </a>
+                              </>
+                            ) : (
+                              <span className="muted"> — awaiting upload</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
+              </details>
+
               <EdrControlPanel
                 tenantShortCode={shortCode}
                 incidentNumber={incidentNumber}

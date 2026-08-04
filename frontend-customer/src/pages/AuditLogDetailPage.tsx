@@ -14,25 +14,43 @@ interface AuditRow {
   summary?: string | null;
   portal?: string | null;
   action_status?: string;
-  source_ip?: string | null;
   resource_type?: string | null;
   resource_id?: string | null;
   details?: Record<string, unknown> | null;
 }
+
+const DETAIL_LABELS: Record<string, string> = {
+  summary: "Summary",
+  portal: "Portal",
+  incident_number: "Incident",
+  action: "Action",
+  reason: "Reason",
+  target: "Target",
+  hostname: "Hostname",
+  result: "Result",
+};
 
 function errMsg(err: unknown, fallback: string): string {
   if (err instanceof ApiError && typeof err.detail === "string") return err.detail;
   return fallback;
 }
 
-function detailValue(v: unknown): string {
-  if (v == null) return "—";
-  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") return String(v);
-  try {
-    return JSON.stringify(v, null, 2);
-  } catch {
-    return String(v);
+function portalLabel(portal: string | null | undefined): string {
+  if (portal === "customer_portal") return "Customer portal";
+  if (portal === "mssp_admin_portal") return "MSSP admin / SOC";
+  return portal || "—";
+}
+
+function friendlyDetailEntries(details: Record<string, unknown>): Array<[string, string]> {
+  const out: Array<[string, string]> = [];
+  for (const [key, value] of Object.entries(details)) {
+    if (key === "source_ip" || key === "raw_event" || key === "raw_json") continue;
+    if (value == null) continue;
+    if (typeof value === "object") continue;
+    const label = DETAIL_LABELS[key] || key.replace(/_/g, " ");
+    out.push([label, String(value)]);
   }
+  return out;
 }
 
 export default function AuditLogDetailPage() {
@@ -52,6 +70,7 @@ export default function AuditLogDetailPage() {
   }, [shortCode, auditId]);
 
   const details = row?.details && typeof row.details === "object" ? row.details : {};
+  const detailRows = friendlyDetailEntries(details);
 
   return (
     <div>
@@ -67,7 +86,7 @@ export default function AuditLogDetailPage() {
           <table className="data-table">
             <tbody>
               <tr>
-                <th>Summary</th>
+                <th>What happened</th>
                 <td>{row.summary || row.action_label || row.action}</td>
               </tr>
               <tr>
@@ -75,7 +94,7 @@ export default function AuditLogDetailPage() {
                 <td className="cell-mono">{row.timestamp || row.created_at}</td>
               </tr>
               <tr>
-                <th>Actor</th>
+                <th>Who</th>
                 <td>
                   {row.actor_email ?? "—"}
                   {row.actor_role ? ` · ${row.actor_role}` : ""}
@@ -83,44 +102,30 @@ export default function AuditLogDetailPage() {
               </tr>
               <tr>
                 <th>Action</th>
-                <td className="cell-mono">{row.action}</td>
+                <td>{row.action_label || row.action}</td>
               </tr>
               <tr>
                 <th>Status</th>
                 <td>{row.action_status || "SUCCESS"}</td>
               </tr>
               <tr>
-                <th>Portal</th>
-                <td>
-                  {row.portal === "customer_portal"
-                    ? "Customer portal"
-                    : row.portal === "mssp_admin_portal"
-                      ? "MSSP admin / SOC"
-                      : row.portal || "—"}
-                </td>
-              </tr>
-              <tr>
-                <th>Source IP</th>
-                <td className="cell-mono">{row.source_ip ?? "—"}</td>
+                <th>Where</th>
+                <td>{portalLabel(row.portal)}</td>
               </tr>
             </tbody>
           </table>
-          <h2 className="section-title">Details</h2>
+          <h2 className="section-title">Additional context</h2>
           <table className="data-table">
             <tbody>
-              {Object.keys(details).length === 0 ? (
+              {detailRows.length === 0 ? (
                 <tr>
-                  <td className="muted">No extra detail fields.</td>
+                  <td className="muted">No extra customer-visible detail for this event.</td>
                 </tr>
               ) : (
-                Object.entries(details).map(([key, value]) => (
-                  <tr key={key}>
-                    <th>{key}</th>
-                    <td>
-                      <pre className="cell-mono" style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-                        {detailValue(value)}
-                      </pre>
-                    </td>
+                detailRows.map(([label, value]) => (
+                  <tr key={label}>
+                    <th>{label}</th>
+                    <td>{value}</td>
                   </tr>
                 ))
               )}
