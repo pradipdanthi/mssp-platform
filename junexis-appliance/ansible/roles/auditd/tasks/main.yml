@@ -10,8 +10,9 @@
     POOL="{{ auditd_offline_pool }}"
     shopt -s nullglob
     debs=("$POOL"/auditd_*.deb "$POOL"/libauparse*.deb "$POOL"/libaudit*.deb)
-    # Jinja treats {# as a comment — never write ${#...} literally in playbooks.
-    if [ "{{ '${#debs[@]}' }}" -eq 0 ]; then
+    cnt=0
+    for _ in "${debs[@]}"; do cnt=$((cnt + 1)); done
+    if [ "$cnt" -eq 0 ]; then
       exit 42
     fi
     apt-get install -y --no-install-recommends "${debs[@]}"

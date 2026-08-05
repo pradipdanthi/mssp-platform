@@ -14,8 +14,9 @@
     for d in "${debs[@]}"; do
       [[ -f "$d" ]] && install_list+=("$d")
     done
-    # Jinja treats {# as a comment — never write ${#...} literally in playbooks.
-    if [ "{{ '${#install_list[@]}' }}" -eq 0 ]; then
+    cnt=0
+    for _ in "${install_list[@]}"; do cnt=$((cnt + 1)); done
+    if [ "$cnt" -eq 0 ]; then
       exit 42
     fi
     apt-get install -y --no-install-recommends "${install_list[@]}"

@@ -16,10 +16,11 @@ grep -q 'ANSIBLE_ROLES_PATH' "$APP/iso/firstboot/junexis-firstboot.sh" \
 grep -q 'ANSIBLE_CONFIG' "$APP/iso/firstboot/junexis-firstboot.sh" \
   || fail "firstboot must set ANSIBLE_CONFIG to payload ansible.cfg"
 # Bash ${#arr[@]} becomes a Jinja comment ({#) and breaks customer firstboot.
-if rg -n '\(\(\$\{#' "$APP/ansible/roles" --glob '*.yml' >/tmp/kb093g-jinja-hash.txt 2>/dev/null; then
-  fail "Ansible roles contain raw ((\${#...}) Jinja trap — see $(head -5 /tmp/kb093g-jinja-hash.txt)"
+# Also ban '{#' inside shell/task YAML (including comments inside | blocks).
+if rg -n '\$\{#|\{#' "$APP/ansible/roles" --glob '*.yml' >/tmp/kb093g-jinja-hash.txt 2>/dev/null; then
+  fail "Ansible roles contain {# Jinja trap (use a counter loop, never \${#arr[@]}) — see $(head -8 /tmp/kb093g-jinja-hash.txt)"
 fi
-ok "no raw ((\${# Jinja traps in ansible roles"
+ok "no {# Jinja traps in ansible roles"
 grep -q 'autoinstall' "$APP/iso/autoinstall/user-data" || fail "user-data missing autoinstall"
 grep -q 'ubuntu-server-minimal' "$APP/iso/autoinstall/user-data" || fail "user-data must force ubuntu-server-minimal"
 grep -q 'interactive-sections: \[\]' "$APP/iso/autoinstall/user-data" || fail "user-data must set interactive-sections: []"

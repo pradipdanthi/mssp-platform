@@ -32,8 +32,9 @@
     test -d "$POOL"
     shopt -s nullglob
     debs=("$POOL"/*.deb)
-    # Jinja treats {# as a comment — never write ${#...} literally in playbooks.
-    if [ "{{ '${#debs[@]}' }}" -eq 0 ]; then
+    cnt=0
+    for _ in "${debs[@]}"; do cnt=$((cnt + 1)); done
+    if [ "$cnt" -eq 0 ]; then
       echo "No offline debs in $POOL" >&2
       exit 3
     fi
