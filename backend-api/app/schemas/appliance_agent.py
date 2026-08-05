@@ -74,6 +74,20 @@ class ApplianceRegisterResponse(BaseModel):
     message: str
 
 
+class ApplianceAgentInventoryItem(BaseModel):
+    """Local Manager agent row reported by appliance (no raw logs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=64)
+    name: Optional[str] = Field(default=None, max_length=255)
+    status: Optional[str] = Field(default=None, max_length=64)
+    ip: Optional[str] = Field(default=None, max_length=64)
+    os_name: Optional[str] = Field(default=None, max_length=128)
+    os_platform: Optional[str] = Field(default=None, max_length=64)
+    last_keep_alive: Optional[str] = Field(default=None, max_length=64)
+
+
 class ApplianceHeartbeatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -89,6 +103,10 @@ class ApplianceHeartbeatRequest(BaseModel):
     disk_percent: Optional[float] = Field(default=None, ge=0, le=100)
     # KB-093G: catalogue services currently enabled on this appliance
     enabled_services: Optional[List[str]] = Field(default=None, max_length=32)
+    # Agents enrolled to the appliance-local Manager
+    agent_inventory: Optional[List[ApplianceAgentInventoryItem]] = Field(
+        default=None, max_length=2000
+    )
 
     # Deliberately absent: appliance_api_key, appliance_api_key_hash,
     # token_hash, activation_token, tenant_id. Credentials for this
@@ -97,8 +115,33 @@ class ApplianceHeartbeatRequest(BaseModel):
     # these fields with a clean 422 rather than silently ignoring them.
 
 
+class AppliancePendingJob(BaseModel):
+    id: str
+    job_type: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    edr_execution_id: Optional[str] = None
+    created_at: Optional[str] = None
+    expires_at: Optional[str] = None
+
+
 class ApplianceHeartbeatResponse(BaseModel):
     appliance_id: str
     status: str
     heartbeat_at: str
+    message: str
+    pending_jobs: List[AppliancePendingJob] = Field(default_factory=list)
+    agent_inventory_sync: Optional[Dict[str, Any]] = None
+
+
+class ApplianceJobAckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    success: bool
+    message: Optional[str] = Field(default=None, max_length=500)
+    result: Optional[Dict[str, Any]] = None
+
+
+class ApplianceJobAckResponse(BaseModel):
+    job_id: str
+    status: str
     message: str

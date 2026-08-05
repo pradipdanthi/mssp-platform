@@ -114,11 +114,27 @@
     dest: /etc/systemd/system/junexis-appliance-engine.service
     mode: "0644"
 
+- name: Install heartbeat service + timer (Phase A bridge)
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../configs/systemd/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - junexis-heartbeat.service
+    - junexis-heartbeat.timer
+
 - name: Enable junexis-appliance-engine (loopback job API)
   ansible.builtin.systemd:
     name: junexis-appliance-engine.service
     enabled: true
     daemon_reload: true
+
+- name: Enable heartbeat timer (every 60s when registered)
+  ansible.builtin.systemd:
+    name: junexis-heartbeat.timer
+    enabled: true
+    daemon_reload: true
+    state: started
 
 - name: Seed default network mode bootstrap
   ansible.builtin.copy:

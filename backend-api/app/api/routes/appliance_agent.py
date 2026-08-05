@@ -65,6 +65,8 @@ from app.db.session import db_transaction, fetch_one
 from app.schemas.appliance_agent import (
     ApplianceHeartbeatRequest,
     ApplianceHeartbeatResponse,
+    ApplianceJobAckRequest,
+    ApplianceJobAckResponse,
     ApplianceRegisterRequest,
     ApplianceRegisterResponse,
 )
@@ -75,6 +77,9 @@ from app.services.appliance_auth_service import (
     hash_secret_sha256,
     verify_appliance_credentials,
 )
+from app.services.appliance_agent_inventory import sync_appliance_agent_inventory
+from app.services import appliance_jobs as appliance_jobs_service
+from app.services.edr_actions import apply_action_callback
 
 logger = logging.getLogger(__name__)
 
@@ -277,8 +282,9 @@ def appliance_heartbeat(
     local_ip_text = str(payload.local_ip) if payload.local_ip is not None else None
     health_status = payload.health_status or "unknown"
     snapshot_dict: Dict[str, Any] = dict(payload.health_snapshot or {})
-    if payload.enabled_services is not None:
-        snapshot_dict["enabled_services"] = list(payload.enabled_services)
+    enabled_services = list(payload.enabled_services) if payload.enabled_services is not None else None
+    if enabled_services is not None:
+        snapshot_dict["enabled_services"] = enabled_services
     health_snapshot = Jsonb(snapshot_dict) if snapshot_dict else None
 
     try:
@@ -305,33 +311,64 @@ def appliance_heartbeat(
             )
             heartbeat_row = cur.fetchone()
 
-            cur.execute(
-                """
-                UPDATE appliances
-                SET last_seen_at = now(),
-                    last_source_ip = %s::inet,
-                    appliance_key_last_used_at = now(),
-                    local_ip = COALESCE(%s::inet, local_ip),
-                    agent_version = COALESCE(%s, agent_version),
-                    config_version = COALESCE(%s, config_version),
-                    git_commit = COALESCE(%s, git_commit),
-                    update_status = COALESCE(%s, update_status),
-                    health_snapshot = COALESCE(%s, health_snapshot),
-                    status = CASE WHEN status = 'maintenance' THEN status ELSE 'online' END
-                WHERE id = %s
-                RETURNING id::text, status;
-                """,
-                (
-                    source_ip,
-                    local_ip_text,
-                    payload.agent_version,
-                    payload.config_version,
-                    payload.git_commit,
-                    payload.update_status,
-                    health_snapshot,
-                    appliance["id"],
-                ),
-            )
+            if enabled_services is not None:
+                cur.execute(
+                    """
+                    UPDATE appliances
+                    SET last_seen_at = now(),
+                        last_source_ip = %s::inet,
+                        appliance_key_last_used_at = now(),
+                        local_ip = COALESCE(%s::inet, local_ip),
+                        agent_version = COALESCE(%s, agent_version),
+                        config_version = COALESCE(%s, config_version),
+                        git_commit = COALESCE(%s, git_commit),
+                        update_status = COALESCE(%s, update_status),
+                        health_snapshot = COALESCE(%s, health_snapshot),
+                        enabled_services = %s::text[],
+                        status = CASE WHEN status = 'maintenance' THEN status ELSE 'online' END
+                    WHERE id = %s
+                    RETURNING id::text, status, tenant_id::text;
+                    """,
+                    (
+                        source_ip,
+                        local_ip_text,
+                        payload.agent_version,
+                        payload.config_version,
+                        payload.git_commit,
+                        payload.update_status,
+                        health_snapshot,
+                        enabled_services,
+                        appliance["id"],
+                    ),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE appliances
+                    SET last_seen_at = now(),
+                        last_source_ip = %s::inet,
+                        appliance_key_last_used_at = now(),
+                        local_ip = COALESCE(%s::inet, local_ip),
+                        agent_version = COALESCE(%s, agent_version),
+                        config_version = COALESCE(%s, config_version),
+                        git_commit = COALESCE(%s, git_commit),
+                        update_status = COALESCE(%s, update_status),
+                        health_snapshot = COALESCE(%s, health_snapshot),
+                        status = CASE WHEN status = 'maintenance' THEN status ELSE 'online' END
+                    WHERE id = %s
+                    RETURNING id::text, status, tenant_id::text;
+                    """,
+                    (
+                        source_ip,
+                        local_ip_text,
+                        payload.agent_version,
+                        payload.config_version,
+                        payload.git_commit,
+                        payload.update_status,
+                        health_snapshot,
+                        appliance["id"],
+                    ),
+                )
             appliance_row = cur.fetchone()
     except HTTPException:
         raise
@@ -349,9 +386,92 @@ def appliance_heartbeat(
             detail="Heartbeat could not be recorded due to an internal error",
         )
 
+    inventory_sync = None
+    if payload.agent_inventory is not None:
+        try:
+            inventory_sync = sync_appliance_agent_inventory(
+                tenant_id=appliance_row["tenant_id"],
+                appliance_id=appliance_row["id"],
+                agents=[item.model_dump() for item in payload.agent_inventory],
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("appliance agent inventory sync failed: %s", exc)
+            inventory_sync = {"synced": 0, "error": str(exc)[:200]}
+
+    pending_jobs = []
+    try:
+        pending_jobs = appliance_jobs_service.claim_pending_jobs(appliance_row["id"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("claim appliance jobs failed: %s", exc)
+
     return {
         "appliance_id": appliance_row["id"],
         "status": appliance_row["status"],
         "heartbeat_at": heartbeat_row["heartbeat_at"],
         "message": "Heartbeat received",
+        "pending_jobs": pending_jobs,
+        "agent_inventory_sync": inventory_sync,
+    }
+
+
+@router.post("/jobs/{job_id}/ack", response_model=ApplianceJobAckResponse)
+def appliance_job_ack(
+    job_id: UUID,
+    payload: ApplianceJobAckRequest,
+    x_appliance_id: Optional[str] = Header(default=None, alias="X-Appliance-ID"),
+    x_appliance_api_key: Optional[str] = Header(default=None, alias="X-Appliance-API-Key"),
+) -> Dict[str, Any]:
+    """Appliance reports result of a pulled job (isolate/AR/etc.)."""
+    if not x_appliance_id or not x_appliance_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing appliance credentials",
+        )
+    try:
+        appliance_id = str(UUID(x_appliance_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid appliance credentials",
+        )
+    try:
+        verify_appliance_credentials(appliance_id, x_appliance_api_key)
+    except InvalidApplianceCredentialsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid appliance credentials",
+        )
+    except ApplianceRetiredError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Appliance is retired",
+        )
+
+    row = appliance_jobs_service.complete_job(
+        job_id=str(job_id),
+        appliance_id=appliance_id,
+        success=payload.success,
+        result=payload.result,
+        message=payload.message or "",
+    )
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    # Mirror EDR callback so Admin isolate lifecycle completes.
+    edr_id = row.get("edr_execution_id")
+    if edr_id:
+        try:
+            apply_action_callback(
+                execution_id=edr_id,
+                status="success" if payload.success else "failed",
+                message=payload.message or ("ok" if payload.success else "failed"),
+                payload=payload.result or {},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("EDR callback from appliance job ack failed: %s", exc)
+
+    return {
+        "job_id": row["id"],
+        "status": "success" if payload.success else "failed",
+        "message": "Job acknowledged",
     }

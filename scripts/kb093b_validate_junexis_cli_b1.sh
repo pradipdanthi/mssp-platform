@@ -72,6 +72,13 @@ MODE="$(cat "$JUNEXIS_STATE_DIR/network_mode")"
 STAT="$("${CLI[@]}" status --json)"
 echo "$STAT" | grep -q '"handoff_ready": true' && pass "handoff_ready true" || fail "handoff_ready"
 echo "$STAT" | grep -q 'not permanent on mssp-control' && pass "status notes mgmt split" || fail "status mgmt split"
+echo "$STAT" | grep -q 'phase_a_heartbeat' && pass "status channel=phase_a_heartbeat" || fail "status channel"
+
+"${CLI[@]}" register --help >/dev/null && pass "cli register help" || fail "cli register help"
+"${CLI[@]}" heartbeat --help >/dev/null && pass "cli heartbeat help" || fail "cli heartbeat help"
+need "$ROOT/junexis-appliance/cli/junexis-cli/junexis_cli/register_ops.py"
+need "$ROOT/junexis-appliance/configs/systemd/junexis-heartbeat.service"
+need "$ROOT/junexis-appliance/configs/systemd/junexis-heartbeat.timer"
 
 # Token must not be stored raw
 if grep -Rq "test-token-not-real-abcdefgh" "$JUNEXIS_STATE_DIR"; then

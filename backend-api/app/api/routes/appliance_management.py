@@ -118,6 +118,7 @@ _APPLIANCE_DETAIL_QUERY = """
         a.tenant_id::text,
         t.name AS tenant_name,
         t.short_code AS tenant_short_code,
+        t.deployment_mode,
         a.appliance_name,
         a.site_name,
         a.status,
@@ -129,6 +130,7 @@ _APPLIANCE_DETAIL_QUERY = """
         a.last_seen_at::text,
         a.created_at::text,
         a.updated_at::text,
+        COALESCE(a.enabled_services, '{}'::text[]) AS enabled_services,
         count(DISTINCT pa.id) AS protected_assets,
         h.health_status AS latest_health_status,
         h.heartbeat_at::text AS latest_heartbeat_at
@@ -143,7 +145,7 @@ _APPLIANCE_DETAIL_QUERY = """
         LIMIT 1
     ) h ON true
     WHERE a.id = %s
-    GROUP BY a.id, t.name, t.short_code, h.health_status, h.heartbeat_at;
+    GROUP BY a.id, t.name, t.short_code, t.deployment_mode, h.health_status, h.heartbeat_at;
 """
 
 _TOKEN_METADATA_COLUMNS = """

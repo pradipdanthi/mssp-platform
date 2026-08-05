@@ -237,6 +237,7 @@ def admin_appliances(
             a.local_ip::text,
             a.last_source_ip::text,
             a.last_seen_at,
+            COALESCE(a.enabled_services, '{{}}'::text[]) AS enabled_services,
             h.health_status,
             h.cpu_percent,
             h.memory_percent,

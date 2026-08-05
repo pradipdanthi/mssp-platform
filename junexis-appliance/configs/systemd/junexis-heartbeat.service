@@ -1,0 +1,15 @@
+[Unit]
+Description=Junexis appliance heartbeat (health + agent inventory + job pull)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/junexis/appliance.env
+Environment=PYTHONPATH=/opt/junexis/cli:/opt/junexis
+# API key is read from /var/lib/junexis/secrets/appliance_api_key by junexis-cli
+ExecStart=/usr/bin/junexis-cli heartbeat --json
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

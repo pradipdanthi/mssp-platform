@@ -12,6 +12,11 @@ from app.db.session import db_transaction, fetch_one
 from app.schemas.edr import EdrActionExecuteRequest, EdrActionType
 from app.services.audit_service import audit_from_user
 from app.services import edr_forensics_storage, shuffle_edr_client, wazuh_client
+from app.services.appliance_manager_resolver import (
+    primary_appliance_for_tenant,
+    tenant_uses_appliance_manager,
+)
+from app.services import appliance_jobs as appliance_jobs_service
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +40,23 @@ def _resolve_ar_command(base_command: str, win_command: str, agent_id: Optional[
     """Pick the OS-appropriate AR command name. Fail closed if OS is unknown."""
     if not agent_id:
         raise ValueError("agent_id is required to resolve the Active Response command")
+    # Prefer protected_assets OS (works for appliance-local agents not on cloud Manager).
+    asset = fetch_one(
+        """
+        SELECT os_name, details
+        FROM protected_assets
+        WHERE details->>'wazuh_agent_id' = %s
+        ORDER BY updated_at DESC NULLS LAST
+        LIMIT 1;
+        """,
+        (str(agent_id),),
+    )
+    if asset:
+        blob = f"{asset.get('os_name') or ''} {asset.get('details') or ''}".lower()
+        if "windows" in blob:
+            return win_command
+        if any(x in blob for x in ("linux", "ubuntu", "centos", "debian", "rhel")):
+            return base_command
     if not wazuh_client.credentials_configured():
         raise ValueError("Wazuh credentials are not configured; cannot resolve agent OS")
     agent_os = wazuh_client.get_agent_os(agent_id)
@@ -46,7 +68,65 @@ def _resolve_ar_command(base_command: str, win_command: str, agent_id: Optional[
         f"Cannot dispatch containment: agent {agent_id} OS is unknown. "
         "Confirm the agent is active on the manager and OS inventory is populated."
     )
+
+
+def _queue_appliance_ar_job(
+    *,
+    tenant_id: str,
+    user: Dict[str, Any],
+    execution_id: str,
+    action_type: str,
+    agent_id: str,
+    ar_command: str,
+    arguments: list,
+) -> Tuple[str, str, str, None, None]:
+    """Enqueue AR for appliance-local Manager; appliance pulls via heartbeat."""
+    appliance = primary_appliance_for_tenant(tenant_id)
+    if not appliance:
+        raise ValueError(
+            "Tenant is appliance-mode but no registered appliance found. "
+            "Register the appliance before running containment."
+        )
+    job = appliance_jobs_service.enqueue_job(
+        appliance_id=appliance["id"],
+        tenant_id=tenant_id,
+        job_type=action_type,
+        payload={
+            "agent_id": agent_id,
+            "ar_command": ar_command,
+            "arguments": [str(a) for a in arguments],
+            "execution_id": execution_id,
+        },
+        edr_execution_id=execution_id,
+        requested_by_user_id=user.get("id"),
+    )
+    msg = (
+        f"Containment job queued for appliance {appliance.get('appliance_name')} "
+        f"(job {job['id']}). Appliance will execute Active Response on next heartbeat."
+    )
+    _update_execution(execution_id, "executing", msg)
+    _audit_success(
+        user,
+        action_type=action_type,
+        execution_id=execution_id,
+        tenant_id=tenant_id,
+        status="executing",
+        message=msg,
+        agent_id=agent_id,
+        incident_number=None,
+        tenant_short_code=None,
+    )
+    return execution_id, "executing", msg, None, None
+
+
+def _tenant_deployment_mode(tenant_id: str) -> Optional[str]:
+    row = fetch_one("SELECT deployment_mode FROM tenants WHERE id = %s::uuid;", (tenant_id,))
+    return (row or {}).get("deployment_mode")
+
+
 ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "120").strip()
+
+
 def _get_callback_base() -> str:
     from app.core.config import get_infra_settings
     return (
@@ -515,6 +595,33 @@ def execute_edr_action(
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for isolation")
             ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
+            # Appliance tenants: queue job for local Manager (do not hit cloud Wazuh).
+            if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
+                with db_transaction() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO edr_endpoint_isolation (
+                            tenant_id, agent_id, isolated_by_user_id, isolation_status
+                        )
+                        VALUES (%s::uuid, %s, %s::uuid, 'isolated')
+                        ON CONFLICT (tenant_id, agent_id)
+                        DO UPDATE SET
+                            isolated_at = now(),
+                            isolated_by_user_id = EXCLUDED.isolated_by_user_id,
+                            isolation_status = 'isolated',
+                            released_at = NULL;
+                        """,
+                        (tenant_id, agent_id, user.get("id")),
+                    )
+                return _queue_appliance_ar_job(
+                    tenant_id=tenant_id,
+                    user=user,
+                    execution_id=execution_id,
+                    action_type=body.action_type,
+                    agent_id=agent_id,
+                    ar_command=ar_cmd,
+                    arguments=[ISOLATE_SECONDS, execution_id],
+                )
             # extra_args: [seconds, execution_id] - endpoint callbacks use execution_id (KB-091).
             wazuh_client.run_active_response(
                 agent_id=agent_id,
@@ -580,6 +687,25 @@ def execute_edr_action(
                 raise ValueError("Could not resolve endpoint agent for un-isolate")
             # Pass "delete" so the AR script restores connectivity.
             ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
+            if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
+                with db_transaction() as cur:
+                    cur.execute(
+                        """
+                        UPDATE edr_endpoint_isolation
+                        SET isolation_status = 'restored', released_at = now()
+                        WHERE tenant_id = %s::uuid AND agent_id = %s;
+                        """,
+                        (tenant_id, agent_id),
+                    )
+                return _queue_appliance_ar_job(
+                    tenant_id=tenant_id,
+                    user=user,
+                    execution_id=execution_id,
+                    action_type=body.action_type,
+                    agent_id=agent_id,
+                    ar_command=ar_cmd,
+                    arguments=["delete", execution_id],
+                )
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ar_cmd,
@@ -633,6 +759,16 @@ def execute_edr_action(
                 raise ValueError("Could not resolve endpoint agent for kill")
             ar_cmd = _resolve_ar_command(KILL_AR_COMMAND, WIN_KILL_AR_COMMAND, agent_id)
             # Pass execution_id so AR scripts can POST applied proof to callback_url.
+            if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
+                return _queue_appliance_ar_job(
+                    tenant_id=tenant_id,
+                    user=user,
+                    execution_id=execution_id,
+                    action_type=body.action_type,
+                    agent_id=agent_id,
+                    ar_command=ar_cmd,
+                    arguments=[str(body.pid), str(execution_id), callback_url],
+                )
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ar_cmd,
@@ -772,6 +908,22 @@ def execute_edr_action(
             if not re.fullmatch(r"[a-f0-9]{64}", h):
                 raise ValueError("file_hash_sha256 must be 64 hex characters")
             ar_msg = "Endpoint hash block skipped (no agent)"
+            via_appliance = tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id))
+            if agent_id and via_appliance:
+                ar_cmd = _resolve_ar_command(BLOCK_HASH_AR_COMMAND, WIN_BLOCK_HASH_AR_COMMAND, agent_id)
+                cb = (callback_url or "").strip()
+                args = [h, execution_id]
+                if cb:
+                    args.append(cb)
+                return _queue_appliance_ar_job(
+                    tenant_id=tenant_id,
+                    user=user,
+                    execution_id=execution_id,
+                    action_type=body.action_type,
+                    agent_id=agent_id,
+                    ar_command=ar_cmd,
+                    arguments=args,
+                )
             if agent_id and wazuh_client.credentials_configured():
                 ar_cmd = _resolve_ar_command(BLOCK_HASH_AR_COMMAND, WIN_BLOCK_HASH_AR_COMMAND, agent_id)
                 cb = (callback_url or "").strip()

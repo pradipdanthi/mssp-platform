@@ -108,11 +108,13 @@ def build_linux_install_script(
     *,
     short_code: str,
     wazuh_agent_group: str,
+    manager: Optional[str] = None,
 ) -> str:
     """Standalone Linux installer script (also embedded in ZIP packages)."""
     code = short_code.strip().upper()
     group = (wazuh_agent_group or f"tenant_{code}").strip()
-    return _linux_script(manager_address(), group, agent_version(), code)
+    mgr = (manager or "").strip() or manager_address()
+    return _linux_script(mgr, group, agent_version(), code)
 
 
 def build_agent_package_zip(
@@ -122,17 +124,19 @@ def build_agent_package_zip(
     wazuh_agent_group: str,
     os_type: str,
     customer_facing: bool = False,
+    manager: Optional[str] = None,
 ) -> Tuple[bytes, str]:
     """
     Returns (zip_bytes, filename).
     os_type: windows | linux | all
     customer_facing: soften README/INSTALL wording (no engine product names).
+    manager: optional override (appliance LAN IP for appliance tenants).
     """
     os_key = (os_type or "").strip().lower()
     if os_key not in ("windows", "linux", "all"):
         raise ValueError("os_type must be windows, linux, or all")
 
-    manager = manager_address()
+    manager = (manager or "").strip() or manager_address()
     version = agent_version()
     code = short_code.strip().upper()
     group = (wazuh_agent_group or f"tenant_{code}").strip()

@@ -11,6 +11,7 @@ from app.api.dependencies import get_current_user, require_tenant_match
 from app.db.session import fetch_one
 from app.services.agent_package_builder import build_agent_package_zip
 from app.services.agent_install_repo import publish_linux_install
+from app.services.appliance_manager_resolver import resolve_tenant_manager_address
 from app.services.audit_service import audit_from_user
 from app.services.tenant_engine_provisioner import (
     ensure_binding_row,
@@ -100,12 +101,14 @@ def download_customer_agent_package(
         pass
 
     try:
+        mgr = resolve_tenant_manager_address(tenant["id"])
         payload, filename = build_agent_package_zip(
             tenant_name=tenant["name"],
             short_code=tenant["short_code"],
             wazuh_agent_group=group,
             os_type=os_type,
             customer_facing=True,
+            manager=mgr["manager_address"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

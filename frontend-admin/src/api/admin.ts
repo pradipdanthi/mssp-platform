@@ -123,6 +123,7 @@ export interface Appliance {
   memory_percent: number | null;
   disk_percent: number | null;
   heartbeat_at: string | null;
+  enabled_services?: string[] | null;
 }
 
 export interface AppliancesListResponse {

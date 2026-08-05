@@ -156,6 +156,13 @@ def publish_linux_install(
 
 
 def build_script_for_tenant(short_code: str, tenant_id: str) -> str:
+    from app.services.appliance_manager_resolver import resolve_tenant_manager_address
+
     binding = ensure_binding_row(tenant_id, short_code)
     group = binding.get("wazuh_agent_group") or _wg(short_code)
-    return build_linux_install_script(short_code=short_code, wazuh_agent_group=group)
+    mgr = resolve_tenant_manager_address(tenant_id)["manager_address"]
+    return build_linux_install_script(
+        short_code=short_code,
+        wazuh_agent_group=group,
+        manager=mgr,
+    )

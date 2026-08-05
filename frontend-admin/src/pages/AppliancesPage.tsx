@@ -360,6 +360,15 @@ function ApplianceRow({
                   />
                   <CredentialField label="Appliance status" value={credential.status} />
                   <CredentialField label="Last seen" value={credential.last_seen_at ?? "Never"} />
+                  <CredentialField label="Local IP (Manager)" value={appliance.local_ip ?? "—"} />
+                  <CredentialField
+                    label="Enabled services"
+                    value={
+                      appliance.enabled_services && appliance.enabled_services.length > 0
+                        ? appliance.enabled_services.join(", ")
+                        : "None reported"
+                    }
+                  />
                 </div>
 
                 {!confirmingRotate && !newRawKey && (

@@ -1,4 +1,4 @@
-"""junexis-cli entrypoint (KB-093 B1)."""
+"""junexis-cli entrypoint (KB-093 B1 + Track-1 register/heartbeat)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from junexis_cli import __version__, bootstrap, license_ops, network, state
+from junexis_cli import __version__, bootstrap, license_ops, network, register_ops, state
 
 
 def _out(data: Any, as_json: bool) -> None:
@@ -23,7 +23,10 @@ def _out(data: Any, as_json: bool) -> None:
 
 def cmd_version(_: argparse.Namespace) -> int:
     print(f"junexis-cli {__version__}")
-    print(f"appliance_train {Path(__file__).resolve().parents[3].joinpath('VERSION').read_text(encoding='utf-8').strip() if Path(__file__).resolve().parents[3].joinpath('VERSION').is_file() else 'unknown'}")
+    print(
+        f"appliance_train "
+        f"{Path(__file__).resolve().parents[3].joinpath('VERSION').read_text(encoding='utf-8').strip() if Path(__file__).resolve().parents[3].joinpath('VERSION').is_file() else 'unknown'}"
+    )
     return 0
 
 
@@ -41,7 +44,7 @@ def cmd_status(args: argparse.Namespace) -> int:
         "network_mode": state.get_network_mode(),
         "bootstrap_last_result": boot.get("last_result"),
         "bootstrap_last_run_at": boot.get("last_run_at"),
-        "channel": "not_implemented",
+        "channel": "phase_a_heartbeat",
         "entitlements": ents.get("service_ids"),
         "handoff_ready": (
             state.get_network_mode() == "locked" and boot.get("last_result") == "success"
@@ -59,7 +62,6 @@ def cmd_setup(args: argparse.Namespace) -> int:
     if not args.token:
         print("error: --token is required", file=sys.stderr)
         return 1
-    # Do not store raw token
     app["appliance_name"] = args.appliance_name or app.get("appliance_name") or "junexis-appliance"
     app["site_name"] = args.site_name or app.get("site_name") or ""
     app["control_plane"] = args.control_plane
@@ -77,12 +79,41 @@ def cmd_setup(args: argparse.Namespace) -> int:
         "next": [
             "junexis-cli bootstrap update",
             "junexis-cli network lock --yes",
-            "junexis-cli register  # when Appliance Mgmt / KB-016 endpoint reachable",
+            "junexis-cli register --token <ACTIVATION_TOKEN>",
+            "systemctl enable --now junexis-heartbeat.timer",
         ],
-        "warning": "Raw activation token was not written to disk",
+        "warning": "Raw activation token was not written to disk — pass it again to register",
     }
     _out(msg, args.json)
     return 0
+
+
+def cmd_register(args: argparse.Namespace) -> int:
+    if not args.token:
+        print("error: --token is required", file=sys.stderr)
+        return 1
+    try:
+        result = register_ops.register(
+            activation_token=args.token,
+            control_plane=args.control_plane or None,
+            appliance_name=args.appliance_name or None,
+            local_ip=args.local_ip or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    _out(result, args.json)
+    return 0
+
+
+def cmd_heartbeat(args: argparse.Namespace) -> int:
+    try:
+        result = register_ops.heartbeat(include_inventory=not args.no_inventory)
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: {exc}", file=sys.stderr)
+        return 3
+    _out(result, args.json)
+    return 0 if result.get("ok") else 4
 
 
 def cmd_bootstrap(args: argparse.Namespace) -> int:
@@ -126,7 +157,7 @@ def cmd_network(args: argparse.Namespace) -> int:
             return 4
         try:
             msg = network.apply_network_mode("locked", dry_run=args.dry_run)
-        except Exception as exc:  # noqa: BLE001 — CLI boundary
+        except Exception as exc:  # noqa: BLE001
             print(f"error: {exc}", file=sys.stderr)
             return 4
         _out({"ok": True, "message": msg, "network_mode": state.get_network_mode()}, args.json)
@@ -190,6 +221,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         "bootstrap_exists": network.profile_path("bootstrap").is_file(),
         "locked_exists": network.profile_path("locked").is_file(),
         "network_mode": state.get_network_mode(),
+        "api_key_present": register_ops.api_key_path().is_file(),
         "thehive_on_appliance": False,
         "production_appliance_mgmt": "separate_server",
     }
@@ -220,6 +252,15 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument("--site-name", default="")
     setup.add_argument("--deploy-method", choices=["factory", "customer-vm"], default="")
     setup.add_argument("--proxy", default="")
+
+    reg = sub.add_parser("register", help="Redeem activation token with control plane", parents=[common])
+    reg.add_argument("--token", required=True)
+    reg.add_argument("--control-plane", default="")
+    reg.add_argument("--appliance-name", default="")
+    reg.add_argument("--local-ip", default="")
+
+    hb = sub.add_parser("heartbeat", help="Push health + agent inventory; pull jobs", parents=[common])
+    hb.add_argument("--no-inventory", action="store_true")
 
     boot = sub.add_parser("bootstrap", help="First-time critical updates", parents=[common])
     boot_sub = boot.add_subparsers(dest="bootstrap_cmd", required=True)
@@ -258,6 +299,8 @@ def main(argv: list[str] | None = None) -> int:
         "version": cmd_version,
         "status": cmd_status,
         "setup": cmd_setup,
+        "register": cmd_register,
+        "heartbeat": cmd_heartbeat,
         "bootstrap": cmd_bootstrap,
         "network": cmd_network,
         "license": cmd_license,

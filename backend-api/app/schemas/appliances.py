@@ -72,6 +72,9 @@ class ApplianceDetail(BaseModel):
     protected_assets: int
     latest_health_status: Optional[str] = None
     latest_heartbeat_at: Optional[str] = None
+    # Catalogue engines enabled on this appliance (svc-01..10)
+    enabled_services: List[str] = Field(default_factory=list)
+    deployment_mode: Optional[str] = None
     # No health_snapshot (raw agent JSON blob) - not needed for admin
     # metadata management in this foundation module.
 
