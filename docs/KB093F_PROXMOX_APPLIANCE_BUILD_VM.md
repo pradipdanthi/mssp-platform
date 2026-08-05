@@ -22,6 +22,8 @@ Nested Packer/QEMU **inside VM 100** fought for RAM with the MSSP stack and made
 | User | `junexis` + build SSH key `junexis-appliance/.tools/build-ssh/junexis_packer` |
 | Lifetime | Disposable — destroy after exporting artifacts (or snapshot before export) |
 
+**Lab status (2026-08-05):** VM **113 was destroyed** to free Proxmox RAM/disk after install ISO artifacts were already on VM 100 (`.cache/dist*`). Recreate anytime with `junexis-appliance/scripts/b2_proxmox_create_build_vm.sh` before the next image build. Permanent Appliance Management is **VM 114** (`docs/KB093L_APPLIANCE_MANAGEMENT_PLANE_VM114.md`), not this factory.
+
 This VM is **not** a permanent SOC engine VM. Do not put TheHive or production customer data on it.
 
 ## Build topology

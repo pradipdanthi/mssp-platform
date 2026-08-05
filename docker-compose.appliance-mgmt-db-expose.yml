@@ -1,0 +1,9 @@
+# Legacy overlay — loopback Postgres/Redis publish now lives in docker-compose.yml
+# (KB-093L). Kept so older docs that pass -f this file still work.
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6379:6379"

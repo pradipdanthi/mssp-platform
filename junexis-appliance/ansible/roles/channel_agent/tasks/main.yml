@@ -39,12 +39,11 @@
     dest: "{{ channel_agent_config_path }}"
     mode: "0640"
     content: |
-      # Managed by channel_agent role
+      # Managed by channel_agent role — gateway URL from group_vars (KB-093L)
       mode: {{ channel_agent_mode }}
       poll_interval_sec: {{ channel_agent_poll_interval_sec }}
-      # control_plane is filled by junexis-cli register into appliance.env / appliance.json
-      # Optional override:
-      # control_plane: https://soc.junexis.com
+      control_plane: {{ junexis_control_plane_url }}
+      channel_ws: {{ junexis_channel_url }}
 
 - name: Install channeld systemd unit
   ansible.builtin.copy:

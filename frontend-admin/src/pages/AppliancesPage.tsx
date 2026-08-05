@@ -25,6 +25,7 @@ import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { APPLIANCE_GATEWAY_URL, applianceRegisterCommand } from "../config/applianceGateway";
 
 const STATUS_OPTIONS = [
   { value: "online", label: "Online" },
@@ -458,6 +459,7 @@ function ActivationTokensSection() {
   const [rawToken, setRawToken] = useState<string | null>(null);
   const [rawTokenHint, setRawTokenHint] = useState<string | null>(null);
   const [copyConfirmed, setCopyConfirmed] = useState(false);
+  const [copyRegisterConfirmed, setCopyRegisterConfirmed] = useState(false);
 
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
@@ -516,6 +518,7 @@ function ActivationTokensSection() {
     setRawToken(null);
     setRawTokenHint(null);
     setCopyConfirmed(false);
+    setCopyRegisterConfirmed(false);
   }
 
   function handleTenantChange(nextId: string) {
@@ -576,6 +579,16 @@ function ActivationTokensSection() {
       setCopyConfirmed(true);
     } catch {
       setCopyConfirmed(false);
+    }
+  }
+
+  async function handleCopyRegisterCommand() {
+    if (!rawToken) return;
+    try {
+      await navigator.clipboard.writeText(applianceRegisterCommand(rawToken));
+      setCopyRegisterConfirmed(true);
+    } catch {
+      setCopyRegisterConfirmed(false);
     }
   }
 
@@ -711,9 +724,24 @@ function ActivationTokensSection() {
                   Tenant: {selectedTenant.name} ({selectedTenant.short_code})
                 </div>
               )}
+              <p className="one-time-secret-hint">
+                On the new appliance, run this one command (gateway is already the lab default
+                on VM 114 — you should not need to memorize a separate URL):
+              </p>
+              <code className="one-time-secret-value">
+                {applianceRegisterCommand(rawToken)}
+              </code>
+              <div className="one-time-secret-hint">Gateway: {APPLIANCE_GATEWAY_URL}</div>
               <div className="confirm-actions">
-                <button className="btn btn-primary" type="button" onClick={handleCopyRawToken}>
-                  {copyConfirmed ? "Copied!" : "Copy to clipboard"}
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={handleCopyRegisterCommand}
+                >
+                  {copyRegisterConfirmed ? "Register command copied!" : "Copy register command"}
+                </button>
+                <button className="btn btn-ghost" type="button" onClick={handleCopyRawToken}>
+                  {copyConfirmed ? "Token copied!" : "Copy token only"}
                 </button>
                 <button className="btn btn-ghost" type="button" onClick={clearRawTokenPanel}>
                   Close and clear from screen

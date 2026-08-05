@@ -2,8 +2,10 @@
 junexis_appliance_version: "0.1.0-dev"
 junexis_config_root: /etc/junexis
 junexis_data_root: /var/lib/junexis
-junexis_channel_url: "wss://soc.junexis.com/appliance/v1/channel"
-junexis_control_plane_url: "https://soc.junexis.com"
+# Lab: Appliance Management VM 114 (KB-093L). Production ISO build should set
+# junexis_control_plane_url: "https://soc.junexis.com" (and matching wss URL).
+junexis_control_plane_url: "http://192.168.0.224:8000"
+junexis_channel_url: "ws://192.168.0.224:8000/appliance/v1/channel"
 # Prefer podman; docker alternate SKU documented in role defaults
 junexis_container_runtime: podman
 junexis_core_services:

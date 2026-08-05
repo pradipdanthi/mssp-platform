@@ -16,6 +16,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Loopback only — Appliance Management VM 114 reaches DB via SSH tunnel (KB-093L).
+    ports:
+      - "127.0.0.1:5432:5432"
     networks:
       - mssp-backend
 
@@ -31,6 +34,9 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Loopback only — paired with Postgres expose for VM 114 tunnel (KB-093L).
+    ports:
+      - "127.0.0.1:6379:6379"
     networks:
       - mssp-backend
 

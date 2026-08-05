@@ -76,6 +76,19 @@ def set_network_mode(mode: str) -> None:
     network_mode_path().write_text(mode + "\n", encoding="utf-8")
 
 
+def default_control_plane() -> str:
+    """Lab appliances default to Appliance Management VM 114 (KB-093L).
+
+    Production/public edge: set JUNEXIS_DEFAULT_CONTROL_PLANE=https://soc.junexis.com
+    at image build or in /etc/junexis/appliance.env before register.
+    """
+    return (
+        os.environ.get("JUNEXIS_DEFAULT_CONTROL_PLANE")
+        or os.environ.get("JUNEXIS_CONTROL_PLANE")
+        or "http://192.168.0.224:8000"
+    ).rstrip("/")
+
+
 def appliance_state_path() -> Path:
     return state_root() / "appliance.json"
 
@@ -87,7 +100,7 @@ def load_appliance_state() -> dict[str, Any]:
             "registration": "unregistered",
             "appliance_name": "",
             "site_name": "",
-            "control_plane": "https://soc.junexis.com",
+            "control_plane": default_control_plane(),
             "deploy_method": "",
             "appliance_id": None,
         },

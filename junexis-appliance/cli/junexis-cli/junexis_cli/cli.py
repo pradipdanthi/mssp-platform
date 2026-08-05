@@ -275,7 +275,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     setup = sub.add_parser("setup", help="First-boot wizard (local state)", parents=[common])
     setup.add_argument("--token", required=True)
-    setup.add_argument("--control-plane", default="https://soc.junexis.com")
+    setup.add_argument(
+        "--control-plane",
+        default=state.default_control_plane(),
+        help="Appliance Management / channel gateway URL (lab default: VM 114)",
+    )
     setup.add_argument("--appliance-name", default="")
     setup.add_argument("--site-name", default="")
     setup.add_argument("--deploy-method", choices=["factory", "customer-vm"], default="")

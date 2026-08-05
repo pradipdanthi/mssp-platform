@@ -40,10 +40,14 @@ def load_api_key() -> str:
 
 
 def _control_plane_base(app: dict[str, Any]) -> str:
-    base = (app.get("control_plane") or os.environ.get("JUNEXIS_CONTROL_PLANE") or "").rstrip("/")
+    base = (
+        app.get("control_plane")
+        or os.environ.get("JUNEXIS_CONTROL_PLANE")
+        or state.default_control_plane()
+    ).rstrip("/")
     if not base:
         raise ValueError("control_plane URL missing; pass --control-plane or run setup first")
-    # Allow http://192.168.0.201:8000 or https://soc.junexis.com — normalize /appliance paths.
+    # Allow http://192.168.0.224:8000 (Appliance Mgmt) or https://soc.junexis.com
     if base.endswith("/api"):
         base = base[:-4]
     return base

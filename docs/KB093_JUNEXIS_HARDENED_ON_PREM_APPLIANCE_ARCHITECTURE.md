@@ -371,7 +371,7 @@ Appliance registration/heartbeat may temporarily use APIs on **VM 100 `mssp-cont
 | Plane | Host role (production) | Responsibilities |
 |-------|------------------------|------------------|
 | **MSSP Control Plane** | `mssp-control` (VM 100 today) | Admin/Customer portals, PostgreSQL system of record, RBAC, entitlements UX, normalized records, case UX pointers |
-| **Appliance Management Plane** | **Separate server/cluster** (future VM — name TBD, e.g. `junexis-appliance-mgmt`) | `soc.junexis.com` edge for appliances: mTLS channel gateway, appliance CA issue/revoke, OTA + WPK repo, registration/bootstrap update allow-lists, appliance health fan-in |
+| **Appliance Management Plane** | **VM 114** `junexis-appliance-mgmt` (`192.168.0.224`) — live; see `docs/KB093L_APPLIANCE_MANAGEMENT_PLANE_VM114.md` | `soc.junexis.com` edge for appliances: mTLS channel gateway, appliance CA issue/revoke, OTA + WPK repo, registration/bootstrap update allow-lists, appliance health fan-in |
 | **Cloud SOC engines** | Existing/shared SOC VMs | TheHive (ticketing), Wazuh cloud path, etc. — not on the customer appliance |
 
 Control plane talks to Appliance Management over **internal** admin APIs (service auth), not by co-locating those daemons on VM 100 forever.
