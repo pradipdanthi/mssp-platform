@@ -16,6 +16,7 @@ Related: KB-093, KB-076, SERVICE_MATRIX.md
 | Customer media | **One bootable/installable ISO** (bare metal, hypervisor VM, cloud VM) — not a pre-baked qcow2 as the field deliverable |
 | TheHive / Shuffle on ISO | **No** — central ticketing + SOAR stay in Junexis Cloud SOC / Admin |
 | Engines on ISO | **Every appliance-installable catalogue service** is **bundled on the ISO, fully installed/configurable, idle** until a Junexis-issued license enables it. No “ship later / download later” for those engines. |
+| Offline package pool | `junexis-appliance/iso/offline-packages/` — fetch with `scripts/b2_fetch_offline_packages.sh` (wazuh-manager, fluent-bit, suricata + deps); `build_install_iso.sh` embeds them so firstboot installs without Internet |
 | Core always included (after contract) | **Log & Event Monitoring** + **Ticketing (central)** — with or without appliance |
 | Contract gate | Core (and any other service) only after **minimum 1-year contract** signed |
 | License keys | **Only** Junexis MSSP control plane can generate license keys, bound to **that customer/tenant identity** (and appliance fingerprint when appliance SKU) |

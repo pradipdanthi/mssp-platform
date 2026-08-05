@@ -4,6 +4,39 @@
   ansible.builtin.meta: end_role
   when: not (wazuh_local_enabled | bool)
 
+- name: Resolve offline package pool
+  ansible.builtin.set_fact:
+    wazuh_local_offline_pool: >-
+      {{
+        wazuh_local_offline_packages_dir
+        if (wazuh_local_offline_packages_dir | length) > 0
+        else (
+          (junexis_payload_root | default('/opt/junexis/payload'))
+          ~ '/offline-packages'
+        )
+      }}
+
+- name: Check offline package pool
+  ansible.builtin.stat:
+    path: "{{ wazuh_local_offline_pool }}"
+  register: wazuh_offline_dir
+
+- name: List offline .deb packages
+  ansible.builtin.find:
+    paths: "{{ wazuh_local_offline_pool }}"
+    patterns: "*.deb"
+    file_type: file
+  register: wazuh_offline_debs
+  when: wazuh_offline_dir.stat.exists | default(false)
+
+- name: Set offline-install flag
+  ansible.builtin.set_fact:
+    wazuh_local_use_offline: >-
+      {{
+        (wazuh_offline_dir.stat.exists | default(false))
+        and ((wazuh_offline_debs.files | default([]) | length) > 0)
+      }}
+
 - name: Assert case-management packages must never be installed
   ansible.builtin.shell: |
     set -e
@@ -27,6 +60,18 @@
     state: present
     update_cache: true
 
+- name: Install engine packages from offline ISO pool (airgap)
+  ansible.builtin.shell: |
+    set -euo pipefail
+    POOL="{{ wazuh_local_offline_pool }}"
+    cd "$POOL"
+    # apt resolves deps among local .debs when all are passed together
+    apt-get install -y --no-install-recommends ./*.deb
+  args:
+    executable: /bin/bash
+  when: wazuh_local_use_offline | bool
+  register: wazuh_offline_install
+
 - name: Add Wazuh APT key
   ansible.builtin.shell: |
     set -euo pipefail
@@ -34,7 +79,9 @@
     chmod 644 /usr/share/keyrings/wazuh.gpg
   args:
     creates: /usr/share/keyrings/wazuh.gpg
-  when: wazuh_local_install_manager | bool
+  when:
+    - not (wazuh_local_use_offline | bool)
+    - wazuh_local_install_manager | bool
 
 - name: Add Wazuh APT repository
   ansible.builtin.copy:
@@ -42,26 +89,32 @@
     mode: "0644"
     content: |
       deb [signed-by=/usr/share/keyrings/wazuh.gpg] {{ wazuh_local_repo_url }} stable main
-  when: wazuh_local_install_manager | bool
+  when:
+    - not (wazuh_local_use_offline | bool)
+    - wazuh_local_install_manager | bool
 
-- name: Install wazuh-manager (idle until license)
+- name: Install wazuh-manager from network (idle until license)
   ansible.builtin.apt:
-    name: wazuh-manager
+    name: "wazuh-manager={{ wazuh_local_manager_deb_version }}"
     state: present
     update_cache: true
-  when: wazuh_local_install_manager | bool
+  when:
+    - not (wazuh_local_use_offline | bool)
+    - wazuh_local_install_manager | bool
   register: wazuh_mgr_install
   failed_when: false
 
-- name: Note when wazuh-manager package missing (use offline pool later)
+- name: Note when wazuh-manager package missing
   ansible.builtin.debug:
     msg: >-
-      wazuh-manager not installed from network apt — for airgap ISO, place debs under
-      junexis-appliance/iso/offline-packages/ and extend firstboot. Firstboot will retry
-      when bootstrap network is available.
+      wazuh-manager not installed — populate junexis-appliance/iso/offline-packages/
+      with b2_fetch_offline_packages.sh and rebuild the install ISO, or allow bootstrap
+      network so APT can reach packages.wazuh.com.
   when:
+    - not (wazuh_local_use_offline | bool)
     - wazuh_local_install_manager | bool
-    - not (wazuh_mgr_install is changed or wazuh_mgr_install is success)
+    - wazuh_mgr_install is defined
+    - not (wazuh_mgr_install is changed or (wazuh_mgr_install is succeeded))
 
 - name: Stop and disable wazuh-manager until entitlement
   ansible.builtin.systemd:
@@ -78,7 +131,9 @@
     chmod 644 /usr/share/keyrings/fluentbit.gpg
   args:
     creates: /usr/share/keyrings/fluentbit.gpg
-  when: wazuh_local_install_fluent_bit | bool
+  when:
+    - not (wazuh_local_use_offline | bool)
+    - wazuh_local_install_fluent_bit | bool
   failed_when: false
 
 - name: Add Fluent Bit APT repository
@@ -87,14 +142,18 @@
     mode: "0644"
     content: |
       deb [signed-by=/usr/share/keyrings/fluentbit.gpg] https://packages.fluentbit.io/ubuntu/noble noble main
-  when: wazuh_local_install_fluent_bit | bool
+  when:
+    - not (wazuh_local_use_offline | bool)
+    - wazuh_local_install_fluent_bit | bool
 
-- name: Install Fluent Bit (appliance-side collector — never on endpoints)
+- name: Install Fluent Bit from network (appliance-side collector — never on endpoints)
   ansible.builtin.apt:
     name: "{{ fluent_bit_apt_package }}"
     state: present
     update_cache: true
-  when: wazuh_local_install_fluent_bit | bool
+  when:
+    - not (wazuh_local_use_offline | bool)
+    - wazuh_local_install_fluent_bit | bool
   register: fb_install
   failed_when: false
 
@@ -133,12 +192,14 @@
   failed_when: false
   when: wazuh_local_install_fluent_bit | bool
 
-- name: Install Suricata for NDR idle slot (svc-06)
+- name: Install Suricata from network for NDR idle slot (svc-06)
   ansible.builtin.apt:
     name: suricata
     state: present
     update_cache: true
-  when: wazuh_local_install_suricata | bool
+  when:
+    - not (wazuh_local_use_offline | bool)
+    - wazuh_local_install_suricata | bool
   register: suri_install
   failed_when: false
 
@@ -175,6 +236,7 @@
       installed_or_staged=true
       enabled=false
       enable_via=junexis-cli license apply
+      offline_pool={{ wazuh_local_use_offline | default(false) }}
   loop:
     - 01-log-event
     - 02-ir-worker

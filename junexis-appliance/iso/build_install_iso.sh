@@ -37,12 +37,27 @@ tar -C "$ROOT" \
   --exclude='.tools' \
   --exclude='packer' \
   -cf - \
-  ansible services hardening cli configs licensing appliance requirements-engine.txt VERSION docs/SERVICE_MATRIX.md \
+  ansible services hardening cli configs licensing appliance engines requirements-engine.txt VERSION docs/SERVICE_MATRIX.md \
   | tar -C "$WORK/seed/junexis-payload" -xf -
 
 cp -f "$ROOT/iso/firstboot/junexis-firstboot.sh" "$WORK/seed/junexis-payload/junexis-firstboot.sh"
 cp -f "$ROOT/iso/firstboot/junexis-firstboot.service" "$WORK/seed/junexis-payload/junexis-firstboot.service"
 chmod +x "$WORK/seed/junexis-payload/junexis-firstboot.sh" "$ROOT/iso/docker_remaster.sh"
+
+# Airgap engine .debs + binaries + wheels
+OFFLINE_SRC="$ROOT/iso/offline-packages"
+if compgen -G "$OFFLINE_SRC/*.deb" >/dev/null; then
+  echo "Staging offline engine packages ($(find "$OFFLINE_SRC" -maxdepth 1 -name '*.deb' | wc -l) debs) ..."
+  mkdir -p "$WORK/seed/junexis-payload/offline-packages/bin" "$WORK/seed/junexis-payload/offline-packages/wheels"
+  cp -a "$OFFLINE_SRC"/*.deb "$WORK/seed/junexis-payload/offline-packages/"
+  [[ -d "$OFFLINE_SRC/bin" ]] && cp -a "$OFFLINE_SRC/bin/." "$WORK/seed/junexis-payload/offline-packages/bin/" || true
+  [[ -d "$OFFLINE_SRC/wheels" ]] && cp -a "$OFFLINE_SRC/wheels/." "$WORK/seed/junexis-payload/offline-packages/wheels/" || true
+  [[ -f "$OFFLINE_SRC/SHA256SUMS" ]] && cp -f "$OFFLINE_SRC/SHA256SUMS" "$WORK/seed/junexis-payload/offline-packages/"
+  [[ -f "$OFFLINE_SRC/MANIFEST.txt" ]] && cp -f "$OFFLINE_SRC/MANIFEST.txt" "$WORK/seed/junexis-payload/offline-packages/"
+else
+  echo "WARN: no .deb files in $OFFLINE_SRC — firstboot will need bootstrap Internet for engines." >&2
+  echo "      Run: $ROOT/scripts/b2_fetch_offline_packages.sh" >&2
+fi
 
 if [[ -f "$ROOT/licensing/keys/licensing-ed25519-v1.pub" ]]; then
   mkdir -p "$WORK/seed/junexis-payload/licensing/keys"

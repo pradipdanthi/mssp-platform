@@ -1,0 +1,123 @@
+---
+# Install ALL catalogue backend engines from ISO offline pool, leave idle.
+- name: Skip when disabled
+  ansible.builtin.meta: end_role
+  when: not (catalogue_engines_enabled | default(true) | bool)
+
+- name: Resolve offline pool
+  ansible.builtin.set_fact:
+    catalogue_offline_pool: >-
+      {{
+        (junexis_payload_root | default('/opt/junexis/payload'))
+        ~ '/offline-packages'
+      }}
+
+- name: Ensure engine directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - /opt/junexis/engines
+    - /opt/junexis/engines/bin
+    - /var/lib/junexis/engine-status
+    - /var/lib/junexis/vmaas
+    - /var/lib/junexis/ndr
+    - /var/lib/junexis/ioc-cache
+
+- name: Install offline .deb packages when present
+  ansible.builtin.shell: |
+    set -euo pipefail
+    POOL="{{ catalogue_offline_pool }}"
+    test -d "$POOL"
+    shopt -s nullglob
+    debs=("$POOL"/*.deb)
+    if ((${#debs[@]} == 0)); then
+      echo "No offline debs in $POOL" >&2
+      exit 3
+    fi
+    apt-get install -y --no-install-recommends "${debs[@]}"
+  args:
+    executable: /bin/bash
+  register: catalogue_deb_install
+  when: catalogue_offline_pool is defined
+
+- name: Install Nuclei/Vuls binaries from offline pool
+  ansible.builtin.copy:
+    src: "{{ catalogue_offline_pool }}/bin/{{ item }}"
+    dest: "/opt/junexis/engines/bin/{{ item }}"
+    mode: "0755"
+    remote_src: true
+  loop:
+    - nuclei
+    - vuls
+  failed_when: false
+
+- name: Install optional vuls-scanner binary
+  ansible.builtin.copy:
+    src: "{{ catalogue_offline_pool }}/bin/vuls-scanner"
+    dest: /opt/junexis/engines/bin/vuls-scanner
+    mode: "0755"
+    remote_src: true
+  failed_when: false
+
+- name: Symlink scanner binaries into PATH
+  ansible.builtin.file:
+    src: "/opt/junexis/engines/bin/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    state: link
+    force: true
+  loop:
+    - nuclei
+    - vuls
+  failed_when: false
+
+- name: Install DuckDB wheel offline when present
+  ansible.builtin.shell: |
+    set -euo pipefail
+    W="{{ catalogue_offline_pool }}/wheels"
+    if compgen -G "$W"/duckdb*.whl >/dev/null; then
+      pip3 install --break-system-packages --no-index --find-links "$W" duckdb
+    else
+      echo "No duckdb wheel — skipping (junexis_runtime may have installed via network)"
+    fi
+  args:
+    executable: /bin/bash
+  failed_when: false
+
+- name: Install catalogue engine worker
+  ansible.builtin.copy:
+    src: junexis_engine_worker.py
+    dest: /usr/bin/junexis-engine-worker
+    mode: "0755"
+
+- name: Stop and disable package daemons until license
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  failed_when: false
+  loop:
+    - wazuh-manager
+    - fluent-bit
+    - suricata
+    - podman
+    - redis-server
+
+- name: Write installed-engines inventory
+  ansible.builtin.shell: |
+    set -euo pipefail
+    python3 /usr/bin/junexis-engine-worker svc-01 --verify-only > /tmp/v01.json || true
+    python3 /usr/bin/junexis-engine-worker svc-04 --verify-only > /tmp/v04.json || true
+    python3 /usr/bin/junexis-engine-worker svc-06 --verify-only > /tmp/v06.json || true
+    {
+      echo "{"
+      echo "\"generated\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+      echo "\"svc-01\": $(cat /tmp/v01.json 2>/dev/null || echo '{}'),"
+      echo "\"svc-04\": $(cat /tmp/v04.json 2>/dev/null || echo '{}'),"
+      echo "\"svc-06\": $(cat /tmp/v06.json 2>/dev/null || echo '{}')"
+      echo "}"
+    } > /var/lib/junexis/installed_engines.json
+  args:
+    executable: /bin/bash
+  failed_when: false

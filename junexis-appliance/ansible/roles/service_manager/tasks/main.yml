@@ -1,5 +1,5 @@
 ---
-# Role: service_manager — install idle svc units + reconcile from entitlements.json
+# Role: service_manager — real catalogue units (idle until license reconcile)
 - name: Skip when disabled
   ansible.builtin.meta: end_role
   when: not (service_manager_enabled | bool)
@@ -10,7 +10,7 @@
     state: directory
     mode: "0755"
 
-- name: Install catalogue service unit templates (idle stubs)
+- name: Install catalogue service units (real engine workers)
   ansible.builtin.copy:
     dest: "/etc/systemd/system/{{ item.name }}"
     mode: "0644"
@@ -18,48 +18,30 @@
       [Unit]
       Description={{ item.desc }}
       After=network-online.target
-      ConditionPathExists=/var/lib/junexis/entitlements.json
+      ConditionPathExists=/usr/bin/junexis-engine-worker
 
       [Service]
-      Type=oneshot
-      RemainAfterExit=yes
-      ExecStart=/usr/bin/junexis-svc-stub {{ item.id }} start
-      ExecStop=/usr/bin/junexis-svc-stub {{ item.id }} stop
+      Type=simple
+      Environment=JUNEXIS_STATE_DIR=/var/lib/junexis
+      Environment=JUNEXIS_LOG_DIR=/var/log/junexis
+      Environment=JUNEXIS_ENGINE_BIN=/opt/junexis/engines/bin
+      ExecStart=/usr/bin/junexis-engine-worker {{ item.id }} --interval 30
+      Restart=on-failure
+      RestartSec=10
 
       [Install]
       WantedBy=multi-user.target
   loop:
-    - { id: svc-01, name: junexis-svc-01-log-event.service, desc: "Junexis Log & Event Monitoring (idle until licensed)" }
+    - { id: svc-01, name: junexis-svc-01-log-event.service, desc: "Junexis Log & Event Monitoring (Wazuh+Fluent Bit, idle until licensed)" }
     - { id: svc-02, name: junexis-svc-02-ir-worker.service, desc: "Junexis IR local worker (idle until licensed)" }
     - { id: svc-03, name: junexis-svc-03-automation.service, desc: "Junexis Security Automation worker (idle until licensed)" }
-    - { id: svc-04, name: junexis-svc-04-vmaas.service, desc: "Junexis Vulnerability Management (idle until licensed)" }
-    - { id: svc-05, name: junexis-svc-05-compliance.service, desc: "Junexis Continuous Compliance (idle until licensed)" }
-    - { id: svc-06, name: junexis-svc-06-ndr.service, desc: "Junexis NDR (idle until licensed)" }
+    - { id: svc-04, name: junexis-svc-04-vmaas.service, desc: "Junexis VMaaS Nuclei+Vuls (idle until licensed)" }
+    - { id: svc-05, name: junexis-svc-05-compliance.service, desc: "Junexis Continuous Compliance / SCA (idle until licensed)" }
+    - { id: svc-06, name: junexis-svc-06-ndr.service, desc: "Junexis NDR Suricata+Zeek (idle until licensed)" }
     - { id: svc-07, name: junexis-svc-07-threat-intel.service, desc: "Junexis Threat Intelligence cache (idle until licensed)" }
     - { id: svc-08, name: junexis-svc-08-forensics.service, desc: "Junexis Forensics listener (idle until licensed)" }
     - { id: svc-09, name: junexis-svc-09-easm.service, desc: "Junexis EASM probes (idle until licensed)" }
     - { id: svc-10, name: junexis-svc-10-itdr.service, desc: "Junexis ITDR connectors (idle until licensed)" }
-
-- name: Install service stub binary
-  ansible.builtin.copy:
-    dest: /usr/bin/junexis-svc-stub
-    mode: "0755"
-    content: |
-      #!/usr/bin/env bash
-      # Marks idle catalogue services as started/stopped for entitlement reconcile.
-      set -euo pipefail
-      SVC="${1:-}"
-      ACT="${2:-status}"
-      STATE_DIR=/var/lib/junexis/service-state
-      mkdir -p "$STATE_DIR"
-      case "$ACT" in
-        start) echo "enabled $(date -Is)" >"$STATE_DIR/$SVC"; logger -t junexis-svc "start $SVC"; ;;
-        stop)  rm -f "$STATE_DIR/$SVC"; logger -t junexis-svc "stop $SVC"; ;;
-        status)
-          if [[ -f "$STATE_DIR/$SVC" ]]; then echo active; else echo inactive; fi
-          ;;
-        *) echo "usage: junexis-svc-stub svc-XX {start|stop|status}" >&2; exit 2 ;;
-      esac
 
 - name: Install reconcile script
   ansible.builtin.copy:
@@ -67,7 +49,7 @@
     mode: "0755"
     content: |
       #!/usr/bin/env python3
-      """Enable/disable catalogue units from /var/lib/junexis/entitlements.json."""
+      """Enable/disable catalogue units + backend daemons from entitlements.json."""
       from __future__ import annotations
       import json, subprocess, sys
       from pathlib import Path
@@ -78,7 +60,7 @@
         "svc-02": ["junexis-svc-02-ir-worker.service"],
         "svc-03": ["junexis-svc-03-automation.service"],
         "svc-04": ["junexis-svc-04-vmaas.service"],
-        "svc-05": ["junexis-svc-05-compliance.service"],
+        "svc-05": ["junexis-svc-05-compliance.service", "wazuh-manager"],
         "svc-06": ["junexis-svc-06-ndr.service", "suricata"],
         "svc-07": ["junexis-svc-07-threat-intel.service"],
         "svc-08": ["junexis-svc-08-forensics.service"],
@@ -95,14 +77,12 @@
               return 0
           data = json.loads(ENT.read_text(encoding="utf-8"))
           enabled = set(data.get("service_ids") or [])
-          # core flag implies svc-01
           if data.get("core"):
               enabled.add("svc-01")
           report = {"enabled": sorted(enabled), "actions": []}
           for sid, units in CATALOG.items():
               want = sid in enabled
               for u in units:
-                  # skip missing units (engines not yet installed)
                   r = subprocess.run(["systemctl", "cat", u], capture_output=True)
                   if r.returncode != 0:
                       continue
@@ -125,7 +105,7 @@
   ansible.builtin.systemd:
     daemon_reload: true
 
-- name: Ensure all catalogue stub units disabled (idle)
+- name: Ensure all catalogue units disabled (idle until license)
   ansible.builtin.systemd:
     name: "{{ item }}"
     enabled: false
@@ -144,8 +124,23 @@
     - junexis-svc-10-itdr.service
   failed_when: false
 
-- name: Reconcile once if entitlements already present
-  ansible.builtin.command: /usr/bin/junexis-reconcile-services
-  register: junexis_reconcile
-  changed_when: "'enable:' in (junexis_reconcile.stdout | default(''))"
-  failed_when: false
+- name: Stage IDLE markers under /opt/junexis/services
+  ansible.builtin.copy:
+    dest: "/opt/junexis/services/{{ item }}/IDLE"
+    mode: "0644"
+    content: |
+      installed=true
+      enabled=false
+      enable_via=junexis-cli license apply
+      worker=/usr/bin/junexis-engine-worker
+  loop:
+    - 01-log-event
+    - 02-ir-worker
+    - 03-automation
+    - 04-vmaas
+    - 05-compliance
+    - 06-ndr
+    - 07-threat-intel
+    - 08-forensics
+    - 09-easm
+    - 10-itdr

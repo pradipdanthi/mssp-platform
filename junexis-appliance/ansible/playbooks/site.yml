@@ -14,5 +14,6 @@
     - channel_agent
     - license_enforcer
     - wazuh_local
+    - catalogue_engines
     - ota_staging
     - service_manager

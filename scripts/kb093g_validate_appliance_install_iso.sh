@@ -24,7 +24,25 @@ for role in license_enforcer service_manager wazuh_local; do
 done
 grep -q 'fluent-bit' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "Fluent Bit not in wazuh_local"
 grep -q 'thehive' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "TheHive forbid check missing"
-ok "Fluent Bit on appliance; TheHive forbidden"
+grep -q 'offline' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "offline package pool not wired in wazuh_local"
+[[ -x "$APP/scripts/b2_fetch_offline_packages.sh" ]] || fail "missing b2_fetch_offline_packages.sh"
+grep -q 'offline-packages' "$APP/iso/build_install_iso.sh" || fail "build_install_iso does not stage offline-packages"
+ok "Fluent Bit on appliance; TheHive forbidden; offline pool wired"
+
+if compgen -G "$APP/iso/offline-packages/wazuh-manager"*.deb >/dev/null \
+  && compgen -G "$APP/iso/offline-packages/fluent-bit"*.deb >/dev/null \
+  && compgen -G "$APP/iso/offline-packages/suricata"*.deb >/dev/null \
+  && [[ -x "$APP/iso/offline-packages/bin/nuclei" ]] \
+  && [[ -x "$APP/iso/offline-packages/bin/vuls" ]] \
+  && compgen -G "$APP/iso/offline-packages/zeek"*.deb >/dev/null; then
+  ok "offline-packages: wazuh, fluent-bit, suricata, zeek, nuclei, vuls"
+else
+  echo "WARN: offline-packages incomplete — run junexis-appliance/scripts/b2_fetch_offline_packages.sh"
+fi
+[[ -f "$APP/engines/junexis_engine_worker.py" ]] || fail "missing engines/junexis_engine_worker.py"
+[[ -f "$APP/ansible/roles/catalogue_engines/tasks/main.yml" ]] || fail "missing catalogue_engines role"
+grep -q 'catalogue_engines' "$APP/ansible/playbooks/install-provision.yml" || fail "catalogue_engines not in install-provision"
+ok "catalogue engine worker + role wired"
 
 # CLI license commands
 grep -q 'license' "$APP/cli/junexis-cli/junexis_cli/cli.py" || fail "CLI license subcommand missing"

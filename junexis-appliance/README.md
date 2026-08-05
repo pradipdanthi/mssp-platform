@@ -11,11 +11,14 @@ This tree is the **appliance software lifecycle** repo: install-ISO remaster, OS
 
 ```bash
 cd /opt/mssp-control
-./junexis-appliance/scripts/b2_fetch_ubuntu_iso.sh   # once
+./junexis-appliance/scripts/b2_fetch_ubuntu_iso.sh        # once (Ubuntu base ISO)
+./junexis-appliance/scripts/b2_fetch_offline_packages.sh  # wazuh/fluent-bit/suricata .debs for airgap
 ./junexis-appliance/iso/build_install_iso.sh
 # → junexis-appliance/.cache/dist-install/Junexis-Appliance-Install-v*.iso
 ./scripts/kb093g_validate_appliance_install_iso.sh
 ```
+
+Offline engine packages land in `iso/offline-packages/` and are embedded in the install ISO so firstboot can install idle engines without Internet.
 
 Plan: `/opt/mssp-control/docs/KB093G_APPLIANCE_ISO_ENTITLEMENT_PLAN.md`  
 Default install user `junexis` / password `ChangeMeNow!` — rotate after setup.

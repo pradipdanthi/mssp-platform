@@ -38,11 +38,19 @@ if [[ ! -f "$PLAYBOOK" ]]; then
   exit 3
 fi
 
+OFFLINE_POOL="$PAYLOAD/offline-packages"
+if compgen -G "$OFFLINE_POOL/*.deb" >/dev/null; then
+  echo "Offline engine pool: $(find "$OFFLINE_POOL" -maxdepth 1 -name '*.deb' | wc -l) deb(s)"
+else
+  echo "WARN: no offline .deb pool at $OFFLINE_POOL — engines need bootstrap Internet APT"
+fi
+
 ansible-playbook -i "$INV" "$PLAYBOOK" \
   -e "junexis_payload_root=$PAYLOAD" \
   -e "firewall_nftables_mode=bootstrap" \
   -e "junexis_install_idle_engines=true" \
-  -e "firewall_nftables_src_dir=$PAYLOAD/hardening/nftables"
+  -e "firewall_nftables_src_dir=$PAYLOAD/hardening/nftables" \
+  -e "wazuh_local_offline_packages_dir=$OFFLINE_POOL"
 
 touch "$MARKER"
 systemctl disable junexis-firstboot.service || true

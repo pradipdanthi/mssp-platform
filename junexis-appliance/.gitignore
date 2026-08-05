@@ -7,6 +7,14 @@ packer_cache/
 __pycache__/
 *.pyc
 
+# Offline engine .debs are large binary artifacts (fetch via script; embed in ISO)
+iso/offline-packages/*.deb
+iso/offline-packages/SHA256SUMS
+iso/offline-packages/MANIFEST.txt
+iso/offline-packages/bin/
+iso/offline-packages/wheels/
+!iso/offline-packages/README.md
+
 # Never commit appliance secrets
 **/secrets/**
 **/*.pem

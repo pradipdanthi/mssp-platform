@@ -18,6 +18,7 @@
     - role: channel_agent
     - role: license_enforcer
     - role: wazuh_local
+    - role: catalogue_engines
     - role: ota_staging
     - role: service_manager
   post_tasks:
