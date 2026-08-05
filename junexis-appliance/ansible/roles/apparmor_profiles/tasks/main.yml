@@ -1,77 +1,76 @@
 ---
 # Install AppArmor and load Junexis profiles (enforce by default).
-- name: Skip apparmor_profiles when disabled
-  ansible.builtin.meta: end_role
-  when: not (apparmor_profiles_enabled | default(true) | bool)
+- name: Apply role when enabled
+  when: apparmor_profiles_enabled | default(true) | bool
+  block:
+  - name: Install apparmor from offline pool when present
+    ansible.builtin.shell: |
+      set -euo pipefail
+      POOL="{{ apparmor_offline_pool }}"
+      shopt -s nullglob
+      debs=("$POOL"/apparmor_*.deb "$POOL"/libapparmor*.deb)
+      install_list=()
+      for d in "${debs[@]}"; do
+        [[ -f "$d" ]] && install_list+=("$d")
+      done
+      cnt=0
+      for _ in "${install_list[@]}"; do cnt=$((cnt + 1)); done
+      if [ "$cnt" -eq 0 ]; then
+        exit 42
+      fi
+      apt-get install -y --no-install-recommends "${install_list[@]}"
+    args:
+      executable: /bin/bash
+    register: apparmor_offline
+    failed_when: apparmor_offline.rc not in [0, 42]
+    changed_when: apparmor_offline.rc == 0
 
-- name: Install apparmor from offline pool when present
-  ansible.builtin.shell: |
-    set -euo pipefail
-    POOL="{{ apparmor_offline_pool }}"
-    shopt -s nullglob
-    debs=("$POOL"/apparmor_*.deb "$POOL"/libapparmor*.deb)
-    install_list=()
-    for d in "${debs[@]}"; do
-      [[ -f "$d" ]] && install_list+=("$d")
-    done
-    cnt=0
-    for _ in "${install_list[@]}"; do cnt=$((cnt + 1)); done
-    if [ "$cnt" -eq 0 ]; then
-      exit 42
-    fi
-    apt-get install -y --no-install-recommends "${install_list[@]}"
-  args:
-    executable: /bin/bash
-  register: apparmor_offline
-  failed_when: apparmor_offline.rc not in [0, 42]
-  changed_when: apparmor_offline.rc == 0
+  - name: Install apparmor from apt when offline miss
+    ansible.builtin.apt:
+      name: "{{ apparmor_packages }}"
+      state: present
+      update_cache: true
+    when: (apparmor_offline.rc | default(42)) == 42
 
-- name: Install apparmor from apt when offline miss
-  ansible.builtin.apt:
-    name: "{{ apparmor_packages }}"
-    state: present
-    update_cache: true
-  when: (apparmor_offline.rc | default(42)) == 42
+  - name: Ensure AppArmor enabled at boot
+    ansible.builtin.systemd:
+      name: apparmor
+      enabled: true
+      state: started
+      daemon_reload: true
+    failed_when: false
 
-- name: Ensure AppArmor enabled at boot
-  ansible.builtin.systemd:
-    name: apparmor
-    enabled: true
-    state: started
-    daemon_reload: true
-  failed_when: false
+  - name: Deploy Junexis AppArmor profiles
+    ansible.builtin.copy:
+      src: "{{ apparmor_profile_src_dir }}/{{ item }}"
+      dest: "/etc/apparmor.d/{{ item }}"
+      mode: "0644"
+    loop: "{{ apparmor_profiles }}"
+    notify: Reload apparmor profiles
 
-- name: Deploy Junexis AppArmor profiles
-  ansible.builtin.copy:
-    src: "{{ apparmor_profile_src_dir }}/{{ item }}"
-    dest: "/etc/apparmor.d/{{ item }}"
-    mode: "0644"
-  loop: "{{ apparmor_profiles }}"
-  notify: Reload apparmor profiles
+  - name: Load Junexis AppArmor profiles now
+    ansible.builtin.command:
+      cmd: "apparmor_parser -r {{ '/etc/apparmor.d/' ~ item }}"
+    loop: "{{ apparmor_profiles }}"
+    register: aa_load
+    failed_when: false
+    changed_when: aa_load.rc == 0
 
-- name: Load Junexis AppArmor profiles now
-  ansible.builtin.command:
-    cmd: "apparmor_parser -r {{ '/etc/apparmor.d/' ~ item }}"
-  loop: "{{ apparmor_profiles }}"
-  register: aa_load
-  failed_when: false
-  changed_when: aa_load.rc == 0
+  - name: Set profile mode (enforce/complain)
+    ansible.builtin.command:
+      cmd: >-
+        {{ 'aa-enforce' if apparmor_mode == 'enforce' else 'aa-complain' }}
+        /etc/apparmor.d/{{ item }}
+    loop: "{{ apparmor_profiles }}"
+    failed_when: false
+    changed_when: true
 
-- name: Set profile mode (enforce/complain)
-  ansible.builtin.command:
-    cmd: >-
-      {{ 'aa-enforce' if apparmor_mode == 'enforce' else 'aa-complain' }}
-      /etc/apparmor.d/{{ item }}
-  loop: "{{ apparmor_profiles }}"
-  failed_when: false
-  changed_when: true
-
-- name: Record apparmor_profiles applied marker
-  ansible.builtin.copy:
-    dest: /var/lib/junexis/apparmor_profiles.applied
-    mode: "0644"
-    content: |
-      applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
-      role=apparmor_profiles
-      mode={{ apparmor_mode }}
-      profiles={{ apparmor_profiles | join(',') }}
+  - name: Record apparmor_profiles applied marker
+    ansible.builtin.copy:
+      dest: /var/lib/junexis/apparmor_profiles.applied
+      mode: "0644"
+      content: |
+        applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+        role=apparmor_profiles
+        mode={{ apparmor_mode }}
+        profiles={{ apparmor_profiles | join(',') }}

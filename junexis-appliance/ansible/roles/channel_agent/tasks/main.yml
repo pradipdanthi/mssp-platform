@@ -1,77 +1,76 @@
 ---
 # Install and enable junexis-channeld (Phase B SOC channel client).
-- name: Skip channel_agent when disabled
-  ansible.builtin.meta: end_role
-  when: not (channel_agent_enabled | default(true) | bool)
+- name: Apply role when enabled
+  when: channel_agent_enabled | default(true) | bool
+  block:
+  - name: Ensure channel source directories on appliance
+    ansible.builtin.file:
+      path: "{{ item }}"
+      state: directory
+      mode: "0755"
+    loop:
+      - /opt/junexis/channel
+      - /opt/junexis/channel/channeld
+      - /etc/junexis
+      - /var/lib/junexis
+      - /run/junexis
 
-- name: Ensure channel source directories on appliance
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: directory
-    mode: "0755"
-  loop:
-    - /opt/junexis/channel
-    - /opt/junexis/channel/channeld
-    - /etc/junexis
-    - /var/lib/junexis
-    - /run/junexis
+  - name: Install channeld package files
+    ansible.builtin.copy:
+      src: "{{ channel_agent_src_dir }}/channeld/"
+      dest: /opt/junexis/channel/channeld/
+      mode: "0644"
 
-- name: Install channeld package files
-  ansible.builtin.copy:
-    src: "{{ channel_agent_src_dir }}/channeld/"
-    dest: /opt/junexis/channel/channeld/
-    mode: "0644"
+  - name: Install junexis-channeld launcher
+    ansible.builtin.copy:
+      dest: /usr/sbin/junexis-channeld
+      mode: "0755"
+      content: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        export PYTHONPATH=/opt/junexis/channel:/opt/junexis/cli:/opt/junexis/appliance-src:/opt/junexis/ota${PYTHONPATH:+:$PYTHONPATH}
+        export JUNEXIS_STATE_DIR=${JUNEXIS_STATE_DIR:-/var/lib/junexis}
+        export JUNEXIS_CONFIG_DIR=${JUNEXIS_CONFIG_DIR:-/etc/junexis}
+        exec /usr/bin/python3 -m channeld "$@"
 
-- name: Install junexis-channeld launcher
-  ansible.builtin.copy:
-    dest: /usr/sbin/junexis-channeld
-    mode: "0755"
-    content: |
-      #!/usr/bin/env bash
-      set -euo pipefail
-      export PYTHONPATH=/opt/junexis/channel:/opt/junexis/cli:/opt/junexis/appliance-src:/opt/junexis/ota${PYTHONPATH:+:$PYTHONPATH}
-      export JUNEXIS_STATE_DIR=${JUNEXIS_STATE_DIR:-/var/lib/junexis}
-      export JUNEXIS_CONFIG_DIR=${JUNEXIS_CONFIG_DIR:-/etc/junexis}
-      exec /usr/bin/python3 -m channeld "$@"
+  - name: Deploy channel.yaml config
+    ansible.builtin.copy:
+      dest: "{{ channel_agent_config_path }}"
+      mode: "0640"
+      content: |
+        # Managed by channel_agent role — gateway URL from group_vars (KB-093L)
+        mode: {{ channel_agent_mode }}
+        poll_interval_sec: {{ channel_agent_poll_interval_sec }}
+        control_plane: {{ junexis_control_plane_url }}
+        channel_ws: {{ junexis_channel_url }}
 
-- name: Deploy channel.yaml config
-  ansible.builtin.copy:
-    dest: "{{ channel_agent_config_path }}"
-    mode: "0640"
-    content: |
-      # Managed by channel_agent role — gateway URL from group_vars (KB-093L)
-      mode: {{ channel_agent_mode }}
-      poll_interval_sec: {{ channel_agent_poll_interval_sec }}
-      control_plane: {{ junexis_control_plane_url }}
-      channel_ws: {{ junexis_channel_url }}
+  - name: Install channeld systemd unit
+    ansible.builtin.copy:
+      src: "{{ playbook_dir }}/../../configs/systemd/junexis-channeld.service"
+      dest: /etc/systemd/system/junexis-channeld.service
+      mode: "0644"
 
-- name: Install channeld systemd unit
-  ansible.builtin.copy:
-    src: "{{ playbook_dir }}/../../configs/systemd/junexis-channeld.service"
-    dest: /etc/systemd/system/junexis-channeld.service
-    mode: "0644"
+  - name: Ensure ReadWritePaths include logs for channeld
+    ansible.builtin.lineinfile:
+      path: /etc/systemd/system/junexis-channeld.service
+      regexp: '^ReadWritePaths='
+      line: 'ReadWritePaths=/var/lib/junexis /var/log/junexis /run/junexis'
+    failed_when: false
 
-- name: Ensure ReadWritePaths include logs for channeld
-  ansible.builtin.lineinfile:
-    path: /etc/systemd/system/junexis-channeld.service
-    regexp: '^ReadWritePaths='
-    line: 'ReadWritePaths=/var/lib/junexis /var/log/junexis /run/junexis'
-  failed_when: false
+  - name: Enable junexis-channeld (starts after register when creds exist)
+    ansible.builtin.systemd:
+      name: "{{ channel_agent_unit }}"
+      enabled: true
+      daemon_reload: true
+      # Do not force start during image build — register may not have happened yet
+      state: started
+    failed_when: false
 
-- name: Enable junexis-channeld (starts after register when creds exist)
-  ansible.builtin.systemd:
-    name: "{{ channel_agent_unit }}"
-    enabled: true
-    daemon_reload: true
-    # Do not force start during image build — register may not have happened yet
-    state: started
-  failed_when: false
-
-- name: Record channel_agent applied marker
-  ansible.builtin.copy:
-    dest: /var/lib/junexis/channel_agent.applied
-    mode: "0644"
-    content: |
-      applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
-      role=channel_agent
-      mode={{ channel_agent_mode }}
+  - name: Record channel_agent applied marker
+    ansible.builtin.copy:
+      dest: /var/lib/junexis/channel_agent.applied
+      mode: "0644"
+      content: |
+        applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+        role=channel_agent
+        mode={{ channel_agent_mode }}

@@ -20,7 +20,11 @@ grep -q 'ANSIBLE_CONFIG' "$APP/iso/firstboot/junexis-firstboot.sh" \
 if rg -n '\$\{#|\{#' "$APP/ansible/roles" --glob '*.yml' >/tmp/kb093g-jinja-hash.txt 2>/dev/null; then
   fail "Ansible roles contain {# Jinja trap (use a counter loop, never \${#arr[@]}) — see $(head -8 /tmp/kb093g-jinja-hash.txt)"
 fi
-ok "no {# Jinja traps in ansible roles"
+# meta: end_role fails on some ansible packaging paths ("invalid meta action"); use when/block.
+if rg -n 'end_role' "$APP/ansible/roles" --glob '*.yml' >/tmp/kb093g-end-role.txt 2>/dev/null; then
+  fail "ansible roles must not use meta:end_role — see $(head -5 /tmp/kb093g-end-role.txt)"
+fi
+ok "no meta:end_role in ansible roles"
 grep -q 'autoinstall' "$APP/iso/autoinstall/user-data" || fail "user-data missing autoinstall"
 grep -q 'ubuntu-server-minimal' "$APP/iso/autoinstall/user-data" || fail "user-data must force ubuntu-server-minimal"
 grep -q 'interactive-sections: \[\]' "$APP/iso/autoinstall/user-data" || fail "user-data must set interactive-sections: []"
