@@ -11,6 +11,10 @@ ok() { echo "PASS: $*"; PASS=$((PASS + 1)); }
 [[ -f "$APP/iso/docker_remaster.sh" ]] || fail "missing iso/docker_remaster.sh"
 [[ -f "$APP/iso/autoinstall/user-data" ]] || fail "missing autoinstall user-data"
 [[ -f "$APP/iso/firstboot/junexis-firstboot.sh" ]] || fail "missing firstboot script"
+grep -q 'ANSIBLE_ROLES_PATH' "$APP/iso/firstboot/junexis-firstboot.sh" \
+  || fail "firstboot must set ANSIBLE_ROLES_PATH (customer installs must find roles)"
+grep -q 'ANSIBLE_CONFIG' "$APP/iso/firstboot/junexis-firstboot.sh" \
+  || fail "firstboot must set ANSIBLE_CONFIG to payload ansible.cfg"
 grep -q 'autoinstall' "$APP/iso/autoinstall/user-data" || fail "user-data missing autoinstall"
 grep -q 'ubuntu-server-minimal' "$APP/iso/autoinstall/user-data" || fail "user-data must force ubuntu-server-minimal"
 grep -q 'interactive-sections: \[\]' "$APP/iso/autoinstall/user-data" || fail "user-data must set interactive-sections: []"

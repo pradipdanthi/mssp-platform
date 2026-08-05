@@ -38,6 +38,11 @@ if [[ ! -f "$PLAYBOOK" ]]; then
   exit 3
 fi
 
+# Roles live in $PAYLOAD/ansible/roles — not under playbooks/roles.
+export ANSIBLE_CONFIG="${PAYLOAD}/ansible/ansible.cfg"
+export ANSIBLE_ROLES_PATH="${PAYLOAD}/ansible/roles${ANSIBLE_ROLES_PATH:+:$ANSIBLE_ROLES_PATH}"
+cd "${PAYLOAD}/ansible"
+
 OFFLINE_POOL="$PAYLOAD/offline-packages"
 if compgen -G "$OFFLINE_POOL/*.deb" >/dev/null; then
   echo "Offline engine pool: $(find "$OFFLINE_POOL" -maxdepth 1 -name '*.deb' | wc -l) deb(s)"
