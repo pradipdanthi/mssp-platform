@@ -619,7 +619,26 @@ function ActivationTokensSection() {
   const selectedTenant = tenants.find((t) => t.id === selectedTenantId) ?? null;
 
   return (
-    <section className="activation-tokens-section">
+    <>
+      <section className="activation-tokens-section" style={{ marginBottom: "1.25rem" }}>
+        <h3>New appliance (lab) — 4 steps</h3>
+        <ol style={{ margin: "0.5rem 0 0", paddingLeft: "1.25rem", lineHeight: 1.5 }}>
+          <li>Create an activation token below for the customer tenant.</li>
+          <li>
+            Click <strong>Copy register command</strong> (gateway URL is already filled —
+            Appliance Management VM 114).
+          </li>
+          <li>On the appliance, paste and run that one command.</li>
+          <li>
+            Confirm the appliance shows <strong>Online</strong> in the list above.
+          </li>
+        </ol>
+        <p className="one-time-secret-hint" style={{ marginTop: "0.75rem" }}>
+          You do not need to memorize the gateway IP. Lab images default to it; production ISOs
+          will use soc.junexis.com when you cut over publicly.
+        </p>
+      </section>
+      <section className="activation-tokens-section">
       <h2 className="section-title">Activation Tokens</h2>
       <p className="page-subtitle">
         Create and manage appliance activation tokens for a selected tenant. The raw token is shown
@@ -833,6 +852,7 @@ function ActivationTokensSection() {
         </>
       )}
     </section>
+    </>
   );
 }
 
