@@ -1,5 +1,59 @@
 ---
-# Role: ota_staging — scaffold (KB-093). Implement in follow-on build KBs.
-- name: Placeholder — ota_staging not yet implemented
-  ansible.builtin.debug:
-    msg: "Role ota_staging is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"
+# OTA staging directories + junexis-ota tool (signed manifests over channel).
+- name: Skip ota_staging when disabled
+  ansible.builtin.meta: end_role
+  when: not (ota_staging_enabled | default(true) | bool)
+
+- name: Ensure OTA / WPK directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: junexis
+    mode: "0750"
+  loop:
+    - "{{ ota_staging_root }}"
+    - "{{ ota_staging_root }}/staging"
+    - "{{ ota_staging_root }}/applied"
+    - "{{ ota_wpk_root }}"
+    - /opt/junexis/ota
+
+- name: Install junexis_ota module
+  ansible.builtin.copy:
+    src: "{{ ota_src_dir }}/junexis_ota.py"
+    dest: /opt/junexis/ota/junexis_ota.py
+    mode: "0644"
+
+- name: Install junexis_ota package marker
+  ansible.builtin.copy:
+    dest: /opt/junexis/ota/__init__.py
+    mode: "0644"
+    content: |
+      # OTA helpers
+
+- name: Install junexis-ota CLI
+  ansible.builtin.copy:
+    dest: /usr/bin/junexis-ota
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+      export PYTHONPATH=/opt/junexis/ota:/opt/junexis/cli${PYTHONPATH:+:$PYTHONPATH}
+      export JUNEXIS_STATE_DIR=${JUNEXIS_STATE_DIR:-/var/lib/junexis}
+      export JUNEXIS_OTA_DIR=${JUNEXIS_OTA_DIR:-/var/lib/junexis/ota}
+      exec /usr/bin/python3 -m junexis_ota "$@"
+
+- name: Install example OTA manifest for operators
+  ansible.builtin.copy:
+    src: "{{ ota_src_dir }}/manifests/example-manifest.json"
+    dest: "{{ ota_staging_root }}/example-manifest.json"
+    mode: "0644"
+
+- name: Record ota_staging applied marker
+  ansible.builtin.copy:
+    dest: /var/lib/junexis/ota_staging.applied
+    mode: "0644"
+    content: |
+      applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+      role=ota_staging
+      ota_root={{ ota_staging_root }}

@@ -52,6 +52,33 @@ def cmd_status(args: argparse.Namespace) -> int:
         "note": "TheHive is not installed on appliance; cases stay in Cloud SOC",
         "appliance_mgmt_plane": "separate server in production (not permanent on mssp-control)",
     }
+    ch_path = state.state_root() / "channeld.status.json"
+    if ch_path.is_file():
+        try:
+            payload["channel"] = "phase_b_channeld"
+            payload["channel_status"] = json.loads(ch_path.read_text(encoding="utf-8"))
+        except Exception:
+            payload["channel_status"] = {"ok": False}
+    _out(payload, args.json)
+    return 0
+
+
+def cmd_channel(args: argparse.Namespace) -> int:
+    from pathlib import Path
+
+    status_path = state.state_root() / "channeld.status.json"
+    payload = {
+        "channel": "phase_b_channeld",
+        "unit_installed": Path("/etc/systemd/system/junexis-channeld.service").is_file(),
+        "status_file": str(status_path),
+        "status": None,
+        "hint": "systemctl status junexis-channeld; heartbeat timer remains Phase A fallback",
+    }
+    if status_path.is_file():
+        try:
+            payload["status"] = json.loads(status_path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            payload["status_error"] = str(exc)
     _out(payload, args.json)
     return 0
 
@@ -244,6 +271,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("version", help="Show CLI version", parents=[common])
     sub.add_parser("status", help="Appliance status summary", parents=[common])
     sub.add_parser("doctor", help="Local diagnostics", parents=[common])
+    sub.add_parser("channel", help="SOC channel status (channeld)", parents=[common])
 
     setup = sub.add_parser("setup", help="First-boot wizard (local state)", parents=[common])
     setup.add_argument("--token", required=True)
@@ -301,6 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         "setup": cmd_setup,
         "register": cmd_register,
         "heartbeat": cmd_heartbeat,
+        "channel": cmd_channel,
         "bootstrap": cmd_bootstrap,
         "network": cmd_network,
         "license": cmd_license,

@@ -1,3 +1,8 @@
 ---
-# Defaults for role channel_agent (scaffold)
 channel_agent_enabled: true
+channel_agent_mode: poll
+channel_agent_poll_interval_sec: 20
+channel_agent_config_path: /etc/junexis/channel.yaml
+channel_agent_unit: junexis-channeld.service
+# Install sources from the junexis-appliance tree (ISO payload / ansible files)
+channel_agent_src_dir: "{{ playbook_dir }}/../../channel"

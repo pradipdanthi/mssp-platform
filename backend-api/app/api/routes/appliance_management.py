@@ -209,6 +209,32 @@ def get_appliance_detail(
     return appliance
 
 
+@router.post("/admin/appliances/{appliance_id}/channel/enqueue")
+def admin_enqueue_channel_frame(
+    appliance_id: UUID,
+    payload: Dict[str, Any],
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_WRITE_ROLES)),
+) -> Dict[str, Any]:
+    """Push ota.offer / license.push / control / job frame to appliance channel inbox."""
+    from app.services import appliance_channel as channel_service
+
+    appliance = fetch_one(
+        "SELECT id::text, tenant_id::text, status FROM appliances WHERE id = %s::uuid;",
+        (str(appliance_id),),
+    )
+    if not appliance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appliance not found")
+    frame_type = str(payload.get("frame_type") or "").strip()
+    if frame_type not in ("ota.offer", "license.push", "control", "job"):
+        raise HTTPException(status_code=400, detail="frame_type must be ota.offer|license.push|control|job")
+    row = channel_service.enqueue_frame(
+        appliance_id=appliance["id"],
+        tenant_id=appliance["tenant_id"],
+        frame_type=frame_type,
+        payload=payload.get("payload") or {},
+    )
+    return {"ok": True, "frame": row}
+
 @router.patch("/admin/appliances/{appliance_id}", response_model=ApplianceDetail)
 def update_appliance(
     appliance_id: UUID,

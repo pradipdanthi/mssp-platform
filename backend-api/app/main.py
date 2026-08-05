@@ -13,6 +13,7 @@ from app.api.routes.admin import router as admin_router
 from app.api.routes.admin_ops import router as admin_ops_router
 from app.api.routes.alert_incident_triage import router as alert_incident_triage_router
 from app.api.routes.appliance_agent import router as appliance_agent_router
+from app.api.routes.appliance_channel import router as appliance_channel_router
 from app.api.routes.appliance_alert_ingest import router as appliance_alert_ingest_router
 from app.api.routes.appliance_management import router as appliance_management_router
 from app.api.routes.telemetry_ingest import router as telemetry_ingest_router
@@ -109,6 +110,10 @@ app.include_router(appliance_management_router)
 # JWT/RBAC - authenticated by activation token / durable appliance API key
 # instead, see app/api/routes/appliance_agent.py).
 app.include_router(appliance_agent_router)
+
+# KB-093 Track-4: appliance channel (WSS + HTTPS poll) — temporary on control plane;
+# production cutover moves this to Appliance Management plane.
+app.include_router(appliance_channel_router)
 
 # KB-057: authenticated appliance alert ingestion with normalized safe fields.
 app.include_router(appliance_alert_ingest_router)
