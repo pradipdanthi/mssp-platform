@@ -1,5 +1,108 @@
 ---
-# Role: harden_cis — scaffold (KB-093). Implement in follow-on build KBs.
-- name: Placeholder — harden_cis not yet implemented
-  ansible.builtin.debug:
-    msg: "Role harden_cis is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"
+# Apply CIS Level-2–aligned hardening with an on-disk exceptions register.
+# Uses only ansible.builtin modules (no ansible.posix collection required).
+- name: Skip harden_cis when disabled
+  ansible.builtin.meta: end_role
+  when: not (harden_cis_enabled | default(true) | bool)
+
+- name: Ensure junexis config directory exists
+  ansible.builtin.file:
+    path: /etc/junexis
+    state: directory
+    mode: "0755"
+
+- name: Ensure junexis state directory exists
+  ansible.builtin.file:
+    path: /var/lib/junexis
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Deploy CIS exceptions register
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../hardening/cis/exceptions.yml"
+    dest: "{{ harden_cis_exceptions_dest }}"
+    mode: "0644"
+
+- name: Deploy CIS-aligned sysctl drop-in
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-junexis-cis.conf
+    mode: "0644"
+    content: |
+      # Managed by junexis harden_cis
+      {% for item in harden_cis_sysctl | dict2items %}
+      {{ item.key }} = {{ item.value }}
+      {% endfor %}
+
+- name: Apply sysctl settings now
+  ansible.builtin.command:
+    cmd: sysctl --system
+  changed_when: true
+  failed_when: false
+
+- name: Blacklist unused filesystems
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/junexis-cis-blacklist.conf
+    mode: "0644"
+    content: |
+      # Managed by junexis harden_cis — unused FS blacklist (CIS)
+      {% for fs in harden_cis_blacklist_fs %}
+      install {{ fs }} /bin/true
+      {% endfor %}
+
+- name: Restrict core dump pattern
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-junexis-cis.conf
+    mode: "0644"
+    content: |
+      # Managed by junexis harden_cis
+      * hard core 0
+      * soft core 0
+
+- name: Harden critical account files permissions
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: root
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: /etc/passwd, group: root, mode: "0644" }
+    - { path: /etc/group, group: root, mode: "0644" }
+    - { path: /etc/shadow, group: shadow, mode: "0640" }
+    - { path: /etc/gshadow, group: shadow, mode: "0640" }
+  failed_when: false
+
+- name: Ensure /etc/ssh/sshd_config.d exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    mode: "0755"
+
+- name: Deploy Junexis SSH hardening drop-in
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/99-junexis-cis.conf
+    mode: "0644"
+    content: |
+      # Managed by junexis harden_cis (CIS subset; see /etc/junexis/cis-exceptions.yml)
+      {% for k, v in harden_cis_sshd.items() %}
+      {{ k }} {{ v }}
+      {% endfor %}
+  notify: Restart sshd if present
+
+- name: Ensure secrets directory tight mode
+  ansible.builtin.file:
+    path: /var/lib/junexis/secrets
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Record harden_cis applied marker
+  ansible.builtin.copy:
+    dest: /var/lib/junexis/harden_cis.applied
+    mode: "0644"
+    content: |
+      applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+      role=harden_cis
+      exceptions={{ harden_cis_exceptions_dest }}

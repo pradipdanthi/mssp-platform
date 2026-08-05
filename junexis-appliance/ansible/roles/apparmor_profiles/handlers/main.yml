@@ -1,0 +1,6 @@
+---
+- name: Reload apparmor profiles
+  ansible.builtin.command:
+    cmd: systemctl reload apparmor
+  failed_when: false
+  changed_when: true

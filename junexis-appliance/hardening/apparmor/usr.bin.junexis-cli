@@ -1,0 +1,49 @@
+# AppArmor profile for /usr/bin/junexis-cli
+# Confines secrets access; allows network to control plane for register/heartbeat.
+#include <tunables/global>
+
+/usr/bin/junexis-cli {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+
+  /usr/bin/junexis-cli rix,
+  /usr/bin/python3* ix,
+  /usr/lib/python3*/** mr,
+  /usr/local/lib/python3*/** mr,
+
+  /etc/junexis/** r,
+  /etc/junexis/nftables/** r,
+  /etc/ssl/certs/** r,
+  /etc/passwd r,
+  /etc/group r,
+  /etc/nsswitch.conf r,
+  /etc/resolv.conf r,
+  /etc/hosts r,
+
+  /var/lib/junexis/ r,
+  /var/lib/junexis/** rw,
+  /var/lib/junexis/secrets/ r,
+  /var/lib/junexis/secrets/** r,
+  # Allow writing API key only during register
+  /var/lib/junexis/secrets/appliance_api_key rw,
+
+  /var/log/junexis/ rw,
+  /var/log/junexis/** rw,
+
+  /opt/junexis/** r,
+  /usr/bin/nft ix,
+  /usr/sbin/nft ix,
+  /usr/bin/systemctl ix,
+  /bin/bash ix,
+  /usr/bin/bash ix,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+
+  /proc/*/net/ r,
+  /sys/kernel/mm/transparent_hugepage/ r,
+}

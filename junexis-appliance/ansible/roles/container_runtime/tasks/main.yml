@@ -1,5 +1,90 @@
 ---
-# Role: container_runtime — scaffold (KB-093). Implement in follow-on build KBs.
-- name: Placeholder — container_runtime not yet implemented
-  ansible.builtin.debug:
-    msg: "Role container_runtime is scaffold-only; see docs/KB093_JUNEXIS_HARDENED_ON_PREM_APPLIANCE_ARCHITECTURE.md"
+# Install Podman/Buildah/crun from offline pool (preferred) or apt.
+# Runtime stays idle — no containers started by this role.
+- name: Skip container_runtime when disabled
+  ansible.builtin.meta: end_role
+  when: not (container_runtime_enabled | default(true) | bool)
+
+- name: Resolve offline pool path
+  ansible.builtin.set_fact:
+    container_offline_pool: "{{ container_runtime_offline_pool }}"
+
+- name: Install container runtime debs from offline pool
+  ansible.builtin.shell: |
+    set -euo pipefail
+    POOL="{{ container_offline_pool }}"
+    test -d "$POOL" || exit 42
+    shopt -s nullglob
+    candidates=(
+      "$POOL"/podman_*.deb
+      "$POOL"/buildah_*.deb
+      "$POOL"/crun_*.deb
+      "$POOL"/libgpgme*.deb
+      "$POOL"/libassuan*.deb
+      "$POOL"/conmon_*.deb
+      "$POOL"/containernetworking*.deb
+      "$POOL"/containers-common*.deb
+      "$POOL"/libslirp*.deb
+      "$POOL"/slirp4netns*.deb
+      "$POOL"/catatonit*.deb
+      "$POOL"/libsubid*.deb
+      "$POOL"/libyajl*.deb
+    )
+    install_list=()
+    for d in "${candidates[@]}"; do
+      [[ -f "$d" ]] && install_list+=("$d")
+    done
+    if ((${#install_list[@]} == 0)); then
+      exit 42
+    fi
+    apt-get install -y --no-install-recommends "${install_list[@]}"
+  args:
+    executable: /bin/bash
+  register: container_offline
+  failed_when: container_offline.rc not in [0, 42]
+  changed_when: container_offline.rc == 0
+
+- name: Install container runtime from apt when offline miss
+  ansible.builtin.apt:
+    name: "{{ container_runtime_packages }}"
+    state: present
+    update_cache: true
+  when: (container_offline.rc | default(42)) == 42
+
+- name: Ensure container storage root exists
+  ansible.builtin.file:
+    path: "{{ container_runtime_storage_root }}"
+    state: directory
+    mode: "0755"
+
+- name: Ensure containers registries drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/containers/registries.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Deploy offline-first registries config
+  ansible.builtin.copy:
+    dest: /etc/containers/registries.conf.d/99-junexis.conf
+    mode: "0644"
+    content: |
+      # Managed by junexis container_runtime — appliance is offline-first.
+      unqualified-search-registries = []
+
+- name: Disable podman socket by default (idle until entitled)
+  ansible.builtin.systemd:
+    name: podman.socket
+    enabled: false
+    state: stopped
+    daemon_reload: true
+  failed_when: false
+  when: not (container_runtime_enable_socket | bool)
+
+- name: Record container_runtime applied marker
+  ansible.builtin.copy:
+    dest: /var/lib/junexis/container_runtime.applied
+    mode: "0644"
+    content: |
+      applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+      role=container_runtime
+      socket_enabled={{ container_runtime_enable_socket }}

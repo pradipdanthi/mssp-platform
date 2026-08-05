@@ -16,7 +16,7 @@ grep -qi 'fluent' "$ROOT/docs/KB093G_APPLIANCE_ISO_ENTITLEMENT_PLAN.md" || fail 
 ok "install ISO scaffolding present"
 
 # Ansible roles no longer placeholders
-for role in license_enforcer service_manager wazuh_local; do
+for role in license_enforcer service_manager wazuh_local harden_cis auditd container_runtime apparmor_profiles; do
   if grep -q 'scaffold-only' "$APP/ansible/roles/$role/tasks/main.yml"; then
     fail "role $role still scaffold-only"
   fi

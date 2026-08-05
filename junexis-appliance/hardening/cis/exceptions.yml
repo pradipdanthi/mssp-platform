@@ -1,3 +1,27 @@
-# CIS Level 2 exceptions register (scaffold)
+# CIS Level 2 exceptions register (Junexis appliance)
 # Every exception needs: control ID, rationale, compensating control, owner, review date.
-exceptions: []
+exceptions:
+  - control_id: "5.2.x PasswordAuthentication"
+    rationale: >-
+      Factory and first-site bootstrap may require password-based SSH before
+      operator keys are installed and network mode is locked.
+    compensating_control: >-
+      nftables bootstrap→locked profiles; MaxAuthTries=4; PermitEmptyPasswords=no;
+      after lock only Junexis management ports remain.
+    owner: platform
+    review_date: "2026-12-01"
+  - control_id: "1.1.x USB storage blacklist"
+    rationale: >-
+      Some appliance SKUs need temporary USB for offline license/media at site.
+    compensating_control: >-
+      usb-storage blacklisted by default; break-glass unlock can remount if needed.
+    owner: platform
+    review_date: "2026-12-01"
+  - control_id: "Full automated CIS suite (e.g. OpenSCAP)"
+    rationale: >-
+      Appliance applies an explicit CIS-aligned control set rather than a full
+      benchmark profile to avoid breaking offline ISO firstboot.
+    compensating_control: >-
+      harden_cis role + exceptions register + auditd + AppArmor + nftables.
+    owner: platform
+    review_date: "2026-12-01"
