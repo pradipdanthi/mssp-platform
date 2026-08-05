@@ -15,14 +15,36 @@ grep -q 'autoinstall' "$APP/iso/autoinstall/user-data" || fail "user-data missin
 grep -q 'ubuntu-server-minimal' "$APP/iso/autoinstall/user-data" || fail "user-data must force ubuntu-server-minimal"
 grep -q 'interactive-sections: \[\]' "$APP/iso/autoinstall/user-data" || fail "user-data must set interactive-sections: []"
 grep -q 'Install Junexis Appliance' "$APP/iso/docker_remaster.sh" || fail "remaster must brand GRUB as Junexis automatic install"
+[[ -f "$APP/iso/boot-splash/junexis-boot.png" ]] || fail "missing boot splash PNG"
+[[ -f "$APP/ansible/roles/boot_splash/tasks/main.yml" ]] || fail "missing boot_splash role"
+grep -q 'boot_splash' "$APP/ansible/playbooks/install-provision.yml" || fail "boot_splash not in install-provision"
+grep -q 'minimize_engine_protect_packages' "$APP/ansible/roles/minimize/defaults/main.yml" || fail "minimize missing engine protect list"
+# plymouth must stay installable for splash — must not appear under minimize_purge_packages
+python3 - <<'PY' "$APP/ansible/roles/minimize/defaults/main.yml" || fail "minimize must NOT purge plymouth (needed for Junexis splash)"
+import sys
+from pathlib import Path
+text = Path(sys.argv[1]).read_text().splitlines()
+in_purge = False
+for line in text:
+    if line.startswith("minimize_purge_packages:"):
+        in_purge = True
+        continue
+    if in_purge and line and not line.startswith(" ") and not line.startswith("\t") and not line.startswith("#"):
+        in_purge = False
+    if in_purge and line.strip() == "- plymouth":
+        raise SystemExit(1)
+raise SystemExit(0)
+PY
+grep -q 'catalogue_engines' "$APP/ansible/playbooks/install-provision.yml" || fail "catalogue_engines not in install-provision"
 grep -qi 'fluent' "$ROOT/docs/KB093G_APPLIANCE_ISO_ENTITLEMENT_PLAN.md" || fail "KB093G Fluent Bit section"
-ok "install ISO scaffolding present (unattended minimized)"
+ok "install ISO scaffolding present (unattended minimized + splash + idle engines)"
 
 # Ansible roles no longer placeholders
-for role in license_enforcer service_manager wazuh_local harden_cis auditd container_runtime apparmor_profiles channel_agent ota_staging; do
-  if grep -q 'scaffold-only' "$APP/ansible/roles/$role/tasks/main.yml"; then
+for role in license_enforcer service_manager wazuh_local harden_cis auditd container_runtime apparmor_profiles channel_agent ota_staging boot_splash; do
+  if grep -q 'scaffold-only' "$APP/ansible/roles/$role/tasks/main.yml" 2>/dev/null; then
     fail "role $role still scaffold-only"
   fi
+  [[ -f "$APP/ansible/roles/$role/tasks/main.yml" ]] || fail "missing role $role"
   ok "role $role implemented"
 done
 grep -q 'fluent-bit' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "Fluent Bit not in wazuh_local"

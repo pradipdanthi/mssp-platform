@@ -1,5 +1,16 @@
 ---
 # Aggressive Ubuntu Server debloat for Junexis Appliance (KB-093 B1)
+- name: Assert purge list never touches engine/runtime protect set
+  ansible.builtin.assert:
+    that:
+      - (minimize_purge_packages | intersect(minimize_engine_protect_packages) | length) == 0
+    fail_msg: >-
+      minimize_purge_packages overlaps engine protect list —
+      refusing to purge packages required for idle catalogue engines / splash.
+    success_msg: "Minimize purge list is engine-safe"
+  when: minimize_enabled | bool
+  tags: [minimize, safety]
+
 - name: Assert we are not wiping a control-plane host by mistake
   ansible.builtin.assert:
     that:

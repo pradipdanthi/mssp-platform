@@ -7,6 +7,7 @@
   gather_facts: true
   roles:
     - role: minimize
+    - role: boot_splash
     - role: harden_cis
     - role: firewall_nftables
       vars:
@@ -33,3 +34,25 @@
       args:
         executable: /bin/bash
       changed_when: false
+
+    - name: Assert idle catalogue engine worker present
+      ansible.builtin.stat:
+        path: /usr/bin/junexis-engine-worker
+      register: junexis_engine_worker
+
+    - name: Fail if catalogue engine worker missing
+      ansible.builtin.assert:
+        that:
+          - junexis_engine_worker.stat.exists
+        fail_msg: "junexis-engine-worker missing — catalogue engines not provisioned"
+
+    - name: Assert boot splash theme installed
+      ansible.builtin.stat:
+        path: /usr/share/plymouth/themes/junexis/junexis-boot.png
+      register: junexis_splash_png
+
+    - name: Fail if splash artwork missing after boot_splash role
+      ansible.builtin.assert:
+        that:
+          - junexis_splash_png.stat.exists
+        fail_msg: "Junexis boot splash PNG missing after provision"

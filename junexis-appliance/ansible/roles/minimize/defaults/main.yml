@@ -2,7 +2,31 @@
 # Defaults for role minimize
 minimize_enabled: true
 
-# Packages to purge when present (idempotent — ignore if absent)
+# Never purge these — required for idle catalogue engines / Junexis runtime.
+# (Documented allow-list; purge list must not include these names.)
+minimize_engine_protect_packages:
+  - wazuh-manager
+  - wazuh-agent
+  - fluent-bit
+  - suricata
+  - zeek
+  - zeekctl
+  - python3
+  - python3-pip
+  - nftables
+  - openssh-server
+  - ansible-core
+  - podman
+  - buildah
+  - crun
+  - containernetworking-plugins
+  - plymouth
+  - plymouth-label
+  - plymouth-themes
+  - fonts-dejavu-core
+
+# Packages to purge when present (idempotent — ignore if absent).
+# NOTE: plymouth is intentionally NOT purged — Junexis boot splash needs it.
 minimize_purge_packages:
   - snapd
   - cloud-init
@@ -27,8 +51,19 @@ minimize_purge_packages:
   - multipath-tools
   - open-iscsi
   - landscape-common
-  - plymouth
   - plymouth-theme-ubuntu-text
+  - plymouth-theme-spinner
+  - ubuntu-desktop
+  - ubuntu-desktop-minimal
+  - gdm3
+  - gnome-shell
+  - thunderbird
+  - libreoffice-common
+  - rhythmbox
+  - totem
+  - transmission-gtk
+  - cheese
+  - shotwell
 
 # Units to mask (do not disable critical networkd/ssh)
 minimize_mask_units:

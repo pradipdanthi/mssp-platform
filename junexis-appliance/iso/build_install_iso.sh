@@ -49,6 +49,10 @@ cp -f "$ROOT/iso/firstboot/junexis-firstboot.sh" "$WORK/seed/junexis-payload/jun
 cp -f "$ROOT/iso/firstboot/junexis-firstboot.service" "$WORK/seed/junexis-payload/junexis-firstboot.service"
 chmod +x "$WORK/seed/junexis-payload/junexis-firstboot.sh" "$ROOT/iso/docker_remaster.sh"
 
+# Boot splash artwork + generator (Plymouth theme pulls PNG from role files; payload copy for audit)
+mkdir -p "$WORK/seed/junexis-payload/iso/boot-splash"
+cp -a "$ROOT/iso/boot-splash/." "$WORK/seed/junexis-payload/iso/boot-splash/"
+
 # Airgap engine .debs + binaries + wheels
 OFFLINE_SRC="$ROOT/iso/offline-packages"
 if compgen -G "$OFFLINE_SRC/*.deb" >/dev/null; then

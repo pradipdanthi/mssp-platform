@@ -1,0 +1,12 @@
+---
+boot_splash_enabled: true
+boot_splash_theme_name: junexis
+boot_splash_theme_dir: /usr/share/plymouth/themes/junexis
+# Hold splash before plymouth-quit so branding is visible ~3 seconds
+boot_splash_hold_seconds: 3
+# Source tree on ISO payload (firstboot sets junexis_payload_root)
+boot_splash_src_dir: "{{ (junexis_payload_root | default('/opt/junexis/payload')) ~ '/iso/boot-splash' }}"
+boot_splash_packages:
+  - plymouth
+  - plymouth-label
+  - fonts-dejavu-core

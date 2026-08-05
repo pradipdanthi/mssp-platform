@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Junexis
+Description=Junexis Appliance — Your Dedicated SOC Sentinel
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/junexis
+ScriptFile=/usr/share/plymouth/themes/junexis/junexis.script
