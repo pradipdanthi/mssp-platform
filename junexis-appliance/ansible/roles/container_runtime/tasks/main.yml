@@ -34,7 +34,8 @@
     for d in "${candidates[@]}"; do
       [[ -f "$d" ]] && install_list+=("$d")
     done
-    if ((${#install_list[@]} == 0)); then
+    # Jinja treats {# as a comment — never write ${#...} literally in playbooks.
+    if [ "{{ '${#install_list[@]}' }}" -eq 0 ]; then
       exit 42
     fi
     apt-get install -y --no-install-recommends "${install_list[@]}"
