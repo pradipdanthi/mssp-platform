@@ -3,17 +3,18 @@
 - name: Apply role when enabled
   when: license_enforcer_enabled | bool
   block:
-  - name: Ensure trust and state directories
+  - name: Ensure lib and trust directories
     ansible.builtin.file:
-      path: "{{ item }}"
+      path: "{{ item.path }}"
       state: directory
       owner: root
-      group: junexis
-      mode: "0750"
+      group: "{{ item.group }}"
+      mode: "{{ item.mode }}"
     loop:
-      - "{{ license_enforcer_state_dir }}"
-      - "{{ license_enforcer_trust_dir }}"
-      - "{{ license_enforcer_pubkeys_dir }}"
+      - { path: /usr/lib/junexis, group: root, mode: "0755" }
+      - { path: "{{ license_enforcer_state_dir }}", group: root, mode: "0750" }
+      - { path: "{{ license_enforcer_trust_dir }}", group: root, mode: "0750" }
+      - { path: "{{ license_enforcer_pubkeys_dir }}", group: root, mode: "0750" }
 
   - name: Install license verify helper
     ansible.builtin.copy:

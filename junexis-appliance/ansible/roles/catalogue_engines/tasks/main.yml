@@ -24,24 +24,33 @@
       - /var/lib/junexis/ndr
       - /var/lib/junexis/ioc-cache
 
-  - name: Install offline .deb packages when present
-    ansible.builtin.shell: |
-      set -euo pipefail
-      POOL="{{ catalogue_offline_pool }}"
-      test -d "$POOL"
-      shopt -s nullglob
-      debs=("$POOL"/*.deb)
-      cnt=0
-      for _ in "${debs[@]}"; do cnt=$((cnt + 1)); done
-      if [ "$cnt" -eq 0 ]; then
-        echo "No offline debs in $POOL" >&2
-        exit 3
-      fi
-      apt-get install -y --no-install-recommends "${debs[@]}"
-    args:
-      executable: /bin/bash
-    register: catalogue_deb_install
-    when: catalogue_offline_pool is defined
+- name: Install offline .deb packages when present
+  ansible.builtin.shell: |
+    set -euo pipefail
+    POOL="{{ catalogue_offline_pool }}"
+    test -d "$POOL"
+    shopt -s nullglob
+    # Shared pool — skip incomplete Zeek meta and -dev packages.
+    debs=()
+    for d in "$POOL"/*.deb; do
+      base=$(basename "$d")
+      case "$base" in
+        zeek-lts_*) continue ;;
+        *-dev_*) continue ;;
+      esac
+      debs+=("$d")
+    done
+    cnt=0
+    for _ in "${debs[@]}"; do cnt=$((cnt + 1)); done
+    if [ "$cnt" -eq 0 ]; then
+      echo "No offline debs in $POOL" >&2
+      exit 3
+    fi
+    apt-get install -y --no-install-recommends "${debs[@]}"
+  args:
+    executable: /bin/bash
+  register: catalogue_deb_install
+  when: catalogue_offline_pool is defined
 
   - name: Install Nuclei/Vuls binaries from offline pool
     ansible.builtin.copy:

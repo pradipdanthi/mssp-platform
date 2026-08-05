@@ -63,9 +63,24 @@
     ansible.builtin.shell: |
       set -euo pipefail
       POOL="{{ wazuh_local_offline_pool }}"
-      cd "$POOL"
-      # apt resolves deps among local .debs when all are passed together
-      apt-get install -y --no-install-recommends ./*.deb
+      shopt -s nullglob
+      # Shared offline pool also holds container/scan debs — install only SIEM/NDR engines.
+      # Never install zeek-lts_*.deb meta (needs -dev/-client not shipped in ISO pool).
+      debs=(
+        "$POOL"/wazuh-manager_*.deb
+        "$POOL"/fluent-bit_*.deb
+        "$POOL"/suricata_*.deb
+        "$POOL"/suricata-update_*.deb
+        "$POOL"/zeek-lts-core_*.deb
+        "$POOL"/zeekctl-lts_*.deb
+      )
+      cnt=0
+      for _ in "${debs[@]}"; do cnt=$((cnt + 1)); done
+      if [ "$cnt" -eq 0 ]; then
+        echo "No SIEM/NDR engine debs in $POOL" >&2
+        exit 3
+      fi
+      apt-get install -y --no-install-recommends "${debs[@]}"
     args:
       executable: /bin/bash
     when: wazuh_local_use_offline | bool
