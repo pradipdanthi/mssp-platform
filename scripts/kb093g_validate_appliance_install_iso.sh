@@ -12,8 +12,11 @@ ok() { echo "PASS: $*"; PASS=$((PASS + 1)); }
 [[ -f "$APP/iso/autoinstall/user-data" ]] || fail "missing autoinstall user-data"
 [[ -f "$APP/iso/firstboot/junexis-firstboot.sh" ]] || fail "missing firstboot script"
 grep -q 'autoinstall' "$APP/iso/autoinstall/user-data" || fail "user-data missing autoinstall"
+grep -q 'ubuntu-server-minimal' "$APP/iso/autoinstall/user-data" || fail "user-data must force ubuntu-server-minimal"
+grep -q 'interactive-sections: \[\]' "$APP/iso/autoinstall/user-data" || fail "user-data must set interactive-sections: []"
+grep -q 'Install Junexis Appliance' "$APP/iso/docker_remaster.sh" || fail "remaster must brand GRUB as Junexis automatic install"
 grep -qi 'fluent' "$ROOT/docs/KB093G_APPLIANCE_ISO_ENTITLEMENT_PLAN.md" || fail "KB093G Fluent Bit section"
-ok "install ISO scaffolding present"
+ok "install ISO scaffolding present (unattended minimized)"
 
 # Ansible roles no longer placeholders
 for role in license_enforcer service_manager wazuh_local harden_cis auditd container_runtime apparmor_profiles channel_agent ota_staging; do

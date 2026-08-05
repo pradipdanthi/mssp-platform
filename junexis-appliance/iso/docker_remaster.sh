@@ -20,20 +20,37 @@ mkdir -p "$DST/nocloud" "$DST/junexis-payload"
 cp -a "$WORK/seed/user-data" "$WORK/seed/meta-data" "$DST/nocloud/"
 cp -a "$WORK/seed/junexis-payload/." "$DST/junexis-payload/"
 
-AUTO_ARGS='autoinstall ds=nocloud;s=/cdrom/nocloud/'
+AUTO_ARGS='autoinstall ds=nocloud\;s=/cdrom/nocloud/'
 
-# Patch GRUB (UEFI) kernel command lines
+# Replace Ubuntu branding with a single Junexis unattended entry.
+# (Without source.id in user-data, Subiquity used to ask Server vs Minimized.)
 while IFS= read -r -d '' grub; do
-  # Insert autoinstall args before the first ---
-  sed -i "s| ---| ${AUTO_ARGS} ---|g" "$grub" || true
-  # Also handle lines that end without ---
-  if ! grep -q 'autoinstall' "$grub"; then
-    sed -i "s|\(linux\s\+/.*/vmlinuz[^\n]*\)|\1 ${AUTO_ARGS}|g" "$grub" || true
-  fi
+  cat >"$grub" <<'GRUB'
+set timeout=5
+set default=0
+
+loadfont unicode
+
+set menu_color_normal=white/black
+set menu_color_highlight=black/light-gray
+
+menuentry "Install Junexis Appliance (automatic — do not pick other options)" {
+	set gfxpayload=keep
+	linux	/casper/vmlinuz autoinstall ds=nocloud\;s=/cdrom/nocloud/ ---
+	initrd	/casper/initrd
+}
+grub_platform
+if [ "$grub_platform" = "efi" ]; then
+menuentry "UEFI Firmware Settings" {
+	fwsetup
+}
+fi
+GRUB
 done < <(find "$DST" -name 'grub.cfg' -print0 2>/dev/null)
 
-# Patch isolinux / BIOS
+# Patch isolinux / BIOS text menus similarly when present
 while IFS= read -r -d '' cfg; do
+  sed -i "s|Try or Install Ubuntu Server|Install Junexis Appliance (automatic)|g" "$cfg" || true
   sed -i "s| ---| ${AUTO_ARGS} ---|g" "$cfg" || true
 done < <(find "$DST" \( -name 'txt.cfg' -o -name 'isolinux.cfg' \) -print0 2>/dev/null)
 
