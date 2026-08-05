@@ -6,3 +6,6 @@ channel_agent_config_path: /etc/junexis/channel.yaml
 channel_agent_unit: junexis-channeld.service
 # Install sources from the junexis-appliance tree (ISO payload / ansible files)
 channel_agent_src_dir: "{{ playbook_dir }}/../../channel"
+# Lab default: Appliance Mgmt VM114 — overridden by group_vars/all.yml when loaded
+junexis_control_plane_url: "http://192.168.0.224:8000"
+junexis_channel_url: "ws://192.168.0.224:8000/appliance/v1/channel"

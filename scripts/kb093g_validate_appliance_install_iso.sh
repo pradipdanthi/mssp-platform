@@ -15,6 +15,8 @@ grep -q 'ANSIBLE_ROLES_PATH' "$APP/iso/firstboot/junexis-firstboot.sh" \
   || fail "firstboot must set ANSIBLE_ROLES_PATH (customer installs must find roles)"
 grep -q 'ANSIBLE_CONFIG' "$APP/iso/firstboot/junexis-firstboot.sh" \
   || fail "firstboot must set ANSIBLE_CONFIG to payload ansible.cfg"
+grep -q 'group_vars/all.yml' "$APP/iso/firstboot/junexis-firstboot.sh" \
+  || fail "firstboot must load group_vars/all.yml (control plane URL)"
 # Bash ${#arr[@]} becomes a Jinja comment ({#) and breaks customer firstboot.
 # Also ban '{#' inside shell/task YAML (including comments inside | blocks).
 if rg -n '\$\{#|\{#' "$APP/ansible/roles" --glob '*.yml' >/tmp/kb093g-jinja-hash.txt 2>/dev/null; then

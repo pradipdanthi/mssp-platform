@@ -51,6 +51,7 @@ else
 fi
 
 ansible-playbook -i "$INV" "$PLAYBOOK" \
+  -e "@${PAYLOAD}/ansible/group_vars/all.yml" \
   -e "junexis_payload_root=$PAYLOAD" \
   -e "firewall_nftables_mode=bootstrap" \
   -e "junexis_install_idle_engines=true" \
