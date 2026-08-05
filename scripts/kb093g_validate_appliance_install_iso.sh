@@ -27,7 +27,11 @@ grep -q 'thehive' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "TheHi
 grep -q 'offline' "$APP/ansible/roles/wazuh_local/tasks/main.yml" || fail "offline package pool not wired in wazuh_local"
 [[ -x "$APP/scripts/b2_fetch_offline_packages.sh" ]] || fail "missing b2_fetch_offline_packages.sh"
 grep -q 'offline-packages' "$APP/iso/build_install_iso.sh" || fail "build_install_iso does not stage offline-packages"
-ok "Fluent Bit on appliance; TheHive forbidden; offline pool wired"
+grep -qE '(^|[[:space:]])channel([[:space:]]|$)' "$APP/iso/build_install_iso.sh" || fail "build_install_iso does not stage channel/"
+grep -qE '(^|[[:space:]])ota([[:space:]]|$)' "$APP/iso/build_install_iso.sh" || fail "build_install_iso does not stage ota/"
+grep -q '192.168.0.224:8000' "$APP/ansible/group_vars/all.yml" || fail "group_vars missing Appliance Mgmt VM114 URL"
+grep -q 'default_control_plane' "$APP/cli/junexis-cli/junexis_cli/state.py" || fail "CLI missing default_control_plane"
+ok "Fluent Bit on appliance; TheHive forbidden; offline pool + channel/ota + VM114 defaults"
 
 if compgen -G "$APP/iso/offline-packages/wazuh-manager"*.deb >/dev/null \
   && compgen -G "$APP/iso/offline-packages/fluent-bit"*.deb >/dev/null \

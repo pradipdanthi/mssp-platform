@@ -50,7 +50,9 @@ ansible-playbook -i "$INV" "$PLAYBOOK" \
   -e "firewall_nftables_mode=bootstrap" \
   -e "junexis_install_idle_engines=true" \
   -e "firewall_nftables_src_dir=$PAYLOAD/hardening/nftables" \
-  -e "wazuh_local_offline_packages_dir=$OFFLINE_POOL"
+  -e "wazuh_local_offline_packages_dir=$OFFLINE_POOL" \
+  -e "channel_agent_src_dir=$PAYLOAD/channel" \
+  -e "ota_src_dir=$PAYLOAD/ota"
 
 touch "$MARKER"
 systemctl disable junexis-firstboot.service || true

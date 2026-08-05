@@ -32,12 +32,17 @@ cp -f "$ROOT/iso/autoinstall/user-data" "$WORK/seed/user-data"
 cp -f "$ROOT/iso/autoinstall/meta-data" "$WORK/seed/meta-data"
 
 echo "Staging Junexis payload ..."
+# Include channel/ + ota/ source trees (Track-4) so firstboot roles can install them.
+# Lab control-plane defaults (VM 114) live under ansible/group_vars + cli + configs/.
 tar -C "$ROOT" \
   --exclude='.cache' \
   --exclude='.tools' \
   --exclude='packer' \
+  --exclude='**/__pycache__' \
+  --exclude='**/*.pyc' \
   -cf - \
-  ansible services hardening cli configs licensing appliance engines requirements-engine.txt VERSION docs/SERVICE_MATRIX.md \
+  ansible services hardening cli configs licensing appliance engines channel ota \
+  requirements-engine.txt VERSION docs/SERVICE_MATRIX.md \
   | tar -C "$WORK/seed/junexis-payload" -xf -
 
 cp -f "$ROOT/iso/firstboot/junexis-firstboot.sh" "$WORK/seed/junexis-payload/junexis-firstboot.sh"
