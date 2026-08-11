@@ -36,6 +36,9 @@
           case "$base" in
             zeek-lts_*) continue ;;
             *-dev_*) continue ;;
+            # Cloud-init may already ship a newer systemd stack than the airgap pool.
+            # Forcing older systemd_*.deb / libsystemd* breaks apt (unmet Depends).
+            systemd*|libsystemd*|libnss-systemd*|libpam-systemd*) continue ;;
           esac
           debs+=("$d")
         done
