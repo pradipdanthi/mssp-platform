@@ -51,7 +51,7 @@ export default function LoginPage() {
       <div className="login-hero" role="main">
         <div className="login-chest-panel">
           <div className="login-chest-brand">
-            <KestrelFalconShieldLogo size={96} className="login-brand-logo" />
+            <KestrelFalconShieldLogo size={320} className="login-brand-logo" title={brand.productName} />
             <span className="login-brand-portal">{brand.portalName}</span>
           </div>
           <p className="login-subtitle">{brand.tagline}</p>

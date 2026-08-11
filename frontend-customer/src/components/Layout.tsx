@@ -6,6 +6,7 @@ import KestrelFalconShieldLogo from "./brand/KestrelFalconShieldLogo";
 import KestrelSecurityWatermark from "./brand/KestrelSecurityWatermark";
 import EngineStatusRibbon from "./EngineStatusRibbon";
 import GlobalSearch from "./GlobalSearch";
+import NavIcon from "./icons/NavIcon";
 
 const NAV_ITEMS = [
   { to: "/dashboard", label: "Dashboard" },
@@ -39,7 +40,7 @@ export default function Layout({ children }: { children: ReactNode }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <KestrelFalconShieldLogo
-            size={118}
+            size={220}
             className="sidebar-brand-logo"
             title={brand.productName}
           />
@@ -47,14 +48,15 @@ export default function Layout({ children }: { children: ReactNode }) {
             <span className="sidebar-brand-portal">{brand.portalName}</span>
           </div>
         </div>
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label="Primary">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               className={({ isActive }) => "sidebar-nav-link" + (isActive ? " active" : "")}
             >
-              {item.label}
+              <NavIcon to={item.to} />
+              <span className="sidebar-nav-label">{item.label}</span>
             </NavLink>
           ))}
         </nav>

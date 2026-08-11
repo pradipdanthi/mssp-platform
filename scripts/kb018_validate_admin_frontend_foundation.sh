@@ -227,15 +227,15 @@ jq -e '
   and .marketingDomain == "kevantic.com"
   and (.documentTitle | test("Kevantic Cyber Security"))
   and (.logo.markSrc | test("kevantic-mark"))
-  and (.logo.logoSrc | test("kevantic-logo"))
+  and (.logo.logoSrc | test("kevantic-horizontal-lockup|kevantic-logo"))
 ' "$BODY_FILE" >/dev/null \
   || fail "app-config.json is missing required Kevantic Cyber Security branding fields"
 echo "OK: app-config.json contains Kevantic domains (admin.kevantic.com, portal.kevantic.com, soc@kevantic.com)."
 
 curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-mark.svg" \
   || fail "GET $FRONTEND_BASE/brand/kevantic-mark.svg failed"
-curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-logo.svg" \
-  || fail "GET $FRONTEND_BASE/brand/kevantic-logo.svg failed"
+curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-horizontal-lockup.svg" \
+  || fail "GET $FRONTEND_BASE/brand/kevantic-horizontal-lockup.svg failed"
 echo "OK: both brand SVG assets are served by the frontend."
 
 # Source/UI must not hardcode the retired product brand string.

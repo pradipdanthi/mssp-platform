@@ -14,6 +14,7 @@ import TimelineChart, {
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
 import EdrMetricsStrip from "../components/edr/EdrMetricsStrip";
 import { getEdrMetrics, type EdrMetricsSummary } from "../api/edr";
+import KpiIcon from "../components/icons/KpiIcon";
 
 const LIVE_FEED_KEY = "kestrel-live-feed";
 const LIVE_FEED_EVENT = "kestrel-live-feed-change";
@@ -144,8 +145,9 @@ export default function DashboardPage() {
   return (
     <div className="command-dashboard">
       <div className="sentinel-dashboard-head">
-        <div>
-          <h1 className="page-title">Security overview</h1>
+        <div className="dash-welcome">
+          <p className="dash-welcome-kicker">Welcome back,</p>
+          <h1 className="dash-welcome-name">{user?.full_name || "Customer"}</h1>
           <p className="page-subtitle">
             Priority KPIs for your organization — open a tile to dig in.
           </p>
@@ -190,6 +192,7 @@ export default function DashboardPage() {
               to="/incidents?status=open"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="shield" />
                 <span className="kpi-label">Active Incidents</span>
                 <span className="kpi-orb kpi-orb--critical" aria-hidden="true" />
               </div>
@@ -203,6 +206,7 @@ export default function DashboardPage() {
               aria-label="Open security alerts / events"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="activity" />
                 <span className="kpi-label">Events monitored</span>
                 <MiniSparkline values={sparkFromTotal(eventsMonitored)} width={56} height={18} />
               </div>
@@ -221,6 +225,7 @@ export default function DashboardPage() {
               to="/alerts?severity=high"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="bell" />
                 <span className="kpi-label">Security Alerts</span>
                 <span className="kpi-orb kpi-orb--high" aria-hidden="true" />
               </div>
@@ -234,6 +239,7 @@ export default function DashboardPage() {
               aria-label="Open recommendations"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="check" />
                 <span className="kpi-label">Open recommendations</span>
               </div>
               <div className="kpi-card-metric-row">

@@ -125,7 +125,7 @@
     el.textContent = String(new Date().getFullYear());
   });
 
-  /* Mega-menu: click/tap + keyboard; hover still works via CSS on desktop */
+  /* Mega-menu: click/tap + keyboard only (no hover-open) */
   document.querySelectorAll(".has-mega").forEach(function (item) {
     const trigger = item.querySelector(".mega-trigger");
     if (!trigger) return;

@@ -1,18 +1,122 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 40" role="img" aria-label="Kevantic Cyber Security">
+<!-- kevantic-horizontal-lockup.svg -->
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 800 300"
+  width="800"
+  height="300"
+  role="img"
+  aria-labelledby="kevanticTitle kevanticDesc"
+>
+  <title id="kevanticTitle">Kevantic Cyber Security Horizontal Lockup</title>
+  <desc id="kevanticDesc">
+    Symmetrical shield matrix icon with geometric network nodes forming a stylized K,
+    paired with the KEVANTIC wordmark.
+  </desc>
+
   <defs>
-    <linearGradient id="kv-word-glow" x1="0" y1="0" x2="280" y2="40" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#E2EAFC"/>
-      <stop offset="100%" stop-color="#D6E2E9"/>
-    </linearGradient>
+    <style>
+      .shield,
+      .network {
+        fill: none;
+        stroke: #D6E2E9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .shield {
+        stroke-width: 8;
+      }
+
+      .network {
+        stroke-width: 2.4;
+      }
+
+      .node {
+        fill: #3A506B;
+        stroke: #D6E2E9;
+        stroke-width: 2;
+      }
+
+      .wordmark {
+        fill: #D6E2E9;
+        font-family: Inter, "JetBrains Mono", "Segoe UI", Arial, sans-serif;
+        font-size: 68px;
+        font-weight: 700;
+        letter-spacing: 8px;
+      }
+    </style>
   </defs>
-  <!-- Compact mark (left) -->
-  <g transform="translate(0,2) scale(0.56)">
-    <path fill="#0B132B" stroke="#3A506B" stroke-width="1.75" d="M32 4 L54 13 V31 C54 45 44 55 32 60 C20 55 10 45 10 31 V13 Z"/>
-    <path fill="#1C2541" d="M32 9 L49 16 V31 C49 42 41 51 32 55 C23 51 15 42 15 31 V16 Z"/>
-    <path fill="none" stroke="#D6E2E9" stroke-width="2.25" stroke-linecap="square" d="M22 44 V20 M22 32 L38 20 M22 32 L38 44"/>
-    <circle cx="22" cy="32" r="2.2" fill="#E2EAFC"/>
+
+  <!-- Midnight Obsidian Canvas -->
+  <rect width="800" height="300" fill="#0B132B"/>
+
+  <!-- Shield Matrix Icon -->
+  <g id="kevantic-shield">
+
+    <!-- Symmetrical Vanguard Shield -->
+    <path
+      class="shield"
+      d="
+        M160 35
+        L185 56
+        L232 78
+        V166
+        L213 199
+        L160 252
+        L107 199
+        L88 166
+        V78
+        L135 56
+        Z
+      "
+    />
+
+    <!-- Internal Network Matrix -->
+    <g class="network">
+      <!-- Central spine -->
+      <line x1="160" y1="58" x2="160" y2="226"/>
+
+      <!-- Left vertical -->
+      <line x1="116" y1="101" x2="116" y2="199"/>
+
+      <!-- Top horizontal -->
+      <line x1="116" y1="101" x2="204" y2="101"/>
+
+      <!-- Middle horizontal -->
+      <line x1="116" y1="150" x2="160" y2="150"/>
+
+      <!-- Bottom horizontal -->
+      <line x1="116" y1="199" x2="204" y2="199"/>
+
+      <!-- K upper diagonals -->
+      <line x1="116" y1="150" x2="160" y2="101"/>
+      <line x1="160" y1="150" x2="204" y2="101"/>
+
+      <!-- K lower diagonals -->
+      <line x1="116" y1="150" x2="160" y2="199"/>
+      <line x1="160" y1="150" x2="204" y2="199"/>
+    </g>
+
+    <!-- Data Nodes -->
+    <g id="network-nodes">
+      <circle class="node" cx="116" cy="101" r="7"/>
+      <circle class="node" cx="160" cy="101" r="7"/>
+      <circle class="node" cx="204" cy="101" r="7"/>
+
+      <circle class="node" cx="116" cy="150" r="7"/>
+      <circle class="node" cx="160" cy="150" r="7"/>
+
+      <circle class="node" cx="116" cy="199" r="7"/>
+      <circle class="node" cx="160" cy="199" r="7"/>
+      <circle class="node" cx="204" cy="199" r="7"/>
+    </g>
   </g>
-  <!-- Wordmark -->
-  <text x="44" y="27" fill="url(#kv-word-glow)" font-family="Inter, system-ui, sans-serif" font-size="18" font-weight="700" letter-spacing="0.04em">KEVANTIC</text>
-  <text x="158" y="27" fill="#94a3b8" font-family="Inter, system-ui, sans-serif" font-size="13" font-weight="500" letter-spacing="0.06em">CYBER SECURITY</text>
+
+  <!-- KEVANTIC Wordmark -->
+  <text
+    class="wordmark"
+    x="285"
+    y="151"
+    dominant-baseline="middle"
+  >KEVANTIC</text>
 </svg>

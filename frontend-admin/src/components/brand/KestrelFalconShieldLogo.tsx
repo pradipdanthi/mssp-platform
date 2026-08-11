@@ -2,28 +2,32 @@ import { useBrand } from "../../config/BrandContext";
 
 interface Props {
   className?: string;
-  /** Width in px; height follows SVG aspect ratio. */
+  /** Display width in px; height follows the lockup aspect ratio (800×300). */
   size?: number;
   title?: string;
+  /** "logo" = horizontal lockup (default); "mark" = shield-only. */
+  variant?: "logo" | "mark";
 }
 
 /**
- * Vanguard Shield Matrix mark — loads from public/app-config.json logo.markSrc.
+ * Kevantic brand graphic — horizontal lockup by default (app-config logoSrc).
  */
 export default function KestrelFalconShieldLogo({
   className = "",
-  size = 132,
+  size = 220,
   title,
+  variant = "logo",
 }: Props) {
   const brand = useBrand();
   const alt = title ?? brand.logo.alt;
+  const src = variant === "mark" ? brand.logo.markSrc : brand.logo.logoSrc;
 
   return (
     <img
-      src={brand.logo.markSrc}
+      src={src}
       alt={alt}
       width={size}
-      className={`kevantic-shield-logo ${className}`.trim()}
+      className={`kevantic-shield-logo kevantic-lockup ${className}`.trim()}
       draggable={false}
       decoding="async"
     />

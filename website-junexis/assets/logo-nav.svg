@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="70 20 700 260" role="img" aria-labelledby="kevNavTitle">
+  <title id="kevNavTitle">Kevantic</title>
+  <defs>
+    <style>
+      .shield,.network{fill:none;stroke:#D6E2E9;stroke-linecap:round;stroke-linejoin:round}
+      .shield{stroke-width:8}
+      .network{stroke-width:2.4}
+      .node{fill:#3A506B;stroke:#D6E2E9;stroke-width:2}
+      .wordmark{fill:#D6E2E9;font-family:Inter,"Segoe UI",Arial,sans-serif;font-size:68px;font-weight:700;letter-spacing:8px}
+    </style>
+  </defs>
+  <g id="kevantic-shield">
+    <path class="shield" d="M160 35 L185 56 L232 78 V166 L213 199 L160 252 L107 199 L88 166 V78 L135 56 Z"/>
+    <g class="network">
+      <line x1="160" y1="58" x2="160" y2="226"/>
+      <line x1="116" y1="101" x2="116" y2="199"/>
+      <line x1="116" y1="101" x2="204" y2="101"/>
+      <line x1="116" y1="150" x2="160" y2="150"/>
+      <line x1="116" y1="199" x2="204" y2="199"/>
+      <line x1="116" y1="150" x2="160" y2="101"/>
+      <line x1="160" y1="150" x2="204" y2="101"/>
+      <line x1="116" y1="150" x2="160" y2="199"/>
+      <line x1="160" y1="150" x2="204" y2="199"/>
+    </g>
+    <g id="network-nodes">
+      <circle class="node" cx="116" cy="101" r="7"/>
+      <circle class="node" cx="160" cy="101" r="7"/>
+      <circle class="node" cx="204" cy="101" r="7"/>
+      <circle class="node" cx="116" cy="150" r="7"/>
+      <circle class="node" cx="160" cy="150" r="7"/>
+      <circle class="node" cx="116" cy="199" r="7"/>
+      <circle class="node" cx="160" cy="199" r="7"/>
+      <circle class="node" cx="204" cy="199" r="7"/>
+    </g>
+  </g>
+  <text class="wordmark" x="285" y="151" dominant-baseline="middle">KEVANTIC</text>
+</svg>

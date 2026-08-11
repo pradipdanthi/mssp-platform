@@ -14,6 +14,8 @@ import TimelineChart, {
 import { useAdminQuery } from "../hooks/useAdminQuery";
 import EdrMetricsStrip from "../components/edr/EdrMetricsStrip";
 import { getEdrMetrics, type EdrMetricsSummary } from "../api/edr";
+import { useAuth } from "../auth/AuthContext";
+import KpiIcon from "../components/icons/KpiIcon";
 
 const LIVE_FEED_KEY = "kestrel-live-feed";
 const LIVE_FEED_EVENT = "kestrel-live-feed-change";
@@ -45,6 +47,7 @@ function withinWindow(iso: string | null | undefined, window: TimeWindow): boole
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const dash = useAdminQuery(() => getDashboard(), []);
   const incidentsQ = useAdminQuery(() => getIncidents({ page: 1, page_size: 200 }), []);
   const [feedSeverity, setFeedSeverity] = useState<string | null>(null);
@@ -207,8 +210,9 @@ export default function DashboardPage() {
   return (
     <div className="command-dashboard">
       <div className="sentinel-dashboard-head">
-        <div>
-          <h1 className="page-title">Security operations</h1>
+        <div className="dash-welcome">
+          <p className="dash-welcome-kicker">Welcome back,</p>
+          <h1 className="dash-welcome-name">{user?.full_name || "Administrator"}</h1>
           <p className="page-subtitle">
             Priority KPIs and ops health — open a tile to dig in.
           </p>
@@ -282,6 +286,7 @@ export default function DashboardPage() {
                 aria-label="Open appliances"
               >
                 <div className="kpi-card-top">
+                  <KpiIcon name="monitor" />
                   <span className="kpi-label">Edge appliances</span>
                 </div>
                 <div className="kpi-value">
@@ -293,6 +298,7 @@ export default function DashboardPage() {
               </Link>
               <div className="kpi-card card-surface">
                 <div className="kpi-card-top">
+                  <KpiIcon name="database" />
                   <span className="kpi-label">Data Lake volume</span>
                 </div>
                 <div className="kpi-value">
@@ -306,6 +312,7 @@ export default function DashboardPage() {
                 aria-label="Open retrospective hunts"
               >
                 <div className="kpi-card-top">
+                  <KpiIcon name="search" />
                   <span className="kpi-label">Retrospective hunts</span>
                 </div>
                 <div className="kpi-value">{applianceCmd.hunts.running}</div>
@@ -323,6 +330,7 @@ export default function DashboardPage() {
               aria-label="Open active incidents"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="shield" />
                 <span className="kpi-label">Active Incidents</span>
                 <span className="kpi-orb kpi-orb--critical" aria-hidden="true" />
               </div>
@@ -338,6 +346,7 @@ export default function DashboardPage() {
               aria-label="Open security alerts / events"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="activity" />
                 <span className="kpi-label">Events Collected</span>
                 <MiniSparkline values={sparkFromTotal(eventsMonitored)} width={56} height={18} />
               </div>
@@ -357,6 +366,7 @@ export default function DashboardPage() {
               aria-label="Open high severity alerts"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="bell" />
                 <span className="kpi-label">Security Alerts</span>
                 <span className="kpi-orb kpi-orb--high" aria-hidden="true" />
               </div>
@@ -370,6 +380,7 @@ export default function DashboardPage() {
               aria-label="Open appliances / collectors"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="monitor" />
                 <span className="kpi-label">Collector health</span>
               </div>
               <div className="kpi-card-metric-row">
@@ -391,6 +402,7 @@ export default function DashboardPage() {
               aria-label="Open pending service requests"
             >
               <div className="kpi-card-top">
+                <KpiIcon name="inbox" />
                 <span className="kpi-label">Pending Service Requests</span>
                 <span className="kpi-orb kpi-orb--high" aria-hidden="true" />
               </div>

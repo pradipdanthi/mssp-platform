@@ -276,7 +276,8 @@ img.kestrel-master-logo--full {
 
 .sidebar-brand {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
   padding: 4px 12px 22px;
   border-bottom: 1px solid var(--border-subtle);
@@ -314,29 +315,73 @@ img.kestrel-master-logo--full {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 12px;
+  gap: 4px;
+  padding: 0 10px 8px;
   flex: 1;
+  overflow-y: auto;
 }
 
 .sidebar-nav-link {
-  display: block;
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  color: var(--text-secondary);
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 10px 14px;
+  border-radius: 8px;
+  color: #8b9bb4;
   text-decoration: none;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   font-weight: 500;
+  letter-spacing: 0.01em;
+  transition: color 0.18s ease, background-color 0.18s ease;
+}
+
+.sidebar-nav-link::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: transparent;
+  transition: background-color 0.18s ease;
+}
+
+.sidebar-nav-icon {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.sidebar-nav-label {
+  min-width: 0;
+  line-height: 1.25;
 }
 
 .sidebar-nav-link:hover {
-  background: var(--bg-panel-raised);
-  color: var(--text-primary);
+  background: rgba(28, 37, 65, 0.85);
+  color: #d6e2e9;
+  box-shadow: none;
+}
+
+.sidebar-nav-link:hover .sidebar-nav-icon {
+  opacity: 1;
 }
 
 .sidebar-nav-link.active {
-  background: rgba(43, 196, 245, 0.14);
-  color: var(--accent);
+  background: rgba(28, 37, 65, 0.95);
+  color: #d6e2e9;
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.sidebar-nav-link.active::before {
+  background: #d6e2e9;
+}
+
+.sidebar-nav-link.active .sidebar-nav-icon {
+  opacity: 1;
+  color: #d6e2e9;
 }
 
 .sidebar-footer {
@@ -2744,6 +2789,27 @@ button.command-chip {
   margin-bottom: 10px;
   gap: 10px;
 }
+.dash-welcome {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dash-welcome-kicker {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: #8b9bb4;
+  letter-spacing: 0.01em;
+}
+.dash-welcome-name {
+  margin: 0 0 6px;
+  font-size: 1.85rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: #d6e2e9;
+}
 .command-dashboard .page-title {
   font-size: 1.35rem;
   margin: 0 0 4px;
@@ -2755,6 +2821,22 @@ button.command-chip {
   font-size: 0.88rem;
   line-height: 1.4;
   max-width: 56rem;
+  color: #8b9bb4;
+}
+.kpi-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(11, 19, 43, 0.55);
+  border: 1px solid #3a506b;
+  color: #d6e2e9;
+  flex-shrink: 0;
+}
+.kpi-glyph {
+  display: block;
 }
 .command-dashboard .command-chip {
   padding: 5px 11px;
@@ -2794,9 +2876,11 @@ button.command-chip {
 .command-dashboard .kpi-card,
 .command-dashboard a.kpi-card--link.card-surface,
 .command-dashboard .kpi-card.card-surface {
-  padding: 10px 12px !important;
+  padding: 14px 16px !important;
   min-height: 0 !important;
-  border-radius: 8px;
+  border-radius: 10px;
+  background: #1c2541 !important;
+  border: 1px solid #3a506b !important;
   box-shadow: none;
 }
 .command-dashboard .kpi-card--critical,
@@ -2806,9 +2890,19 @@ button.command-chip {
   box-shadow: none;
 }
 .command-dashboard .kpi-card-top {
-  margin-bottom: 2px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.command-dashboard .kpi-card-top .kpi-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.command-dashboard .kpi-card-top .mini-sparkline,
+.command-dashboard .kpi-card-top .kpi-orb {
+  margin-left: auto;
 }
 .command-dashboard .kpi-label {
   font-size: 0.72rem;
@@ -2821,11 +2915,16 @@ button.command-chip {
 .command-dashboard .kpi-value--high,
 .command-dashboard .kpi-value--accent,
 .command-dashboard .kpi-value--low {
-  font-size: 1.55rem !important;
+  font-size: 1.75rem !important;
   line-height: 1.1;
   margin-top: 2px;
   text-shadow: none !important;
   filter: none !important;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.command-dashboard .kpi-value--accent {
+  color: #d6e2e9 !important;
 }
 .command-dashboard .kpi-foot {
   margin-top: 4px;
@@ -3231,6 +3330,27 @@ button.command-chip {
 }
 
 img.kevantic-shield-logo.login-brand-logo {
-  width: 96px;
+  width: min(320px, 88vw);
+  max-width: 100%;
   height: auto;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+img.kevantic-shield-logo.sidebar-brand-logo,
+img.kevantic-lockup.sidebar-brand-logo {
+  width: 220px;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 16px 14px 12px;
 }
