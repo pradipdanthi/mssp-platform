@@ -1,0 +1,11 @@
+---
+channel_agent_enabled: true
+channel_agent_mode: poll
+channel_agent_poll_interval_sec: 20
+channel_agent_config_path: /etc/kevantic/channel.yaml
+channel_agent_unit: kevantic-channeld.service
+# Install sources from the kevantic-appliance tree (ISO payload / ansible files)
+channel_agent_src_dir: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/channel"
+# Lab default: Appliance Mgmt VM114 — overridden by group_vars/all.yml when loaded
+kevantic_control_plane_url: "http://192.168.0.224:8000"
+kevantic_channel_url: "ws://192.168.0.224:8000/appliance/v1/channel"

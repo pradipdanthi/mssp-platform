@@ -74,6 +74,16 @@ class ApplianceRegisterResponse(BaseModel):
     message: str
 
 
+class ApplianceRegistrationAbortResponse(BaseModel):
+    """Returned when an appliance cancels a just-completed register because
+    local credential persistence failed (prevents Admin 'Online' ghosts)."""
+
+    ok: bool
+    appliance_id: str
+    status: str
+    message: str
+
+
 class ApplianceAgentInventoryItem(BaseModel):
     """Local Manager agent row reported by appliance (no raw logs)."""
 

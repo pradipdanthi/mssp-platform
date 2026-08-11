@@ -5,9 +5,9 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="$REPO/ansible"
-AUTO_HOST="${JUNEXIS_ANSIBLE_HOST:-192.168.0.222}"
-AUTO_USER="${JUNEXIS_ANSIBLE_USER:-secadmin}"
-AUTO_KEY="${JUNEXIS_ANSIBLE_SSH_KEY:-$HOME/.ssh/id_ed25519_automation}"
+AUTO_HOST="${KEVANTIC_ANSIBLE_HOST:-192.168.0.222}"
+AUTO_USER="${KEVANTIC_ANSIBLE_USER:-secadmin}"
+AUTO_KEY="${KEVANTIC_ANSIBLE_SSH_KEY:-$HOME/.ssh/id_ed25519_automation}"
 REMOTE_ROOT="${MSSP_AUTOMATION_ROOT:-/home/secadmin/mssp-automation}"
 REMOTE_ANSIBLE="$REMOTE_ROOT/ansible"
 
@@ -42,7 +42,7 @@ fi
 
 echo "=== Align SSH private keys on controller (non-destructive) ==="
 # Copy keys that inventory expects and that exist on VM 100 (management keys only).
-for key in id_ed25519_misp id_ed25519_velociraptor id_ed25519_linux_endpoint id_ed25519_junexis_build; do
+for key in id_ed25519_misp id_ed25519_velociraptor id_ed25519_linux_endpoint id_ed25519_kevantic_build; do
   if [[ -f "$HOME/.ssh/$key" ]]; then
     scp -o BatchMode=yes -i "$AUTO_KEY" -o IdentitiesOnly=yes \
       "$HOME/.ssh/$key" "$HOME/.ssh/${key}.pub" \
@@ -53,13 +53,13 @@ for key in id_ed25519_misp id_ed25519_velociraptor id_ed25519_linux_endpoint id_
   fi
 done
 
-# Also copy junexis build key from appliance tree if dedicated name missing
-BUILD_KEY="$REPO/junexis-appliance/.tools/build-ssh/junexis_packer"
+# Also copy kevantic build key from appliance tree if dedicated name missing
+BUILD_KEY="$REPO/kevantic-appliance/.tools/build-ssh/kevantic_packer"
 if [[ -f "$BUILD_KEY" ]]; then
   scp -o BatchMode=yes -i "$AUTO_KEY" -o IdentitiesOnly=yes \
-    "$BUILD_KEY" "${AUTO_USER}@${AUTO_HOST}:/home/secadmin/.ssh/id_ed25519_junexis_build"
+    "$BUILD_KEY" "${AUTO_USER}@${AUTO_HOST}:/home/secadmin/.ssh/id_ed25519_kevantic_build"
   [[ -f "${BUILD_KEY}.pub" ]] && scp -o BatchMode=yes -i "$AUTO_KEY" -o IdentitiesOnly=yes \
-    "${BUILD_KEY}.pub" "${AUTO_USER}@${AUTO_HOST}:/home/secadmin/.ssh/id_ed25519_junexis_build.pub" || true
+    "${BUILD_KEY}.pub" "${AUTO_USER}@${AUTO_HOST}:/home/secadmin/.ssh/id_ed25519_kevantic_build.pub" || true
 fi
 
 "${AUTO_SSH[@]}" bash -s <<'EOF'
@@ -108,11 +108,11 @@ for limit in wazuh-stack thehive_shuffle suricata-sensor greenbone; do
   echo "-- ping \$limit"
   ansible all -m ping --limit "\$limit" || echo "PING_WARN \$limit"
 done
-# Optional: junexis build VM may not exist yet
-if ansible all -m ping --limit junexis-appliance-build >/tmp/jx-ping.out 2>&1; then
-  echo "-- ping junexis-appliance-build OK"
+# Optional: kevantic build VM may not exist yet
+if ansible all -m ping --limit kevantic-appliance-build >/tmp/jx-ping.out 2>&1; then
+  echo "-- ping kevantic-appliance-build OK"
 else
-  echo "-- ping junexis-appliance-build skipped/unavailable (OK if VM 113 not created yet)"
+  echo "-- ping kevantic-appliance-build skipped/unavailable (OK if VM 113 not created yet)"
 fi
 EOF
 

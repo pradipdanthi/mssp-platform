@@ -21,7 +21,7 @@ from app.core.error_handlers import validation_exception_handler
 from app.db.session import fetch_one, redis_client
 
 app = FastAPI(
-    title=os.getenv("APP_NAME", "Junexis Appliance Management API"),
+    title=os.getenv("APP_NAME", "Kevantic Appliance Management API"),
     version=os.getenv("APP_VERSION", "0.1.0"),
 )
 
@@ -38,7 +38,7 @@ APP_ENV = os.getenv("APP_ENV", "production")
 @app.get("/")
 def root() -> Dict[str, Any]:
     return {
-        "service": "junexis-appliance-mgmt",
+        "service": "kevantic-appliance-mgmt",
         "plane": "appliance_management",
         "status": "running",
         "environment": APP_ENV,
@@ -64,7 +64,7 @@ def health() -> Dict[str, Any]:
     api_status = "ok" if db_status == "ok" and redis_status == "ok" else "degraded"
     return {
         "api": api_status,
-        "service": "junexis-appliance-mgmt",
+        "service": "kevantic-appliance-mgmt",
         "plane": "appliance_management",
         "environment": APP_ENV,
         "database": db_status,

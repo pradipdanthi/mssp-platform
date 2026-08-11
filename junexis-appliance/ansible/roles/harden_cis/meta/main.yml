@@ -1,6 +1,0 @@
----
-galaxy_info:
-  role_name: harden_cis
-  description: Junexis appliance role harden_cis (scaffold)
-  license: proprietary
-dependencies: []

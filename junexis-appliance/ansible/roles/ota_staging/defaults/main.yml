@@ -1,5 +1,0 @@
----
-ota_staging_enabled: true
-ota_staging_root: /var/lib/junexis/ota
-ota_wpk_root: /var/lib/junexis/wpk
-ota_src_dir: "{{ playbook_dir }}/../../ota"

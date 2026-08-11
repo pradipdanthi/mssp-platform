@@ -1,0 +1,24 @@
+[Unit]
+Description=Kevantic Appliance outbound channel agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=-/etc/kevantic/appliance.env
+Environment=PYTHONPATH=/opt/kevantic/channel:/opt/kevantic/cli:/opt/kevantic/appliance-src:/opt/kevantic/ota
+Environment=KEVANTIC_STATE_DIR=/var/lib/kevantic
+Environment=KEVANTIC_CONFIG_DIR=/etc/kevantic
+ExecStart=/usr/sbin/kevantic-channeld --config /etc/kevantic/channel.yaml --mode auto
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

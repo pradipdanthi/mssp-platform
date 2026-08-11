@@ -1,0 +1,59 @@
+# AppArmor profile for /usr/bin/kevantic-cli
+# Enforce mode. Allows register/heartbeat state under /var/lib/kevantic and
+# /etc/kevantic while keeping the CLI confined (no broad / rw).
+#include <tunables/global>
+
+/usr/bin/kevantic-cli {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/openssl>
+  #include <local/usr.bin.kevantic-cli>
+
+  /usr/bin/kevantic-cli rix,
+  /usr/bin/env rix,
+  /usr/bin/python3* ix,
+  /usr/lib/python3*/** mr,
+  /usr/local/lib/python3*/** mr,
+  /opt/kevantic/cli/** mr,
+  /opt/kevantic/** r,
+
+  # Config: register writes appliance.env; other ops may update channel/nft copies
+  /etc/kevantic/ r,
+  /etc/kevantic/** rwk,
+  /etc/ssl/certs/** r,
+  /etc/passwd r,
+  /etc/group r,
+  /etc/nsswitch.conf r,
+  /etc/resolv.conf r,
+  /etc/hosts r,
+
+  # State + secrets (mkdir/chmod/write API key + JSON state + atomic .tmp)
+  /var/lib/kevantic/ r,
+  /var/lib/kevantic/** rwk,
+  /var/lib/kevantic/secrets/ rwk,
+  /var/lib/kevantic/secrets/** rwk,
+
+  /var/log/kevantic/ rw,
+  /var/log/kevantic/** rwk,
+
+  /usr/bin/nft ix,
+  /usr/sbin/nft ix,
+  /usr/bin/systemctl ix,
+  /bin/bash ix,
+  /usr/bin/bash ix,
+
+  network inet stream,
+  network inet6 stream,
+  network inet dgram,
+  network inet6 dgram,
+
+  /proc/*/net/ r,
+  /sys/kernel/mm/transparent_hugepage/ r,
+
+  # Python / urllib scratch
+  /tmp/ r,
+  /tmp/** rwk,
+  /var/tmp/ r,
+  /var/tmp/** rwk,
+}

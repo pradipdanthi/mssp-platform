@@ -279,7 +279,7 @@ def export_pdf(blocks: list[tuple[str, str]], path: Path) -> None:
         canvas.saveState()
         canvas.setFont("Helvetica", 8)
         canvas.setFillColor(colors.grey)
-        canvas.drawString(inch * 0.9, 0.5 * inch, "Kestrel Cyber — MSSP Platform Master Blueprint")
+        canvas.drawString(inch * 0.9, 0.5 * inch, "Kevantic Cyber Security — MSSP Platform Master Blueprint")
         canvas.drawRightString(A4[0] - inch * 0.9, 0.5 * inch, f"Page {doc.page}")
         canvas.restoreState()
 

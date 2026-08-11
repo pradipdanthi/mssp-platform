@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: auditd
+  description: Kevantic appliance role auditd (scaffold)
+  license: proprietary
+dependencies: []

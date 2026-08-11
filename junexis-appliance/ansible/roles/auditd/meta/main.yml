@@ -1,6 +1,0 @@
----
-galaxy_info:
-  role_name: auditd
-  description: Junexis appliance role auditd (scaffold)
-  license: proprietary
-dependencies: []

@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: apparmor_profiles
+  description: Kevantic appliance role apparmor_profiles (scaffold)
+  license: proprietary
+dependencies: []

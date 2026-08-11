@@ -1,0 +1,11 @@
+---
+container_runtime_enabled: true
+container_runtime_offline_pool: "{{ (kevantic_payload_root | default('/opt/kevantic/payload')) ~ '/offline-packages' }}"
+# Packages preferred from offline ISO pool; apt fallback when missing
+container_runtime_packages:
+  - podman
+  - buildah
+  - crun
+# Keep container socket off by default (engines idle until licensed)
+container_runtime_enable_socket: false
+container_runtime_storage_root: /var/lib/containers

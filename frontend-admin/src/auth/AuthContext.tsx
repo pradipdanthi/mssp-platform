@@ -42,7 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setAuthToken(null);
           setToken(null);
           setUser(null);
-          setError("This account is for the customer portal only. Use port 3001.");
+          setError("This account is for the customer portal only. Sign in at portal.kevantic.com.");
           return;
         }
         setToken(stored);
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionStorage.removeItem(TOKEN_STORAGE_KEY);
         setAuthToken(null);
         setError(
-          "This account is for the customer portal only. Open the customer portal on port 3001."
+          "This account is for the customer portal only. Sign in at portal.kevantic.com."
         );
         throw new ApiError(403, "Wrong portal");
       }

@@ -1,0 +1,44 @@
+---
+# B2 disposable VM smoke — implemented roles only.
+# Case/ticketing stack stays in Cloud SOC (never package TheHive here).
+# Does NOT run on mssp-control (minimize safety assert).
+- name: Kevantic appliance B2 smoke
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - role: minimize
+    - role: firewall_nftables
+      vars:
+        firewall_nftables_mode: bootstrap
+    - role: kevantic_runtime
+  post_tasks:
+    - name: Assert case-management packages absent
+      ansible.builtin.shell: |
+        set -e
+        if dpkg -l 2>/dev/null | grep -qiE 'thehive|cortex'; then
+          echo "Case-management packages must not be on appliance" >&2
+          exit 1
+        fi
+        echo OK
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Assert kevantic-cli present
+      ansible.builtin.command: kevantic-cli version
+      register: jx_ver
+      changed_when: false
+
+    - name: Assert appliance engine importable (datalake + hunt)
+      ansible.builtin.shell: |
+        set -e
+        export PYTHONPATH=/opt/kevantic/appliance-src
+        python3 -c "from appliance.datalake import DataLakeArchiver, QueryEngine; from appliance.telemetry import TelemetryForwarder; from appliance.hunting import RetrospectiveSweeper; print('ENGINE_OK')"
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Show kevantic-cli version
+      ansible.builtin.debug:
+        var: jx_ver.stdout_lines

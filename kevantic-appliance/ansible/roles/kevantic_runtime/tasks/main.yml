@@ -1,0 +1,144 @@
+---
+# Install kevantic runtime dirs + CLI onto appliance image
+- name: Ensure kevantic system group
+  ansible.builtin.group:
+    name: kevantic
+    system: true
+
+# Cloud-init / build VM already has login user "kevantic". Do not usermod an
+# active session (system/home/shell changes fail with "currently used by process").
+- name: Check whether kevantic user already exists
+  ansible.builtin.command: id -u kevantic
+  register: kevantic_id
+  changed_when: false
+  failed_when: false
+
+- name: Create kevantic login user when missing
+  ansible.builtin.user:
+    name: kevantic
+    group: kevantic
+    shell: /bin/bash
+    home: /home/kevantic
+    create_home: true
+  when: kevantic_id.rc != 0
+
+- name: Ensure existing kevantic user is in kevantic group
+  ansible.builtin.user:
+    name: kevantic
+    groups: kevantic
+    append: true
+  when: kevantic_id.rc == 0
+
+- name: Create kevantic directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: kevantic
+    mode: "{{ '0750' if 'secrets' in item else '0755' }}"
+  loop:
+    - /etc/kevantic
+    - /etc/kevantic/nftables
+    - /etc/kevantic/trust
+    - /var/lib/kevantic
+    - /var/lib/kevantic/secrets
+    - /var/lib/kevantic/ota
+    - /var/lib/kevantic/wpk
+    - /var/log/kevantic
+    - /var/log/kevantic/datalake
+
+- name: Install kevantic-cli package tree
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/cli/kevantic-cli/kevantic_cli/"
+    dest: /opt/kevantic/cli/kevantic_cli/
+    mode: "0644"
+    directory_mode: "0755"
+
+- name: Install kevantic-cli wrapper
+  ansible.builtin.copy:
+    dest: /usr/bin/kevantic-cli
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      export PYTHONPATH=/opt/kevantic/cli${PYTHONPATH:+:$PYTHONPATH}
+      exec python3 -m kevantic_cli "$@"
+
+- name: Install appliance engine package tree
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/appliance/"
+    dest: /opt/kevantic/appliance-src/appliance/
+    mode: "0644"
+    directory_mode: "0755"
+
+- name: Install engine requirements file
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/requirements-engine.txt"
+    dest: /opt/kevantic/requirements-engine.txt
+    mode: "0644"
+
+- name: Ensure pip available for engine deps
+  ansible.builtin.apt:
+    name:
+      - python3-pip
+      - python3-venv
+    state: present
+    update_cache: true
+
+- name: Install DuckDB for local Parquet lake (KB-093E)
+  ansible.builtin.pip:
+    requirements: /opt/kevantic/requirements-engine.txt
+    extra_args: --break-system-packages
+  # Ubuntu 24.04 PEP 668 — appliance image is dedicated, break-system-packages OK
+
+- name: Install appliance engine module path helper
+  ansible.builtin.copy:
+    dest: /etc/profile.d/kevantic-appliance-engine.sh
+    mode: "0644"
+    content: |
+      export PYTHONPATH=/opt/kevantic/appliance-src${PYTHONPATH:+:$PYTHONPATH}
+
+- name: Install kevantic-engine-api wrapper
+  ansible.builtin.copy:
+    dest: /usr/bin/kevantic-engine-api
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      export PYTHONPATH=/opt/kevantic/appliance-src${PYTHONPATH:+:$PYTHONPATH}
+      export KEVANTIC_STATE_DIR=${KEVANTIC_STATE_DIR:-/var/lib/kevantic}
+      export KEVANTIC_LOG_DIR=${KEVANTIC_LOG_DIR:-/var/log/kevantic}
+      exec python3 -m appliance.api.local_app "$@"
+
+- name: Install engine systemd unit
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/configs/systemd/kevantic-appliance-engine.service"
+    dest: /etc/systemd/system/kevantic-appliance-engine.service
+    mode: "0644"
+
+- name: Install heartbeat service + timer (Phase A bridge)
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/configs/systemd/{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    mode: "0644"
+  loop:
+    - kevantic-heartbeat.service
+    - kevantic-heartbeat.timer
+
+- name: Enable kevantic-appliance-engine (loopback job API)
+  ansible.builtin.systemd:
+    name: kevantic-appliance-engine.service
+    enabled: true
+    daemon_reload: true
+
+- name: Enable heartbeat timer (every 60s when registered)
+  ansible.builtin.systemd:
+    name: kevantic-heartbeat.timer
+    enabled: true
+    daemon_reload: true
+    state: started
+
+- name: Seed default network mode bootstrap
+  ansible.builtin.copy:
+    dest: /var/lib/kevantic/network_mode
+    content: "bootstrap\n"
+    mode: "0644"
+    force: false

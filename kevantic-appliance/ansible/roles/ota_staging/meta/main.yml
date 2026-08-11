@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: ota_staging
+  description: Kevantic appliance role ota_staging (scaffold)
+  license: proprietary
+dependencies: []

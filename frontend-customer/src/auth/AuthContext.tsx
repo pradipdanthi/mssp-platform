@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setAuthToken(null);
           setToken(null);
           setUser(null);
-          setError("MSSP staff must use the admin portal on port 3000.");
+          setError("MSSP staff must use the admin portal at admin.kevantic.com.");
           return;
         }
         setToken(stored);
@@ -67,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!isCustomerPortalUser(result.user)) {
         sessionStorage.removeItem(TOKEN_STORAGE_KEY);
         setAuthToken(null);
-        setError("MSSP staff must sign in on the admin portal (port 3000).");
+        setError("MSSP staff must sign in at admin.kevantic.com.");
         throw new ApiError(403, "Wrong portal");
       }
       sessionStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);

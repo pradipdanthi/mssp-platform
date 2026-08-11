@@ -1,6 +1,0 @@
----
-auditd_enabled: true
-auditd_package: auditd
-auditd_rules_dest: /etc/audit/rules.d/junexis.rules
-# Prefer offline pool when present (ISO firstboot)
-auditd_offline_pool: "{{ (junexis_payload_root | default('/opt/junexis/payload')) ~ '/offline-packages' }}"

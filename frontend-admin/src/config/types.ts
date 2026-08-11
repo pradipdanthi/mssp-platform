@@ -11,7 +11,11 @@ export interface AppConfig {
   legalEntityName: string;
   tagline: string;
   supportEmail: string;
+  salesEmail: string;
   portalDomain: string;
+  adminDomain: string;
+  marketingDomain: string;
+  footerCopyright: string;
   documentTitle: string;
   logo: BrandLogoConfig;
 }
@@ -23,7 +27,11 @@ const REQUIRED_STRING_KEYS: Array<keyof Omit<AppConfig, "logo">> = [
   "legalEntityName",
   "tagline",
   "supportEmail",
+  "salesEmail",
   "portalDomain",
+  "adminDomain",
+  "marketingDomain",
+  "footerCopyright",
   "documentTitle",
 ];
 
@@ -61,7 +69,11 @@ export function assertAppConfig(data: unknown): AppConfig {
     legalEntityName: raw.legalEntityName as string,
     tagline: raw.tagline as string,
     supportEmail: raw.supportEmail as string,
+    salesEmail: raw.salesEmail as string,
     portalDomain: raw.portalDomain as string,
+    adminDomain: raw.adminDomain as string,
+    marketingDomain: raw.marketingDomain as string,
+    footerCopyright: raw.footerCopyright as string,
     documentTitle: raw.documentTitle as string,
     logo: {
       markSrc: logoRaw.markSrc as string,
@@ -69,4 +81,11 @@ export function assertAppConfig(data: unknown): AppConfig {
       alt: logoRaw.alt as string,
     },
   };
+}
+
+/** Build https:// URLs for portal entry points on kevantic.com. */
+export function portalUrl(domain: string, path = ""): string {
+  const host = domain.replace(/^https?:\/\//, "").replace(/\/+$/, "");
+  const suffix = path.startsWith("/") ? path : path ? `/${path}` : "";
+  return `https://${host}${suffix}`;
 }

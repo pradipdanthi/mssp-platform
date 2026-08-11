@@ -45,12 +45,12 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     pricing: "Included in Core Plan",
     competitorValue: "Competitor value: ~$4.00 / endpoint / month",
     achieves:
-      "Ingests, normalizes, and analyzes 24/7 endpoint, server, and system event logs across your infrastructure — with Junexis Data Lake retention.",
+      "Ingests, normalizes, and analyzes 24/7 endpoint, server, and system event logs across your infrastructure — with Kevantic Data Lake retention.",
     whereItFits:
       "Sits at the core SIEM/telemetry layer. Eliminates security blind spots and translates obscure log lines into actionable business risk insights.",
     features: [
       "24/7 real-time telemetry ingest (endpoint, Windows, and Linux audit sources)",
-      "Zero-Cloud-Tax Data Retention (up to 365+ days local/cloud Parquet via Junexis Data Lake)",
+      "Zero-Cloud-Tax Data Retention (up to 365+ days local/cloud Parquet via Kevantic Data Lake)",
       "Automated alert translation into plain-English business impact summaries",
       "Correlation against global MITRE ATT&CK detection rulesets",
       "Universal across Edge Appliance (Modes 2/4) and cloud-direct (Modes 1/3) deployments",
@@ -172,13 +172,13 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     pricing: "$150.00 / tenant / month",
     competitorValue: "Flat tenant fee",
     achieves:
-      "Contextualizes alerts with live threat feeds and enables 90-day Junexis Retrospective Engine sweeps when new IOCs appear.",
+      "Contextualizes alerts with live threat feeds and enables 90-day Kevantic Retrospective Engine sweeps when new IOCs appear.",
     whereItFits:
       "Sits at the enrichment layer. Reduces alert fatigue by filtering known-benign traffic and highlighting true high-risk attacks.",
     features: [
       "Automated indicator matching against curated open and commercial threat feeds (incl. STIX 2.1 / TAXII)",
-      "90-Day Retrospective Threat Hunting — instant zero-day retro-sweeps via Junexis Retrospective Engine",
-      "Works for Edge Appliance tenants (local Parquet) and cloud-direct tenants (Junexis Data Lake)",
+      "90-Day Retrospective Threat Hunting — instant zero-day retro-sweeps via Kevantic Retrospective Engine",
+      "Works for Edge Appliance tenants (local Parquet) and cloud-direct tenants (Kevantic Data Lake)",
       "Automatic mapping of every alert to exact MITRE ATT&CK techniques",
       "Early-warning alerts when active campaigns target your vertical",
     ],
@@ -195,11 +195,11 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     pricing: "$5.00 / endpoint / month",
     competitorValue: "Per-endpoint advanced response",
     achieves:
-      "Combines deception tripwires, deep forensic triage, and Junexis ThreatLens AI-assisted IOC extraction from advisories.",
+      "Combines deception tripwires, deep forensic triage, and Kevantic ThreatLens AI-assisted IOC extraction from advisories.",
     whereItFits:
       "Sits at the proactive & advanced-response layer. Traps sophisticated attackers early and collects legal-grade evidence.",
     features: [
-      "Junexis ThreatLens — AI-assisted IOC extraction & advisory / PDF / URL analysis",
+      "Kevantic ThreatLens — AI-assisted IOC extraction & advisory / PDF / URL analysis",
       "Stealthy deployment of zero-overhead deception tripwires (decoy credentials, fake shares)",
       "Instant automated host isolation when an attacker touches a canary trap",
       "One-click remote triage collection (RAM, MFT, process memory)",

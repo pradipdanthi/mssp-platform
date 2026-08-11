@@ -1,0 +1,119 @@
+---
+# Kevantic DCUI — tty1 only, SSH denied, hardened unit
+- name: Ensure python3 present for DCUI
+  ansible.builtin.apt:
+    name: [python3]
+    state: present
+
+- name: Ensure kevantic libexec directory
+  ansible.builtin.file:
+    path: /usr/libexec/kevantic
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Clear immutable bit before DCUI update (if set)
+  ansible.builtin.command: "chattr -i {{ item }}"
+  failed_when: false
+  changed_when: false
+  loop:
+    - /usr/libexec/kevantic/mssp-dcui
+    - /usr/local/bin/config
+    - /usr/local/bin/mssp-dcui
+
+- name: Install mssp-dcui (libexec — not for SSH use)
+  ansible.builtin.copy:
+    src: mssp-dcui.py
+    dest: /usr/libexec/kevantic/mssp-dcui
+    mode: "0755"
+    owner: root
+    group: root
+
+- name: Install SSH deny stubs for config / mssp-dcui in PATH
+  ansible.builtin.copy:
+    src: mssp-dcui-ssh-deny.sh
+    dest: "{{ item }}"
+    mode: "0755"
+    owner: root
+    group: root
+  loop:
+    - /usr/local/bin/config
+    - /usr/local/bin/mssp-dcui
+
+- name: Lock DCUI binary + PATH stubs immutable (tamper resistance)
+  ansible.builtin.command: "chattr +i {{ item }}"
+  failed_when: false
+  loop:
+    - /usr/libexec/kevantic/mssp-dcui
+    - /usr/local/bin/config
+    - /usr/local/bin/mssp-dcui
+
+- name: Install AppArmor profile for DCUI (when AppArmor present)
+  ansible.builtin.copy:
+    src: apparmor-mssp-dcui
+    dest: /etc/apparmor.d/usr.libexec.kevantic.mssp-dcui
+    mode: "0644"
+    owner: root
+    group: root
+  when: ansible_facts.get('apparmor', {}).status is defined or True
+  failed_when: false
+
+- name: Load AppArmor DCUI profile (enforce if aa-enforce available)
+  ansible.builtin.shell: |
+    set -e
+    if command -v apparmor_parser >/dev/null 2>&1; then
+      apparmor_parser -r /etc/apparmor.d/usr.libexec.kevantic.mssp-dcui || true
+    fi
+  changed_when: false
+  failed_when: false
+
+- name: Install mssp-dcui systemd unit
+  ansible.builtin.copy:
+    src: mssp-dcui.service
+    dest: /etc/systemd/system/mssp-dcui.service
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Reload systemd for mssp-dcui
+
+- name: Disable getty on tty1 (DCUI owns console)
+  ansible.builtin.systemd:
+    name: getty@tty1
+    enabled: false
+    masked: true
+    state: stopped
+  failed_when: false
+
+- name: Enable and start mssp-dcui on tty1
+  ansible.builtin.systemd:
+    name: mssp-dcui
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Disable cloud-init network (DCUI owns management IP)
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    mode: "0644"
+    content: |
+      network: {config: disabled}
+
+- name: Remove legacy first-boot hooks
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/profile.d/zz-kevantic-firstboot-netconfig.sh
+    - /usr/local/sbin/kevantic-firstboot-netconfig
+
+- name: DCUI security note
+  ansible.builtin.copy:
+    dest: /etc/kevantic/dcui.note
+    mode: "0644"
+    content: |
+      Kevantic Console (DCUI) — LOCAL tty1 ONLY.
+      Proxmox → VM → Console (graphical). Never Serial. Never SSH.
+      Binary: /usr/libexec/kevantic/mssp-dcui (immutable bit set when supported)
+      PATH stubs `config` / `mssp-dcui` refuse SSH by design.
+      Netplan: /etc/netplan/99-mssp-management.yaml

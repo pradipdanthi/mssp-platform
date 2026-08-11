@@ -798,7 +798,7 @@ export function getThreatIntelCampaigns(
   return request(`/customer/threat-intel/${encodeURIComponent(shortCode)}/campaigns`);
 }
 
-/** Junexis ThreatLens + Retrospective Engine */
+/** Kevantic ThreatLens + Retrospective Engine */
 export interface ThreatLensIoc {
   type: string;
   value: string;

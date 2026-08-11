@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
-# Create permanent Proxmox VM 114 — Junexis Appliance Management plane.
+# Create permanent Proxmox VM 114 — Kevantic Appliance Management plane.
 # Hosts appliance channel gateway (not co-located on mssp-control / VM 100).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-PVE_HOST="${JUNEXIS_PVE_HOST:-192.168.0.191}"
-PVE_KEY="${JUNEXIS_PVE_SSH_KEY:-$HOME/.ssh/id_ed25519_proxmox}"
+PVE_HOST="${KEVANTIC_PVE_HOST:-192.168.0.191}"
+PVE_KEY="${KEVANTIC_PVE_SSH_KEY:-$HOME/.ssh/id_ed25519_proxmox}"
 PVE_SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -i "$PVE_KEY" "root@${PVE_HOST}")
-VMID="${JUNEXIS_MGMT_VMID:-114}"
-VM_NAME="${JUNEXIS_MGMT_VM_NAME:-junexis-appliance-mgmt}"
-VM_IP="${JUNEXIS_MGMT_VM_IP:-192.168.0.224}"
-VM_CIDR="${JUNEXIS_MGMT_VM_CIDR:-24}"
-VM_GW="${JUNEXIS_MGMT_VM_GW:-192.168.0.1}"
-VM_MEM="${JUNEXIS_MGMT_VM_MEM:-4096}"
-VM_CORES="${JUNEXIS_MGMT_VM_CORES:-2}"
-VM_DISK="${JUNEXIS_MGMT_VM_DISK:-40}"
-BRIDGE="${JUNEXIS_MGMT_VM_BRIDGE:-vmbr0}"
-STORAGE="${JUNEXIS_MGMT_VM_STORAGE:-local-zfs}"
-CLOUDIMG="${JUNEXIS_BUILD_CLOUDIMG:-/var/lib/vz/template/iso/ubuntu-24.04-server-cloudimg-amd64.img}"
+VMID="${KEVANTIC_MGMT_VMID:-114}"
+VM_NAME="${KEVANTIC_MGMT_VM_NAME:-kevantic-appliance-mgmt}"
+VM_IP="${KEVANTIC_MGMT_VM_IP:-192.168.0.224}"
+VM_CIDR="${KEVANTIC_MGMT_VM_CIDR:-24}"
+VM_GW="${KEVANTIC_MGMT_VM_GW:-192.168.0.1}"
+VM_MEM="${KEVANTIC_MGMT_VM_MEM:-4096}"
+VM_CORES="${KEVANTIC_MGMT_VM_CORES:-2}"
+VM_DISK="${KEVANTIC_MGMT_VM_DISK:-40}"
+BRIDGE="${KEVANTIC_MGMT_VM_BRIDGE:-vmbr0}"
+STORAGE="${KEVANTIC_MGMT_VM_STORAGE:-local-zfs}"
+CLOUDIMG="${KEVANTIC_BUILD_CLOUDIMG:-/var/lib/vz/template/iso/ubuntu-24.04-server-cloudimg-amd64.img}"
 # Reuse factory build pubkey for bootstrap; rotate later in production
-SSH_PUB="${JUNEXIS_MGMT_SSH_PUB:-$ROOT/junexis-appliance/.tools/build-ssh/junexis_packer.pub}"
-CI_USER="${JUNEXIS_MGMT_CI_USER:-junexis}"
-CI_PASS="${JUNEXIS_MGMT_CI_PASS:-JunexisMgmtChangeMe}"
+SSH_PUB="${KEVANTIC_MGMT_SSH_PUB:-$ROOT/kevantic-appliance/.tools/build-ssh/kevantic_packer.pub}"
+CI_USER="${KEVANTIC_MGMT_CI_USER:-kevantic}"
+CI_PASS="${KEVANTIC_MGMT_CI_PASS:-KevanticMgmtChangeMe}"
 
 if [[ ! -f "$SSH_PUB" ]]; then
   echo "Missing SSH pubkey: $SSH_PUB" >&2
@@ -33,7 +33,7 @@ if [[ ! -f "$PVE_KEY" ]]; then
 fi
 
 echo "Creating Appliance Management VM ${VMID} (${VM_NAME}) IP ${VM_IP} on ${PVE_HOST}..."
-scp -o BatchMode=yes -i "$PVE_KEY" "$SSH_PUB" "root@${PVE_HOST}:/tmp/junexis_mgmt_vm.pub"
+scp -o BatchMode=yes -i "$PVE_KEY" "$SSH_PUB" "root@${PVE_HOST}:/tmp/kevantic_mgmt_vm.pub"
 
 "${PVE_SSH[@]}" bash -s <<EOF
 set -euo pipefail
@@ -72,9 +72,9 @@ qm set "\$VMID" --ipconfig0 'ip=${VM_IP}/${VM_CIDR},gw=${VM_GW}'
 qm set "\$VMID" --nameserver '${VM_GW}'
 qm set "\$VMID" --ciuser '${CI_USER}'
 qm set "\$VMID" --cipassword '${CI_PASS}'
-qm set "\$VMID" --sshkeys /tmp/junexis_mgmt_vm.pub
+qm set "\$VMID" --sshkeys /tmp/kevantic_mgmt_vm.pub
 qm set "\$VMID" --ciupgrade 0
-rm -f /tmp/junexis_mgmt_vm.pub
+rm -f /tmp/kevantic_mgmt_vm.pub
 
 qm start "\$VMID"
 qm status "\$VMID"

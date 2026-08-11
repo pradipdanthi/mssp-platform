@@ -23,7 +23,7 @@ export default function KestrelMasterLogo({
   className = "",
   size = "56px",
   variant = "mark",
-  alt = "Kestrel Cyber Master Emblem",
+  alt = "Kevantic Cyber Security Emblem",
   live = false,
 }: KestrelMasterLogoProps) {
   if (variant === "full") {

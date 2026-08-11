@@ -2,7 +2,7 @@
   "name": "mssp-frontend-customer",
   "private": true,
   "version": "0.1.0",
-  "description": "Kestrel Cyber Control Plane — Customer portal (React + TypeScript).",
+  "description": "Kevantic Cyber Security — Customer portal (React + TypeScript).",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5173",

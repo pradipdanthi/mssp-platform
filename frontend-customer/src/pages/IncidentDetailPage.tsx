@@ -270,7 +270,7 @@ export default function IncidentDetailPage() {
                 <div className="forensic-accordion-body">
                   <p className="muted" style={{ marginTop: 0 }}>
                     Optional technical detail for your security contacts. Leaders can stay with the
-                    AI Executive Summary above — Junexis SOC owns the investigation.
+                    AI Executive Summary above — Kevantic SOC owns the investigation.
                   </p>
                   <ProcessTreeWidget
                     root={edr.process_tree.root}

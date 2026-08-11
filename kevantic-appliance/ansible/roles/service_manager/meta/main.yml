@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: service_manager
+  description: Kevantic appliance role service_manager (scaffold)
+  license: proprietary
+dependencies: []

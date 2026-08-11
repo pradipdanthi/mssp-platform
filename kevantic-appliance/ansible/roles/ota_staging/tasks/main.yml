@@ -1,0 +1,58 @@
+---
+# OTA staging directories + kevantic-ota tool (signed manifests over channel).
+- name: Apply role when enabled
+  when: ota_staging_enabled | default(true) | bool
+  block:
+  - name: Ensure OTA / WPK directories
+    ansible.builtin.file:
+      path: "{{ item }}"
+      state: directory
+      owner: root
+      group: kevantic
+      mode: "0750"
+    loop:
+      - "{{ ota_staging_root }}"
+      - "{{ ota_staging_root }}/staging"
+      - "{{ ota_staging_root }}/applied"
+      - "{{ ota_wpk_root }}"
+      - /opt/kevantic/ota
+
+  - name: Install kevantic_ota module
+    ansible.builtin.copy:
+      src: "{{ ota_src_dir }}/kevantic_ota.py"
+      dest: /opt/kevantic/ota/kevantic_ota.py
+      mode: "0644"
+
+  - name: Install kevantic_ota package marker
+    ansible.builtin.copy:
+      dest: /opt/kevantic/ota/__init__.py
+      mode: "0644"
+      content: |
+        # OTA helpers
+
+  - name: Install kevantic-ota CLI
+    ansible.builtin.copy:
+      dest: /usr/bin/kevantic-ota
+      mode: "0755"
+      content: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        export PYTHONPATH=/opt/kevantic/ota:/opt/kevantic/cli${PYTHONPATH:+:$PYTHONPATH}
+        export KEVANTIC_STATE_DIR=${KEVANTIC_STATE_DIR:-/var/lib/kevantic}
+        export KEVANTIC_OTA_DIR=${KEVANTIC_OTA_DIR:-/var/lib/kevantic/ota}
+        exec /usr/bin/python3 -m kevantic_ota "$@"
+
+  - name: Install example OTA manifest for operators
+    ansible.builtin.copy:
+      src: "{{ ota_src_dir }}/manifests/example-manifest.json"
+      dest: "{{ ota_staging_root }}/example-manifest.json"
+      mode: "0644"
+
+  - name: Record ota_staging applied marker
+    ansible.builtin.copy:
+      dest: /var/lib/kevantic/ota_staging.applied
+      mode: "0644"
+      content: |
+        applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+        role=ota_staging
+        ota_root={{ ota_staging_root }}

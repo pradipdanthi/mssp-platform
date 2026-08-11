@@ -1,6 +1,0 @@
----
-galaxy_info:
-  role_name: junexis_runtime
-  description: Junexis appliance role junexis_runtime (scaffold)
-  license: proprietary
-dependencies: []

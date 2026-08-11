@@ -13,7 +13,7 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
 /**
- * Junexis ThreatLens — paste advisory text, extract IOCs, run 90-day retrospective sweep.
+ * Kevantic ThreatLens — paste advisory text, extract IOCs, run 90-day retrospective sweep.
  * Requires Threat Intelligence and/or Endpoint Forensics entitlement (Cards 7/8).
  * Works for appliance tenants (Modes 2/4) and cloud-direct tenants (Modes 1/3).
  */
@@ -140,7 +140,7 @@ export default function ThreatLensPage() {
   if (loading) {
     return (
       <div className="page">
-        <h1 className="page-title">Junexis ThreatLens</h1>
+        <h1 className="page-title">Kevantic ThreatLens</h1>
         <p className="muted">Checking service entitlements…</p>
       </div>
     );
@@ -149,7 +149,7 @@ export default function ThreatLensPage() {
   if (!enabled) {
     return (
       <div className="page">
-        <h1 className="page-title">Junexis ThreatLens</h1>
+        <h1 className="page-title">Kevantic ThreatLens</h1>
         <p className="page-lead">
           ThreatLens extracts IOCs from advisories and runs 90-day retrospective sweeps. It is part of
           Threat Intelligence and/or Endpoint Forensics &amp; Deception.
@@ -169,10 +169,10 @@ export default function ThreatLensPage() {
 
   return (
     <div className="page threatlens-page">
-      <h1 className="page-title">Junexis ThreatLens</h1>
+      <h1 className="page-title">Kevantic ThreatLens</h1>
       <p className="page-lead">
         Paste a security advisory, report, or URL. ThreatLens extracts indicators and can run a
-        90-day Junexis Retrospective Engine sweep across your Data Lake — on-appliance or in the
+        90-day Kevantic Retrospective Engine sweep across your Data Lake — on-appliance or in the
         cloud SOC, depending on your deployment mode.
       </p>
       {error && <p className="form-error">{error}</p>}

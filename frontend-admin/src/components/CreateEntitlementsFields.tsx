@@ -34,7 +34,7 @@ export default function CreateEntitlementsFields({ value, onChange }: Props) {
       <p className="page-subtitle" style={{ marginTop: 0 }}>
         Same names as the Service Catalog. New customers start with Core (log monitoring + incident
         response). Turn on add-ons only when they are in the contract; otherwise customers request
-        consulting from the portal and Junexis sales approves in Admin.
+        consulting from the portal and Kevantic sales approves in Admin.
       </p>
 
       <div className="entitlement-section-label">Core (included)</div>

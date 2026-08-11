@@ -1,0 +1,11 @@
+---
+apparmor_profiles_enabled: true
+apparmor_packages:
+  - apparmor
+  - apparmor-utils
+apparmor_offline_pool: "{{ (kevantic_payload_root | default('/opt/kevantic/payload')) ~ '/offline-packages' }}"
+apparmor_profile_src_dir: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/hardening/apparmor"
+# One path-attached profile for kevantic-cli (covers heartbeat timer invocations)
+apparmor_profiles:
+  - usr.bin.kevantic-cli
+apparmor_mode: enforce

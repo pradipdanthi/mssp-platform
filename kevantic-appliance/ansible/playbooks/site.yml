@@ -1,0 +1,19 @@
+---
+# Full appliance image provision (order matters)
+- name: Kevantic appliance site
+  hosts: all
+  become: true
+  roles:
+    - minimize
+    - harden_cis
+    - firewall_nftables
+    - apparmor_profiles
+    - auditd
+    - container_runtime
+    - kevantic_runtime
+    - channel_agent
+    - license_enforcer
+    - wazuh_local
+    - catalogue_engines
+    - ota_staging
+    - service_manager

@@ -1,0 +1,87 @@
+---
+# Defaults for role minimize
+minimize_enabled: true
+
+# Never purge these — required for idle catalogue engines / Kevantic runtime.
+# (Documented allow-list; purge list must not include these names.)
+minimize_engine_protect_packages:
+  - wazuh-manager
+  - wazuh-agent
+  - fluent-bit
+  - suricata
+  - zeek
+  - zeekctl
+  - python3
+  - python3-pip
+  - nftables
+  - openssh-server
+  - ansible-core
+  - podman
+  - buildah
+  - crun
+  - containernetworking-plugins
+  - plymouth
+  - plymouth-label
+  - plymouth-themes
+  - fonts-dejavu-core
+
+# Packages to purge when present (idempotent — ignore if absent).
+# NOTE: plymouth is intentionally NOT purged — Kevantic boot splash needs it.
+minimize_purge_packages:
+  - snapd
+  - cloud-init
+  - cloud-guest-utils
+  - cloud-initramfs-copymods
+  - cloud-initramfs-dyn-netconf
+  - cups
+  - cups-browsed
+  - cups-client
+  - cups-common
+  - cups-core-drivers
+  - cups-daemon
+  - cups-filters
+  - cups-ppdc
+  - cups-server-common
+  - modemmanager
+  - bluez
+  - bluez-obexd
+  - popularity-contest
+  - update-notifier-common
+  - ubuntu-advantage-tools
+  - multipath-tools
+  - open-iscsi
+  - landscape-common
+  - plymouth-theme-ubuntu-text
+  - plymouth-theme-spinner
+  - ubuntu-desktop
+  - ubuntu-desktop-minimal
+  - gdm3
+  - gnome-shell
+  - thunderbird
+  - libreoffice-common
+  - rhythmbox
+  - totem
+  - transmission-gtk
+  - cheese
+  - shotwell
+
+# Units to mask (do not disable critical networkd/ssh)
+minimize_mask_units:
+  - snapd.service
+  - snapd.socket
+  - snapd.seeded.service
+  - cloud-init.service
+  - cloud-init-local.service
+  - cloud-config.service
+  - cloud-final.service
+  - ModemManager.service
+  - bluetooth.service
+  - cups.service
+  - cups-browsed.service
+  - multipathd.service
+  - open-iscsi.service
+  - iscsid.service
+  - apport.service
+  - whoopsie.service
+
+minimize_remove_snap_dir: true

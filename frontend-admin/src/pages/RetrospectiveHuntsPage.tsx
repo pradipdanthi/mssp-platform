@@ -41,7 +41,7 @@ export default function RetrospectiveHuntsPage() {
       </p>
       <h1 className="page-title">Retrospective hunts</h1>
       <p className="page-subtitle">
-        Junexis Retrospective Engine jobs across all tenants — LOCAL_APPLIANCE (Modes 2/4) and
+        Kevantic Retrospective Engine jobs across all tenants — LOCAL_APPLIANCE (Modes 2/4) and
         CLOUD_SOC (Modes 1/3).
       </p>
 

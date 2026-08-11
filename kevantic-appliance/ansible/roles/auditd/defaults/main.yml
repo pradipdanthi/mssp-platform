@@ -1,0 +1,6 @@
+---
+auditd_enabled: true
+auditd_package: auditd
+auditd_rules_dest: /etc/audit/rules.d/kevantic.rules
+# Prefer offline pool when present (ISO firstboot)
+auditd_offline_pool: "{{ (kevantic_payload_root | default('/opt/kevantic/payload')) ~ '/offline-packages' }}"

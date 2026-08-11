@@ -73,6 +73,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg.errors import UniqueViolation
+from pydantic import BaseModel, Field, field_validator
+import ipaddress
 
 from app.api.dependencies import require_roles
 from app.api.routes.admin import ADMIN_SOC_ROLES
@@ -88,6 +90,45 @@ from app.schemas.appliances import (
     ApplianceUpdateRequest,
 )
 from app.services.appliance_auth_service import generate_appliance_api_key
+from app.services import appliance_jobs as appliance_jobs_service
+
+
+class ApplianceAgentCidrsRequest(BaseModel):
+    """Admin-set LAN CIDRs allowed to reach this appliance's local Manager."""
+
+    cidrs: List[str] = Field(default_factory=list, max_length=64)
+
+    @field_validator("cidrs")
+    @classmethod
+    def validate_cidrs(cls, values: List[str]) -> List[str]:
+        cleaned: List[str] = []
+        for raw in values:
+            s = str(raw).strip()
+            if not s:
+                continue
+            try:
+                net = ipaddress.ip_network(s, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"invalid CIDR '{s}': {exc}") from exc
+            if net.version != 4:
+                raise ValueError(f"only IPv4 CIDRs supported: {s}")
+            cleaned.append(str(net))
+        # de-dupe
+        seen = set()
+        out: List[str] = []
+        for c in cleaned:
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
+
+class ApplianceAgentCidrsResponse(BaseModel):
+    appliance_id: str
+    agent_source_cidrs: List[str]
+    job_id: Optional[str] = None
+    message: str
+
 
 router = APIRouter(tags=["admin-appliances"])
 
@@ -131,6 +172,7 @@ _APPLIANCE_DETAIL_QUERY = """
         a.created_at::text,
         a.updated_at::text,
         COALESCE(a.enabled_services, '{}'::text[]) AS enabled_services,
+        COALESCE(a.agent_source_cidrs, '{}'::text[]) AS agent_source_cidrs,
         count(DISTINCT pa.id) AS protected_assets,
         h.health_status AS latest_health_status,
         h.heartbeat_at::text AS latest_heartbeat_at
@@ -207,6 +249,61 @@ def get_appliance_detail(
     if not appliance:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appliance not found")
     return appliance
+
+
+@router.put(
+    "/admin/appliances/{appliance_id}/agent-source-cidrs",
+    response_model=ApplianceAgentCidrsResponse,
+)
+def put_appliance_agent_source_cidrs(
+    appliance_id: UUID,
+    payload: ApplianceAgentCidrsRequest,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_WRITE_ROLES)),
+) -> Dict[str, Any]:
+    """
+    Set multi-subnet agent allow-list for an appliance and enqueue a job so the
+    online appliance applies nftables (ports 1514/1515) on next heartbeat.
+    """
+    appliance = fetch_one(
+        """
+        SELECT id::text, tenant_id::text, status
+        FROM appliances
+        WHERE id = %s::uuid;
+        """,
+        (str(appliance_id),),
+    )
+    if not appliance:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appliance not found")
+
+    updated = fetch_one_write(
+        """
+        UPDATE appliances
+        SET agent_source_cidrs = %s::text[],
+            updated_at = NOW()
+        WHERE id = %s::uuid
+        RETURNING id::text, COALESCE(agent_source_cidrs, '{}'::text[]) AS agent_source_cidrs;
+        """,
+        (payload.cidrs, str(appliance_id)),
+    )
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appliance not found")
+
+    job = appliance_jobs_service.enqueue_job(
+        appliance_id=appliance["id"],
+        tenant_id=appliance["tenant_id"],
+        job_type="set_agent_cidrs",
+        payload={"cidrs": list(payload.cidrs)},
+        requested_by_user_id=str(current_user.get("id") or "") or None,
+    )
+    return {
+        "appliance_id": updated["id"],
+        "agent_source_cidrs": list(updated.get("agent_source_cidrs") or []),
+        "job_id": job.get("id"),
+        "message": (
+            "CIDRs saved. Appliance will apply firewall allow-list on next heartbeat "
+            "(usually within ~60s if online)."
+        ),
+    }
 
 
 @router.post("/admin/appliances/{appliance_id}/channel/enqueue")

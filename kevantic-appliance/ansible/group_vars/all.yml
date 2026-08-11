@@ -1,0 +1,12 @@
+---
+kevantic_appliance_version: "0.1.0-dev"
+kevantic_config_root: /etc/kevantic
+kevantic_data_root: /var/lib/kevantic
+# Lab: Appliance Management VM 114 (KB-093L). Production ISO build should set
+# kevantic_control_plane_url: "https://soc.kevantic.com" (and matching wss URL).
+kevantic_control_plane_url: "http://192.168.0.224:8000"
+kevantic_channel_url: "ws://192.168.0.224:8000/appliance/v1/channel"
+# Prefer podman; docker alternate SKU documented in role defaults
+kevantic_container_runtime: podman
+kevantic_core_services:
+  - svc-01

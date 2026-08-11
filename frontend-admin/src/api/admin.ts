@@ -124,6 +124,7 @@ export interface Appliance {
   disk_percent: number | null;
   heartbeat_at: string | null;
   enabled_services?: string[] | null;
+  agent_source_cidrs?: string[] | null;
 }
 
 export interface AppliancesListResponse {
@@ -1210,6 +1211,24 @@ export function updateAppliance(
   });
 }
 
+export interface ApplianceAgentCidrsResponse {
+  appliance_id: string;
+  agent_source_cidrs: string[];
+  job_id?: string | null;
+  message: string;
+}
+
+/** Push multi-subnet agent allow-list to appliance (applied on next heartbeat). */
+export function putApplianceAgentSourceCidrs(
+  applianceId: string,
+  cidrs: string[]
+): Promise<ApplianceAgentCidrsResponse> {
+  return request<ApplianceAgentCidrsResponse>(
+    `/admin/appliances/${encodeURIComponent(applianceId)}/agent-source-cidrs`,
+    { method: "PUT", body: { cidrs } }
+  );
+}
+
 /** KB-069: Admin vulnerability findings (Greenbone normalized). */
 export interface AdminVulnerability {
   id: string;
@@ -1477,7 +1496,7 @@ export function createConsultationRequestOnBehalf(
   });
 }
 
-/** Junexis Retrospective Engine + appliance command tile */
+/** Kevantic Retrospective Engine + appliance command tile */
 export interface ApplianceCommandSummary {
   engine: string;
   appliances: {

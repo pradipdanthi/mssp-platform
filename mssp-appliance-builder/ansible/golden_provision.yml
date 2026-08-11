@@ -1,0 +1,113 @@
+---
+# Factory golden-image provision: Kevantic splash + idle catalogue engines.
+# Invoked from VM 112. Roles resolved via ANSIBLE_ROLES_PATH → kevantic-appliance/ansible/roles
+- name: Stage offline payload then full Kevantic install provision
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    kevantic_payload_root: /opt/kevantic/payload
+    kevantic_install_idle_engines: true
+    firewall_nftables_mode: bootstrap
+    kevantic_controller_root: "{{ lookup('env', 'KEVANTIC_APPLIANCE_ROOT') | default('/home/secadmin/mssp-automation/kevantic-appliance', true) }}"
+    kevantic_repo_root: "{{ kevantic_controller_root }}"
+
+  pre_tasks:
+    - name: Ensure packer passwordless sudo for factory build
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/90-packer-factory
+        mode: "0440"
+        content: "packer ALL=(ALL) NOPASSWD:ALL\n"
+      become: true
+
+    - name: Ensure payload directories on guest
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - /opt/kevantic
+        - "{{ kevantic_payload_root }}"
+        - "{{ kevantic_payload_root }}/offline-packages"
+        - "{{ kevantic_payload_root }}/iso/boot-splash"
+        - /var/lib/kevantic
+
+    - name: Push offline packages from controller (112) to guest via tar+ssh
+      ansible.builtin.shell: |
+        set -euo pipefail
+        SRC="{{ kevantic_controller_root }}/iso/offline-packages/"
+        KEY="{{ hostvars[inventory_hostname]['ansible_ssh_private_key_file'] | default('/home/secadmin/.ssh/id_ed25519_kevantic_build') }}"
+        HOST="{{ inventory_hostname }}"
+        USER="{{ hostvars[inventory_hostname]['ansible_user'] | default('packer') }}"
+        test -d "$SRC"
+        tar -C "$SRC" -czf - . | ssh -i "$KEY" -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes \
+          "${USER}@${HOST}" \
+          "sudo mkdir -p {{ kevantic_payload_root }}/offline-packages && sudo tar -C {{ kevantic_payload_root }}/offline-packages -xzf - && sudo chown -R root:root {{ kevantic_payload_root }}"
+      args:
+        executable: /bin/bash
+      delegate_to: localhost
+      become: false
+      changed_when: true
+
+    - name: Push boot-splash artwork into payload
+      ansible.builtin.copy:
+        src: "{{ kevantic_controller_root }}/iso/boot-splash/"
+        dest: "{{ kevantic_payload_root }}/iso/boot-splash/"
+        mode: preserve
+
+  roles:
+    - role: minimize
+    - role: boot_splash
+    - role: harden_cis
+    - role: firewall_nftables
+    - role: apparmor_profiles
+    - role: auditd
+    - role: container_runtime
+    - role: kevantic_runtime
+    - role: channel_agent
+    - role: license_enforcer
+    - role: wazuh_local
+    - role: catalogue_engines
+    - role: ota_staging
+    - role: service_manager
+
+  post_tasks:
+    - name: Install Kevantic Direct Console UI (tty1 DCUI)
+      ansible.builtin.import_tasks: "{{ playbook_dir }}/files/mssp_dcui_tasks.yml"
+
+    - name: Assert case-management / SOAR packages absent
+      ansible.builtin.shell: |
+        set -e
+        if dpkg -l 2>/dev/null | grep -qiE 'thehive|cortex|shuffle'; then
+          echo "FORBIDDEN packages on appliance" >&2
+          exit 1
+        fi
+        echo OK
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Assert Kevantic splash PNG present
+      ansible.builtin.stat:
+        path: /usr/share/plymouth/themes/kevantic/kevantic-boot.png
+      register: kevantic_splash_png
+
+    - name: Fail if splash missing
+      ansible.builtin.assert:
+        that: [kevantic_splash_png.stat.exists]
+        fail_msg: "Kevantic boot splash PNG missing"
+
+    - name: Assert catalogue engine worker present
+      ansible.builtin.stat:
+        path: /usr/bin/kevantic-engine-worker
+      register: kevantic_engine_worker
+
+    - name: Fail if engine worker missing
+      ansible.builtin.assert:
+        that: [kevantic_engine_worker.stat.exists]
+        fail_msg: "kevantic-engine-worker missing"
+
+  handlers:
+    - name: Reload systemd for mssp-dcui
+      ansible.builtin.systemd:
+        daemon_reload: true

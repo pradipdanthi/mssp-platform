@@ -5,5 +5,5 @@ export const APPLIANCE_GATEWAY_URL =
   "http://192.168.0.224:8000";
 
 export function applianceRegisterCommand(token: string): string {
-  return `junexis-cli register --token '${token}' --control-plane ${APPLIANCE_GATEWAY_URL}`;
+  return `kevantic-cli register --token '${token}' --control-plane ${APPLIANCE_GATEWAY_URL}`;
 }

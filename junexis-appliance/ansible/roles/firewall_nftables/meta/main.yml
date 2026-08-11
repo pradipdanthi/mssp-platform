@@ -1,6 +1,0 @@
----
-galaxy_info:
-  role_name: firewall_nftables
-  description: Junexis appliance role firewall_nftables (scaffold)
-  license: proprietary
-dependencies: []

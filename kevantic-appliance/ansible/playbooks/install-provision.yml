@@ -1,0 +1,58 @@
+---
+# Full provision used by ISO firstboot (and factory rebuilds).
+# TheHive / Shuffle must never appear on the appliance.
+- name: Kevantic appliance install provision
+  hosts: all
+  become: true
+  gather_facts: true
+  roles:
+    - role: minimize
+    - role: boot_splash
+    - role: harden_cis
+    - role: firewall_nftables
+      vars:
+        firewall_nftables_mode: "{{ firewall_nftables_mode | default('bootstrap') }}"
+    - role: apparmor_profiles
+    - role: auditd
+    - role: container_runtime
+    - role: kevantic_runtime
+    - role: channel_agent
+    - role: license_enforcer
+    - role: wazuh_local
+    - role: catalogue_engines
+    - role: ota_staging
+    - role: service_manager
+  post_tasks:
+    - name: Assert case-management / SOAR packages absent
+      ansible.builtin.shell: |
+        set -e
+        if dpkg -l 2>/dev/null | grep -qiE 'thehive|cortex|shuffle'; then
+          echo "FORBIDDEN packages on appliance" >&2
+          exit 1
+        fi
+        echo OK
+      args:
+        executable: /bin/bash
+      changed_when: false
+
+    - name: Assert idle catalogue engine worker present
+      ansible.builtin.stat:
+        path: /usr/bin/kevantic-engine-worker
+      register: kevantic_engine_worker
+
+    - name: Fail if catalogue engine worker missing
+      ansible.builtin.assert:
+        that:
+          - kevantic_engine_worker.stat.exists
+        fail_msg: "kevantic-engine-worker missing — catalogue engines not provisioned"
+
+    - name: Assert boot splash theme installed
+      ansible.builtin.stat:
+        path: /usr/share/plymouth/themes/kevantic/kevantic-boot.png
+      register: kevantic_splash_png
+
+    - name: Fail if splash artwork missing after boot_splash role
+      ansible.builtin.assert:
+        that:
+          - kevantic_splash_png.stat.exists
+        fail_msg: "Kevantic boot splash PNG missing after provision"

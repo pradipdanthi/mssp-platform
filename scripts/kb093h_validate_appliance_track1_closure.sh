@@ -17,8 +17,8 @@ need "$ROOT/postgres/init/030_appliance_jobs_agent_inventory.sql"
 need "$ROOT/backend-api/app/services/appliance_manager_resolver.py"
 need "$ROOT/backend-api/app/services/appliance_jobs.py"
 need "$ROOT/backend-api/app/services/appliance_agent_inventory.py"
-need "$ROOT/junexis-appliance/cli/junexis-cli/junexis_cli/register_ops.py"
-need "$ROOT/junexis-appliance/configs/systemd/junexis-heartbeat.timer"
+need "$ROOT/kevantic-appliance/cli/kevantic-cli/kevantic_cli/register_ops.py"
+need "$ROOT/kevantic-appliance/configs/systemd/kevantic-heartbeat.timer"
 
 grep -Fq "resolve_tenant_manager_address" \
   "$ROOT/backend-api/app/api/routes/admin_agent_packages.py" \
@@ -61,8 +61,8 @@ grep -Fq "Enabled services" \
   || fail "Admin UI missing enabled services"
 
 grep -Fq 'cmd_register' \
-  "$ROOT/junexis-appliance/cli/junexis-cli/junexis_cli/cli.py" \
-  && pass "junexis-cli register wired" \
+  "$ROOT/kevantic-appliance/cli/kevantic-cli/kevantic_cli/cli.py" \
+  && pass "kevantic-cli register wired" \
   || fail "cli register missing"
 
 # Live DB migration present
@@ -99,7 +99,7 @@ OA="$(curl -fsS http://localhost:8000/openapi.json)"
 echo "$OA" | grep -q '/appliance/jobs/{job_id}/ack' && pass "OpenAPI has job ack" || fail "OpenAPI missing job ack"
 echo "$OA" | grep -q '/appliance/heartbeat' && pass "OpenAPI has heartbeat" || fail "OpenAPI missing heartbeat"
 
-"$ROOT/scripts/kb093b_validate_junexis_cli_b1.sh" >/tmp/kb093b-track1.txt
+"$ROOT/scripts/kb093b_validate_kevantic_cli_b1.sh" >/tmp/kb093b-track1.txt
 tail -1 /tmp/kb093b-track1.txt | grep -q PASSED && pass "kb093b CLI validator" || fail "kb093b CLI validator"
 
 if [[ "$FAIL" -ne 0 ]]; then

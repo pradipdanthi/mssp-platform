@@ -1,21 +1,30 @@
-# Junexis marketing website
+# Kevantic marketing website
 
-Fortune-500-style static site for **junexis.com** (Hostinger `public_html`).
-Operated by **Cicilia Consultancy**. No Keroxsys / Kestrel. No public Admin/SOC links.
+Fortune-500-style static site for **kevantic.com** (Hostinger `public_html`).
+Operated by **Kevantic Cyber Security Private Limited**. No public Admin/SOC links.
 
-## Preview
+## Preview (lab — permanent until Hostinger cutover)
+
+The lab site runs as a Docker nginx container on **port 8080** (`restart: unless-stopped`, survives reboot).
 
 ```bash
-cd /opt/mssp-control/website-junexis
-python3 -m http.server 8080
+# Start / recreate
+/opt/mssp-control/website-junexis/lab-serve.sh
+
+# Status
+docker ps --filter name=junexis-website-lab
 ```
 
-Open http://127.0.0.1:8080/
+Open **http://192.168.0.201:8080/** (or http://127.0.0.1:8080/).
+
+`js/site-config.js` points Customer Login at the lab portal `http://192.168.0.201:3001` while in lab. Change back to `https://portal.kevantic.com` before Hostinger publish.
+
+Optional systemd unit file is also present (`junexis-website-lab.service`) if you prefer host nginx/python later.
 
 ## Upload to Hostinger
 
-Upload the entire folder contents into `public_html`. Enable SSL. Create `sales@junexis.com`.
-Set customer portal URL in `js/site-config.js` (`portal.junexis.com`).
+Upload the entire folder contents into `public_html`. Enable SSL. Create `sales@kevantic.com`.
+Set customer portal URL in `js/site-config.js` (`portal.kevantic.com`).
 
 ## Structure
 
@@ -25,7 +34,7 @@ Set customer portal URL in `js/site-config.js` (`portal.junexis.com`).
 | `services.html` | 10-service portfolio |
 | `platform.html` | Customer portal showcase |
 | `solutions.html` | Audience solutions |
-| `about.html` | Brand + Cicilia |
+| `about.html` | Brand + company story |
 | `contact.html` | Demo form |
 | `privacy.html` / `terms.html` | Placeholders |
 | `css/styles.css` | Design system |

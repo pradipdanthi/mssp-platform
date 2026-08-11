@@ -2,7 +2,7 @@
 # KB-093G validation — install ISO pipeline + license mint/verify + idle roles
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/junexis-appliance"
+APP="$ROOT/kevantic-appliance"
 PASS=0
 fail() { echo "FAIL: $*"; exit 1; }
 ok() { echo "PASS: $*"; PASS=$((PASS + 1)); }
@@ -10,12 +10,12 @@ ok() { echo "PASS: $*"; PASS=$((PASS + 1)); }
 [[ -f "$APP/iso/build_install_iso.sh" ]] || fail "missing iso/build_install_iso.sh"
 [[ -f "$APP/iso/docker_remaster.sh" ]] || fail "missing iso/docker_remaster.sh"
 [[ -f "$APP/iso/autoinstall/user-data" ]] || fail "missing autoinstall user-data"
-[[ -f "$APP/iso/firstboot/junexis-firstboot.sh" ]] || fail "missing firstboot script"
-grep -q 'ANSIBLE_ROLES_PATH' "$APP/iso/firstboot/junexis-firstboot.sh" \
+[[ -f "$APP/iso/firstboot/kevantic-firstboot.sh" ]] || fail "missing firstboot script"
+grep -q 'ANSIBLE_ROLES_PATH' "$APP/iso/firstboot/kevantic-firstboot.sh" \
   || fail "firstboot must set ANSIBLE_ROLES_PATH (customer installs must find roles)"
-grep -q 'ANSIBLE_CONFIG' "$APP/iso/firstboot/junexis-firstboot.sh" \
+grep -q 'ANSIBLE_CONFIG' "$APP/iso/firstboot/kevantic-firstboot.sh" \
   || fail "firstboot must set ANSIBLE_CONFIG to payload ansible.cfg"
-grep -q 'group_vars/all.yml' "$APP/iso/firstboot/junexis-firstboot.sh" \
+grep -q 'group_vars/all.yml' "$APP/iso/firstboot/kevantic-firstboot.sh" \
   || fail "firstboot must load group_vars/all.yml (control plane URL)"
 # Bash ${#arr[@]} becomes a Jinja comment ({#) and breaks customer firstboot.
 # Also ban '{#' inside shell/task YAML (including comments inside | blocks).
@@ -30,13 +30,13 @@ ok "no meta:end_role in ansible roles"
 grep -q 'autoinstall' "$APP/iso/autoinstall/user-data" || fail "user-data missing autoinstall"
 grep -q 'ubuntu-server-minimal' "$APP/iso/autoinstall/user-data" || fail "user-data must force ubuntu-server-minimal"
 grep -q 'interactive-sections: \[\]' "$APP/iso/autoinstall/user-data" || fail "user-data must set interactive-sections: []"
-grep -q 'Install Junexis Appliance' "$APP/iso/docker_remaster.sh" || fail "remaster must brand GRUB as Junexis automatic install"
-[[ -f "$APP/iso/boot-splash/junexis-boot.png" ]] || fail "missing boot splash PNG"
+grep -q 'Install Kevantic Appliance' "$APP/iso/docker_remaster.sh" || fail "remaster must brand GRUB as Kevantic automatic install"
+[[ -f "$APP/iso/boot-splash/kevantic-boot.png" ]] || fail "missing boot splash PNG"
 [[ -f "$APP/ansible/roles/boot_splash/tasks/main.yml" ]] || fail "missing boot_splash role"
 grep -q 'boot_splash' "$APP/ansible/playbooks/install-provision.yml" || fail "boot_splash not in install-provision"
 grep -q 'minimize_engine_protect_packages' "$APP/ansible/roles/minimize/defaults/main.yml" || fail "minimize missing engine protect list"
 # plymouth must stay installable for splash — must not appear under minimize_purge_packages
-python3 - <<'PY' "$APP/ansible/roles/minimize/defaults/main.yml" || fail "minimize must NOT purge plymouth (needed for Junexis splash)"
+python3 - <<'PY' "$APP/ansible/roles/minimize/defaults/main.yml" || fail "minimize must NOT purge plymouth (needed for Kevantic splash)"
 import sys
 from pathlib import Path
 text = Path(sys.argv[1]).read_text().splitlines()
@@ -71,7 +71,7 @@ grep -q 'offline-packages' "$APP/iso/build_install_iso.sh" || fail "build_instal
 grep -qE '(^|[[:space:]])channel([[:space:]]|$)' "$APP/iso/build_install_iso.sh" || fail "build_install_iso does not stage channel/"
 grep -qE '(^|[[:space:]])ota([[:space:]]|$)' "$APP/iso/build_install_iso.sh" || fail "build_install_iso does not stage ota/"
 grep -q '192.168.0.224:8000' "$APP/ansible/group_vars/all.yml" || fail "group_vars missing Appliance Mgmt VM114 URL"
-grep -q 'default_control_plane' "$APP/cli/junexis-cli/junexis_cli/state.py" || fail "CLI missing default_control_plane"
+grep -q 'default_control_plane' "$APP/cli/kevantic-cli/kevantic_cli/state.py" || fail "CLI missing default_control_plane"
 ok "Fluent Bit on appliance; TheHive forbidden; offline pool + channel/ota + VM114 defaults"
 
 if compgen -G "$APP/iso/offline-packages/wazuh-manager"*.deb >/dev/null \
@@ -82,19 +82,19 @@ if compgen -G "$APP/iso/offline-packages/wazuh-manager"*.deb >/dev/null \
   && compgen -G "$APP/iso/offline-packages/zeek"*.deb >/dev/null; then
   ok "offline-packages: wazuh, fluent-bit, suricata, zeek, nuclei, vuls"
 else
-  echo "WARN: offline-packages incomplete — run junexis-appliance/scripts/b2_fetch_offline_packages.sh"
+  echo "WARN: offline-packages incomplete — run kevantic-appliance/scripts/b2_fetch_offline_packages.sh"
 fi
-[[ -f "$APP/engines/junexis_engine_worker.py" ]] || fail "missing engines/junexis_engine_worker.py"
+[[ -f "$APP/engines/kevantic_engine_worker.py" ]] || fail "missing engines/kevantic_engine_worker.py"
 [[ -f "$APP/ansible/roles/catalogue_engines/tasks/main.yml" ]] || fail "missing catalogue_engines role"
 grep -q 'catalogue_engines' "$APP/ansible/playbooks/install-provision.yml" || fail "catalogue_engines not in install-provision"
 ok "catalogue engine worker + role wired"
 
 # CLI license commands
-grep -q 'license' "$APP/cli/junexis-cli/junexis_cli/cli.py" || fail "CLI license subcommand missing"
-ok "junexis-cli license commands present"
+grep -q 'license' "$APP/cli/kevantic-cli/kevantic_cli/cli.py" || fail "CLI license subcommand missing"
+ok "kevantic-cli license commands present"
 
 # Backend license service + admin route
-[[ -f "$ROOT/backend-api/app/services/junexis_license.py" ]] || fail "missing junexis_license.py"
+[[ -f "$ROOT/backend-api/app/services/kevantic_license.py" ]] || fail "missing kevantic_license.py"
 grep -q 'appliance-licenses' "$ROOT/backend-api/app/api/routes/entitlements.py" || fail "mint route missing"
 grep -q 'cryptography==' "$ROOT/backend-api/requirements.txt" || fail "cryptography not pinned"
 ok "control-plane license mint path present"
@@ -114,7 +114,7 @@ python3 - <<'PY' "$TMP" "$ROOT"
 import json, os, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[2]) / "backend-api"))
-from app.services.junexis_license import generate_keypair, mint_license, verify_license
+from app.services.kevantic_license import generate_keypair, mint_license, verify_license
 
 tmp = Path(sys.argv[1])
 priv_pem, pub_pem = generate_keypair()
@@ -139,24 +139,24 @@ PY
 ok "license mint/verify round-trip"
 
 # CLI apply against temp state
-export JUNEXIS_STATE_DIR="$TMP/state"
-export JUNEXIS_LICENSE_PUBKEY="$TMP/pub.pem"
+export KEVANTIC_STATE_DIR="$TMP/state"
+export KEVANTIC_LICENSE_PUBKEY="$TMP/pub.pem"
 mkdir -p "$TMP/state" "$APP/licensing/keys"
 # point CLI pubkey candidate via env
-PYTHONPATH="$APP/cli/junexis-cli${PYTHONPATH:+:$PYTHONPATH}" \
-  python3 -m junexis_cli license apply --file "$TMP/license.jws" --fingerprint lab-fp-1 --json \
+PYTHONPATH="$APP/cli/kevantic-cli${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -m kevantic_cli license apply --file "$TMP/license.jws" --fingerprint lab-fp-1 --json \
   | grep -q '"ok": true' || fail "CLI license apply failed"
-PYTHONPATH="$APP/cli/junexis-cli${PYTHONPATH:+:$PYTHONPATH}" \
-  python3 -m junexis_cli license show --json | grep -q 'svc-01' || fail "CLI license show missing svc-01"
+PYTHONPATH="$APP/cli/kevantic-cli${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -m kevantic_cli license show --json | grep -q 'svc-01' || fail "CLI license show missing svc-01"
 ok "CLI license apply/show"
 
 # ISO cache presence (build is separate / long)
 if [[ -f "$APP/.cache/ubuntu-24.04.4-live-server-amd64.iso" ]]; then
   ok "Ubuntu live ISO cached for remaster"
 else
-  echo "WARN: Ubuntu ISO not cached — run junexis-appliance/scripts/b2_fetch_ubuntu_iso.sh before build"
+  echo "WARN: Ubuntu ISO not cached — run kevantic-appliance/scripts/b2_fetch_ubuntu_iso.sh before build"
 fi
 
 echo ""
 echo "KB093G_VALIDATE_OK checks_passed=$PASS"
-echo "Next: $APP/iso/build_install_iso.sh  # produces .cache/dist-install/Junexis-Appliance-Install-*.iso"
+echo "Next: $APP/iso/build_install_iso.sh  # produces .cache/dist-install/Kevantic-Appliance-Install-*.iso"

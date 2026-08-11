@@ -1,0 +1,6 @@
+---
+# Defaults for firewall_nftables
+firewall_nftables_enabled: true
+firewall_nftables_mode: bootstrap   # bootstrap | locked
+firewall_nftables_dir: /etc/kevantic/nftables
+firewall_nftables_src_dir: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/hardening/nftables"

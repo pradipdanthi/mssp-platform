@@ -1,4 +1,4 @@
-"""Junexis ThreatLens — AI-assisted IOC extraction from advisories (regex + heuristics)."""
+"""Kevantic ThreatLens — AI-assisted IOC extraction from advisories (regex + heuristics)."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def extract_iocs(
 
     flat_values = [i["value"] for i in iocs if i["type"] != "URL"]
     return {
-        "engine": "Junexis ThreatLens",
+        "engine": "Kevantic ThreatLens",
         "source": source_label,
         "url_fetched": fetched,
         "counts": {
@@ -126,7 +126,7 @@ def _fetch_url_text(url: str, timeout: float = 8.0) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         return ""
-    req = Request(url, headers={"User-Agent": "Junexis-ThreatLens/1.0"})
+    req = Request(url, headers={"User-Agent": "Kevantic-ThreatLens/1.0"})
     try:
         with urlopen(req, timeout=timeout) as resp:  # noqa: S310 — operator-controlled SOC URL
             raw = resp.read(500_000)

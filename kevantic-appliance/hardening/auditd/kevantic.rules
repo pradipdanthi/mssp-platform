@@ -1,0 +1,29 @@
+## Kevantic appliance audit rules
+## Identity / config / secrets / binaries — no customer raw log content here.
+
+# Kevantic config and trust material
+-w /etc/kevantic -p wa -k kevantic_config
+-w /etc/kevantic/trust -p wa -k kevantic_trust
+
+# Secrets and state (API keys, license material)
+-w /var/lib/kevantic/secrets -p rwa -k kevantic_secrets
+-w /var/lib/kevantic/entitlements.json -p wa -k kevantic_entitlements
+-w /var/lib/kevantic/appliance.json -p wa -k kevantic_state
+
+# Operator CLI and reconcile tools
+-w /usr/bin/kevantic-cli -p x -k kevantic_cli
+-w /usr/bin/kevantic-reconcile-services -p x -k kevantic_reconcile
+
+# Identity and privilege
+-w /etc/passwd -p wa -k identity
+-w /etc/group -p wa -k identity
+-w /etc/shadow -p wa -k identity
+-w /etc/sudoers -p wa -k scope
+-w /etc/sudoers.d -p wa -k scope
+
+# Network posture
+-w /etc/kevantic/nftables -p wa -k kevantic_nft
+-w /etc/sysctl.d/99-kevantic-cis.conf -p wa -k kevantic_sysctl
+
+# Note: do not set `-e 2` here during firstboot; operators may enable
+# immutable rules after network lock if policy requires.

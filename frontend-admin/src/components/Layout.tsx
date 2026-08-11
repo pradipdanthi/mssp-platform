@@ -42,9 +42,7 @@ export default function Layout({ children }: { children: ReactNode }) {
             title={brand.productName}
           />
           <div className="sidebar-brand-copy">
-            <span className="sidebar-brand-product">{brand.productName}</span>
-            <span className="sidebar-brand-text">Control Plane</span>
-            <span className="sidebar-brand-company">by {brand.companyName}</span>
+            <span className="sidebar-brand-portal">{brand.portalName}</span>
           </div>
         </div>
         <nav className="sidebar-nav">
@@ -59,10 +57,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <footer className="sidebar-footer">
-          <p className="sidebar-footer-legal">
-            {brand.companyName} and {brand.productName} are business/service brands operated by{" "}
-            {brand.legalEntityName}.
-          </p>
+          <p className="sidebar-footer-legal">{brand.footerCopyright}</p>
         </footer>
       </aside>
       <div className="app-main">

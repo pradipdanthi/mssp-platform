@@ -1,4 +1,4 @@
-# Junexis Appliance Management plane (VM 114 — 192.168.0.224).
+# Kevantic Appliance Management plane (VM 114 — 192.168.0.224).
 # Appliance-facing API only; Admin/Customer stay on mssp-control (VM 100).
 # Uses host network so the container can reach the SSH tunnel on 127.0.0.1
 # (Postgres/Redis loopback forwards to VM 100).
@@ -7,8 +7,8 @@ services:
     build:
       context: ./backend-api
       dockerfile: Dockerfile
-    image: junexis-appliance-mgmt-api:local
-    container_name: junexis-appliance-mgmt-api
+    image: kevantic-appliance-mgmt-api:local
+    container_name: kevantic-appliance-mgmt-api
     restart: unless-stopped
     network_mode: host
     command:
@@ -21,7 +21,7 @@ services:
         "8000",
       ]
     environment:
-      APP_NAME: Junexis Appliance Management API
+      APP_NAME: Kevantic Appliance Management API
       APP_ENV: ${APP_ENV:-production}
       POSTGRES_HOST: ${POSTGRES_HOST:-127.0.0.1}
       POSTGRES_PORT: ${POSTGRES_PORT:-5432}

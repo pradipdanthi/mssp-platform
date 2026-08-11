@@ -1,26 +1,29 @@
-import FalconMark from "../../assets/images/kestrel_falcon_shield_mark.png";
+import { useBrand } from "../../config/BrandContext";
 
 interface Props {
   className?: string;
-  /** Width in px; height follows the full emblem aspect (tail included). */
+  /** Width in px; height follows SVG aspect ratio. */
   size?: number;
   title?: string;
 }
 
 /**
- * Full falcon + shield mark (tight crop, high-res — no empty canvas padding).
+ * Vanguard Shield Matrix mark — loads from public/app-config.json logo.markSrc.
  */
 export default function KestrelFalconShieldLogo({
   className = "",
   size = 132,
-  title = "Kestrel Cyber",
+  title,
 }: Props) {
+  const brand = useBrand();
+  const alt = title ?? brand.logo.alt;
+
   return (
     <img
-      src={FalconMark}
-      alt={title}
+      src={brand.logo.markSrc}
+      alt={alt}
       width={size}
-      className={`kestrel-falcon-shield-logo ${className}`.trim()}
+      className={`kevantic-shield-logo ${className}`.trim()}
       draggable={false}
       decoding="async"
     />

@@ -2,7 +2,7 @@
 # KB-093E — DuckDB/Parquet lake + anonymizing forwarder + retrospective hunter
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/junexis-appliance"
+APP="$ROOT/kevantic-appliance"
 FAIL=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; FAIL=1; }
@@ -43,11 +43,11 @@ python3 -c "import duckdb; print('duckdb', duckdb.__version__)" && pass "duckdb 
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-export JUNEXIS_STATE_DIR="$TMP/state"
-export JUNEXIS_LOG_DIR="$TMP/logs"
-export JUNEXIS_DATALAKE_DIR="$TMP/logs/datalake"
-export JUNEXIS_METADATA_DB="$TMP/state/appliance_local.db"
-export JUNEXIS_TELEMETRY_URL="http://127.0.0.1:9/api/v1/telemetry/ingest"  # closed port → buffer
+export KEVANTIC_STATE_DIR="$TMP/state"
+export KEVANTIC_LOG_DIR="$TMP/logs"
+export KEVANTIC_DATALAKE_DIR="$TMP/logs/datalake"
+export KEVANTIC_METADATA_DB="$TMP/state/appliance_local.db"
+export KEVANTIC_TELEMETRY_URL="http://127.0.0.1:9/api/v1/telemetry/ingest"  # closed port → buffer
 
 python3 <<'PY'
 import json

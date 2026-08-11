@@ -6,6 +6,7 @@ import {
   getAppliances,
   getTenants,
   postAuditEvent,
+  putApplianceAgentSourceCidrs,
   updateAppliance,
 } from "../api/admin";
 import {
@@ -176,6 +177,11 @@ function ApplianceRow({
   const [retireOpen, setRetireOpen] = useState(false);
   const [actionBusy, setActionBusy] = useState(false);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
+  const [cidrText, setCidrText] = useState(
+    (appliance.agent_source_cidrs || []).join(", ")
+  );
+  const [cidrBusy, setCidrBusy] = useState(false);
+  const [cidrMsg, setCidrMsg] = useState<string | null>(null);
 
   async function loadCredential() {
     setCredentialLoading(true);
@@ -227,6 +233,36 @@ function ApplianceRow({
       setCopyConfirmed(true);
     } catch {
       setCopyConfirmed(false);
+    }
+  }
+
+  async function handleSaveCidrs() {
+    if (!canWrite || cidrBusy) return;
+    setCidrBusy(true);
+    setCidrMsg(null);
+    const cidrs = cidrText
+      .split(/[,;\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    try {
+      const result = await putApplianceAgentSourceCidrs(appliance.id, cidrs);
+      setCidrText((result.agent_source_cidrs || []).join(", "));
+      setCidrMsg(result.message);
+      void postAuditEvent({
+        action: "appliance.agent_source_cidrs_updated",
+        entity_type: "appliance",
+        entity_id: appliance.id,
+        details: {
+          cidrs: result.agent_source_cidrs,
+          job_id: result.job_id,
+          appliance_name: appliance.appliance_name,
+        },
+      }).catch(() => undefined);
+      onChanged();
+    } catch (err) {
+      setCidrMsg(apiErrorMessage(err, "Could not save agent network CIDRs."));
+    } finally {
+      setCidrBusy(false);
     }
   }
 
@@ -370,6 +406,43 @@ function ApplianceRow({
                         : "None reported"
                     }
                   />
+                </div>
+
+                <div style={{ marginTop: "1rem" }}>
+                  <h3 style={{ fontSize: "0.95rem", margin: "0 0 0.35rem" }}>
+                    Agent networks (multi-subnet)
+                  </h3>
+                  <p className="page-subtitle" style={{ marginTop: 0, marginBottom: "0.5rem" }}>
+                    IPv4 CIDRs allowed to reach this appliance&apos;s local Manager (ports 1514/1515).
+                    Saved here and pushed to the appliance on the next heartbeat.
+                  </p>
+                  <textarea
+                    className="input"
+                    rows={3}
+                    style={{ width: "100%", maxWidth: "40rem" }}
+                    value={cidrText}
+                    onChange={(e) => setCidrText(e.target.value)}
+                    placeholder="e.g. 10.10.0.0/16, 10.20.0.0/24, 192.168.0.0/24"
+                    disabled={!canWrite || cidrBusy}
+                  />
+                  <div className="confirm-actions" style={{ marginTop: "0.5rem" }}>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      disabled={!canWrite || cidrBusy}
+                      onClick={() => void handleSaveCidrs()}
+                    >
+                      {cidrBusy ? "Saving…" : "Save & push to appliance"}
+                    </button>
+                  </div>
+                  {cidrMsg && (
+                    <div
+                      className={`state-message ${cidrMsg.toLowerCase().includes("could not") ? "state-error" : ""}`}
+                      style={{ marginTop: "0.5rem" }}
+                    >
+                      {cidrMsg}
+                    </div>
+                  )}
                 </div>
 
                 {!confirmingRotate && !newRawKey && (
@@ -635,7 +708,7 @@ function ActivationTokensSection() {
         </ol>
         <p className="one-time-secret-hint" style={{ marginTop: "0.75rem" }}>
           You do not need to memorize the gateway IP. Lab images default to it; production ISOs
-          will use soc.junexis.com when you cut over publicly.
+          will use soc.kevantic.com when you cut over publicly.
         </p>
       </section>
       <section className="activation-tokens-section">

@@ -1,6 +1,0 @@
----
-galaxy_info:
-  role_name: minimize
-  description: Junexis appliance role minimize (scaffold)
-  license: proprietary
-dependencies: []

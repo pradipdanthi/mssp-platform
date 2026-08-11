@@ -662,7 +662,7 @@ def tenant_has_threat_intel_data(tenant_id: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# STIX 2.1 / TAXII feed parsing (Junexis Threat Intelligence Engine)
+# STIX 2.1 / TAXII feed parsing (Kevantic Threat Intelligence Engine)
 # ---------------------------------------------------------------------------
 
 _STIX_TYPE_MAP = {
@@ -771,8 +771,8 @@ def ingest_stix_bundle_for_tenant(tenant_id: str, bundle: Dict[str, Any]) -> Dic
                 item.get("threat_actor") or "STIX",
                 int(item.get("confidence_score") or 75),
                 item.get("reputation_status") or "SUSPICIOUS",
-                "Ingested from Junexis STIX 2.1 threat feed.",
-                "Hunt historically with Junexis Retrospective Engine.",
+                "Ingested from Kevantic STIX 2.1 threat feed.",
+                "Hunt historically with Kevantic Retrospective Engine.",
                 json.dumps({"source": "stix2", "stix": True}),
             ),
         )
@@ -821,7 +821,7 @@ def pull_taxii_collection(
     url = f"{api_root.rstrip('/')}/collections/{collection_id}/objects/"
     headers = {
         "Accept": "application/taxii+json;version=2.1",
-        "User-Agent": "Junexis-ThreatIntel/1.0",
+        "User-Agent": "Kevantic-ThreatIntel/1.0",
     }
     if username:
         token = base64.b64encode(f"{username}:{password or ''}".encode()).decode()

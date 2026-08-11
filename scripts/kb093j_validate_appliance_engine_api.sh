@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Track-3 — junexis-engine-api job queue + catalogue executors
+# Track-3 — kevantic-engine-api job queue + catalogue executors
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/junexis-appliance"
+APP="$ROOT/kevantic-appliance"
 FAIL=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; FAIL=1; }
@@ -14,18 +14,18 @@ need() { [[ -f "$1" ]] && pass "file ${1#"$ROOT"/}" || fail "missing ${1#"$ROOT"
 need "$APP/appliance/jobs/queue.py"
 need "$APP/appliance/jobs/executor.py"
 need "$APP/appliance/api/local_app.py"
-need "$APP/engines/junexis_engine_worker.py"
+need "$APP/engines/kevantic_engine_worker.py"
 
-grep -q 'junexis-engine-api' "$APP/appliance/api/local_app.py" && pass "local_app identifies as junexis-engine-api" || fail "service name"
+grep -q 'kevantic-engine-api' "$APP/appliance/api/local_app.py" && pass "local_app identifies as kevantic-engine-api" || fail "service name"
 grep -q '/appliance/v1/jobs/claim' "$APP/appliance/api/local_app.py" && pass "job claim endpoint" || fail "claim missing"
 grep -q '_exec_containment' "$APP/appliance/jobs/executor.py" && pass "containment executor" || fail "containment"
 grep -q '_exec_easm' "$APP/appliance/jobs/executor.py" && pass "easm executor" || fail "easm"
-grep -q 'process_one_job' "$APP/engines/junexis_engine_worker.py" && pass "worker claims jobs" || fail "worker jobs"
+grep -q 'process_one_job' "$APP/engines/kevantic_engine_worker.py" && pass "worker claims jobs" || fail "worker jobs"
 
 export PYTHONPATH="$APP${PYTHONPATH:+:$PYTHONPATH}"
-export JUNEXIS_STATE_DIR="$(mktemp -d)"
-export JUNEXIS_LOG_DIR="$(mktemp -d)"
-trap 'rm -rf "$JUNEXIS_STATE_DIR" "$JUNEXIS_LOG_DIR"' EXIT
+export KEVANTIC_STATE_DIR="$(mktemp -d)"
+export KEVANTIC_LOG_DIR="$(mktemp -d)"
+trap 'rm -rf "$KEVANTIC_STATE_DIR" "$KEVANTIC_LOG_DIR"' EXIT
 
 python3 - <<'PY' || fail "job queue/executor smoke"
 from appliance.jobs import queue
@@ -50,7 +50,7 @@ PY
 python3 -m py_compile "$APP/appliance/api/local_app.py" \
   "$APP/appliance/jobs/queue.py" \
   "$APP/appliance/jobs/executor.py" \
-  "$APP/engines/junexis_engine_worker.py" \
+  "$APP/engines/kevantic_engine_worker.py" \
   && pass "python compile track-3 modules" || fail "compile"
 
 "$ROOT/scripts/kb093e_validate_appliance_engine.sh" >/tmp/kb093e-track3.txt

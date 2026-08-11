@@ -136,7 +136,7 @@ echo "OK: /auth/me public user model includes tenant_short_code and tenant_name.
 
 section "8. Branding config"
 
-grep -q "Kestrel Cyber Control Plane - Customer" frontend-customer/public/app-config.json \
+grep -q "Kevantic Cyber Security - Customer" frontend-customer/public/app-config.json \
   || fail "app-config.json documentTitle should be customer-branded"
 echo "OK: customer branding config present."
 
@@ -178,9 +178,11 @@ section "11. Customer app-config and Vite proxy health"
 
 curl -fsS "$FRONTEND_BASE/app-config.json" -o "$BODY_FILE" || fail "GET app-config.json failed"
 jq -e '
-  .documentTitle == "Kestrel Cyber Control Plane - Customer"
-  and .productName == "Kestrel Cyber"
-  and .companyName == "Keroxsys"
+  .documentTitle == "Kevantic Cyber Security - Customer Portal"
+  and .productName == "Kevantic Cyber Security"
+  and .companyName == "Kevantic"
+  and .portalDomain == "portal.kevantic.com"
+  and .adminDomain == "admin.kevantic.com"
 ' "$BODY_FILE" >/dev/null || fail "app-config.json branding fields incorrect"
 echo "OK: customer branding JSON served."
 

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Runs inside the image at end of mkosi build (as root in the OS tree).
+set -euo pipefail
+
+if ! id -u kevantic >/dev/null 2>&1; then
+  useradd -m -s /bin/bash -G sudo kevantic
+fi
+echo 'kevantic:ChangeMeNow!' | chpasswd
+# Password SSH for lab bootstrap (lock later after register)
+mkdir -p /etc/ssh/sshd_config.d
+cat >/etc/ssh/sshd_config.d/60-kevantic-bootstrap.conf <<'EOF'
+PasswordAuthentication yes
+PermitRootLogin no
+EOF
+
+# Ensure engines stay idle if present
+for u in wazuh-manager fluent-bit suricata zeek podman.socket; do
+  systemctl disable "$u" 2>/dev/null || true
+  systemctl mask "$u" 2>/dev/null || true
+done
+
+cat >/etc/motd <<'EOF'
+Kevantic Appliance (immutable N1 — KB-093N)
+Factory: register with Admin Copy register command → Appliance Mgmt (VM 114)
+EOF
+
+echo "kevantic postinst OK"

@@ -1,4 +1,4 @@
-"""Junexis Data Lake — DuckDB queries over cloud/SOC Parquet partitions (Modes 1/3)."""
+"""Kevantic Data Lake — DuckDB queries over cloud/SOC Parquet partitions (Modes 1/3)."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def search_iocs(
     lookback_days: int = 90,
     limit: int = 200,
 ) -> List[Dict[str, Any]]:
-    """Search Junexis Data Lake Parquet for IOC hits. Empty lake → empty list (not an error)."""
+    """Search Kevantic Data Lake Parquet for IOC hits. Empty lake → empty list (not an error)."""
     ioc_list = [str(i).strip() for i in iocs if i and str(i).strip()]
     if not ioc_list:
         return []

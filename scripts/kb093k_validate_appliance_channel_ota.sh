@@ -2,7 +2,7 @@
 # Track-4 — channeld + OTA staging + control-plane channel gateway
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/junexis-appliance"
+APP="$ROOT/kevantic-appliance"
 FAIL=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; FAIL=1; }
@@ -12,8 +12,8 @@ echo "=== Appliance Track-4 channel/OTA validation ==="
 need() { [[ -f "$1" ]] && pass "file ${1#"$ROOT"/}" || fail "missing ${1#"$ROOT"/}"; }
 
 need "$APP/channel/channeld/__main__.py"
-need "$APP/ota/junexis_ota.py"
-need "$APP/configs/systemd/junexis-channeld.service"
+need "$APP/ota/kevantic_ota.py"
+need "$APP/configs/systemd/kevantic-channeld.service"
 need "$ROOT/postgres/init/031_appliance_channel_ota.sql"
 need "$ROOT/backend-api/app/api/routes/appliance_channel.py"
 need "$ROOT/backend-api/app/services/appliance_channel.py"
@@ -26,20 +26,20 @@ for role in channel_agent ota_staging; do
   fi
 done
 
-grep -q 'junexis-channeld' "$APP/ansible/roles/channel_agent/tasks/main.yml" && pass "channel_agent installs channeld" || fail "channeld install"
-grep -q 'junexis-ota' "$APP/ansible/roles/ota_staging/tasks/main.yml" && pass "ota_staging installs junexis-ota" || fail "ota install"
+grep -q 'kevantic-channeld' "$APP/ansible/roles/channel_agent/tasks/main.yml" && pass "channel_agent installs channeld" || fail "channeld install"
+grep -q 'kevantic-ota' "$APP/ansible/roles/ota_staging/tasks/main.yml" && pass "ota_staging installs kevantic-ota" || fail "ota install"
 grep -q 'appliance_channel_router' "$ROOT/backend-api/app/main.py" && pass "main.py wires channel router" || fail "main wire"
-grep -q 'cmd_channel' "$APP/cli/junexis-cli/junexis_cli/cli.py" && pass "CLI channel command" || fail "CLI channel"
+grep -q 'cmd_channel' "$APP/cli/kevantic-cli/kevantic_cli/cli.py" && pass "CLI channel command" || fail "CLI channel"
 
 # OTA smoke
-export PYTHONPATH="$APP/ota:$APP/cli/junexis-cli${PYTHONPATH:+:$PYTHONPATH}"
-export JUNEXIS_STATE_DIR="$(mktemp -d)"
-export JUNEXIS_OTA_DIR="$JUNEXIS_STATE_DIR/ota"
-export JUNEXIS_OTA_ALLOW_UNSIGNED=1
-trap 'rm -rf "$JUNEXIS_STATE_DIR"' EXIT
+export PYTHONPATH="$APP/ota:$APP/cli/kevantic-cli${PYTHONPATH:+:$PYTHONPATH}"
+export KEVANTIC_STATE_DIR="$(mktemp -d)"
+export KEVANTIC_OTA_DIR="$KEVANTIC_STATE_DIR/ota"
+export KEVANTIC_OTA_ALLOW_UNSIGNED=1
+trap 'rm -rf "$KEVANTIC_STATE_DIR"' EXIT
 python3 - <<'PY' || fail "ota smoke"
-from junexis_ota import apply_offer, status
-r = apply_offer({"version": "0.1.0-test", "component": "junexis-appliance-meta", "notes": "t", "auto_apply": True})
+from kevantic_ota import apply_offer, status
+r = apply_offer({"version": "0.1.0-test", "component": "kevantic-appliance-meta", "notes": "t", "auto_apply": True})
 assert r.get("ok"), r
 s = status()
 assert s["current"]["version"] == "0.1.0-test"
@@ -48,7 +48,7 @@ PY
 pass "ota stage/apply smoke"
 
 # channeld module imports
-PYTHONPATH="$APP/channel:$APP/cli/junexis-cli:$APP/ota${PYTHONPATH:+:$PYTHONPATH}" \
+PYTHONPATH="$APP/channel:$APP/cli/kevantic-cli:$APP/ota${PYTHONPATH:+:$PYTHONPATH}" \
   python3 -c "import channeld; print('channeld_ok')" | grep -q channeld_ok && pass "channeld import" || fail "channeld import"
 
 # Live DB + API when stack is up

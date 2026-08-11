@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
-MGMT_IP="${JUNEXIS_MGMT_VM_IP:-192.168.0.224}"
+MGMT_IP="${KEVANTIC_MGMT_VM_IP:-192.168.0.224}"
 MGMT="http://${MGMT_IP}:8000"
 CP="http://127.0.0.1:8000"
 BODY="$(mktemp)"
@@ -30,7 +30,7 @@ pass "KB093M doc present"
 
 grep -q 'applianceRegisterCommand' frontend-admin/src/pages/AppliancesPage.tsx \
   || fail "Admin missing Copy register command"
-grep -q '192.168.0.224:8000' junexis-appliance/ansible/group_vars/all.yml \
+grep -q '192.168.0.224:8000' kevantic-appliance/ansible/group_vars/all.yml \
   || fail "ISO defaults not on VM114"
 pass "operator register path baked into Admin + ISO defaults"
 

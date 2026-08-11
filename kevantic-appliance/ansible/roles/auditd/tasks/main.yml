@@ -1,0 +1,60 @@
+---
+# Install and enable auditd with Kevantic watch rules.
+- name: Apply role when enabled
+  when: auditd_enabled | default(true) | bool
+  block:
+  - name: Install auditd from offline pool when debs present
+    ansible.builtin.shell: |
+      set -euo pipefail
+      POOL="{{ auditd_offline_pool }}"
+      shopt -s nullglob
+      debs=("$POOL"/auditd_*.deb "$POOL"/libauparse*.deb "$POOL"/libaudit*.deb)
+      cnt=0
+      for _ in "${debs[@]}"; do cnt=$((cnt + 1)); done
+      if [ "$cnt" -eq 0 ]; then
+        exit 42
+      fi
+      apt-get install -y --no-install-recommends "${debs[@]}"
+    args:
+      executable: /bin/bash
+    register: auditd_offline
+    failed_when: auditd_offline.rc not in [0, 42]
+    changed_when: auditd_offline.rc == 0
+
+  - name: Install auditd from apt when offline miss
+    ansible.builtin.apt:
+      name:
+        - "{{ auditd_package }}"
+        - audispd-plugins
+      state: present
+      update_cache: true
+    when: (auditd_offline.rc | default(42)) == 42
+
+  - name: Ensure audit rules directory exists
+    ansible.builtin.file:
+      path: /etc/audit/rules.d
+      state: directory
+      mode: "0750"
+
+  - name: Deploy Kevantic audit rules
+    ansible.builtin.copy:
+      src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/hardening/auditd/kevantic.rules"
+      dest: "{{ auditd_rules_dest }}"
+      mode: "0640"
+    notify: Reload auditd rules
+
+  - name: Enable and start auditd
+    ansible.builtin.systemd:
+      name: auditd
+      enabled: true
+      state: started
+      daemon_reload: true
+
+  - name: Record auditd applied marker
+    ansible.builtin.copy:
+      dest: /var/lib/kevantic/auditd.applied
+      mode: "0644"
+      content: |
+        applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+        role=auditd
+        rules={{ auditd_rules_dest }}

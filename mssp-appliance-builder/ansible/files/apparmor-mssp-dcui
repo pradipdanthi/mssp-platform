@@ -1,0 +1,56 @@
+# AppArmor profile for Kevantic DCUI — enforce lightly; do not break netplan.
+# Profile name matches path: /usr/libexec/kevantic/mssp-dcui
+#include <tunables/global>
+
+/usr/libexec/kevantic/mssp-dcui flags=(attach_disconnected) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/consoles>
+
+  /usr/bin/python3 ix,
+  /usr/bin/python3.* ix,
+  /usr/lib/python3*/** mr,
+  /usr/libexec/kevantic/mssp-dcui r,
+
+  /dev/tty* rw,
+  /dev/pts/* rw,
+  /dev/null rw,
+  /dev/urandom r,
+
+  /proc/** r,
+  /sys/class/net/** r,
+  /sys/devices/**/net/** r,
+
+  /etc/os-release r,
+  /etc/hostname rw,
+  /etc/hosts rw,
+  /etc/resolv.conf r,
+  /etc/netplan/** rw,
+  /etc/cloud/cloud.cfg.d/** rw,
+  /run/** rw,
+  /var/lib/kevantic/** rwk,
+  /tmp/** rwk,
+
+  /usr/bin/hostnamectl mrix,
+  /usr/sbin/netplan mrix,
+  /usr/bin/netplan mrix,
+  /usr/bin/ip mrix,
+  /usr/sbin/ip mrix,
+  /usr/bin/ping mrix,
+  /bin/bash mrix,
+  /usr/bin/bash mrix,
+  /bin/sh mrix,
+  /usr/bin/systemctl mrix,
+  /bin/systemctl mrix,
+
+  capability net_admin,
+  capability net_raw,
+  capability sys_admin,
+  network inet,
+  network inet6,
+  network netlink,
+
+  deny capability sys_module,
+  deny capability sys_rawio,
+}

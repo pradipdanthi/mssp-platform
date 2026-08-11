@@ -1,6 +1,6 @@
 (function () {
-  const site = window.JUNEXIS_SITE || {};
-  const portalUrl = site.customerPortalUrl || "https://portal.junexis.com";
+  const site = window.KEVANTIC_SITE || window.JUNEXIS_SITE || {};
+  const portalUrl = site.customerPortalUrl || "https://portal.kevantic.com";
   const header = document.querySelector(".site-header");
   const nav = document.querySelector(".nav");
   const toggle = document.querySelector(".nav-toggle");
@@ -111,12 +111,12 @@
         String(data.get("notes") || "").trim(),
       ];
       const subject = encodeURIComponent(
-        "Junexis executive demo — " + (String(data.get("company") || data.get("name") || "Website").trim())
+        "Kevantic executive demo — " + (String(data.get("company") || data.get("name") || "Website").trim())
       );
       const body = encodeURIComponent(lines.join("\n"));
       const success = document.getElementById("form-success");
       if (success) success.classList.add("is-visible");
-      window.location.href = "mailto:sales@junexis.com?subject=" + subject + "&body=" + body;
+      window.location.href = "mailto:sales@kevantic.com?subject=" + subject + "&body=" + body;
       form.reset();
     });
   }

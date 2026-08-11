@@ -1,0 +1,5 @@
+---
+ota_staging_enabled: true
+ota_staging_root: /var/lib/kevantic/ota
+ota_wpk_root: /var/lib/kevantic/wpk
+ota_src_dir: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/ota"

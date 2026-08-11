@@ -1,4 +1,4 @@
-"""KB-093E: appliance telemetry ingest at /api/v1/telemetry/* (Junexis Edge contract).
+"""KB-093E: appliance telemetry ingest at /api/v1/telemetry/* (Kevantic Edge contract).
 
 Reuses KB-057 safe field set and appliance API-key auth. Production may move
 this router to the separate Appliance Management plane.
@@ -81,7 +81,7 @@ def telemetry_ingest(
     x_appliance_id: Optional[str] = Header(default=None, alias="X-Appliance-ID"),
     x_appliance_api_key: Optional[str] = Header(default=None, alias="X-Appliance-API-Key"),
 ) -> Dict[str, Any]:
-    """Normalized anonymized alert from Junexis Edge Appliance."""
+    """Normalized anonymized alert from Kevantic Edge Appliance."""
     return ingest_appliance_alert(
         payload,
         response,

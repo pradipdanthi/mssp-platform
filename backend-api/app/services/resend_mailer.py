@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 RESEND_API_URL = "https://api.resend.com/emails"
-DEFAULT_SALES_TO = "sales@keroxsys.com"
+DEFAULT_SALES_TO = "sales@kevantic.com"
 DEFAULT_FROM = "MSSP Control Plane <onboarding@resend.dev>"
 
 

@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: license_enforcer
+  description: Kevantic appliance role license_enforcer (scaffold)
+  license: proprietary
+dependencies: []

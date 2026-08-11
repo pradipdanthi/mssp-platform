@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""List local Wazuh Manager agents as JSON for kevantic-cli heartbeat inventory."""
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+from datetime import datetime, timezone
+
+
+def trunc(s: str | None, n: int = 120) -> str | None:
+    if s is None:
+        return None
+    s = str(s).strip()
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
+def keep_alive_iso(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    raw = raw.strip()
+    if raw.isdigit():
+        try:
+            ts = int(raw)
+            if ts > 10_000_000_000:
+                ts //= 1000
+            return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+        except Exception:
+            return None
+    return trunc(raw, 64)
+
+
+def run(cmd: list[str]) -> str:
+    try:
+        return subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT, timeout=20)
+    except Exception:
+        return subprocess.check_output(
+            ["sudo", "-n", *cmd], text=True, stderr=subprocess.STDOUT, timeout=20
+        )
+
+
+def main() -> int:
+    try:
+        out = run(["/var/ossec/bin/agent_control", "-l"])
+    except Exception as exc:
+        print("[]")
+        print(f"kevantic-list-local-agents: {exc}", file=sys.stderr)
+        return 0
+
+    agents: list[dict] = []
+    for line in out.splitlines():
+        m = re.search(
+            r"ID:\s*(\d+),\s*Name:\s*([^,]+),\s*IP:\s*([^,]+),\s*(\S+)",
+            line.strip(),
+        )
+        if not m:
+            continue
+        agent_id, name, ip, status = (
+            m.group(1),
+            m.group(2).strip(),
+            m.group(3).strip(),
+            m.group(4).strip(),
+        )
+        if agent_id == "000" or "local" in status.lower():
+            continue
+        os_name = None
+        last_keep = None
+        try:
+            info = run(["/var/ossec/bin/agent_control", "-i", agent_id])
+            osm = re.search(r"Operating system:\s*(.+)", info)
+            if osm:
+                raw = osm.group(1).strip()
+                if raw.lower().startswith("linux"):
+                    os_name = "Linux"
+                elif "windows" in raw.lower():
+                    os_name = "Windows"
+                else:
+                    os_name = trunc(raw, 120)
+            lm = re.search(r"Last keep alive:\s*(\S+)", info)
+            if lm:
+                last_keep = keep_alive_iso(lm.group(1))
+        except Exception:
+            pass
+        safe_ip = None if ip in ("any", "0.0.0.0", "127.0.0.1") else ip
+        agents.append(
+            {
+                "id": agent_id,
+                "name": trunc(name, 255),
+                "status": trunc(status.split("/")[0], 64),
+                "ip": safe_ip,
+                "os_name": os_name,
+                "os_platform": (
+                    "linux"
+                    if (os_name or "").lower() == "linux"
+                    else ("windows" if (os_name or "").lower() == "windows" else None)
+                ),
+                "last_keep_alive": last_keep,
+            }
+        )
+    print(json.dumps(agents))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

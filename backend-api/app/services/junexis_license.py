@@ -1,4 +1,4 @@
-"""Junexis appliance license JWS (EdDSA / Ed25519) — mint only on control plane."""
+"""Kevantic appliance license JWS (EdDSA / Ed25519) — mint only on control plane."""
 
 from __future__ import annotations
 

@@ -2,8 +2,8 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useBrand } from "../config/BrandContext";
+import KestrelFalconShieldLogo from "../components/brand/KestrelFalconShieldLogo";
 import KestrelSecurityWatermark from "../components/brand/KestrelSecurityWatermark";
-import EagleOpenWings from "../assets/images/kestrel_eagle_open_wings.png";
 
 export default function LoginPage() {
   const { token, loading, login } = useAuth();
@@ -38,18 +38,10 @@ export default function LoginPage() {
     <div className="login-page">
       <KestrelSecurityWatermark />
       <div className="login-hero" role="main">
-        <img
-          src={EagleOpenWings}
-          alt=""
-          className="login-eagle"
-          draggable={false}
-          decoding="async"
-        />
         <div className="login-chest-panel">
           <div className="login-chest-brand">
-            <span className="login-brand-product">{brand.productName}</span>
+            <KestrelFalconShieldLogo size={96} className="login-brand-logo" />
             <span className="login-brand-portal">{brand.portalName}</span>
-            <span className="login-company">by {brand.companyName}</span>
           </div>
           <p className="login-subtitle">{brand.tagline}</p>
 
@@ -91,10 +83,7 @@ export default function LoginPage() {
             Support:{" "}
             <a href={`mailto:${brand.supportEmail}`}>{brand.supportEmail}</a>
           </p>
-          <p className="login-legal">
-            {brand.companyName} and {brand.productName} are business/service brands operated by{" "}
-            {brand.legalEntityName}.
-          </p>
+          <p className="login-legal">{brand.footerCopyright}</p>
         </div>
       </div>
     </div>

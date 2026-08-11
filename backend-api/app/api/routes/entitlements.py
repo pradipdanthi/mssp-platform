@@ -1272,7 +1272,7 @@ def put_admin_asset_service_coverage(
 
 
 # ---------------------------------------------------------------------------
-# KB-093G: Junexis-signed appliance license keys (Admin / platform_admin only)
+# KB-093G: Kevantic-signed appliance license keys (Admin / platform_admin only)
 # ---------------------------------------------------------------------------
 
 
@@ -1303,7 +1303,7 @@ def mint_appliance_license(
     request: Request,
     current_user: Dict[str, Any] = Depends(require_roles(*PLATFORM_ADMIN)),
 ) -> ApplianceLicenseMintResponse:
-    """Mint a customer-bound license JWS. Only Junexis control plane can do this."""
+    """Mint a customer-bound license JWS. Only Kevantic control plane can do this."""
     _ensure_tenant(tenant_id)
     if payload.appliance_id:
         ap = fetch_one(
@@ -1355,6 +1355,6 @@ def mint_appliance_license(
         claims=minted["claims"],
         message=(
             "License minted. Deliver online via channel or offline with "
-            "`junexis-cli license apply --file …`. Only Junexis can mint keys."
+            "`kevantic-cli license apply --file …`. Only Kevantic control plane can mint keys."
         ),
     )

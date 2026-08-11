@@ -1,0 +1,102 @@
+---
+# Install Kevantic Plymouth splash (black + yellow/red brand + white tagline).
+- name: Apply role when enabled
+  when: boot_splash_enabled | default(true) | bool
+  block:
+  - name: Install Plymouth packages for splash
+    ansible.builtin.apt:
+      name: "{{ boot_splash_packages }}"
+      state: present
+      update_cache: true
+    failed_when: false
+
+  - name: Ensure Plymouth theme directory exists
+    ansible.builtin.file:
+      path: "{{ boot_splash_theme_dir }}"
+      state: directory
+      mode: "0755"
+
+  - name: Install Plymouth theme descriptor
+    ansible.builtin.copy:
+      src: kevantic.plymouth
+      dest: "{{ boot_splash_theme_dir }}/kevantic.plymouth"
+      mode: "0644"
+
+  - name: Install Plymouth script
+    ansible.builtin.copy:
+      src: kevantic.script
+      dest: "{{ boot_splash_theme_dir }}/kevantic.script"
+      mode: "0644"
+
+  - name: Install boot splash PNG (shipped in role files)
+    ansible.builtin.copy:
+      src: kevantic-boot.png
+      dest: "{{ boot_splash_theme_dir }}/kevantic-boot.png"
+      mode: "0644"
+
+  - name: Set default Plymouth theme to kevantic
+    ansible.builtin.command:
+      cmd: plymouth-set-default-theme -R {{ boot_splash_theme_name }}
+    register: boot_splash_theme_set
+    changed_when: boot_splash_theme_set.rc == 0
+    failed_when: false
+
+  - name: Configure plymouthd Theme=
+    ansible.builtin.copy:
+      dest: /etc/plymouth/plymouthd.conf
+      mode: "0644"
+      content: |
+        [Daemon]
+        Theme={{ boot_splash_theme_name }}
+        ShowDelay=0
+
+  - name: Enable splash on kernel cmdline via grub
+    ansible.builtin.lineinfile:
+      path: /etc/default/grub
+      regexp: "{{ item.regexp }}"
+      line: "{{ item.line }}"
+    loop:
+      - { regexp: '^GRUB_CMDLINE_LINUX_DEFAULT=', line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' }
+      - { regexp: '^GRUB_TIMEOUT=', line: 'GRUB_TIMEOUT={{ boot_splash_hold_seconds }}' }
+      - { regexp: '^#?GRUB_TIMEOUT_STYLE=', line: 'GRUB_TIMEOUT_STYLE=menu' }
+    failed_when: false
+
+  - name: Update GRUB config
+    ansible.builtin.command: update-grub
+    changed_when: true
+    failed_when: false
+
+  - name: Install splash hold unit (~3 seconds before quit)
+    ansible.builtin.copy:
+      dest: /etc/systemd/system/kevantic-splash-hold.service
+      mode: "0644"
+      content: |
+        [Unit]
+        Description=Hold Kevantic splash briefly for branding
+        DefaultDependencies=no
+        After=plymouth-start.service
+        Before=plymouth-quit.service plymouth-quit-wait.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/bin/sleep {{ boot_splash_hold_seconds }}
+        RemainAfterExit=yes
+
+        [Install]
+        WantedBy=sysinit.target
+
+  - name: Enable splash hold unit
+    ansible.builtin.systemd:
+      name: kevantic-splash-hold.service
+      enabled: true
+      daemon_reload: true
+    failed_when: false
+
+  - name: Record boot_splash applied marker
+    ansible.builtin.copy:
+      dest: /var/lib/kevantic/boot_splash.applied
+      mode: "0644"
+      content: |
+        applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+        theme={{ boot_splash_theme_name }}
+        hold_seconds={{ boot_splash_hold_seconds }}

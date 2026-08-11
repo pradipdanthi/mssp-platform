@@ -1,6 +1,0 @@
----
-galaxy_info:
-  role_name: ota_staging
-  description: Junexis appliance role ota_staging (scaffold)
-  license: proprietary
-dependencies: []

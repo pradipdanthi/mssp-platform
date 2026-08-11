@@ -1,15 +1,19 @@
 {
-  "productName": "Kestrel Cyber",
-  "portalName": "Kestrel Cyber Control Plane",
-  "companyName": "Keroxsys",
-  "legalEntityName": "Cicilia Consultancy",
+  "productName": "Kevantic Cyber Security",
+  "portalName": "KEVANTIC CYBER SECURITY CONTROL PLANE",
+  "companyName": "Kevantic",
+  "legalEntityName": "Kevantic Cyber Security Private Limited",
   "tagline": "AI-Assisted Managed SOC Platform",
-  "supportEmail": "soc@keroxsys.com",
-  "portalDomain": "portal.keroxsys.com",
-  "documentTitle": "Kestrel Cyber Control Plane - Admin",
+  "supportEmail": "soc@kevantic.com",
+  "salesEmail": "sales@kevantic.com",
+  "portalDomain": "portal.kevantic.com",
+  "adminDomain": "admin.kevantic.com",
+  "marketingDomain": "kevantic.com",
+  "footerCopyright": "© 2026 Kevantic Cyber Security Private Limited. All rights reserved.",
+  "documentTitle": "Kevantic Cyber Security Control Plane - Admin",
   "logo": {
-    "markSrc": "/brand/kestrel-mark.svg",
-    "logoSrc": "/brand/kestrel-logo.svg",
-    "alt": "Kestrel Cyber"
+    "markSrc": "/brand/kevantic-mark.svg",
+    "logoSrc": "/brand/kevantic-logo.svg",
+    "alt": "Kevantic Cyber Security"
   }
 }

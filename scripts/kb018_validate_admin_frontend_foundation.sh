@@ -216,23 +216,26 @@ echo "OK: frontend HTML has id=\"root\", a generic Admin Portal title, and no ol
 curl -fsS "$FRONTEND_BASE/app-config.json" -o "$BODY_FILE" \
   || fail "GET $FRONTEND_BASE/app-config.json failed"
 jq -e '
-  .productName == "Kestrel Cyber"
-  and .portalName == "Kestrel Cyber Control Plane"
-  and .companyName == "Keroxsys"
-  and .legalEntityName == "Cicilia Consultancy"
-  and .supportEmail == "soc@keroxsys.com"
-  and .portalDomain == "portal.keroxsys.com"
-  and (.documentTitle | test("Kestrel Cyber"))
-  and (.logo.markSrc | length) > 0
-  and (.logo.logoSrc | length) > 0
+  .productName == "Kevantic Cyber Security"
+  and .portalName == "KEVANTIC CYBER SECURITY CONTROL PLANE"
+  and .companyName == "Kevantic"
+  and .legalEntityName == "Kevantic Cyber Security Private Limited"
+  and .supportEmail == "soc@kevantic.com"
+  and .salesEmail == "sales@kevantic.com"
+  and .portalDomain == "portal.kevantic.com"
+  and .adminDomain == "admin.kevantic.com"
+  and .marketingDomain == "kevantic.com"
+  and (.documentTitle | test("Kevantic Cyber Security"))
+  and (.logo.markSrc | test("kevantic-mark"))
+  and (.logo.logoSrc | test("kevantic-logo"))
 ' "$BODY_FILE" >/dev/null \
-  || fail "app-config.json is missing required Kestrel Cyber / Keroxsys branding fields"
-echo "OK: app-config.json contains Kestrel Cyber, Keroxsys, Cicilia Consultancy, soc@keroxsys.com, portal.keroxsys.com."
+  || fail "app-config.json is missing required Kevantic Cyber Security branding fields"
+echo "OK: app-config.json contains Kevantic domains (admin.kevantic.com, portal.kevantic.com, soc@kevantic.com)."
 
-curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kestrel-mark.svg" \
-  || fail "GET $FRONTEND_BASE/brand/kestrel-mark.svg failed"
-curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kestrel-logo.svg" \
-  || fail "GET $FRONTEND_BASE/brand/kestrel-logo.svg failed"
+curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-mark.svg" \
+  || fail "GET $FRONTEND_BASE/brand/kevantic-mark.svg failed"
+curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-logo.svg" \
+  || fail "GET $FRONTEND_BASE/brand/kevantic-logo.svg failed"
 echo "OK: both brand SVG assets are served by the frontend."
 
 # Source/UI must not hardcode the retired product brand string.

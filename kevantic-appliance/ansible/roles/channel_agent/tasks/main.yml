@@ -1,0 +1,76 @@
+---
+# Install and enable kevantic-channeld (Phase B SOC channel client).
+- name: Apply role when enabled
+  when: channel_agent_enabled | default(true) | bool
+  block:
+  - name: Ensure channel source directories on appliance
+    ansible.builtin.file:
+      path: "{{ item }}"
+      state: directory
+      mode: "0755"
+    loop:
+      - /opt/kevantic/channel
+      - /opt/kevantic/channel/channeld
+      - /etc/kevantic
+      - /var/lib/kevantic
+      - /run/kevantic
+
+  - name: Install channeld package files
+    ansible.builtin.copy:
+      src: "{{ channel_agent_src_dir }}/channeld/"
+      dest: /opt/kevantic/channel/channeld/
+      mode: "0644"
+
+  - name: Install kevantic-channeld launcher
+    ansible.builtin.copy:
+      dest: /usr/sbin/kevantic-channeld
+      mode: "0755"
+      content: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        export PYTHONPATH=/opt/kevantic/channel:/opt/kevantic/cli:/opt/kevantic/appliance-src:/opt/kevantic/ota${PYTHONPATH:+:$PYTHONPATH}
+        export KEVANTIC_STATE_DIR=${KEVANTIC_STATE_DIR:-/var/lib/kevantic}
+        export KEVANTIC_CONFIG_DIR=${KEVANTIC_CONFIG_DIR:-/etc/kevantic}
+        exec /usr/bin/python3 -m channeld "$@"
+
+  - name: Deploy channel.yaml config
+    ansible.builtin.copy:
+      dest: "{{ channel_agent_config_path }}"
+      mode: "0640"
+      content: |
+        # Managed by channel_agent role — gateway URL from group_vars (KB-093L)
+        mode: {{ channel_agent_mode }}
+        poll_interval_sec: {{ channel_agent_poll_interval_sec }}
+        control_plane: {{ kevantic_control_plane_url }}
+        channel_ws: {{ kevantic_channel_url }}
+
+  - name: Install channeld systemd unit
+    ansible.builtin.copy:
+      src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/configs/systemd/kevantic-channeld.service"
+      dest: /etc/systemd/system/kevantic-channeld.service
+      mode: "0644"
+
+  - name: Ensure ReadWritePaths include logs for channeld
+    ansible.builtin.lineinfile:
+      path: /etc/systemd/system/kevantic-channeld.service
+      regexp: '^ReadWritePaths='
+      line: 'ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic'
+    failed_when: false
+
+  - name: Enable kevantic-channeld (starts after register when creds exist)
+    ansible.builtin.systemd:
+      name: "{{ channel_agent_unit }}"
+      enabled: true
+      daemon_reload: true
+      # Do not force start during image build — register may not have happened yet
+      state: started
+    failed_when: false
+
+  - name: Record channel_agent applied marker
+    ansible.builtin.copy:
+      dest: /var/lib/kevantic/channel_agent.applied
+      mode: "0644"
+      content: |
+        applied_at_utc={{ ansible_date_time.iso8601 | default('unknown') }}
+        role=channel_agent
+        mode={{ channel_agent_mode }}

@@ -8,7 +8,7 @@ Status: Live controller on **VM 112**. Source of truth for playbooks/roles is
 Ansible layout for deploying and validating the enterprise SOC stack defined in
 `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md`.
 
-**Junexis edge appliance image builds** use a separate tree (`junexis-appliance/`)
+**Kevantic edge appliance image builds** use a separate tree (`kevantic-appliance/`)
 and Proxmox factory VM 113 — see `docs/KB093F_PROXMOX_APPLIANCE_BUILD_VM.md`.
 Those roles are **not** mixed into SOC stack install playbooks.
 
@@ -69,4 +69,4 @@ ansible/
 ## Related
 
 - KB-039 / KB-041 — automation foundation / Wazuh
-- KB-093F — Junexis Proxmox build VM (factory, separate from SOC stack)
+- KB-093F — Kevantic Proxmox build VM (factory, separate from SOC stack)

@@ -1,0 +1,57 @@
+#cloud-config
+# Ubuntu 24.04 Subiquity autoinstall — MSSP/Kevantic golden image (cidata ISO).
+autoinstall:
+  version: 1
+  interactive-sections: []
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  network:
+    network:
+      version: 2
+      ethernets:
+        ens18:
+          dhcp4: true
+          dhcp-identifier: mac
+          optional: true
+        enp6s18:
+          dhcp4: true
+          dhcp-identifier: mac
+          optional: true
+        all-en:
+          match:
+            name: "en*"
+          dhcp4: true
+          dhcp-identifier: mac
+          optional: true
+  source:
+    id: ubuntu-server-minimal
+    search_drivers: false
+  identity:
+    hostname: mssp-appliance
+    username: packer
+    password: "$6$.LizhDmqGpQJRqZx$T9wpUb8jqY2ZEgg7qeaVAI68nHX0xjmquNMin8O1Olp6AFi.hufU0d/9XJ6UWWzoSLuiVHsDCqnGFepcwAOLR."
+  ssh:
+    install-server: true
+    allow-pw: true
+    authorized-keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEZ0FCM2Njl7mYWRkJBCWf4G8SDSMT1OhZ5G/tWJTBEJ kevantic-packer-build-only
+  storage:
+    layout:
+      name: lvm
+  packages:
+    - openssh-server
+    - qemu-guest-agent
+    - python3
+    - python3-apt
+    - sudo
+    - curl
+    - ca-certificates
+  early-commands:
+    - systemctl stop systemd-networkd-wait-online.service 2>/dev/null || true
+  late-commands:
+    - curtin in-target --target=/target -- systemctl enable ssh
+    - curtin in-target --target=/target -- systemctl enable qemu-guest-agent || true
+    - curtin in-target --target=/target -- bash -c 'echo "packer ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-packer && chmod 440 /etc/sudoers.d/90-packer'
+    - curtin in-target --target=/target -- bash -c 'install -d -m 700 -o packer -g packer /home/packer/.ssh && echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEZ0FCM2Njl7mYWRkJBCWf4G8SDSMT1OhZ5G/tWJTBEJ kevantic-packer-build-only" > /home/packer/.ssh/authorized_keys && chown packer:packer /home/packer/.ssh/authorized_keys && chmod 600 /home/packer/.ssh/authorized_keys'
+  shutdown: reboot

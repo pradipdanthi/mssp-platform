@@ -2,7 +2,7 @@
 # KB-093I / Track-2 — appliance hardening roles must be real (not scaffold).
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/junexis-appliance"
+APP="$ROOT/kevantic-appliance"
 FAIL=0
 pass() { echo "PASS: $*"; }
 fail() { echo "FAIL: $*"; FAIL=1; }
@@ -22,19 +22,19 @@ done
 # CIS artifacts
 [[ -f "$APP/hardening/cis/exceptions.yml" ]] || fail "missing cis exceptions"
 grep -q 'exceptions:' "$APP/hardening/cis/exceptions.yml" && pass "CIS exceptions register present" || fail "CIS exceptions empty/malformed"
-grep -q '99-junexis-cis.conf' "$APP/ansible/roles/harden_cis/tasks/main.yml" && pass "harden_cis writes sysctl drop-in" || fail "harden_cis sysctl missing"
+grep -q '99-kevantic-cis.conf' "$APP/ansible/roles/harden_cis/tasks/main.yml" && pass "harden_cis writes sysctl drop-in" || fail "harden_cis sysctl missing"
 
 # auditd
-[[ -f "$APP/hardening/auditd/junexis.rules" ]] || fail "missing auditd rules"
-grep -q 'junexis_secrets' "$APP/hardening/auditd/junexis.rules" && pass "auditd watches secrets" || fail "auditd secrets watch missing"
-grep -q 'junexis.rules' "$APP/ansible/roles/auditd/tasks/main.yml" && pass "auditd role deploys rules" || fail "auditd deploy missing"
+[[ -f "$APP/hardening/auditd/kevantic.rules" ]] || fail "missing auditd rules"
+grep -q 'kevantic_secrets' "$APP/hardening/auditd/kevantic.rules" && pass "auditd watches secrets" || fail "auditd secrets watch missing"
+grep -q 'kevantic.rules' "$APP/ansible/roles/auditd/tasks/main.yml" && pass "auditd role deploys rules" || fail "auditd deploy missing"
 
 # container_runtime
 grep -q 'podman' "$APP/ansible/roles/container_runtime/tasks/main.yml" && pass "container_runtime installs podman" || fail "podman missing"
 grep -q 'offline' "$APP/ansible/roles/container_runtime/tasks/main.yml" && pass "container_runtime prefers offline pool" || fail "offline pool missing"
 
 # apparmor
-[[ -f "$APP/hardening/apparmor/usr.bin.junexis-cli" ]] || fail "missing junexis-cli AppArmor profile"
+[[ -f "$APP/hardening/apparmor/usr.bin.kevantic-cli" ]] || fail "missing kevantic-cli AppArmor profile"
 grep -q 'apparmor_parser' "$APP/ansible/roles/apparmor_profiles/tasks/main.yml" && pass "apparmor loads profiles" || fail "apparmor_parser missing"
 
 # Wired into install provision

@@ -1,6 +1,0 @@
----
-galaxy_info:
-  role_name: license_enforcer
-  description: Junexis appliance role license_enforcer (scaffold)
-  license: proprietary
-dependencies: []

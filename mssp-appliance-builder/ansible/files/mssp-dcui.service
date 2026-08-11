@@ -1,0 +1,43 @@
+[Unit]
+Description=Kevantic Appliance Console (tty1 only — SSH denied by design)
+Documentation=file:///etc/kevantic/dcui.note
+After=local-fs.target systemd-user-sessions.service
+Wants=local-fs.target
+Conflicts=getty@tty1.service
+ConditionPathExists=/usr/libexec/kevantic/mssp-dcui
+
+[Service]
+Type=idle
+Environment=TERM=linux
+Environment=NCURSES_NO_UTF8_ACS=1
+# Unset SSH vars if somehow inherited
+Environment=SSH_CONNECTION=
+Environment=SSH_CLIENT=
+Environment=SSH_TTY=
+ExecStart=/usr/bin/python3 /usr/libexec/kevantic/mssp-dcui
+WorkingDirectory=/
+StandardInput=tty
+StandardOutput=tty
+StandardError=journal
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+Restart=always
+RestartSec=1
+User=root
+# Hardening (still needs netplan/hostnamectl)
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictSUIDSGID=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+# Allow writing netplan + applying
+ReadWritePaths=/etc/netplan /etc/cloud/cloud.cfg.d /etc/hostname /etc/hosts /var/lib/kevantic /run
+
+[Install]
+WantedBy=multi-user.target

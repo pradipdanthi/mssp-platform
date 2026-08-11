@@ -1,0 +1,37 @@
+---
+- name: Ensure Kevantic nftables config directory exists
+  ansible.builtin.file:
+    path: "{{ firewall_nftables_dir }}"
+    state: directory
+    mode: "0755"
+  when: firewall_nftables_enabled | bool
+
+- name: Install nftables package
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: true
+  when: firewall_nftables_enabled | bool
+
+- name: Deploy bootstrap and locked nftables profiles
+  ansible.builtin.copy:
+    src: "{{ firewall_nftables_src_dir }}/{{ item }}"
+    dest: "{{ firewall_nftables_dir }}/{{ item }}"
+    mode: "0644"
+  loop:
+    - bootstrap.nft
+    - locked.nft
+    - kevantic-appliance.nft
+  when: firewall_nftables_enabled | bool
+
+- name: Select active profile by mode
+  ansible.builtin.set_fact:
+    firewall_nftables_active: >-
+      {{ 'locked.nft' if firewall_nftables_mode == 'locked' else 'bootstrap.nft' }}
+  when: firewall_nftables_enabled | bool
+
+- name: Apply active nftables profile
+  ansible.builtin.command:
+    cmd: "nft -f {{ firewall_nftables_dir }}/{{ firewall_nftables_active }}"
+  when: firewall_nftables_enabled | bool
+  changed_when: true

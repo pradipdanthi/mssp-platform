@@ -8,6 +8,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes.admin import router as admin_router
 from app.api.routes.admin_ops import router as admin_ops_router
@@ -52,6 +53,7 @@ from app.api.routes.threatlens import router as threatlens_router
 from app.api.routes.endpoint_forensics import router as endpoint_forensics_router
 from app.api.routes.vuln_sync import router as vuln_sync_router
 from app.api.routes.vulnerability_management import router as vulnerability_management_router
+from app.core.cors import get_cors_allowed_origins
 from app.core.error_handlers import validation_exception_handler
 
 APP_NAME = os.getenv("APP_NAME", "MSSP Control Plane API")
@@ -61,6 +63,16 @@ app = FastAPI(
     title=APP_NAME,
     description="Backend API foundation for the MSSP Control Plane.",
     version="0.1.0",
+)
+
+# Allow kevantic.com portal subdomains (admin / portal / marketing) plus lab LAN
+# origins. Override with CORS_ALLOWED_ORIGINS in .env (comma-separated).
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=get_cors_allowed_origins(),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
 )
 
 # KB-014 fix: sanitize 422 validation-error responses globally so a
@@ -118,7 +130,7 @@ app.include_router(appliance_channel_router)
 # KB-057: authenticated appliance alert ingestion with normalized safe fields.
 app.include_router(appliance_alert_ingest_router)
 
-# KB-093E: Junexis Edge telemetry ingest + hunt-result callback
+# KB-093E: Kevantic Edge telemetry ingest + hunt-result callback
 # (/api/v1/telemetry/*). Same appliance API-key auth; may move to Appliance
 # Management plane in production.
 app.include_router(telemetry_ingest_router)

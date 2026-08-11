@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Deploy Junexis Appliance Management API onto VM 114 (channel / register / heartbeat).
+# Deploy Kevantic Appliance Management API onto VM 114 (channel / register / heartbeat).
 # Prerequisites: VM created (create_proxmox_vm.sh). Publishes Postgres/Redis on VM100 loopback
 # and reaches them from VM114 via SSH local forward (not LAN-exposed DB).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MGMT_IP="${JUNEXIS_MGMT_VM_IP:-192.168.0.224}"
-MGMT_USER="${JUNEXIS_MGMT_CI_USER:-junexis}"
-SSH_KEY="${JUNEXIS_MGMT_SSH_KEY:-$ROOT/junexis-appliance/.tools/build-ssh/junexis_packer}"
+MGMT_IP="${KEVANTIC_MGMT_VM_IP:-192.168.0.224}"
+MGMT_USER="${KEVANTIC_MGMT_CI_USER:-kevantic}"
+SSH_KEY="${KEVANTIC_MGMT_SSH_KEY:-$ROOT/kevantic-appliance/.tools/build-ssh/kevantic_packer}"
 CP_HOST="${MSSP_CONTROL_HOST:-192.168.0.201}"
 CP_USER="${MSSP_CONTROL_USER:-secadmin}"
 SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -i "$SSH_KEY" "${MGMT_USER}@${MGMT_IP}")
@@ -75,20 +75,20 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 UNIT
-"${SCP[@]}" "$UNIT_LOCAL" "${MGMT_USER}@${MGMT_IP}:/tmp/junexis-db-tunnel.service"
+"${SCP[@]}" "$UNIT_LOCAL" "${MGMT_USER}@${MGMT_IP}:/tmp/kevantic-db-tunnel.service"
 rm -f "$UNIT_LOCAL"
 # Discrete remote steps (avoid nested-heredoc / stdin issues under ssh + sudo)
 "${SSH[@]}" "ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -i \$HOME/.ssh/id_ed25519_cp_tunnel ${CP_USER}@${CP_HOST} 'echo TUNNEL_SSH_OK' >/dev/null"
 "${SSH[@]}" 'pkill -f "ssh -N .*id_ed25519_cp_tunnel" 2>/dev/null || true; sleep 1'
-"${SSH[@]}" 'sudo mv /tmp/junexis-db-tunnel.service /etc/systemd/system/junexis-db-tunnel.service'
+"${SSH[@]}" 'sudo mv /tmp/kevantic-db-tunnel.service /etc/systemd/system/kevantic-db-tunnel.service'
 "${SSH[@]}" 'sudo systemctl daemon-reload'
-"${SSH[@]}" 'sudo systemctl enable --now junexis-db-tunnel.service'
+"${SSH[@]}" 'sudo systemctl enable --now kevantic-db-tunnel.service'
 sleep 2
-"${SSH[@]}" 'systemctl is-active junexis-db-tunnel.service'
+"${SSH[@]}" 'systemctl is-active kevantic-db-tunnel.service'
 "${SSH[@]}" 'ss -lntp | grep -E "127\\.0\\.0\\.1:5432|127\\.0\\.0\\.1:6379" || true'
 
 echo "==> Sync Appliance Management compose + backend source"
-"${SSH[@]}" "sudo mkdir -p /opt/junexis-appliance-mgmt && sudo chown ${MGMT_USER}:${MGMT_USER} /opt/junexis-appliance-mgmt"
+"${SSH[@]}" "sudo mkdir -p /opt/kevantic-appliance-mgmt && sudo chown ${MGMT_USER}:${MGMT_USER} /opt/kevantic-appliance-mgmt"
 TAR_BUNDLE=$(mktemp /tmp/appliance-mgmt-src.XXXXXX.tgz)
 tar -C "$ROOT" -czf "$TAR_BUNDLE" \
   --exclude='backend-api/**/__pycache__' \
@@ -99,7 +99,7 @@ tar -C "$ROOT" -czf "$TAR_BUNDLE" \
 rm -f "$TAR_BUNDLE"
 "${SSH[@]}" 'bash -s' <<'REMOTE'
 set -euo pipefail
-cd /opt/junexis-appliance-mgmt
+cd /opt/kevantic-appliance-mgmt
 rm -rf backend-api appliance-mgmt
 tar -xzf /tmp/appliance-mgmt-src.tgz
 mv -f appliance-mgmt/docker-compose.yml ./docker-compose.yml
@@ -155,14 +155,14 @@ out = {
 }
 dst.write_text("".join(f"{k}={v}\n" for k, v in out.items()))
 PY
-"${SCP[@]}" "$REMOTE_ENV" "${MGMT_USER}@${MGMT_IP}:/opt/junexis-appliance-mgmt/.env"
+"${SCP[@]}" "$REMOTE_ENV" "${MGMT_USER}@${MGMT_IP}:/opt/kevantic-appliance-mgmt/.env"
 rm -f "$REMOTE_ENV"
-"${SSH[@]}" 'chmod 600 /opt/junexis-appliance-mgmt/.env'
+"${SSH[@]}" 'chmod 600 /opt/kevantic-appliance-mgmt/.env'
 
 echo "==> Build and start appliance-mgmt-api"
 "${SSH[@]}" 'bash -s' <<'REMOTE'
 set -euo pipefail
-cd /opt/junexis-appliance-mgmt
+cd /opt/kevantic-appliance-mgmt
 DOC=(docker)
 if ! docker info >/dev/null 2>&1; then
   DOC=(sudo docker)

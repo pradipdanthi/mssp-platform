@@ -1,0 +1,287 @@
+---
+# MSSP Appliance — CIS-oriented hardening + rootless Podman Wazuh agent
+# Applied by Packer ansible provisioner over SSH as user packer (passwordless sudo).
+- name: Harden MSSP Ubuntu appliance and deploy rootless engine runtime
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    mssp_build_user: packer
+    mssp_engine_log_dir: /var/log/mssp-engine
+    mssp_wazuh_agent_image: docker.io/wazuh/wazuh-agent:4.9.0
+    mssp_wazuh_container_name: mssp-wazuh-agent
+    mssp_sysctl_conf: /etc/sysctl.d/99-mssp-appliance-harden.conf
+    mssp_tmpfs_fstab_marker: "# MSSP-APPLIANCE-TMPFS"
+
+  tasks:
+    - name: Ensure required packages are present
+      ansible.builtin.apt:
+        name:
+          - openssh-server
+          - podman
+          - uidmap
+          - slirp4netns
+          - fuse-overlayfs
+          - crun
+          - dbus-user-session
+          - cryptsetup
+          - cryptsetup-bin
+          - systemd-ukify
+          - systemd-boot-efi
+          - binutils
+          - curl
+          - ca-certificates
+        state: present
+        update_cache: true
+
+    - name: Apply kernel sysctl hardening
+      ansible.builtin.copy:
+        dest: "{{ mssp_sysctl_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # MSSP appliance CIS Level 2–oriented kernel lockdown
+          # Note: kernel.modules_disabled=1 is applied last at boot via systemd oneshot
+          # after required modules load; runtime enforce lives in mssp-modules-lock.service
+          kernel.dmesg_restrict = 1
+          kernel.kptr_restrict = 2
+          net.core.bpf_jit_harden = 2
+          kernel.yama.ptrace_scope = 2
+          fs.protected_hardlinks = 1
+          fs.protected_symlinks = 1
+          fs.suid_dumpable = 0
+          net.ipv4.conf.all.rp_filter = 1
+          net.ipv4.conf.default.rp_filter = 1
+          net.ipv4.conf.all.accept_redirects = 0
+          net.ipv4.conf.default.accept_redirects = 0
+          net.ipv4.conf.all.send_redirects = 0
+          net.ipv6.conf.all.accept_redirects = 0
+          net.ipv6.conf.default.accept_redirects = 0
+          kernel.unprivileged_bpf_disabled = 1
+
+    - name: Load sysctl hardening immediately
+      ansible.builtin.command: sysctl --system
+      changed_when: true
+
+    - name: Install systemd unit to lock module loading after boot (kernel.modules_disabled=1)
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/mssp-modules-lock.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=MSSP lock kernel module loading (CIS)
+          After=multi-user.target
+          ConditionPathExists=/proc/sys/kernel/modules_disabled
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/sbin/sysctl -w kernel.modules_disabled=1
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Enable module-lock service
+      ansible.builtin.systemd:
+        name: mssp-modules-lock.service
+        enabled: true
+        daemon_reload: true
+
+    - name: Harden SSH daemon (no root login, no password auth)
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-mssp-harden.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          PermitRootLogin no
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          ChallengeResponseAuthentication no
+          PubkeyAuthentication yes
+          X11Forwarding no
+          AllowTcpForwarding no
+          MaxAuthTries 3
+          LoginGraceTime 30
+          PermitEmptyPasswords no
+          UsePAM yes
+
+    - name: Ensure packer authorized_keys directory exists (Packer/Ansible session)
+      ansible.builtin.file:
+        path: "/home/{{ mssp_build_user }}/.ssh"
+        state: directory
+        owner: "{{ mssp_build_user }}"
+        group: "{{ mssp_build_user }}"
+        mode: "0700"
+
+    - name: Allow temporary password auth for Packer provisioner only until keys are present
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config.d/99-mssp-harden.conf
+        regexp: '^PasswordAuthentication'
+        line: "PasswordAuthentication no"
+        state: present
+
+    - name: Validate and reload sshd
+      ansible.builtin.shell: |
+        set -euo pipefail
+        sshd -t
+        systemctl reload ssh || systemctl reload sshd
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Remove any existing fstab tmp entries for /tmp and /var/tmp
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '{{ item }}'
+        state: absent
+      loop:
+        - '^\s*tmpfs\s+/tmp\s+'
+        - '^\s*tmpfs\s+/var/tmp\s+'
+        - '^\s*/tmp\s+'
+        - '^\s*/var/tmp\s+'
+
+    - name: Mount volatile paths as tmpfs (RAM)
+      ansible.builtin.blockinfile:
+        path: /etc/fstab
+        marker: "{{ mssp_tmpfs_fstab_marker }} {mark}"
+        block: |
+          tmpfs /tmp     tmpfs defaults,noexec,nosuid,nodev,size=512M,mode=1777 0 0
+          tmpfs /var/tmp tmpfs defaults,noexec,nosuid,nodev,size=512M,mode=1777 0 0
+
+    - name: Remount /tmp and /var/tmp as tmpfs now
+      ansible.builtin.shell: |
+        set -euo pipefail
+        mkdir -p /tmp /var/tmp
+        mount -o remount /tmp 2>/dev/null || mount /tmp
+        mount -o remount /var/tmp 2>/dev/null || mount /var/tmp
+        findmnt -no FSTYPE,OPTIONS /tmp
+        findmnt -no FSTYPE,OPTIONS /var/tmp
+      args:
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Create persistent MSSP engine log queue directory
+      ansible.builtin.file:
+        path: "{{ mssp_engine_log_dir }}"
+        state: directory
+        owner: "{{ mssp_build_user }}"
+        group: "{{ mssp_build_user }}"
+        mode: "0750"
+
+    - name: Enable lingering for rootless Podman user services
+      ansible.builtin.command: "loginctl enable-linger {{ mssp_build_user }}"
+      register: linger_result
+      changed_when: linger_result.rc == 0
+      failed_when: linger_result.rc not in [0]
+
+    - name: Ensure rootless Podman directories exist for build user
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ mssp_build_user }}"
+        group: "{{ mssp_build_user }}"
+        mode: "0750"
+      loop:
+        - "/home/{{ mssp_build_user }}/.config/containers"
+        - "/home/{{ mssp_build_user }}/.config/systemd/user"
+        - "/home/{{ mssp_build_user }}/.local/share/containers"
+
+    - name: Configure containers.conf for rootless Podman
+      ansible.builtin.copy:
+        dest: "/home/{{ mssp_build_user }}/.config/containers/containers.conf"
+        owner: "{{ mssp_build_user }}"
+        group: "{{ mssp_build_user }}"
+        mode: "0644"
+        content: |
+          [containers]
+          default_sysctls = []
+          [engine]
+          cgroup_manager = "systemd"
+          events_logger = "journald"
+          runtime = "crun"
+
+    - name: Pull Wazuh Agent container image (rootless)
+      become: true
+      become_user: "{{ mssp_build_user }}"
+      ansible.builtin.command: >
+        podman pull {{ mssp_wazuh_agent_image }}
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid | default(1000) }}"
+      register: pull_result
+      changed_when: "'Downloading' in pull_result.stdout or 'Writing' in pull_result.stdout or pull_result.rc == 0"
+      failed_when: pull_result.rc != 0
+      retries: 3
+      delay: 10
+
+    - name: Create rootless Podman Wazuh Agent container with persistent log queue
+      become: true
+      become_user: "{{ mssp_build_user }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+        if podman container exists {{ mssp_wazuh_container_name }}; then
+          podman stop {{ mssp_wazuh_container_name }} || true
+          podman rm {{ mssp_wazuh_container_name }} || true
+        fi
+        podman create \
+          --name {{ mssp_wazuh_container_name }} \
+          --replace \
+          --restart=unless-stopped \
+          --network=slirp4netns \
+          --security-opt label=disable \
+          -v {{ mssp_engine_log_dir }}:/var/ossec/logs:Z \
+          -v {{ mssp_engine_log_dir }}/queue:/var/ossec/queue:Z \
+          -e WAZUH_MANAGER="${WAZUH_MANAGER:-127.0.0.1}" \
+          -e WAZUH_AGENT_NAME="${WAZUH_AGENT_NAME:-mssp-appliance}" \
+          {{ mssp_wazuh_agent_image }}
+        mkdir -p {{ mssp_engine_log_dir }}/queue
+        podman generate systemd --new --name {{ mssp_wazuh_container_name }} \
+          > /home/{{ mssp_build_user }}/.config/systemd/user/container-{{ mssp_wazuh_container_name }}.service
+      args:
+        executable: /bin/bash
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid | default(1000) }}"
+
+    - name: Enable rootless Wazuh Agent user systemd unit
+      become: true
+      become_user: "{{ mssp_build_user }}"
+      ansible.builtin.shell: |
+        set -euo pipefail
+        export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+        systemctl --user daemon-reload
+        systemctl --user enable container-{{ mssp_wazuh_container_name }}.service
+      args:
+        executable: /bin/bash
+      environment:
+        XDG_RUNTIME_DIR: "/run/user/{{ ansible_user_uid | default(1000) }}"
+        DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_user_uid | default(1000) }}/bus"
+
+    - name: Write appliance build metadata
+      ansible.builtin.copy:
+        dest: /etc/mssp-appliance-build.env
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          MSSP_APPLIANCE_PROFILE=immutable-verity
+          MSSP_ENGINE_RUNTIME=podman-rootless
+          MSSP_ENGINE_LOG_DIR={{ mssp_engine_log_dir }}
+          MSSP_WAZUH_CONTAINER={{ mssp_wazuh_container_name }}
+          MSSP_HARDENING=cis-l2-oriented
+
+    - name: Install Kevantic Direct Console UI (tty1 DCUI)
+      ansible.builtin.import_tasks: files/mssp_dcui_tasks.yml
+
+    - name: Sync filesystems before Packer shutdown
+      ansible.builtin.command: sync
+      changed_when: false
+
+  handlers:
+    - name: Reload systemd for mssp-dcui
+      ansible.builtin.systemd:
+        daemon_reload: true

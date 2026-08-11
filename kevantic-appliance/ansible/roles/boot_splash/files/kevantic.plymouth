@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Kevantic
+Description=Kevantic Appliance — Your Dedicated SOC Sentinel
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/kevantic
+ScriptFile=/usr/share/plymouth/themes/kevantic/kevantic.script

@@ -1,0 +1,145 @@
+---
+# Role: service_manager — real catalogue units (idle until license reconcile)
+- name: Apply role when enabled
+  when: service_manager_enabled | bool
+  block:
+  - name: Ensure services payload directory
+    ansible.builtin.file:
+      path: /opt/kevantic/services
+      state: directory
+      mode: "0755"
+
+  - name: Install catalogue service units (real engine workers)
+    ansible.builtin.copy:
+      dest: "/etc/systemd/system/{{ item.name }}"
+      mode: "0644"
+      content: |
+        [Unit]
+        Description={{ item.desc }}
+        After=network-online.target
+        ConditionPathExists=/usr/bin/kevantic-engine-worker
+
+        [Service]
+        Type=simple
+        Environment=KEVANTIC_STATE_DIR=/var/lib/kevantic
+        Environment=KEVANTIC_LOG_DIR=/var/log/kevantic
+        Environment=KEVANTIC_ENGINE_BIN=/opt/kevantic/engines/bin
+        ExecStart=/usr/bin/kevantic-engine-worker {{ item.id }} --interval 30
+        Restart=on-failure
+        RestartSec=10
+
+        [Install]
+        WantedBy=multi-user.target
+    loop:
+      - { id: svc-01, name: kevantic-svc-01-log-event.service, desc: "Kevantic Log & Event Monitoring (Wazuh+Fluent Bit, idle until licensed)" }
+      - { id: svc-02, name: kevantic-svc-02-ir-worker.service, desc: "Kevantic IR local worker (idle until licensed)" }
+      - { id: svc-03, name: kevantic-svc-03-automation.service, desc: "Kevantic Security Automation worker (idle until licensed)" }
+      - { id: svc-04, name: kevantic-svc-04-vmaas.service, desc: "Kevantic VMaaS Nuclei+Vuls (idle until licensed)" }
+      - { id: svc-05, name: kevantic-svc-05-compliance.service, desc: "Kevantic Continuous Compliance / SCA (idle until licensed)" }
+      - { id: svc-06, name: kevantic-svc-06-ndr.service, desc: "Kevantic NDR Suricata+Zeek (idle until licensed)" }
+      - { id: svc-07, name: kevantic-svc-07-threat-intel.service, desc: "Kevantic Threat Intelligence cache (idle until licensed)" }
+      - { id: svc-08, name: kevantic-svc-08-forensics.service, desc: "Kevantic Forensics listener (idle until licensed)" }
+      - { id: svc-09, name: kevantic-svc-09-easm.service, desc: "Kevantic EASM probes (idle until licensed)" }
+      - { id: svc-10, name: kevantic-svc-10-itdr.service, desc: "Kevantic ITDR connectors (idle until licensed)" }
+
+  - name: Install reconcile script
+    ansible.builtin.copy:
+      dest: /usr/bin/kevantic-reconcile-services
+      mode: "0755"
+      content: |
+        #!/usr/bin/env python3
+        """Enable/disable catalogue units + backend daemons from entitlements.json."""
+        from __future__ import annotations
+        import json, subprocess, sys
+        from pathlib import Path
+
+        ENT = Path("/var/lib/kevantic/entitlements.json")
+        CATALOG = {
+          "svc-01": ["kevantic-svc-01-log-event.service", "wazuh-manager", "fluent-bit"],
+          "svc-02": ["kevantic-svc-02-ir-worker.service"],
+          "svc-03": ["kevantic-svc-03-automation.service"],
+          "svc-04": ["kevantic-svc-04-vmaas.service"],
+          "svc-05": ["kevantic-svc-05-compliance.service", "wazuh-manager"],
+          "svc-06": ["kevantic-svc-06-ndr.service", "suricata"],
+          "svc-07": ["kevantic-svc-07-threat-intel.service"],
+          "svc-08": ["kevantic-svc-08-forensics.service"],
+          "svc-09": ["kevantic-svc-09-easm.service"],
+          "svc-10": ["kevantic-svc-10-itdr.service"],
+        }
+
+        def systemctl(*args: str) -> None:
+            subprocess.run(["systemctl", *args], check=False)
+
+        def main() -> int:
+            if not ENT.is_file():
+                print("no entitlements; all idle", file=sys.stderr)
+                return 0
+            data = json.loads(ENT.read_text(encoding="utf-8"))
+            enabled = set(data.get("service_ids") or [])
+            if data.get("core"):
+                enabled.add("svc-01")
+            report = {"enabled": sorted(enabled), "actions": []}
+            for sid, units in CATALOG.items():
+                want = sid in enabled
+                for u in units:
+                    r = subprocess.run(["systemctl", "cat", u], capture_output=True)
+                    if r.returncode != 0:
+                        continue
+                    if want:
+                        systemctl("enable", "--now", u)
+                        report["actions"].append(f"enable:{u}")
+                    else:
+                        systemctl("disable", "--now", u)
+                        report["actions"].append(f"disable:{u}")
+            Path("/var/lib/kevantic/reconcile_last.json").write_text(
+                json.dumps(report, indent=2) + "\n", encoding="utf-8"
+            )
+            print(json.dumps(report))
+            return 0
+
+        if __name__ == "__main__":
+            raise SystemExit(main())
+
+  - name: Reload systemd after unit install
+    ansible.builtin.systemd:
+      daemon_reload: true
+
+  - name: Ensure all catalogue units disabled (idle until license)
+    ansible.builtin.systemd:
+      name: "{{ item }}"
+      enabled: false
+      state: stopped
+      daemon_reload: true
+    loop:
+      - kevantic-svc-01-log-event.service
+      - kevantic-svc-02-ir-worker.service
+      - kevantic-svc-03-automation.service
+      - kevantic-svc-04-vmaas.service
+      - kevantic-svc-05-compliance.service
+      - kevantic-svc-06-ndr.service
+      - kevantic-svc-07-threat-intel.service
+      - kevantic-svc-08-forensics.service
+      - kevantic-svc-09-easm.service
+      - kevantic-svc-10-itdr.service
+    failed_when: false
+
+  - name: Stage IDLE markers under /opt/kevantic/services
+    ansible.builtin.copy:
+      dest: "/opt/kevantic/services/{{ item }}/IDLE"
+      mode: "0644"
+      content: |
+        installed=true
+        enabled=false
+        enable_via=kevantic-cli license apply
+        worker=/usr/bin/kevantic-engine-worker
+    loop:
+      - 01-log-event
+      - 02-ir-worker
+      - 03-automation
+      - 04-vmaas
+      - 05-compliance
+      - 06-ndr
+      - 07-threat-intel
+      - 08-forensics
+      - 09-easm
+      - 10-itdr

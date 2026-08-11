@@ -1,0 +1,22 @@
+[Unit]
+Description=Kevantic Appliance Engine local job API (loopback)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kevantic
+Group=kevantic
+Environment=PYTHONPATH=/opt/kevantic/appliance-src
+Environment=KEVANTIC_STATE_DIR=/var/lib/kevantic
+Environment=KEVANTIC_LOG_DIR=/var/log/kevantic
+ExecStart=/usr/bin/python3 -m appliance.api.local_app
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

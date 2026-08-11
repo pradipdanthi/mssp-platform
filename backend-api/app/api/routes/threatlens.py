@@ -1,4 +1,4 @@
-"""Junexis ThreatLens + Retrospective Engine APIs (customer + admin)."""
+"""Kevantic ThreatLens + Retrospective Engine APIs (customer + admin)."""
 
 from __future__ import annotations
 
@@ -39,7 +39,7 @@ def _require_threatlens(tenant_id: str) -> None:
         raise HTTPException(
             status_code=403,
             detail=(
-                "Junexis ThreatLens requires Threat Intelligence and/or "
+                "Kevantic ThreatLens requires Threat Intelligence and/or "
                 "Endpoint Forensics entitlement. Request enablement from your MSSP."
             ),
         )

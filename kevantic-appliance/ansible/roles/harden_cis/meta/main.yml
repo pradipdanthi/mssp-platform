@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: harden_cis
+  description: Kevantic appliance role harden_cis (scaffold)
+  license: proprietary
+dependencies: []

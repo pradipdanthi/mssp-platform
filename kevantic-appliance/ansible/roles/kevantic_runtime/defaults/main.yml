@@ -1,0 +1,3 @@
+---
+# Defaults for role kevantic_runtime (scaffold)
+kevantic_runtime_enabled: true

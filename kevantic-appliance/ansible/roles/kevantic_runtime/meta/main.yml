@@ -1,0 +1,6 @@
+---
+galaxy_info:
+  role_name: kevantic_runtime
+  description: Kevantic appliance role kevantic_runtime (scaffold)
+  license: proprietary
+dependencies: []

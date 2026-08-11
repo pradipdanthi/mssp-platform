@@ -49,7 +49,7 @@ def build_pdf_bytes(
     small = ParagraphStyle("Small", parent=body, fontSize=9, leading=12)
 
     story: List[Any] = []
-    story.append(Paragraph("Kestrel Cyber — Monthly Security Report", h1))
+    story.append(Paragraph("Kevantic Cyber Security — Monthly Security Report", h1))
     story.append(Paragraph(title, h2))
     cover = sections.get("cover") or {}
     period = sections.get("period") or {}
@@ -281,4 +281,4 @@ def build_xlsx_bytes(
 
 def export_filename(short_code: str, report_month: str, ext: str) -> str:
     month = str(report_month)[:7].replace("-", "")
-    return f"Kestrel_{short_code}_{month}_Monthly_Report.{ext}"
+    return f"Kevantic_{short_code}_{month}_Monthly_Report.{ext}"

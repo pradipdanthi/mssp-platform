@@ -1,0 +1,15 @@
+[Unit]
+Description=Kevantic appliance heartbeat (health + agent inventory + job pull)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/kevantic/appliance.env
+Environment=PYTHONPATH=/opt/kevantic/cli:/opt/kevantic
+# API key is read from /var/lib/kevantic/secrets/appliance_api_key by kevantic-cli
+ExecStart=/usr/bin/kevantic-cli heartbeat --json
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

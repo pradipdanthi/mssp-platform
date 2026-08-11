@@ -53,7 +53,7 @@ export default function ProcessTreeWidget({ root, message }: Props) {
     return (
       <p className="muted">
         {message ??
-          "No process-creation telemetry found for this incident. This usually means Junexis Endpoint Telemetry / process auditing is not flowing yet — not that the attack had no process chain."}
+          "No process-creation telemetry found for this incident. This usually means Kevantic Endpoint Telemetry / process auditing is not flowing yet — not that the attack had no process chain."}
       </p>
     );
   }

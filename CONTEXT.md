@@ -23,8 +23,8 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | Alert tenant mapping | Fail-closed — Wazuh agent group / binding required (no DEMO default) |
 | Shared TheHive org | `THEHIVE_DEFAULT_ORG` default **`MSSP`** (override in `.env` if existing org name differs) |
 | Cloud | Same architecture; migrate later — do not invent a second product |
-| **Appliance Management (production)** | **VM 114** `junexis-appliance-mgmt` (`192.168.0.224`) — channel/register/heartbeat edge (KB-093L); Admin/Customer + Postgres stay on VM 100 |
-| **Junexis appliance image build** | Disposable Proxmox factory **VM 113** when needed (KB-093F); **destroyed 2026-08-05** — recreate before next ISO build; nested Packer on VM 100 is legacy only |
+| **Appliance Management (production)** | **VM 114** `kevantic-appliance-mgmt` (`192.168.0.224`) — channel/register/heartbeat edge (KB-093L); Admin/Customer + Postgres stay on VM 100 |
+| **Kevantic appliance image build** | Disposable Proxmox factory **VM 113** when needed (KB-093F); **destroyed 2026-08-05** — recreate before next ISO build; nested Packer on VM 100 is legacy only |
 
 **Do not** treat this platform as a lab prototype in planning, user-facing copy, dashboards, or runtime defaults. Lab shortcuts need explicit user acceptance + upgrade plan.
 

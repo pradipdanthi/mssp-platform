@@ -12,7 +12,7 @@ interface LogoProps {
 export default function KestrelTransparentLogo({
   className = "",
   size = 48,
-  title = "Kestrel Cyber",
+  title = "Kevantic Cyber Security",
 }: LogoProps) {
   const uid = useId().replace(/:/g, "");
   const glowId = `falcon-cyan-glow-${uid}`;

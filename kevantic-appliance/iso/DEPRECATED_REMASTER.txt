@@ -1,0 +1,7 @@
+# Deprecated as primary ship path — see docs/KB093N_IMMUTABLE_APPLIANCE_IMAGE_STRATEGY.md
+#
+# This Subiquity remaster mutates root at firstboot and cannot deliver
+# dm-verity / UKI / A/B. Kept only for historical reference until N1 ships.
+#
+# DO NOT use for new customer media. Use:
+#   /opt/mssp-control/kevantic-appliance/mkosi/build.sh

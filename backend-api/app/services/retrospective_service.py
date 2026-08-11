@@ -1,4 +1,4 @@
-"""Junexis Retrospective Engine — dual-route hunt jobs (appliance vs cloud Data Lake)."""
+"""Kevantic Retrospective Engine — dual-route hunt jobs (appliance vs cloud Data Lake)."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from app.services import cloud_datalake
 
 logger = logging.getLogger(__name__)
 
-ENGINE_LABEL = "Junexis Retrospective Engine"
+ENGINE_LABEL = "Kevantic Retrospective Engine"
 
 
 def _active_appliance(tenant_id: str) -> Optional[Dict[str, Any]]:
@@ -317,7 +317,7 @@ def _dispatch_appliance(job: Dict[str, Any], iocs: List[str], lookback: int) -> 
         url,
         data=data,
         method="POST",
-        headers={"Content-Type": "application/json", "User-Agent": "Junexis-SOC/1.0"},
+        headers={"Content-Type": "application/json", "User-Agent": "Kevantic-SOC/1.0"},
     )
     timeout = float(os.getenv("APPLIANCE_HUNT_TIMEOUT_SEC", "12"))
     try:

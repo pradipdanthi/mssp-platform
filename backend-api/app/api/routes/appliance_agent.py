@@ -69,6 +69,7 @@ from app.schemas.appliance_agent import (
     ApplianceJobAckResponse,
     ApplianceRegisterRequest,
     ApplianceRegisterResponse,
+    ApplianceRegistrationAbortResponse,
 )
 from app.services.appliance_auth_service import (
     ApplianceRetiredError,
@@ -241,6 +242,86 @@ def register_appliance(payload: ApplianceRegisterRequest) -> Dict[str, Any]:
         "appliance_api_key": raw_api_key,
         "api_key_hint": api_key_hint,
         "message": "Appliance registered successfully. Store the appliance_api_key securely - it will not be shown again.",
+    }
+
+
+@router.post(
+    "/registration/abort",
+    response_model=ApplianceRegistrationAbortResponse,
+)
+def abort_appliance_registration(
+    x_appliance_id: Optional[str] = Header(default=None, alias="X-Appliance-ID"),
+    x_appliance_api_key: Optional[str] = Header(default=None, alias="X-Appliance-API-Key"),
+) -> Dict[str, Any]:
+    """Retire an appliance that just registered if local secret persistence failed.
+
+    Prevents Admin dashboard ghost rows (registered/online) when kevantic-cli
+    cannot write /var/lib/kevantic or /etc/kevantic after a successful
+    POST /appliance/register. Invalidates the API key so heartbeats stop.
+    Activation token stays consumed — operator must mint a new token to retry.
+    """
+    if not x_appliance_id or not x_appliance_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing appliance credentials",
+        )
+
+    try:
+        appliance_id = str(UUID(x_appliance_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid appliance credentials",
+        )
+
+    try:
+        appliance = verify_appliance_credentials(appliance_id, x_appliance_api_key)
+    except InvalidApplianceCredentialsError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid appliance credentials",
+        )
+    except ApplianceRetiredError:
+        return {
+            "ok": True,
+            "appliance_id": appliance_id,
+            "status": "retired",
+            "message": "Appliance registration already aborted (retired).",
+        }
+
+    with db_transaction() as cur:
+        cur.execute(
+            """
+            UPDATE appliances
+            SET status = 'retired',
+                appliance_api_key_hash = NULL,
+                appliance_api_key_hint = NULL,
+                updated_at = now()
+            WHERE id = %s
+            RETURNING id::text, status;
+            """,
+            (appliance["id"],),
+        )
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to abort appliance registration",
+        )
+
+    logger.info(
+        "Appliance registration aborted after local persist failure appliance_id=%s",
+        appliance_id,
+    )
+    return {
+        "ok": True,
+        "appliance_id": row["id"],
+        "status": row["status"],
+        "message": (
+            "Registration aborted on control plane (retired). "
+            "Mint a new activation token before retrying register."
+        ),
     }
 
 
