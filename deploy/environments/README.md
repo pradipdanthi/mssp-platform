@@ -10,6 +10,19 @@
 | `control-plane.production.example.env` | Production or cloud control plane (hostnames + TLS) |
 | `engines.lab.example.env` | Reference for engine adapter URLs (lab IPs) — merge into `.env` |
 | `engines.production.example.env` | Reference for production engine hostnames |
+| `validation.lab.example.env` | Template for **validator passwords** → copy to `.secrets/validation.env` |
+
+## Validation passwords (so the agent never skips kb011)
+
+Validators need the five **lab demo user** passwords. Store them once (never in git):
+
+```bash
+cp deploy/environments/validation.lab.example.env .secrets/validation.env
+chmod 600 .secrets/validation.env
+# Edit — fill PLATFORM_ADMIN_PASSWORD, SOC_MANAGER_PASSWORD, etc.
+```
+
+After that, `./scripts/run_post_change_checks.sh` and `kb011_validate_protected_apis.sh` run **without prompts** and the agent does not skip auth regression checks.
 
 ## Quick start (lab)
 

@@ -38,8 +38,8 @@ When implementing or fixing anything, **do not stop at “files edited”** — 
 
 1. **Blast radius** — Before editing, note what shares the change (auth, nginx `/api` proxy, entitlements, both portals, Docker service names, migrations).
 2. **Rebuild/restart what changed** — If `backend-api` is recreated, also recreate **both** `frontend-admin` and `frontend-customer` (stale nginx upstream IPs caused customer login 502). Prefer nginx configs that re-resolve Docker DNS (`resolver 127.0.0.11`).
-3. **Smoke checks after deploy** — At minimum: `curl` `/health`; `POST` login via **:3000** and **:3001** `/api/auth/login` (expect 401 with bad password, not 502/405); hit the feature path you changed.
-4. **Regression scripts** — Run the module validator plus `kb011_validate_protected_apis.sh` when auth/API/nginx touched; fix failures before telling the user to test.
+3. **Smoke checks after deploy** — Run `./scripts/production_deploy_control_plane.sh` then `./scripts/run_post_change_checks.sh` (see `.cursor/rules/auto-validate-and-deploy.mdc`). Minimum: `/health`; login **401** on `:3000`/`:3001` (not 502/405).
+4. **Regression scripts** — `run_post_change_checks.sh` picks validators from `git diff`; add `kb011` when auth/API touched; fix failures before telling the user to test.
 5. **If something breaks** — Diagnose and fix in the same session; do not leave the user to discover cross-module breakage.
 6. **Customer portal copy/API** — No third-party engine or scanner product names in `frontend-customer/` or customer API responses; use capability labels (see `customer_safe_labels.py`).
 

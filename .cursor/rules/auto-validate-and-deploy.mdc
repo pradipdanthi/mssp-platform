@@ -1,0 +1,53 @@
+---
+description: After code changes — auto-run deploy smoke + full validation using .secrets/validation.env (no skips).
+alwaysApply: true
+---
+
+# Auto validate and deploy (operator does not remind)
+
+When this session **implements or fixes** control-plane or appliance code (not docs-only Q&A), finish by running checks **yourself** — never stop at “files edited”.
+
+## Lab validation passwords (one-time operator setup)
+
+File: **`/opt/mssp-control/.secrets/validation.env`** (gitignored, chmod 600)
+
+Template: `deploy/environments/validation.lab.example.env`
+
+Five passwords for demo users: `platform.admin`, `soc.manager`, `soc.analyst`, `customer.admin@demo2`, `customer.viewer@demo`.
+
+If missing and kb011 is required: **stop and tell the operator** to create the file (do not skip kb011).
+
+Loader: `scripts/load_validation_credentials.sh` (never print values).
+
+## Control plane code change → always run
+
+```bash
+cd /opt/mssp-control
+./scripts/production_deploy_control_plane.sh
+./scripts/run_post_change_checks.sh
+```
+
+`run_post_change_checks.sh` sources validation.env and runs **kb011** when backend/frontends changed.
+
+## Docs-only change
+
+Skip deploy; run doc/module validator if applicable.
+
+## Validator map
+
+| If you touched | Run |
+|----------------|-----|
+| backend-api / frontends | kb011 (needs validation.env) + deploy smoke |
+| Customer entitlements | kb_validate_customer_entitlement_nav.sh |
+| Service catalog | kb_validate_admin_service_catalog_ops.sh |
+| Appliance forwarder | kb093p_validate_appliance_critical_alert_forward.sh |
+| Deploy pack | kb094_validate_production_portability_pack.sh |
+| Admin frontend | kb018_validate_admin_frontend_foundation.sh |
+
+## Report to operator
+
+State: deploy ran/skipped, each validator PASS/FAIL, whether validation.env was used.
+
+## Commit
+
+Only when user asks. After runtime changes, still run deploy + post_change_checks.

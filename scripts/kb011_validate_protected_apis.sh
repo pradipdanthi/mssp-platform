@@ -7,6 +7,9 @@ BODY_FILE="/tmp/kb011-body.json"
 
 cd "$PROJECT_DIR"
 
+# shellcheck disable=SC1091
+source "$(dirname "$0")/load_validation_credentials.sh"
+
 echo "======================================================================"
 echo "KB-011: Validate Protected /admin/* and /customer/* APIs"
 echo "Target: $PROJECT_DIR"
@@ -104,18 +107,25 @@ check_status "GET /health (public)" 200 "$API_BASE/health"
 check_status "GET /auth/roles (public)" 200 "$API_BASE/auth/roles"
 check_status "GET /docs (public, dev docs)" 200 "$API_BASE/docs"
 
-section "4. Enter demo passwords (input hidden, never logged)"
+section "4. Lab login passwords (from .secrets/validation.env or prompt)"
 
-read -rs -p "Enter the password for platform.admin@example.local: " PLATFORM_ADMIN_PASSWORD
-echo
-read -rs -p "Enter the password for soc.manager@example.local: " SOC_MANAGER_PASSWORD
-echo
-read -rs -p "Enter the password for soc.analyst@example.local: " SOC_ANALYST_PASSWORD
-echo
-read -rs -p "Enter the password for customer.admin@demo2.local: " CUSTOMER_ADMIN_PASSWORD
-echo
-read -rs -p "Enter the password for customer.viewer@demo.local: " CUSTOMER_VIEWER_PASSWORD
-echo
+if validation_creds_complete; then
+  echo "Using credentials from .secrets/validation.env (values not printed)."
+else
+  echo "Tip: copy deploy/environments/validation.lab.example.env to .secrets/validation.env"
+  echo "     so validators run without prompts (chmod 600)."
+  echo
+  [[ -n "${PLATFORM_ADMIN_PASSWORD:-}" ]] || read -rs -p "Enter the password for platform.admin@example.local: " PLATFORM_ADMIN_PASSWORD
+  echo
+  [[ -n "${SOC_MANAGER_PASSWORD:-}" ]] || read -rs -p "Enter the password for soc.manager@example.local: " SOC_MANAGER_PASSWORD
+  echo
+  [[ -n "${SOC_ANALYST_PASSWORD:-}" ]] || read -rs -p "Enter the password for soc.analyst@example.local: " SOC_ANALYST_PASSWORD
+  echo
+  [[ -n "${CUSTOMER_ADMIN_PASSWORD:-}" ]] || read -rs -p "Enter the password for customer.admin@demo2.local: " CUSTOMER_ADMIN_PASSWORD
+  echo
+  [[ -n "${CUSTOMER_VIEWER_PASSWORD:-}" ]] || read -rs -p "Enter the password for customer.viewer@demo.local: " CUSTOMER_VIEWER_PASSWORD
+  echo
+fi
 
 for pw_name in PLATFORM_ADMIN_PASSWORD SOC_MANAGER_PASSWORD SOC_ANALYST_PASSWORD CUSTOMER_ADMIN_PASSWORD CUSTOMER_VIEWER_PASSWORD; do
   [ -n "${!pw_name}" ] || fail "$pw_name cannot be empty."
@@ -140,20 +150,26 @@ login() {
   echo "$response" | jq -r '.access_token'
 }
 
-echo "Logging in as platform_admin..."
-PLATFORM_ADMIN_TOKEN="$(login "platform.admin@example.local" "$PLATFORM_ADMIN_PASSWORD" "platform_admin")"
+PLATFORM_ADMIN_EMAIL="${PLATFORM_ADMIN_EMAIL:-platform.admin@example.local}"
+SOC_MANAGER_EMAIL="${SOC_MANAGER_EMAIL:-soc.manager@example.local}"
+SOC_ANALYST_EMAIL="${SOC_ANALYST_EMAIL:-soc.analyst@example.local}"
+CUSTOMER_ADMIN_EMAIL="${CUSTOMER_ADMIN_EMAIL:-customer.admin@demo2.local}"
+CUSTOMER_VIEWER_EMAIL="${CUSTOMER_VIEWER_EMAIL:-customer.viewer@demo.local}"
 
-echo "Logging in as soc_manager..."
-SOC_MANAGER_TOKEN="$(login "soc.manager@example.local" "$SOC_MANAGER_PASSWORD" "soc_manager")"
+echo "Logging in as platform_admin ($PLATFORM_ADMIN_EMAIL)..."
+PLATFORM_ADMIN_TOKEN="$(login "$PLATFORM_ADMIN_EMAIL" "$PLATFORM_ADMIN_PASSWORD" "platform_admin")"
 
-echo "Logging in as soc_analyst..."
-SOC_ANALYST_TOKEN="$(login "soc.analyst@example.local" "$SOC_ANALYST_PASSWORD" "soc_analyst")"
+echo "Logging in as soc_manager ($SOC_MANAGER_EMAIL)..."
+SOC_MANAGER_TOKEN="$(login "$SOC_MANAGER_EMAIL" "$SOC_MANAGER_PASSWORD" "soc_manager")"
 
-echo "Logging in as customer_admin (tenant DEMO2)..."
-CUSTOMER_ADMIN_TOKEN="$(login "customer.admin@demo2.local" "$CUSTOMER_ADMIN_PASSWORD" "customer_admin")"
+echo "Logging in as soc_analyst ($SOC_ANALYST_EMAIL)..."
+SOC_ANALYST_TOKEN="$(login "$SOC_ANALYST_EMAIL" "$SOC_ANALYST_PASSWORD" "soc_analyst")"
 
-echo "Logging in as customer_viewer (tenant DEMO)..."
-CUSTOMER_VIEWER_TOKEN="$(login "customer.viewer@demo.local" "$CUSTOMER_VIEWER_PASSWORD" "customer_viewer")"
+echo "Logging in as customer_admin ($CUSTOMER_ADMIN_EMAIL)..."
+CUSTOMER_ADMIN_TOKEN="$(login "$CUSTOMER_ADMIN_EMAIL" "$CUSTOMER_ADMIN_PASSWORD" "customer_admin")"
+
+echo "Logging in as customer_viewer ($CUSTOMER_VIEWER_EMAIL)..."
+CUSTOMER_VIEWER_TOKEN="$(login "$CUSTOMER_VIEWER_EMAIL" "$CUSTOMER_VIEWER_PASSWORD" "customer_viewer")"
 
 unset PLATFORM_ADMIN_PASSWORD SOC_MANAGER_PASSWORD SOC_ANALYST_PASSWORD CUSTOMER_ADMIN_PASSWORD CUSTOMER_VIEWER_PASSWORD
 
@@ -205,36 +221,39 @@ CUSTOMER_ENDPOINTS=(
   "/customer/incidents"
 )
 
+CUSTOMER_VIEWER_TENANT="${CUSTOMER_VIEWER_TENANT:-DEMO}"
+CUSTOMER_ADMIN_TENANT="${CUSTOMER_ADMIN_TENANT:-DEMO2}"
+
 for ep in "${CUSTOMER_ENDPOINTS[@]}"; do
-  check_status "GET $ep/DEMO with no token" 401 "$API_BASE$ep/DEMO"
-  check_status "GET $ep/DEMO with garbage token" 401 "$API_BASE$ep/DEMO" "not-a-real-token"
+  check_status "GET $ep/$CUSTOMER_VIEWER_TENANT with no token" 401 "$API_BASE$ep/$CUSTOMER_VIEWER_TENANT"
+  check_status "GET $ep/$CUSTOMER_VIEWER_TENANT with garbage token" 401 "$API_BASE$ep/$CUSTOMER_VIEWER_TENANT" "not-a-real-token"
 done
 
 section "11. /customer/* endpoints - admin/SOC roles get cross-tenant read access"
 
 for ep in "${CUSTOMER_ENDPOINTS[@]}"; do
-  check_status "GET $ep/DEMO as platform_admin (cross-tenant support access)" 200 "$API_BASE$ep/DEMO" "$PLATFORM_ADMIN_TOKEN"
-  check_status "GET $ep/DEMO as soc_manager (cross-tenant support access)" 200 "$API_BASE$ep/DEMO" "$SOC_MANAGER_TOKEN"
-  check_status "GET $ep/DEMO as soc_analyst (cross-tenant support access)" 200 "$API_BASE$ep/DEMO" "$SOC_ANALYST_TOKEN"
-  check_status "GET $ep/DEMO2 as platform_admin (cross-tenant support access)" 200 "$API_BASE$ep/DEMO2" "$PLATFORM_ADMIN_TOKEN"
-  check_status "GET $ep/DEMO2 as soc_manager (cross-tenant support access)" 200 "$API_BASE$ep/DEMO2" "$SOC_MANAGER_TOKEN"
-  check_status "GET $ep/DEMO2 as soc_analyst (cross-tenant support access)" 200 "$API_BASE$ep/DEMO2" "$SOC_ANALYST_TOKEN"
+  check_status "GET $ep/$CUSTOMER_VIEWER_TENANT as platform_admin (cross-tenant support access)" 200 "$API_BASE$ep/$CUSTOMER_VIEWER_TENANT" "$PLATFORM_ADMIN_TOKEN"
+  check_status "GET $ep/$CUSTOMER_VIEWER_TENANT as soc_manager (cross-tenant support access)" 200 "$API_BASE$ep/$CUSTOMER_VIEWER_TENANT" "$SOC_MANAGER_TOKEN"
+  check_status "GET $ep/$CUSTOMER_VIEWER_TENANT as soc_analyst (cross-tenant support access)" 200 "$API_BASE$ep/$CUSTOMER_VIEWER_TENANT" "$SOC_ANALYST_TOKEN"
+  check_status "GET $ep/$CUSTOMER_ADMIN_TENANT as platform_admin (cross-tenant support access)" 200 "$API_BASE$ep/$CUSTOMER_ADMIN_TENANT" "$PLATFORM_ADMIN_TOKEN"
+  check_status "GET $ep/$CUSTOMER_ADMIN_TENANT as soc_manager (cross-tenant support access)" 200 "$API_BASE$ep/$CUSTOMER_ADMIN_TENANT" "$SOC_MANAGER_TOKEN"
+  check_status "GET $ep/$CUSTOMER_ADMIN_TENANT as soc_analyst (cross-tenant support access)" 200 "$API_BASE$ep/$CUSTOMER_ADMIN_TENANT" "$SOC_ANALYST_TOKEN"
 done
 
 section "12. /customer/* endpoints - customer roles may only see their own tenant"
 
 for ep in "${CUSTOMER_ENDPOINTS[@]}"; do
-  echo "12a. customer_viewer (tenant DEMO) on own tenant -> 200"
-  check_status "GET $ep/DEMO as customer_viewer (own tenant)" 200 "$API_BASE$ep/DEMO" "$CUSTOMER_VIEWER_TOKEN"
+  echo "12a. customer_viewer on own tenant -> 200"
+  check_status "GET $ep/$CUSTOMER_VIEWER_TENANT as customer_viewer (own tenant)" 200 "$API_BASE$ep/$CUSTOMER_VIEWER_TENANT" "$CUSTOMER_VIEWER_TOKEN"
 
-  echo "12b. customer_viewer (tenant DEMO) on tenant DEMO2 -> 404, never 403 (anti-enumeration)"
-  check_status "GET $ep/DEMO2 as customer_viewer (wrong tenant, must be 404)" 404 "$API_BASE$ep/DEMO2" "$CUSTOMER_VIEWER_TOKEN"
+  echo "12b. customer_viewer on other tenant -> 404, never 403 (anti-enumeration)"
+  check_status "GET $ep/$CUSTOMER_ADMIN_TENANT as customer_viewer (wrong tenant, must be 404)" 404 "$API_BASE$ep/$CUSTOMER_ADMIN_TENANT" "$CUSTOMER_VIEWER_TOKEN"
 
-  echo "12c. customer_admin (tenant DEMO2) on own tenant -> 200"
-  check_status "GET $ep/DEMO2 as customer_admin (own tenant)" 200 "$API_BASE$ep/DEMO2" "$CUSTOMER_ADMIN_TOKEN"
+  echo "12c. customer_admin on own tenant -> 200"
+  check_status "GET $ep/$CUSTOMER_ADMIN_TENANT as customer_admin (own tenant)" 200 "$API_BASE$ep/$CUSTOMER_ADMIN_TENANT" "$CUSTOMER_ADMIN_TOKEN"
 
-  echo "12d. customer_admin (tenant DEMO2) on tenant DEMO -> 404, never 403 (anti-enumeration)"
-  check_status "GET $ep/DEMO as customer_admin (wrong tenant, must be 404)" 404 "$API_BASE$ep/DEMO" "$CUSTOMER_ADMIN_TOKEN"
+  echo "12d. customer_admin on other tenant -> 404, never 403 (anti-enumeration)"
+  check_status "GET $ep/$CUSTOMER_VIEWER_TENANT as customer_admin (wrong tenant, must be 404)" 404 "$API_BASE$ep/$CUSTOMER_VIEWER_TENANT" "$CUSTOMER_ADMIN_TOKEN"
 done
 
 section "13. Anti-enumeration sanity check: nonexistent tenant looks identical to wrong tenant"
