@@ -227,16 +227,18 @@ jq -e '
   and .marketingDomain == "kevantic.com"
   and (.documentTitle | test("Kevantic Cyber Security"))
   and (.logo.markSrc | test("kevantic-mark"))
-  and (.logo.logoSrc | test("kevantic-horizontal-lockup|kevantic-logo"))
+  and (.logo.logoSrc | test("kevantic-horizontal"))
 ' "$BODY_FILE" >/dev/null \
   || fail "app-config.json is missing required Kevantic Cyber Security branding fields"
 echo "OK: app-config.json contains Kevantic domains (admin.kevantic.com, portal.kevantic.com, soc@kevantic.com)."
 
 curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-mark.svg" \
   || fail "GET $FRONTEND_BASE/brand/kevantic-mark.svg failed"
-curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-horizontal-lockup.svg" \
-  || fail "GET $FRONTEND_BASE/brand/kevantic-horizontal-lockup.svg failed"
-echo "OK: both brand SVG assets are served by the frontend."
+curl -fsS -o /dev/null "$FRONTEND_BASE/brand/kevantic-horizontal.svg" \
+  || fail "GET $FRONTEND_BASE/brand/kevantic-horizontal.svg failed"
+curl -fsS -o /dev/null "$FRONTEND_BASE/brand/favicon.svg" \
+  || fail "GET $FRONTEND_BASE/brand/favicon.svg failed"
+echo "OK: locked brand SVG assets are served by the frontend."
 
 # Source/UI must not hardcode the retired product brand string.
 if grep -RIn --exclude-dir=node_modules --exclude-dir=dist 'MSSP Control Plane' frontend-admin/src frontend-admin/index.html 2>/dev/null; then

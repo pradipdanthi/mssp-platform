@@ -4,7 +4,12 @@
    ============================================================================= */
 
 :root {
-  /* --- Brand & surfaces (Kevantic cosmic palette) --- */
+  /* --- Brand & surfaces (Kevantic cosmic palette + locked kit tokens) --- */
+  --kevantic-midnight-obsidian: #0B132B;
+  --kevantic-cosmic-platinum: #D6E2E9;
+  --kevantic-steel-cyber-blue: #3A506B;
+  --kevantic-network-blue: #79A9D1;
+  --kevantic-display-cyber-blue: #5F86AE;
   --soc-canvas: #0B132B;
   --soc-surface: #1C2541;
   --soc-surface-raised: #1C2541;
@@ -162,41 +167,45 @@ svg.kestrel-apex-logo {
   overflow: visible;
 }
 
-/* Full falcon/shield — never crop the tail; large, crisp sidebar mark */
-img.kestrel-falcon-shield-logo {
+/* Locked Kevantic brand — no filters/glow/shadow on artwork */
+img.kestrel-falcon-shield-logo,
+img.kevantic-shield-logo,
+img.kevantic-lockup,
+img.kevantic-brand-logo,
+img.kevantic-brand-mark {
   display: block;
   flex-shrink: 0;
-  width: 132px;
   height: auto;
   max-height: none;
   object-fit: contain;
   object-position: center;
   background: transparent;
   border: none;
-  /* Inner pad so shield rim / wing tips are never clipped by layout or glow */
-  padding: 10px;
+  border-radius: 0;
+  padding: 0;
   box-sizing: content-box;
   overflow: visible;
   image-rendering: auto;
-  -webkit-font-smoothing: antialiased;
-  filter:
-    drop-shadow(0 0 8px rgba(214, 226, 233, 0.28))
-    drop-shadow(0 0 16px rgba(214, 226, 233, 0.12))
-    brightness(1.05)
-    contrast(1.06)
-    saturate(1.05);
+  filter: none;
+  box-shadow: none;
 }
 
-img.kestrel-falcon-shield-logo.sidebar-brand-logo {
-  width: 118px;
-  min-width: 118px;
-  height: auto;
-  padding: 10px;
+img.kevantic-brand-logo.sidebar-brand-logo,
+img.kevantic-shield-logo.sidebar-brand-logo,
+img.kevantic-lockup.sidebar-brand-logo {
+  width: clamp(168px, 78%, 210px);
+  max-width: 100%;
+  min-width: 0;
 }
 
-img.kestrel-falcon-shield-logo.login-brand-logo {
-  width: 148px;
-  height: auto;
+img.kevantic-brand-logo.login-brand-logo,
+img.kevantic-shield-logo.login-brand-logo {
+  width: min(280px, 88vw);
+  max-width: 100%;
+}
+
+img.kevantic-brand-mark {
+  width: 40px;
 }
 
 .sidebar-brand {
@@ -2706,6 +2715,11 @@ button.command-chip {
   text-transform: uppercase;
   margin-bottom: 10px;
 }
+.mitre-empty-note {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted, #94a3b8);
+}
 .mitre-legend-list {
   list-style: none;
   margin: 0;
@@ -3484,22 +3498,27 @@ button.command-chip {
   text-align: center;
 }
 
-img.kevantic-shield-logo.login-brand-logo {
-  width: min(320px, 88vw);
+img.kevantic-shield-logo.login-brand-logo,
+img.kevantic-brand-logo.login-brand-logo {
+  width: min(280px, 88vw);
   max-width: 100%;
   height: auto;
-  border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  border-radius: 0;
+  box-shadow: none;
+  filter: none;
 }
 
 img.kevantic-shield-logo.sidebar-brand-logo,
-img.kevantic-lockup.sidebar-brand-logo {
-  width: 220px;
+img.kevantic-lockup.sidebar-brand-logo,
+img.kevantic-brand-logo.sidebar-brand-logo {
+  width: clamp(168px, 78%, 210px);
   max-width: 100%;
   min-width: 0;
   height: auto;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0;
+  filter: none;
+  box-shadow: none;
 }
 
 .sidebar-brand {
@@ -3508,4 +3527,132 @@ img.kevantic-lockup.sidebar-brand-logo {
   align-items: stretch;
   gap: 10px;
   padding: 16px 14px 12px;
+}
+
+/* Admin Service Catalog — ops controls (pricing / rollout / request pulse) */
+.catalog-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.5rem 0 0.25rem;
+}
+.catalog-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.btn.is-active-filter {
+  border-color: rgba(214, 226, 233, 0.55);
+  color: #e2eafc;
+  background: rgba(58, 80, 107, 0.45);
+}
+.catalog-open-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid rgba(251, 113, 133, 0.45);
+  background: rgba(190, 18, 60, 0.18);
+  color: #fecdd3;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+.service-card-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+.service-request-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(251, 113, 133, 0.65);
+  background: rgba(190, 18, 60, 0.28);
+  color: #fecdd3;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  animation: request-badge-pulse 1.4s ease-in-out infinite;
+}
+.request-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fb7185;
+  box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.7);
+  animation: request-dot-ping 1.4s ease-out infinite;
+}
+@keyframes request-badge-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.25); }
+}
+@keyframes request-dot-ping {
+  0% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0.7); }
+  70% { box-shadow: 0 0 0 8px rgba(251, 113, 133, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(251, 113, 133, 0); }
+}
+.service-card--has-requests {
+  border-color: rgba(251, 113, 133, 0.35);
+}
+.service-card-meta {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+.service-request-list {
+  border-top: 1px solid rgba(58, 80, 107, 0.55);
+  padding-top: 0.55rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.service-request-list-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #8b9bb4;
+  font-weight: 650;
+}
+.service-request-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(11, 19, 43, 0.55);
+  border: 1px solid rgba(58, 80, 107, 0.45);
+  font-size: 0.8rem;
+  color: #d6e2e9;
+}
+.service-request-row:hover {
+  border-color: rgba(214, 226, 233, 0.35);
+}
+.modal-panel--wide {
+  max-width: min(640px, 94vw);
+}
+.rollout-tenant-list {
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid rgba(58, 80, 107, 0.55);
+  border-radius: 8px;
+  padding: 0.45rem;
+  background: rgba(11, 19, 43, 0.45);
+}
+.rollout-tenant-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.35rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+.rollout-tenant-row:hover {
+  background: rgba(58, 80, 107, 0.25);
 }

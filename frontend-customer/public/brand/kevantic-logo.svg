@@ -1,122 +1,62 @@
-<!-- kevantic-horizontal-lockup.svg -->
-<svg
-  xmlns="http://www.w3.org/2000/svg"
-  viewBox="0 0 800 300"
-  width="800"
-  height="300"
-  role="img"
-  aria-labelledby="kevanticTitle kevanticDesc"
->
-  <title id="kevanticTitle">Kevantic Cyber Security Horizontal Lockup</title>
-  <desc id="kevanticDesc">
-    Symmetrical shield matrix icon with geometric network nodes forming a stylized K,
-    paired with the KEVANTIC wordmark.
-  </desc>
-
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- kevantic-horizontal.svg | Brand master v1.1 | All lettering is vector geometry. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 300" role="img" aria-labelledby="title desc">
+  <title id="title">Kevantic Cyber Security</title>
+  <desc id="desc">Kevantic shield matrix with custom KEVANTIC wordmark and Cyber Security subline.</desc>
   <defs>
-    <style>
-      .shield,
-      .network {
-        fill: none;
-        stroke: #D6E2E9;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-
-      .shield {
-        stroke-width: 8;
-      }
-
-      .network {
-        stroke-width: 2.4;
-      }
-
-      .node {
-        fill: #3A506B;
-        stroke: #D6E2E9;
-        stroke-width: 2;
-      }
-
-      .wordmark {
-        fill: #D6E2E9;
-        font-family: Inter, "JetBrains Mono", "Segoe UI", Arial, sans-serif;
-        font-size: 68px;
-        font-weight: 700;
-        letter-spacing: 8px;
-      }
-    </style>
-  </defs>
-
-  <!-- Midnight Obsidian Canvas -->
-  <rect width="800" height="300" fill="#0B132B"/>
-
-  <!-- Shield Matrix Icon -->
+  <linearGradient id="kevantic-platinum" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#F8FAFB"/>
+    <stop offset="0.36" stop-color="#D6E2E9"/>
+    <stop offset="0.62" stop-color="#AEBBC4"/>
+    <stop offset="1" stop-color="#EEF3F6"/>
+  </linearGradient>
+</defs>
   <g id="kevantic-shield">
-
-    <!-- Symmetrical Vanguard Shield -->
-    <path
-      class="shield"
-      d="
-        M160 35
-        L185 56
-        L232 78
-        V166
-        L213 199
-        L160 252
-        L107 199
-        L88 166
-        V78
-        L135 56
-        Z
-      "
-    />
-
-    <!-- Internal Network Matrix -->
-    <g class="network">
-      <!-- Central spine -->
-      <line x1="160" y1="58" x2="160" y2="226"/>
-
-      <!-- Left vertical -->
-      <line x1="116" y1="101" x2="116" y2="199"/>
-
-      <!-- Top horizontal -->
-      <line x1="116" y1="101" x2="204" y2="101"/>
-
-      <!-- Middle horizontal -->
-      <line x1="116" y1="150" x2="160" y2="150"/>
-
-      <!-- Bottom horizontal -->
-      <line x1="116" y1="199" x2="204" y2="199"/>
-
-      <!-- K upper diagonals -->
-      <line x1="116" y1="150" x2="160" y2="101"/>
-      <line x1="160" y1="150" x2="204" y2="101"/>
-
-      <!-- K lower diagonals -->
-      <line x1="116" y1="150" x2="160" y2="199"/>
-      <line x1="160" y1="150" x2="204" y2="199"/>
-    </g>
-
-    <!-- Data Nodes -->
-    <g id="network-nodes">
-      <circle class="node" cx="116" cy="101" r="7"/>
-      <circle class="node" cx="160" cy="101" r="7"/>
-      <circle class="node" cx="204" cy="101" r="7"/>
-
-      <circle class="node" cx="116" cy="150" r="7"/>
-      <circle class="node" cx="160" cy="150" r="7"/>
-
-      <circle class="node" cx="116" cy="199" r="7"/>
-      <circle class="node" cx="160" cy="199" r="7"/>
-      <circle class="node" cx="204" cy="199" r="7"/>
-    </g>
+  <path
+    d="M140 28 L160 47 L220 76 V171 L203 202 L140 270 L77 202 L60 171 V76 L120 47 Z"
+    fill="none"
+    stroke="url(#kevantic-platinum)"
+    stroke-width="9"
+    stroke-linejoin="miter"
+  />
+  <g fill="none" stroke="#79A9D1" stroke-width="2.4" stroke-linecap="round">
+    <line x1="140" y1="52" x2="140" y2="247"/>
+    <line x1="95" y1="96" x2="95" y2="204"/>
+    <line x1="95" y1="96" x2="185" y2="96"/>
+    <line x1="95" y1="150" x2="140" y2="150"/>
+    <line x1="95" y1="204" x2="185" y2="204"/>
+    <line x1="95" y1="150" x2="140" y2="96"/>
+    <line x1="140" y1="150" x2="185" y2="96"/>
+    <line x1="95" y1="150" x2="140" y2="204"/>
+    <line x1="140" y1="150" x2="185" y2="204"/>
   </g>
-
-  <!-- KEVANTIC Wordmark -->
-  <text
-    class="wordmark"
-    x="285"
-    y="151"
-    dominant-baseline="middle"
-  >KEVANTIC</text>
+  <g fill="#3A506B" stroke="#D6E2E9" stroke-width="2">
+    <circle cx="95" cy="96" r="7"/>
+    <circle cx="140" cy="96" r="7"/>
+    <circle cx="185" cy="96" r="7"/>
+    <circle cx="95" cy="150" r="7"/>
+    <circle cx="140" cy="150" r="7"/>
+    <circle cx="95" cy="204" r="7"/>
+    <circle cx="140" cy="204" r="7"/>
+    <circle cx="185" cy="204" r="7"/>
+  </g>
+</g>
+  <g id="kevantic-wordmark">
+  <path d="M380.31,135.10 L380.31,179.34 L454.04,179.34 L454.04,165.21 L398.74,165.21 L398.13,164.59 L395.67,165.21 L394.44,160.91 L395.06,149.85 L395.67,149.23 L447.89,149.23 L447.89,135.10 Z M873.65,109.30 L869.96,113.60 L867.50,120.97 L867.50,163.36 L868.73,168.28 L870.58,171.97 L874.88,176.27 L882.86,179.34 L939.39,179.34 L939.39,165.21 L888.39,165.21 L885.32,163.98 L882.86,161.52 L882.25,159.68 L882.25,124.66 L885.32,120.36 L886.55,119.74 L939.39,119.74 L939.39,105.00 L882.86,105.00 L877.33,106.84 Z M834.94,105.00 L834.94,179.34 L849.69,179.34 L849.69,105.00 Z M744.02,105.00 L744.02,119.13 L744.63,119.74 L773.51,119.74 L774.12,120.36 L774.12,179.34 L788.25,179.34 L788.25,173.19 L788.87,172.58 L788.87,169.51 L788.25,168.89 L788.25,120.36 L788.87,119.74 L818.97,119.74 L818.97,105.00 Z M651.25,105.00 L651.25,179.34 L665.99,179.34 L665.99,127.73 L666.61,127.12 L711.46,179.34 L728.04,179.34 L728.04,105.61 L727.43,105.00 L713.30,105.00 L713.30,157.22 L712.68,157.84 L667.84,105.00 Z M584.28,105.00 L549.26,179.34 L565.24,179.34 L565.85,178.72 L565.85,177.50 L574.45,160.29 L574.45,159.06 L593.50,120.36 L597.80,127.73 L597.80,128.96 L602.71,138.18 L602.71,139.40 L607.01,147.39 L607.01,148.62 L616.23,167.05 L621.76,179.34 L637.73,179.34 L602.71,105.00 Z M466.94,105.00 L466.94,106.23 L489.05,152.92 L489.05,154.15 L493.97,163.36 L500.73,179.34 L520.39,179.34 L556.02,105.00 L539.43,105.00 L536.36,112.37 L518.54,148.62 L513.63,160.29 L510.56,165.21 L482.30,105.00 Z M380.31,105.00 L380.31,119.74 L454.04,119.74 L454.04,105.00 Z M290.00,105.00 L290.00,179.34 L305.36,179.34 L305.36,149.23 L305.97,148.62 L343.45,179.34 L364.95,179.34 L320.72,142.48 L326.25,136.95 L364.34,105.00 L342.22,105.00 L305.97,135.72 L305.36,135.10 L305.36,105.00 Z" fill="url(#kevantic-platinum)" fill-rule="evenodd"/>
+</g>
+  <g id="kevantic-tagline" aria-label="Cyber Security">
+<path d="M792 1274Q558 1274 428.0 1123.5Q298 973 298 711Q298 452 433.5 294.5Q569 137 800 137Q1096 137 1245 430L1401 352Q1314 170 1156.5 75.0Q999 -20 791 -20Q578 -20 422.5 68.5Q267 157 185.5 321.5Q104 486 104 711Q104 1048 286.0 1239.0Q468 1430 790 1430Q1015 1430 1166.0 1342.0Q1317 1254 1388 1081L1207 1021Q1158 1144 1049.5 1209.0Q941 1274 792 1274Z" transform="translate(294.00 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M777 584V0H587V584L45 1409H255L684 738L1111 1409H1321Z" transform="translate(345.78 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M1258 397Q1258 209 1121.0 104.5Q984 0 740 0H168V1409H680Q1176 1409 1176 1067Q1176 942 1106.0 857.0Q1036 772 908 743Q1076 723 1167.0 630.5Q1258 538 1258 397ZM984 1044Q984 1158 906.0 1207.0Q828 1256 680 1256H359V810H680Q833 810 908.5 867.5Q984 925 984 1044ZM1065 412Q1065 661 715 661H359V153H730Q905 153 985.0 218.0Q1065 283 1065 412Z" transform="translate(395.12 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M168 0V1409H1237V1253H359V801H1177V647H359V156H1278V0Z" transform="translate(444.47 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M1164 0 798 585H359V0H168V1409H831Q1069 1409 1198.5 1302.5Q1328 1196 1328 1006Q1328 849 1236.5 742.0Q1145 635 984 607L1384 0ZM1136 1004Q1136 1127 1052.5 1191.5Q969 1256 812 1256H359V736H820Q971 736 1053.5 806.5Q1136 877 1136 1004Z" transform="translate(493.82 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M1272 389Q1272 194 1119.5 87.0Q967 -20 690 -20Q175 -20 93 338L278 375Q310 248 414.0 188.5Q518 129 697 129Q882 129 982.5 192.5Q1083 256 1083 379Q1083 448 1051.5 491.0Q1020 534 963.0 562.0Q906 590 827.0 609.0Q748 628 652 650Q485 687 398.5 724.0Q312 761 262.0 806.5Q212 852 185.5 913.0Q159 974 159 1053Q159 1234 297.5 1332.0Q436 1430 694 1430Q934 1430 1061.0 1356.5Q1188 1283 1239 1106L1051 1073Q1020 1185 933.0 1235.5Q846 1286 692 1286Q523 1286 434.0 1230.0Q345 1174 345 1063Q345 998 379.5 955.5Q414 913 479.0 883.5Q544 854 738 811Q803 796 867.5 780.5Q932 765 991.0 743.5Q1050 722 1101.5 693.0Q1153 664 1191.0 622.0Q1229 580 1250.5 523.0Q1272 466 1272 389Z" transform="translate(577.82 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M168 0V1409H1237V1253H359V801H1177V647H359V156H1278V0Z" transform="translate(627.17 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M792 1274Q558 1274 428.0 1123.5Q298 973 298 711Q298 452 433.5 294.5Q569 137 800 137Q1096 137 1245 430L1401 352Q1314 170 1156.5 75.0Q999 -20 791 -20Q578 -20 422.5 68.5Q267 157 185.5 321.5Q104 486 104 711Q104 1048 286.0 1239.0Q468 1430 790 1430Q1015 1430 1166.0 1342.0Q1317 1254 1388 1081L1207 1021Q1158 1144 1049.5 1209.0Q941 1274 792 1274Z" transform="translate(676.51 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M731 -20Q558 -20 429.0 43.0Q300 106 229.0 226.0Q158 346 158 512V1409H349V528Q349 335 447.0 235.0Q545 135 730 135Q920 135 1025.5 238.5Q1131 342 1131 541V1409H1321V530Q1321 359 1248.5 235.0Q1176 111 1043.5 45.5Q911 -20 731 -20Z" transform="translate(728.29 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M1164 0 798 585H359V0H168V1409H831Q1069 1409 1198.5 1302.5Q1328 1196 1328 1006Q1328 849 1236.5 742.0Q1145 635 984 607L1384 0ZM1136 1004Q1136 1127 1052.5 1191.5Q969 1256 812 1256H359V736H820Q971 736 1053.5 806.5Q1136 877 1136 1004Z" transform="translate(780.06 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M189 0V1409H380V0Z" transform="translate(831.84 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M720 1253V0H530V1253H46V1409H1204V1253Z" transform="translate(864.06 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+<path d="M777 584V0H587V584L45 1409H255L684 738L1111 1409H1321Z" transform="translate(910.94 238.00) scale(0.021484 -0.021484)" fill="#6F9CC8"/>
+</g>
 </svg>

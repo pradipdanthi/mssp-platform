@@ -112,17 +112,42 @@ select {
 
 .brand-mark { display: none; }
 
-.brand-logo {
-  height: 52px;
-  width: auto;
-  max-width: 188px;
+.brand-logo,
+.kevantic-brand-logo {
   display: block;
+  width: clamp(160px, 13vw, 220px);
+  height: auto;
+  max-width: 220px;
+  object-fit: contain;
+  flex: 0 0 auto;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  filter: none;
 }
 
-@media (max-width: 720px) {
-  .brand-logo {
-    height: 42px;
-    max-width: 148px;
+.brand-logo-mark,
+.kevantic-brand-mark {
+  display: none;
+  width: 40px;
+  height: auto;
+  object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .brand-logo,
+  .kevantic-brand-logo {
+    width: clamp(145px, 42vw, 180px);
+  }
+}
+
+@media (max-width: 380px) {
+  .brand-logo-full {
+    display: none;
+  }
+  .brand-logo-mark,
+  .kevantic-brand-mark {
+    display: block;
   }
 }
 

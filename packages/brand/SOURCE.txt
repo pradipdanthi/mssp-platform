@@ -1,0 +1,5 @@
+Kevantic Brand Kit v1.1.0
+Installed from: /opt/mssp-control/kevantic-brand-kit-v1.1/kevantic-brand-kit-v1.1
+Installed at: 2026-08-12T00:41:17+05:30
+Primary logo: kevantic-horizontal.svg
+Note: CYBER SECURITY subline geometry corrected inside SVG (~2x). Do not restyle with CSS/HTML.

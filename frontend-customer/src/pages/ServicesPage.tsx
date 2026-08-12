@@ -5,6 +5,7 @@ import {
   ConsultationRequest,
   CustomerEntitlements,
   createConsultationRequest,
+  getCustomerCatalogPricing,
   getCustomerEntitlements,
   listConsultationRequests,
 } from "../api/customer";
@@ -38,6 +39,9 @@ export default function ServicesPage() {
   const shortCode = user?.tenant_short_code ?? "";
   const [ent, setEnt] = useState<CustomerEntitlements | null>(null);
   const [requests, setRequests] = useState<ConsultationRequest[]>([]);
+  const [pricingByKey, setPricingByKey] = useState<
+    Record<string, { pricing_display: string; competitor_value?: string | null }>
+  >({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeItem, setActiveItem] = useState<ServiceCatalogItem | null>(null);
@@ -48,10 +52,26 @@ export default function ServicesPage() {
 
   function refresh() {
     if (!shortCode) return;
-    Promise.all([getCustomerEntitlements(shortCode), listConsultationRequests(shortCode)])
-      .then(([e, r]) => {
+    Promise.all([
+      getCustomerEntitlements(shortCode),
+      listConsultationRequests(shortCode),
+      getCustomerCatalogPricing().catch(() => ({ pricing: [] as Array<{
+        service_key: string;
+        pricing_display: string;
+        competitor_value?: string | null;
+      }> })),
+    ])
+      .then(([e, r, p]) => {
         setEnt(e);
         setRequests(r.requests || []);
+        const map: Record<string, { pricing_display: string; competitor_value?: string | null }> = {};
+        for (const row of p.pricing || []) {
+          map[row.service_key] = {
+            pricing_display: row.pricing_display,
+            competitor_value: row.competitor_value,
+          };
+        }
+        setPricingByKey(map);
         setError(null);
       })
       .catch((err) => {
@@ -109,7 +129,7 @@ export default function ServicesPage() {
       await createConsultationRequest(shortCode, {
         service_key: activeItem.serviceKey,
         service_name: activeItem.name,
-        pricing_tier: activeItem.pricing,
+        pricing_tier: pricingByKey[activeItem.serviceKey]?.pricing_display || activeItem.pricing,
         endpoint_count: form.endpoint_count ? Number(form.endpoint_count) : null,
         m365_seat_count: form.m365_seat_count ? Number(form.m365_seat_count) : null,
         target_domains: domains,
@@ -155,8 +175,10 @@ export default function ServicesPage() {
                   </span>
                 </div>
                 <div className="service-pricing">
-                  <strong>{item.pricing}</strong>
-                  <span className="service-pricing-comp">{item.competitorValue}</span>
+                  <strong>{pricingByKey[item.serviceKey]?.pricing_display || item.pricing}</strong>
+                  <span className="service-pricing-comp">
+                    {pricingByKey[item.serviceKey]?.competitor_value || item.competitorValue}
+                  </span>
                 </div>
                 <p className="service-card-summary">
                   <strong>What it achieves.</strong> {item.achieves}

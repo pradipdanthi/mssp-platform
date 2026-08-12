@@ -1,0 +1,31 @@
+/* Kevantic Cyber Security — Brand Tokens v1.0
+   Keep these values synchronized across Public, Admin, and Customer applications. */
+
+:root {
+  --kevantic-midnight-obsidian: #0B132B;
+  --kevantic-cosmic-platinum: #D6E2E9;
+  --kevantic-steel-cyber-blue: #3A506B;
+  --kevantic-network-blue: #79A9D1;
+  --kevantic-display-cyber-blue: #5F86AE;
+}
+
+.kevantic-brand-logo {
+  display: block;
+  width: clamp(160px, 13vw, 220px);
+  height: auto;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.kevantic-brand-mark {
+  display: block;
+  width: 40px;
+  height: auto;
+  object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .kevantic-brand-logo {
+    width: clamp(145px, 42vw, 180px);
+  }
+}

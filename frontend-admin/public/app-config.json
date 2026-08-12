@@ -9,11 +9,11 @@
   "portalDomain": "portal.kevantic.com",
   "adminDomain": "admin.kevantic.com",
   "marketingDomain": "kevantic.com",
-  "footerCopyright": "© 2026 Kevantic Cyber Security Private Limited. All rights reserved.",
+  "footerCopyright": "\u00a9 2026 Kevantic Cyber Security Private Limited. All rights reserved.",
   "documentTitle": "Kevantic Cyber Security Control Plane - Admin",
   "logo": {
-    "markSrc": "/brand/kevantic-mark.svg",
-    "logoSrc": "/brand/kevantic-horizontal-lockup.svg",
+    "markSrc": "/brand/kevantic-mark.svg?v=1.1.0",
+    "logoSrc": "/brand/kevantic-horizontal.svg?v=1.1.0",
     "alt": "Kevantic Cyber Security"
   }
 }

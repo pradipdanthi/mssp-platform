@@ -38,9 +38,9 @@ export default function Layout({ children }: { children: ReactNode }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <KestrelFalconShieldLogo
-            size={220}
+            size={200}
             className="sidebar-brand-logo"
-            title={brand.productName}
+            title="Kevantic Cyber Security"
           />
           <div className="sidebar-brand-copy">
             <span className="sidebar-brand-portal">{brand.portalName}</span>

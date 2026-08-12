@@ -1,0 +1,29 @@
+{
+  "brand": "Kevantic Cyber Security",
+  "version": "1.1.0",
+  "master_background": "#0B132B",
+  "primary": "#D6E2E9",
+  "steel_cyber_blue": "#3A506B",
+  "network_blue": "#79A9D1",
+  "display_cyber_blue": "#6F9CC8",
+  "assets": {
+    "primary_horizontal": "kevantic-horizontal.svg",
+    "horizontal_dark": "kevantic-horizontal-dark.svg",
+    "wordmark": "kevantic-wordmark.svg",
+    "mark": "kevantic-mark.svg",
+    "favicon_svg": "favicon.svg",
+    "favicon_ico": "favicon.ico",
+    "apple_touch": "apple-touch-icon-180.png",
+    "app_icon": "app-icon-512.png",
+    "social_preview": "kevantic-og-1200x630.png"
+  },
+  "rules": [
+    "Never recreate KEVANTIC using HTML/CSS text.",
+    "Never substitute a font for the corporate wordmark.",
+    "Never modify path geometry in the approved SVG assets.",
+    "Preserve aspect ratio with width plus height:auto.",
+    "Use horizontal logo in expanded navigation and login surfaces.",
+    "Use shield mark only in collapsed navigation and compact app anchors."
+  ],
+  "change_note": "CYBER SECURITY subline enlarged approximately 2x for header/dashboard legibility."
+}

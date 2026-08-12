@@ -2,7 +2,7 @@ import { useBrand } from "../../config/BrandContext";
 
 interface Props {
   className?: string;
-  /** Display width in px; height follows the lockup aspect ratio (800×300). */
+  /** Display width in px; height follows the locked SVG aspect ratio. */
   size?: number;
   title?: string;
   /** "logo" = horizontal lockup (default); "mark" = shield-only. */
@@ -10,26 +10,29 @@ interface Props {
 }
 
 /**
- * Kevantic brand graphic — horizontal lockup by default (app-config logoSrc).
+ * Locked Kevantic brand graphic from packages/brand (via public/brand + app-config).
+ * Never reconstruct the wordmark with HTML/CSS text.
  */
 export default function KestrelFalconShieldLogo({
   className = "",
-  size = 220,
+  size = 200,
   title,
   variant = "logo",
 }: Props) {
   const brand = useBrand();
-  const alt = title ?? brand.logo.alt;
+  const alt = title ?? brand.logo.alt ?? "Kevantic Cyber Security";
   const src = variant === "mark" ? brand.logo.markSrc : brand.logo.logoSrc;
+  const width = variant === "mark" ? Math.min(size, 48) : size;
 
   return (
     <img
       src={src}
-      alt={alt}
-      width={size}
-      className={`kevantic-shield-logo kevantic-lockup ${className}`.trim()}
+      alt={variant === "mark" && className.includes("decorative") ? "" : alt}
+      width={width}
+      className={`kevantic-shield-logo kevantic-lockup ${variant === "mark" ? "kevantic-brand-mark" : "kevantic-brand-logo"} ${className}`.trim()}
       draggable={false}
       decoding="async"
+      style={{ height: "auto", objectFit: "contain" }}
     />
   );
 }

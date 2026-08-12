@@ -1,5 +1,10 @@
 :root {
   /* Premium SOC palette — colour tokens only; layout unchanged */
+  --kevantic-midnight-obsidian: #0B132B;
+  --kevantic-cosmic-platinum: #D6E2E9;
+  --kevantic-steel-cyber-blue: #3A506B;
+  --kevantic-network-blue: #79A9D1;
+  --kevantic-display-cyber-blue: #5F86AE;
   --soc-canvas: #0B132B;
   --soc-surface: #1C2541;
   --soc-surface-raised: #1C2541;
@@ -131,40 +136,45 @@ svg.kestrel-apex-logo {
   overflow: visible;
 }
 
-/* Full falcon/shield — tight high-res crop; large, crisp sidebar mark */
-img.kestrel-falcon-shield-logo {
+/* Locked Kevantic brand — no filters/glow/shadow on artwork */
+img.kestrel-falcon-shield-logo,
+img.kevantic-shield-logo,
+img.kevantic-lockup,
+img.kevantic-brand-logo,
+img.kevantic-brand-mark {
   display: block;
   flex-shrink: 0;
-  width: 132px;
   height: auto;
   max-height: none;
   object-fit: contain;
   object-position: center;
   background: transparent;
   border: none;
-  padding: 10px;
+  border-radius: 0;
+  padding: 0;
   box-sizing: content-box;
   overflow: visible;
   image-rendering: auto;
-  -webkit-font-smoothing: antialiased;
-  filter:
-    drop-shadow(0 0 8px rgba(214, 226, 233, 0.28))
-    drop-shadow(0 0 16px rgba(214, 226, 233, 0.12))
-    brightness(1.05)
-    contrast(1.06)
-    saturate(1.05);
+  filter: none;
+  box-shadow: none;
 }
 
-img.kestrel-falcon-shield-logo.sidebar-brand-logo {
-  width: 118px;
-  min-width: 118px;
-  height: auto;
-  padding: 10px;
+img.kevantic-brand-logo.sidebar-brand-logo,
+img.kevantic-shield-logo.sidebar-brand-logo,
+img.kevantic-lockup.sidebar-brand-logo {
+  width: clamp(168px, 78%, 210px);
+  max-width: 100%;
+  min-width: 0;
 }
 
-img.kestrel-falcon-shield-logo.login-brand-logo {
-  width: 148px;
-  height: auto;
+img.kevantic-brand-logo.login-brand-logo,
+img.kevantic-shield-logo.login-brand-logo {
+  width: min(280px, 88vw);
+  max-width: 100%;
+}
+
+img.kevantic-brand-mark {
+  width: 40px;
 }
 
 .sidebar-brand {
@@ -653,6 +663,17 @@ img.kestrel-master-logo--full {
   color: var(--text-muted);
   margin: 0 0 24px;
   font-size: 0.9rem;
+}
+
+.entitlement-gate {
+  max-width: 36rem;
+}
+
+.entitlement-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
 }
 
 .section-title {
@@ -3329,22 +3350,27 @@ button.command-chip {
   text-align: center;
 }
 
-img.kevantic-shield-logo.login-brand-logo {
-  width: min(320px, 88vw);
+img.kevantic-shield-logo.login-brand-logo,
+img.kevantic-brand-logo.login-brand-logo {
+  width: min(280px, 88vw);
   max-width: 100%;
   height: auto;
-  border-radius: 10px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  border-radius: 0;
+  box-shadow: none;
+  filter: none;
 }
 
 img.kevantic-shield-logo.sidebar-brand-logo,
-img.kevantic-lockup.sidebar-brand-logo {
-  width: 220px;
+img.kevantic-lockup.sidebar-brand-logo,
+img.kevantic-brand-logo.sidebar-brand-logo {
+  width: clamp(168px, 78%, 210px);
   max-width: 100%;
   min-width: 0;
   height: auto;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 0;
+  filter: none;
+  box-shadow: none;
 }
 
 .sidebar-brand {

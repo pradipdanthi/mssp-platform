@@ -1,40 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-hidden="true">
-  <!-- KB-018A: original geometric kestrel/raptor mark. No product text. -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- kevantic-mark.svg | Shield-only master for collapsed navigation/app anchors -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 300" role="img" aria-labelledby="title">
+  <title id="title">Kevantic shield mark</title>
   <defs>
-    <linearGradient id="kc-mark-accent" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#38BDF8"/>
-      <stop offset="100%" stop-color="#34D399"/>
-    </linearGradient>
-  </defs>
-  <!-- Shield frame -->
+  <linearGradient id="kevantic-platinum" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#F8FAFB"/>
+    <stop offset="0.36" stop-color="#D6E2E9"/>
+    <stop offset="0.62" stop-color="#AEBBC4"/>
+    <stop offset="1" stop-color="#EEF3F6"/>
+  </linearGradient>
+</defs>
+  <g id="kevantic-shield">
   <path
-    fill="#0B1220"
-    stroke="#24334F"
-    stroke-width="2"
-    d="M32 4 L54 12 V30 C54 44 44 54 32 60 C20 54 10 44 10 30 V12 Z"
-  />
-  <!-- Inner shield plane -->
-  <path
-    fill="#121B2E"
-    d="M32 9 L49 15.5 V30 C49 41.5 41 50 32 55 C23 50 15 41.5 15 30 V15.5 Z"
-  />
-  <!-- Raptor head profile (beak left, crown right) -->
-  <path
-    fill="url(#kc-mark-accent)"
-    d="M18 34 L26 22 L34 18 L40 20 L44 26 L42 32 L36 36 L30 38 L24 40 L18 36 Z"
-  />
-  <!-- Beak tip -->
-  <path fill="#0EA5E9" d="M18 34 L12 32 L18 30 Z"/>
-  <!-- Cyber eye -->
-  <circle cx="34" cy="27" r="4.2" fill="#0B1220"/>
-  <circle cx="34" cy="27" r="2.2" fill="#34D399"/>
-  <circle cx="34.8" cy="26.2" r="0.7" fill="#E7ECF6"/>
-  <!-- Subtle K negative-space wing slash -->
-  <path
+    d="M140 28 L160 47 L220 76 V171 L203 202 L140 270 L77 202 L60 171 V76 L120 47 Z"
     fill="none"
-    stroke="#182640"
-    stroke-width="2.2"
-    stroke-linecap="square"
-    d="M28 42 L34 36 L40 44"
+    stroke="url(#kevantic-platinum)"
+    stroke-width="9"
+    stroke-linejoin="miter"
   />
+  <g fill="none" stroke="#79A9D1" stroke-width="2.4" stroke-linecap="round">
+    <line x1="140" y1="52" x2="140" y2="247"/>
+    <line x1="95" y1="96" x2="95" y2="204"/>
+    <line x1="95" y1="96" x2="185" y2="96"/>
+    <line x1="95" y1="150" x2="140" y2="150"/>
+    <line x1="95" y1="204" x2="185" y2="204"/>
+    <line x1="95" y1="150" x2="140" y2="96"/>
+    <line x1="140" y1="150" x2="185" y2="96"/>
+    <line x1="95" y1="150" x2="140" y2="204"/>
+    <line x1="140" y1="150" x2="185" y2="204"/>
+  </g>
+  <g fill="#3A506B" stroke="#D6E2E9" stroke-width="2">
+    <circle cx="95" cy="96" r="7"/>
+    <circle cx="140" cy="96" r="7"/>
+    <circle cx="185" cy="96" r="7"/>
+    <circle cx="95" cy="150" r="7"/>
+    <circle cx="140" cy="150" r="7"/>
+    <circle cx="95" cy="204" r="7"/>
+    <circle cx="140" cy="204" r="7"/>
+    <circle cx="185" cy="204" r="7"/>
+  </g>
+</g>
 </svg>
