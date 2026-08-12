@@ -27,6 +27,10 @@ After a disaster, they should be able to say **one** of:
 
 Cursor then provisions/restores until Admin `:3000`, Customer `:3001`, and API `:8000` are healthy.
 
+**KB-094 (normal deploy):** For non-disaster updates or first production host, use  
+`docs/KB094_PRODUCTION_PORTABILITY_PACK.md` and `./scripts/production_deploy_control_plane.sh`  
+instead of improvising `docker compose` steps.
+
 ### Honest scope (no false hope)
 
 | Comes back from Path A/B | May need time / re-download |

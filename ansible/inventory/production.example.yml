@@ -1,0 +1,87 @@
+# KB-094 — Production / cloud inventory EXAMPLE (no secrets).
+# Copy to hosts.yml on the Ansible controller (VM 112 or cloud bastion) and replace
+# <PLACEHOLDER> values. Lab inventory remains ansible/inventory/hosts.yml.
+---
+all:
+  children:
+    automation_controller:
+      hosts:
+        automation:
+          ansible_host: <AUTOMATION_CONTROLLER_IP>
+          ansible_connection: local
+          deployment_role: ansible_controller
+
+    control_plane:
+      hosts:
+        mssp-control:
+          ansible_host: <CONTROL_PLANE_IP_OR_DNS>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: control_plane
+
+    wazuh_stack:
+      hosts:
+        wazuh-stack:
+          ansible_host: <WAZUH_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: wazuh_cluster
+
+    case_management:
+      hosts:
+        thehive_shuffle:
+          ansible_host: <THEHIVE_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: case_soar
+
+    network_sensors:
+      hosts:
+        suricata-sensor:
+          ansible_host: <SURICATA_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: suricata_sensor
+
+    vulnerability:
+      hosts:
+        greenbone:
+          ansible_host: <GREENBONE_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: greenbone
+
+    vuln_free_stack:
+      hosts:
+        greenbone-vuln-free:
+          ansible_host: <GREENBONE_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: vuln_free_stack
+          colocated_with: greenbone
+
+    appliance_management:
+      hosts:
+        kevantic-appliance-mgmt:
+          ansible_host: <APPLIANCE_MGMT_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: appliance_management_plane
+
+    # Golden appliance master disk (Proxmox VM 199 lab — or cloud AMI/qcow2 in production)
+    kevantic_appliance_golden:
+      hosts:
+        mssp-appliance-golden-build:
+          ansible_host: <GOLDEN_APPLIANCE_BUILD_IP>
+          ansible_user: packer
+          ansible_ssh_private_key_file: <PATH_TO_BUILD_SSH_KEY>
+          ansible_become: true
+          deployment_role: kevantic_appliance_golden
+          vm_id: 199

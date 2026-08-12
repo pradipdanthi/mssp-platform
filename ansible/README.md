@@ -49,6 +49,10 @@ There is **no** single playbook that tears down and rebuilds every VM safely.
 Treat “full stack redeploy” as: sync controller → snapshot targets → run each
 approved playbook in dependency order.
 
+**KB-094:** Normal control-plane deploy uses `./scripts/production_deploy_control_plane.sh`.
+Engine orchestration (dry-run by default): `./scripts/production_deploy_engines.sh`.
+Production inventory template: `inventory/production.example.yml`.
+
 ## Directory layout (VM 100 source)
 
 ```text
