@@ -29,7 +29,7 @@
         - telemetry
         - common
 
-    - name: Sync appliance telemetry + privacy modules from golden repo
+     - name: Sync appliance telemetry + privacy modules from golden repo
       ansible.builtin.copy:
         src: "{{ kevantic_repo_root }}/appliance/{{ item }}"
         dest: "{{ appliance_src }}/appliance/{{ item }}"
@@ -66,13 +66,13 @@
         - /var/log/junexis
         - /var/log/kevantic
 
-    - name: Point telemetry URL at control plane VM 100
+    - name: Point telemetry URL at SOC control plane VM 100 (not Appliance Mgmt heartbeat host)
       ansible.builtin.lineinfile:
         path: "{{ env_file }}"
         create: true
         mode: "0640"
         regexp: "^(JUNEXIS|KEVANTIC)_TELEMETRY_URL="
-        line: "{{ telemetry_key }}=http://192.168.0.201:8000/api/v1/telemetry/ingest"
+        line: "{{ telemetry_key }}={{ kevantic_soc_telemetry_url | default('http://192.168.0.201:8000/api/v1/telemetry/ingest') }}"
 
     - name: Enable and start brand forwarder unit
       ansible.builtin.systemd:

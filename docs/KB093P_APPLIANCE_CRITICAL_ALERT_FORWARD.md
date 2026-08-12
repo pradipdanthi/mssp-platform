@@ -13,7 +13,16 @@ This forwarder is part of the **appliance golden image**, not a per-customer man
 | mkosi postinst | Enables unit when present in image tree |
 | `kevantic-cli register` | Ensures forwarder enabled after local Manager comes up |
 
-**After changing KB-093P code, rebuild the golden image once** (factory VM 113 / mkosi or ISO remaster). Every new customer appliance then ships with forwarding already enabled.
+**After changing KB-093P code, update the golden image once** on Proxmox **VM 199** (`mssp-appliance-golden-build`, `192.168.0.225`). This is the permanent golden disk you clone for new customer appliances — rebuild in place or re-provision from `mssp-appliance-builder` when the recipe changes; do not destroy casually. Every new clone then ships with forwarding already enabled.
+
+### Lab appliance → control-plane routing (locked)
+
+| Traffic | Target (lab) | Why |
+|---------|----------------|-----|
+| Register / heartbeat / channel jobs | **VM 114** Appliance Mgmt (`192.168.0.224:8000`) | Edge plane for appliance ops |
+| Critical-alert telemetry + SOC incidents | **VM 100** Control plane (`192.168.0.201:8000/api/v1/telemetry/ingest`) | Admin/Customer dashboards and `security_alerts` |
+
+Beta (`192.168.0.226`) intentionally uses this split: heartbeat stays on 114; high/critical alert metadata goes to 100.
 
 ### Existing field appliances (one-time only)
 

@@ -24,7 +24,9 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | Shared TheHive org | `THEHIVE_DEFAULT_ORG` default **`MSSP`** (override in `.env` if existing org name differs) |
 | Cloud | Same architecture; migrate later — do not invent a second product |
 | **Appliance Management (production)** | **VM 114** `kevantic-appliance-mgmt` (`192.168.0.224`) — channel/register/heartbeat edge (KB-093L); Admin/Customer + Postgres stay on VM 100 |
-| **Kevantic appliance image build** | Disposable Proxmox factory **VM 113** when needed (KB-093F); **destroyed 2026-08-05** — recreate before next ISO build; nested Packer on VM 100 is legacy only |
+| **Appliance golden image (master clone source)** | Proxmox **VM 199** `mssp-appliance-golden-build` (`192.168.0.225`) — permanent golden disk; improvements commit to repo then bake/update 199; new customer appliances clone from 199 |
+| **Appliance image factory (optional mkosi/ISO workshop)** | **VM 113** when needed (KB-093F); may be stopped/destroyed between builds — not the same as golden 199 |
+| **KB-093P critical-alert forward** | Baked in golden recipe (`ada21fe`+); Beta field-upgraded; telemetry → VM 100, heartbeat → VM 114 |
 
 **Do not** treat this platform as a lab prototype in planning, user-facing copy, dashboards, or runtime defaults. Lab shortcuts need explicit user acceptance + upgrade plan.
 
