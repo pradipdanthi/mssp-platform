@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useCustomerEntitlements } from "../config/EntitlementsContext";
+import { entitlementKeyForPath, isEntitlementEnabled } from "../config/navEntitlements";
 
 const ROUTES = [
   { label: "Dashboard", path: "/dashboard", keywords: "home overview" },
   { label: "Incidents", path: "/incidents", keywords: "cases" },
   { label: "Alerts", path: "/alerts", keywords: "detections" },
   { label: "Vulnerabilities", path: "/vulnerabilities", keywords: "cve scanning findings" },
+  { label: "Compliance", path: "/compliance", keywords: "cis framework" },
+  { label: "Attack Surface", path: "/easm", keywords: "external exposure" },
+  { label: "Cloud & Identity", path: "/itdr", keywords: "identity cloud" },
+  { label: "Network Detection", path: "/ndr", keywords: "network traffic" },
+  { label: "Threat Intel", path: "/threat-intel", keywords: "ioc intelligence" },
+  { label: "ThreatLens", path: "/threatlens", keywords: "analysis" },
+  { label: "Forensics", path: "/forensics", keywords: "endpoint" },
   { label: "Recommendations", path: "/recommendations", keywords: "actions" },
   { label: "Assets", path: "/assets", keywords: "appliances" },
   { label: "Services", path: "/services", keywords: "subscription add-on vulnerability network" },
@@ -19,6 +28,17 @@ export default function GlobalSearch({ routes = ROUTES }: { routes?: typeof ROUT
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { entitlements } = useCustomerEntitlements();
+
+  const allowedRoutes = useMemo(
+    () =>
+      routes.filter((r) => {
+        const key = entitlementKeyForPath(r.path);
+        if (!key) return true;
+        return isEntitlementEnabled(entitlements, key);
+      }),
+    [routes, entitlements]
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -40,7 +60,7 @@ export default function GlobalSearch({ routes = ROUTES }: { routes?: typeof ROUT
   }, [open]);
 
   const needle = q.trim().toLowerCase();
-  const hits = routes.filter(
+  const hits = allowedRoutes.filter(
     (r) =>
       !needle ||
       r.label.toLowerCase().includes(needle) ||

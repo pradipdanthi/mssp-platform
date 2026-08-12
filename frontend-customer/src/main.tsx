@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./auth/AuthContext";
 import { BrandProvider } from "./config/BrandContext";
+import { EntitlementsProvider } from "./config/EntitlementsContext";
 import "./styles.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <BrandProvider>
       <BrowserRouter>
         <AuthProvider>
-          <App />
+          <EntitlementsProvider>
+            <App />
+          </EntitlementsProvider>
         </AuthProvider>
       </BrowserRouter>
     </BrandProvider>

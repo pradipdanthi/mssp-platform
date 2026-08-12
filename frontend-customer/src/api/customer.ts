@@ -1360,3 +1360,13 @@ export function listConsultationRequests(
     `/customer/service-consultation-requests/${encodeURIComponent(shortCode)}`
   );
 }
+
+export function getCustomerCatalogPricing(): Promise<{
+  pricing: Array<{
+    service_key: string;
+    pricing_display: string;
+    competitor_value?: string | null;
+  }>;
+}> {
+  return request("/customer/service-catalog/pricing");
+}

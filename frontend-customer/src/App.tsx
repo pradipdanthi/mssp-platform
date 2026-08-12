@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { useBrand } from "./config/BrandContext";
 import ProtectedRoute from "./components/ProtectedRoute";
+import EntitlementGate from "./components/EntitlementGate";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import AlertsPage from "./pages/AlertsPage";
@@ -152,7 +153,9 @@ export default function App() {
         path="/vulnerabilities"
         element={
           <ProtectedRoute>
-            <VulnerabilitiesPage />
+            <EntitlementGate require="vulnerability_management">
+              <VulnerabilitiesPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -160,7 +163,9 @@ export default function App() {
         path="/vulnerability"
         element={
           <ProtectedRoute>
-            <VulnerabilitiesPage />
+            <EntitlementGate require="vulnerability_management">
+              <VulnerabilitiesPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -168,7 +173,9 @@ export default function App() {
         path="/compliance"
         element={
           <ProtectedRoute>
-            <CompliancePage />
+            <EntitlementGate require="continuous_compliance">
+              <CompliancePage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -176,7 +183,9 @@ export default function App() {
         path="/easm"
         element={
           <ProtectedRoute>
-            <EasmPage />
+            <EntitlementGate require="external_attack_surface">
+              <EasmPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -184,7 +193,9 @@ export default function App() {
         path="/itdr"
         element={
           <ProtectedRoute>
-            <ItdrPage />
+            <EntitlementGate require="cloud_identity_protection">
+              <ItdrPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -192,7 +203,9 @@ export default function App() {
         path="/ndr"
         element={
           <ProtectedRoute>
-            <NdrPage />
+            <EntitlementGate require="network_detection">
+              <NdrPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -200,7 +213,9 @@ export default function App() {
         path="/network"
         element={
           <ProtectedRoute>
-            <NdrPage />
+            <EntitlementGate require="network_detection">
+              <NdrPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -208,7 +223,9 @@ export default function App() {
         path="/threat-intel"
         element={
           <ProtectedRoute>
-            <ThreatIntelPage />
+            <EntitlementGate require="threat_intelligence">
+              <ThreatIntelPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -216,7 +233,9 @@ export default function App() {
         path="/threatlens"
         element={
           <ProtectedRoute>
-            <ThreatLensPage />
+            <EntitlementGate require="threatlens">
+              <ThreatLensPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />
@@ -224,7 +243,9 @@ export default function App() {
         path="/forensics"
         element={
           <ProtectedRoute>
-            <ForensicsPage />
+            <EntitlementGate require="endpoint_forensics">
+              <ForensicsPage />
+            </EntitlementGate>
           </ProtectedRoute>
         }
       />

@@ -2,37 +2,19 @@ import type { ReactNode } from "react";
 import { NavLink } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useBrand } from "../config/BrandContext";
+import { useCustomerEntitlements } from "../config/EntitlementsContext";
+import { buildCustomerNavItems } from "../config/navEntitlements";
 import KestrelFalconShieldLogo from "./brand/KestrelFalconShieldLogo";
 import KestrelSecurityWatermark from "./brand/KestrelSecurityWatermark";
 import EngineStatusRibbon from "./EngineStatusRibbon";
 import GlobalSearch from "./GlobalSearch";
 import NavIcon from "./icons/NavIcon";
 
-const NAV_ITEMS = [
-  { to: "/dashboard", label: "Dashboard" },
-  { to: "/alerts", label: "Alerts" },
-  { to: "/incidents", label: "Incidents" },
-  { to: "/assets", label: "Assets" },
-  { to: "/vulnerabilities", label: "Vulnerabilities" },
-  { to: "/compliance", label: "Compliance" },
-  { to: "/easm", label: "Attack Surface" },
-  { to: "/itdr", label: "Cloud & Identity" },
-  { to: "/ndr", label: "Network Detection" },
-  { to: "/threat-intel", label: "Threat Intel" },
-  { to: "/threatlens", label: "ThreatLens" },
-  { to: "/forensics", label: "Forensics" },
-  { to: "/recommendations", label: "Recommendations" },
-  { to: "/reports", label: "Reports" },
-  { to: "/notifications", label: "Notifications" },
-  { to: "/users", label: "User Management" },
-  { to: "/audit", label: "Audit" },
-  { to: "/account", label: "Account" },
-  { to: "/services", label: "Service Portfolio" },
-];
-
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
   const brand = useBrand();
+  const { entitlements, loading: entitlementsLoading } = useCustomerEntitlements();
+  const navItems = buildCustomerNavItems(entitlementsLoading ? null : entitlements);
 
   return (
     <div className="app-shell">
@@ -40,16 +22,16 @@ export default function Layout({ children }: { children: ReactNode }) {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <KestrelFalconShieldLogo
-            size={220}
+            size={200}
             className="sidebar-brand-logo"
-            title={brand.productName}
+            title="Kevantic Cyber Security"
           />
           <div className="sidebar-brand-copy">
             <span className="sidebar-brand-portal">{brand.portalName}</span>
           </div>
         </div>
         <nav className="sidebar-nav" aria-label="Primary">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
