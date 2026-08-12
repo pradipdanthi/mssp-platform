@@ -2,67 +2,50 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError } from "../api/client";
 import {
-  ConsultationRequest,
-  TenantEntitlements,
-  createConsultationRequestOnBehalf,
-  getTenantEntitlements,
+  AdminCatalogService,
+  Tenant,
+  getAdminServiceCatalog,
   getTenants,
-  listConsultationRequests,
-  putTenantEntitlements,
-  type Tenant,
+  patchCatalogPricing,
+  rolloutCatalogService,
 } from "../api/admin";
-import { getStoredTenantFilter } from "../components/TenantSwitcher";
-import {
-  SERVICE_CATALOG,
-  ServiceCatalogItem,
-  resolveServiceStatus,
-  statusLabel,
-} from "../data/serviceCatalog";
+import { getCatalogItem } from "../data/serviceCatalog";
 
-type ConsultForm = {
-  endpoint_count: string;
-  m365_seat_count: string;
-  target_domains: string;
-  scope_notes: string;
+type PriceForm = {
+  pricing_display: string;
+  pricing_notes: string;
+  competitor_value: string;
 };
-
-const EMPTY_FORM: ConsultForm = {
-  endpoint_count: "",
-  m365_seat_count: "",
-  target_domains: "",
-  scope_notes: "",
-};
-
-const OPEN_STATUSES = new Set(["PENDING_CONSULTATION", "UNDER_REVIEW"]);
 
 export default function ServiceCatalogPage() {
+  const [services, setServices] = useState<AdminCatalogService[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [shortCode, setShortCode] = useState(getStoredTenantFilter() || "");
-  const [ent, setEnt] = useState<TenantEntitlements | null>(null);
-  const [requests, setRequests] = useState<ConsultationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeItem, setActiveItem] = useState<ServiceCatalogItem | null>(null);
-  const [form, setForm] = useState<ConsultForm>(EMPTY_FORM);
-  const [submitting, setSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [savingToggle, setSavingToggle] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "core" | "addons" | "requests">("all");
 
-  const selectedTenant = useMemo(
-    () => tenants.find((t) => t.short_code === shortCode) || null,
-    [tenants, shortCode]
-  );
+  const [priceItem, setPriceItem] = useState<AdminCatalogService | null>(null);
+  const [priceForm, setPriceForm] = useState<PriceForm>({
+    pricing_display: "",
+    pricing_notes: "",
+    competitor_value: "",
+  });
+  const [priceSaving, setPriceSaving] = useState(false);
+  const [priceError, setPriceError] = useState<string | null>(null);
+
+  const [rolloutItem, setRolloutItem] = useState<AdminCatalogService | null>(null);
+  const [selectedTenantIds, setSelectedTenantIds] = useState<string[]>([]);
+  const [rolloutNotes, setRolloutNotes] = useState("");
+  const [rolloutBusy, setRolloutBusy] = useState(false);
+  const [rolloutError, setRolloutError] = useState<string | null>(null);
 
   function refresh() {
-    const pTenants = getTenants({ page_size: 200 });
-    const pRequests = listConsultationRequests();
-    Promise.all([pTenants, pRequests])
-      .then(([tRes, rRes]) => {
-        const list = tRes.tenants || [];
-        setTenants(list);
-        setRequests(rRes.requests || []);
-        if (!shortCode && list.length) setShortCode(list[0].short_code);
+    setLoading(true);
+    Promise.all([getAdminServiceCatalog(), getTenants({ page_size: 200 })])
+      .then(([catalog, tenantRes]) => {
+        setServices(catalog.services || []);
+        setTenants(tenantRes.tenants || []);
         setError(null);
       })
       .catch((err) => {
@@ -74,88 +57,98 @@ export default function ServiceCatalogPage() {
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!selectedTenant) {
-      setEnt(null);
+  const filtered = useMemo(() => {
+    return services.filter((s) => {
+      if (filter === "core") return s.is_core;
+      if (filter === "addons") return !s.is_core;
+      if (filter === "requests") return s.open_request_count > 0;
+      return true;
+    });
+  }, [services, filter]);
+
+  const openTotal = useMemo(
+    () => services.reduce((n, s) => n + (s.open_request_count || 0), 0),
+    [services]
+  );
+
+  function openPriceEditor(item: AdminCatalogService) {
+    setPriceItem(item);
+    setPriceForm({
+      pricing_display: item.pricing_display || "",
+      pricing_notes: item.pricing_notes || "",
+      competitor_value: item.competitor_value || "",
+    });
+    setPriceError(null);
+  }
+
+  async function savePrice(e: FormEvent) {
+    e.preventDefault();
+    if (!priceItem) return;
+    if (!priceForm.pricing_display.trim()) {
+      setPriceError("List price is required.");
       return;
     }
-    getTenantEntitlements(selectedTenant.id)
-      .then(setEnt)
-      .catch(() => setEnt(null));
-  }, [selectedTenant]);
-
-  const openRequestKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const r of requests) {
-      if (r.short_code === shortCode && OPEN_STATUSES.has(r.status)) keys.add(r.service_key);
-    }
-    return keys;
-  }, [requests, shortCode]);
-
-  async function toggleEntitlement(item: ServiceCatalogItem) {
-    if (!selectedTenant || !ent) return;
-    const patch: Partial<TenantEntitlements> = {};
-    if (item.serviceKey === "vulnerability_management")
-      patch.greenbone_enabled = !ent.greenbone_enabled;
-    else if (item.serviceKey === "network_detection_response")
-      patch.zeek_enabled = !ent.zeek_enabled;
-    else if (item.serviceKey === "threat_intelligence") patch.misp_enabled = !ent.misp_enabled;
-    else if (item.serviceKey === "endpoint_forensics_deception")
-      patch.velociraptor_enabled = !ent.velociraptor_enabled;
-    else if (item.serviceKey === "log_event_monitoring") patch.wazuh_siem = !ent.wazuh_siem;
-    else return;
-    setSavingToggle(item.id);
+    setPriceSaving(true);
+    setPriceError(null);
     try {
-      const next = await putTenantEntitlements(selectedTenant.id, patch);
-      setEnt(next);
-      setSuccess(`Updated entitlements for ${selectedTenant.name}.`);
+      await patchCatalogPricing(priceItem.service_key, {
+        pricing_display: priceForm.pricing_display.trim(),
+        pricing_notes: priceForm.pricing_notes.trim() || null,
+        competitor_value: priceForm.competitor_value.trim() || null,
+      });
+      setSuccess(`Updated list price for ${priceItem.service_name}.`);
+      setPriceItem(null);
+      refresh();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.detail === "string") setError(err.detail);
-      else setError("Could not update entitlements.");
+      if (err instanceof ApiError && typeof err.detail === "string") setPriceError(err.detail);
+      else setPriceError("Could not save pricing.");
     } finally {
-      setSavingToggle(null);
+      setPriceSaving(false);
     }
   }
 
-  async function handleSubmit(e: FormEvent) {
+  function openRollout(item: AdminCatalogService) {
+    setRolloutItem(item);
+    setSelectedTenantIds([]);
+    setRolloutNotes("");
+    setRolloutError(null);
+  }
+
+  function toggleTenant(id: string) {
+    setSelectedTenantIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  async function submitRollout(e: FormEvent) {
     e.preventDefault();
-    if (!activeItem || !shortCode) {
-      setFormError("Select a customer tenant first.");
+    if (!rolloutItem) return;
+    if (!selectedTenantIds.length) {
+      setRolloutError("Select at least one customer.");
       return;
     }
-    const notes = form.scope_notes.trim();
-    if (notes.length < 8) {
-      setFormError("Add at least 8 characters of scope notes.");
-      return;
-    }
-    const domains = form.target_domains
-      .split(/[\s,;]+/)
-      .map((d) => d.trim())
-      .filter(Boolean);
-    setSubmitting(true);
-    setFormError(null);
+    setRolloutBusy(true);
+    setRolloutError(null);
     try {
-      await createConsultationRequestOnBehalf({
-        tenant_short_code: shortCode,
-        service_key: activeItem.serviceKey,
-        service_name: activeItem.name,
-        pricing_tier: activeItem.pricing,
-        endpoint_count: form.endpoint_count ? Number(form.endpoint_count) : null,
-        m365_seat_count: form.m365_seat_count ? Number(form.m365_seat_count) : null,
-        target_domains: domains,
-        scope_notes: notes,
+      const res = await rolloutCatalogService(rolloutItem.service_key, {
+        tenant_ids: selectedTenantIds,
+        admin_notes: rolloutNotes.trim() || null,
+        mark_requests_approved: true,
       });
-      setSuccess(`Consultation request created for ${selectedTenant?.name || shortCode}.`);
-      setActiveItem(null);
+      setSuccess(
+        `Rolled out ${rolloutItem.service_name} to ${res.rolled_out} customer(s)` +
+          (res.failed ? ` (${res.failed} failed)` : "") +
+          "."
+      );
+      setRolloutItem(null);
       refresh();
     } catch (err) {
-      if (err instanceof ApiError && typeof err.detail === "string") setFormError(err.detail);
-      else setFormError("Could not submit consultation request.");
+      if (err instanceof ApiError && typeof err.detail === "string") setRolloutError(err.detail);
+      else setRolloutError("Rollout failed.");
     } finally {
-      setSubmitting(false);
+      setRolloutBusy(false);
     }
   }
 
@@ -163,27 +156,37 @@ export default function ServiceCatalogPage() {
     <div>
       <h1 className="page-title">Service Catalog</h1>
       <p className="page-subtitle">
-        Tenant-scoped portfolio view. Toggle supported entitlements and submit consulting requests on
-        behalf of a customer. Global queue:{" "}
-        <Link to="/service-requests">Service Requests</Link>.
+        MSSP portfolio control — review offerings, edit list pricing, roll services out to customers,
+        and act on consultation demand. Customer self-service consulting requests stay in the
+        customer portal. Global queue: <Link to="/service-requests">Service Requests</Link>.
       </p>
 
-      <div className="form-grid" style={{ marginBottom: "1rem", maxWidth: 420 }}>
-        <label className="form-label">
-          Customer tenant
-          <select
-            className="form-input"
-            value={shortCode}
-            onChange={(e) => setShortCode(e.target.value)}
-          >
-            <option value="">Select tenant…</option>
-            {tenants.map((t) => (
-              <option key={t.id} value={t.short_code}>
-                {t.name} ({t.short_code})
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="catalog-toolbar">
+        <div className="catalog-filters">
+          {(
+            [
+              ["all", "All services"],
+              ["core", "Core"],
+              ["addons", "Add-ons"],
+              ["requests", "Has open requests"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              className={"btn btn-ghost" + (filter === key ? " is-active-filter" : "")}
+              onClick={() => setFilter(key)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {openTotal > 0 && (
+          <Link className="catalog-open-strip" to="/service-requests?status=PENDING_CONSULTATION">
+            <span className="request-pulse-dot" aria-hidden="true" />
+            {openTotal} open customer request{openTotal === 1 ? "" : "s"} across the catalog
+          </Link>
+        )}
       </div>
 
       {loading && <div className="state-message">Loading catalog…</div>}
@@ -192,135 +195,215 @@ export default function ServiceCatalogPage() {
 
       {!loading && (
         <div className="services-catalog">
-          {SERVICE_CATALOG.map((item) => {
-            const status = resolveServiceStatus(item, ent, openRequestKeys);
-            const canToggle = [
-              "log_event_monitoring",
-              "vulnerability_management",
-              "network_detection_response",
-              "threat_intelligence",
-              "endpoint_forensics_deception",
-            ].includes(item.serviceKey);
+          {filtered.map((item) => {
+            const meta = getCatalogItem(item.service_key as never);
+            const features = meta?.features?.slice(0, 4) || [];
+            const summary = meta?.achieves || "";
             return (
-              <article key={item.id} className={"service-card glass-card service-card--" + status}>
+              <article
+                key={item.service_key}
+                className={
+                  "service-card glass-card" +
+                  (item.open_request_count > 0 ? " service-card--has-requests" : "")
+                }
+              >
                 <div className="service-card-top">
-                  <h2 className="service-card-title">{item.name}</h2>
-                  <span className={"service-status service-status--" + status}>
-                    {statusLabel(status)}
-                  </span>
+                  <h2 className="service-card-title">{item.service_name}</h2>
+                  <div className="service-card-badges">
+                    <span className={"service-status service-status--" + (item.is_core ? "included" : "available")}>
+                      {item.is_core ? "Core" : "Add-on"}
+                    </span>
+                    {item.open_request_count > 0 && (
+                      <Link
+                        className="service-request-badge"
+                        to={`/service-requests?service_key=${encodeURIComponent(item.service_key)}`}
+                        title="Open customer requests for this service"
+                      >
+                        <span className="request-pulse-dot" aria-hidden="true" />
+                        {item.open_request_count} request
+                        {item.open_request_count === 1 ? "" : "s"}
+                      </Link>
+                    )}
+                  </div>
                 </div>
+
                 <div className="service-pricing">
-                  <strong>{item.pricing}</strong>
-                  <span className="service-pricing-comp">{item.competitorValue}</span>
-                </div>
-                <p className="service-card-summary">{item.achieves}</p>
-                <ul className="service-benefits">
-                  {item.features.slice(0, 5).map((b) => (
-                    <li key={b}>{b}</li>
-                  ))}
-                </ul>
-                <div className="service-card-actions">
-                  {canToggle && selectedTenant && (
-                    <button
-                      className="btn btn-ghost"
-                      type="button"
-                      disabled={!!savingToggle}
-                      onClick={() => toggleEntitlement(item)}
-                    >
-                      {savingToggle === item.id ? "Saving…" : "Toggle entitlement"}
-                    </button>
+                  <strong>{item.pricing_display}</strong>
+                  {item.competitor_value && (
+                    <span className="service-pricing-comp">{item.competitor_value}</span>
                   )}
-                  {item.requestable && status === "available" && (
+                </div>
+                <p className="service-card-meta">
+                  <strong>{item.active_tenant_count}</strong> active customer
+                  {item.active_tenant_count === 1 ? "" : "s"}
+                </p>
+                {summary && <p className="service-card-summary">{summary}</p>}
+                {features.length > 0 && (
+                  <ul className="service-benefits">
+                    {features.map((b) => (
+                      <li key={b}>{b}</li>
+                    ))}
+                  </ul>
+                )}
+
+                {item.open_requests.length > 0 && (
+                  <div className="service-request-list">
+                    <div className="service-request-list-label">Recent open requests</div>
+                    {item.open_requests.slice(0, 3).map((r) => (
+                      <Link
+                        key={r.id}
+                        className="service-request-row"
+                        to={`/tenants?q=${encodeURIComponent(r.short_code || "")}`}
+                      >
+                        <span>{r.tenant_name || r.short_code || "Customer"}</span>
+                        <span className="cell-mono">{r.status.replace(/_/g, " ")}</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
+                <div className="service-card-actions">
+                  <button
+                    className="btn btn-ghost"
+                    type="button"
+                    onClick={() => openPriceEditor(item)}
+                  >
+                    Edit price
+                  </button>
+                  {item.rollout_supported && (
                     <button
                       className="btn btn-primary"
                       type="button"
-                      disabled={!shortCode}
-                      onClick={() => {
-                        setActiveItem(item);
-                        setForm(EMPTY_FORM);
-                        setFormError(null);
-                      }}
+                      onClick={() => openRollout(item)}
                     >
-                      Request for Consulting
+                      Roll out to customers
                     </button>
+                  )}
+                  {item.open_request_count > 0 && (
+                    <Link
+                      className="btn btn-ghost"
+                      to={`/service-requests?service_key=${encodeURIComponent(item.service_key)}`}
+                    >
+                      View requests
+                    </Link>
                   )}
                 </div>
               </article>
             );
           })}
+          {filtered.length === 0 && (
+            <div className="state-message">No services match this filter.</div>
+          )}
         </div>
       )}
 
-      {activeItem && (
-        <div className="modal-backdrop" onClick={() => !submitting && setActiveItem(null)}>
-          <form
-            className="modal-panel"
-            onSubmit={handleSubmit}
-            onClick={(e) => e.stopPropagation()}
-          >
+      {priceItem && (
+        <div className="modal-backdrop" onClick={() => !priceSaving && setPriceItem(null)}>
+          <form className="modal-panel" onSubmit={savePrice} onClick={(e) => e.stopPropagation()}>
             <h2 className="section-title" style={{ marginTop: 0 }}>
-              On-behalf request — {activeItem.name}
+              Edit list price — {priceItem.service_name}
             </h2>
             <p className="page-subtitle">
-              Tenant: <strong>{selectedTenant?.name || shortCode}</strong>
+              Updates the price shown on Admin and Customer Service Catalogs. Does not invent
+              discounts per tenant.
             </p>
-            <div className="form-grid">
-              {activeItem.scopeFields.includes("endpoints") && (
-                <label className="form-label">
-                  Endpoints
-                  <input
-                    className="form-input"
-                    type="number"
-                    min={0}
-                    value={form.endpoint_count}
-                    onChange={(e) => setForm({ ...form, endpoint_count: e.target.value })}
-                  />
-                </label>
-              )}
-              {activeItem.scopeFields.includes("m365_seats") && (
-                <label className="form-label">
-                  M365 seats
-                  <input
-                    className="form-input"
-                    type="number"
-                    min={0}
-                    value={form.m365_seat_count}
-                    onChange={(e) => setForm({ ...form, m365_seat_count: e.target.value })}
-                  />
-                </label>
-              )}
-              {activeItem.scopeFields.includes("domains") && (
-                <label className="form-label" style={{ gridColumn: "1 / -1" }}>
-                  Domains
-                  <input
-                    className="form-input"
-                    value={form.target_domains}
-                    onChange={(e) => setForm({ ...form, target_domains: e.target.value })}
-                  />
-                </label>
-              )}
-            </div>
-            <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>
-              Notes
-              <textarea
+            <label className="form-label" style={{ display: "block" }}>
+              List price display
+              <input
                 className="form-input"
                 required
-                minLength={8}
-                rows={4}
-                value={form.scope_notes}
-                onChange={(e) => setForm({ ...form, scope_notes: e.target.value })}
+                maxLength={200}
+                value={priceForm.pricing_display}
+                onChange={(e) => setPriceForm({ ...priceForm, pricing_display: e.target.value })}
               />
             </label>
-            {formError && <div className="form-error">{formError}</div>}
+            <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>
+              Competitor / packaging note (optional)
+              <input
+                className="form-input"
+                maxLength={400}
+                value={priceForm.competitor_value}
+                onChange={(e) => setPriceForm({ ...priceForm, competitor_value: e.target.value })}
+              />
+            </label>
+            <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>
+              Internal pricing notes (optional)
+              <textarea
+                className="form-input"
+                rows={3}
+                maxLength={2000}
+                value={priceForm.pricing_notes}
+                onChange={(e) => setPriceForm({ ...priceForm, pricing_notes: e.target.value })}
+              />
+            </label>
+            {priceError && <div className="form-error">{priceError}</div>}
             <div className="confirm-actions">
-              <button className="btn btn-primary" type="submit" disabled={submitting}>
-                {submitting ? "Sending…" : "Submit"}
+              <button className="btn btn-primary" type="submit" disabled={priceSaving}>
+                {priceSaving ? "Saving…" : "Save price"}
               </button>
               <button
                 className="btn btn-ghost"
                 type="button"
-                onClick={() => setActiveItem(null)}
-                disabled={submitting}
+                disabled={priceSaving}
+                onClick={() => setPriceItem(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {rolloutItem && (
+        <div className="modal-backdrop" onClick={() => !rolloutBusy && setRolloutItem(null)}>
+          <form
+            className="modal-panel modal-panel--wide"
+            onSubmit={submitRollout}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="section-title" style={{ marginTop: 0 }}>
+              Roll out — {rolloutItem.service_name}
+            </h2>
+            <p className="page-subtitle">
+              Enables this add-on for selected customers and marks their open consulting requests as
+              approved.
+            </p>
+            <div className="rollout-tenant-list">
+              {tenants.map((t) => (
+                <label key={t.id} className="rollout-tenant-row">
+                  <input
+                    type="checkbox"
+                    checked={selectedTenantIds.includes(t.id)}
+                    onChange={() => toggleTenant(t.id)}
+                  />
+                  <span>
+                    {t.name} <span className="cell-mono">({t.short_code})</span>
+                  </span>
+                </label>
+              ))}
+              {tenants.length === 0 && <div className="state-message">No tenants found.</div>}
+            </div>
+            <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>
+              Notes (optional)
+              <textarea
+                className="form-input"
+                rows={3}
+                value={rolloutNotes}
+                onChange={(e) => setRolloutNotes(e.target.value)}
+              />
+            </label>
+            {rolloutError && <div className="form-error">{rolloutError}</div>}
+            <div className="confirm-actions">
+              <button className="btn btn-primary" type="submit" disabled={rolloutBusy}>
+                {rolloutBusy
+                  ? "Rolling out…"
+                  : `Enable for ${selectedTenantIds.length || 0} customer(s)`}
+              </button>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                disabled={rolloutBusy}
+                onClick={() => setRolloutItem(null)}
               >
                 Cancel
               </button>

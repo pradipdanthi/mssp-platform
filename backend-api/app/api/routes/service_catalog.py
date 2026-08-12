@@ -303,18 +303,24 @@ def _insert_request(
 
 @router.get("/admin/service-consultation-requests/summary")
 def admin_consultation_summary(
+    tenant_id: Optional[UUID] = Query(default=None),
     current_user: Dict[str, Any] = Depends(
         require_roles("platform_admin", "soc_manager", "soc_analyst")
     ),
 ) -> Dict[str, Any]:
+    tid = str(tenant_id) if tenant_id else None
+    where = "WHERE tenant_id = %s::uuid" if tid else ""
+    params: tuple = (tid,) if tid else ()
     row = fetch_one(
-        """
+        f"""
         SELECT
           COUNT(*) FILTER (WHERE status = 'PENDING_CONSULTATION')::int AS pending_consultation,
           COUNT(*) FILTER (WHERE status = 'UNDER_REVIEW')::int AS under_review,
           COUNT(*) FILTER (WHERE status IN ('PENDING_CONSULTATION', 'UNDER_REVIEW'))::int AS unreviewed_total
-        FROM service_consultation_requests;
-        """
+        FROM service_consultation_requests
+        {where};
+        """,
+        params,
     )
     return {
         "pending_consultation": int((row or {}).get("pending_consultation") or 0),
@@ -327,43 +333,42 @@ def admin_consultation_summary(
 @router.get("/admin/service-consultation-requests")
 def admin_list_consultations(
     status_filter: Optional[str] = Query(default=None, alias="status"),
+    service_key: Optional[str] = Query(default=None),
     current_user: Dict[str, Any] = Depends(
         require_roles("platform_admin", "soc_manager", "soc_analyst")
     ),
 ) -> Dict[str, Any]:
+    clauses: List[str] = []
+    params: List[Any] = []
     if status_filter:
-        rows = fetch_all(
-            """
-            SELECT r.*, t.name AS tenant_name, t.short_code,
-                   u.full_name AS requested_by_name
-            FROM service_consultation_requests r
-            JOIN tenants t ON t.id = r.tenant_id
-            LEFT JOIN platform_users u ON u.id = r.requested_by_user_id
-            WHERE r.status = %s
-            ORDER BY r.created_at DESC
-            LIMIT 500;
-            """,
-            (status_filter,),
-        )
-    else:
-        rows = fetch_all(
-            """
-            SELECT r.*, t.name AS tenant_name, t.short_code,
-                   u.full_name AS requested_by_name
-            FROM service_consultation_requests r
-            JOIN tenants t ON t.id = r.tenant_id
-            LEFT JOIN platform_users u ON u.id = r.requested_by_user_id
-            ORDER BY
-              CASE r.status
-                WHEN 'PENDING_CONSULTATION' THEN 0
-                WHEN 'UNDER_REVIEW' THEN 1
-                WHEN 'APPROVED' THEN 2
-                ELSE 3
-              END,
-              r.created_at DESC
-            LIMIT 500;
-            """
-        )
+        clauses.append("r.status = %s")
+        params.append(status_filter)
+    if service_key:
+        if service_key not in SERVICE_KEYS:
+            raise HTTPException(status_code=400, detail="Unknown service_key.")
+        clauses.append("r.service_key = %s")
+        params.append(service_key)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    rows = fetch_all(
+        f"""
+        SELECT r.*, t.name AS tenant_name, t.short_code,
+               u.full_name AS requested_by_name
+        FROM service_consultation_requests r
+        JOIN tenants t ON t.id = r.tenant_id
+        LEFT JOIN platform_users u ON u.id = r.requested_by_user_id
+        {where}
+        ORDER BY
+          CASE r.status
+            WHEN 'PENDING_CONSULTATION' THEN 0
+            WHEN 'UNDER_REVIEW' THEN 1
+            WHEN 'APPROVED' THEN 2
+            ELSE 3
+          END,
+          r.created_at DESC
+        LIMIT 500;
+        """,
+        tuple(params),
+    )
     return {"requests": [_row_out(r).model_dump() for r in rows]}
 
 
@@ -541,3 +546,363 @@ def customer_list_consultations(
         item.pop("admin_notes", None)
         out.append(item)
     return {"requests": out}
+
+
+# ---------------------------------------------------------------------------
+# Admin Service Catalog (pricing + adoption + rollout)
+# ---------------------------------------------------------------------------
+
+class CatalogPricingPatch(BaseModel):
+    pricing_display: str = Field(min_length=1, max_length=200)
+    pricing_notes: Optional[str] = Field(default=None, max_length=2000)
+    competitor_value: Optional[str] = Field(default=None, max_length=400)
+
+
+class CatalogRolloutRequest(BaseModel):
+    tenant_ids: List[UUID] = Field(min_length=1, max_length=200)
+    admin_notes: Optional[str] = Field(default=None, max_length=2000)
+    mark_requests_approved: bool = True
+
+
+def _ensure_pricing_seeded() -> None:
+    """Idempotent seed when migration not yet applied on long-lived DB."""
+    from app.db.session import execute
+    from app.services.service_catalog_pricing import CATALOG_DEFAULTS
+
+    try:
+        existing = fetch_one("SELECT COUNT(*)::int AS n FROM service_catalog_pricing;")
+    except Exception:
+        return
+    if existing and int(existing.get("n") or 0) > 0:
+        return
+    for row in CATALOG_DEFAULTS:
+        execute(
+            """
+            INSERT INTO service_catalog_pricing (
+              service_key, service_name, pricing_display, competitor_value,
+              is_core, requestable, sort_order
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (service_key) DO NOTHING;
+            """,
+            (
+                row["service_key"],
+                row["service_name"],
+                row["pricing_display"],
+                row.get("competitor_value"),
+                row["is_core"],
+                row["requestable"],
+                row["sort_order"],
+            ),
+        )
+
+
+def _open_request_count(service_key: str) -> int:
+    row = fetch_one(
+        """
+        SELECT COUNT(*)::int AS n
+        FROM service_consultation_requests
+        WHERE service_key = %s
+          AND status IN ('PENDING_CONSULTATION', 'UNDER_REVIEW');
+        """,
+        (service_key,),
+    )
+    return int((row or {}).get("n") or 0)
+
+
+def _adoption_count(service_key: str) -> int:
+    from app.services.service_catalog_pricing import ADOPTION_SQL
+
+    pred = ADOPTION_SQL.get(service_key)
+    if not pred:
+        return 0
+    sql_frag, _ = pred
+    row = fetch_one(
+        f"""
+        SELECT COUNT(*)::int AS n
+        FROM tenants t
+        LEFT JOIN tenant_entitlements e ON e.tenant_id = t.id
+        WHERE {sql_frag};
+        """
+    )
+    return int((row or {}).get("n") or 0)
+
+
+def _open_requests_for_service(service_key: str, limit: int = 8) -> List[Dict[str, Any]]:
+    rows = fetch_all(
+        """
+        SELECT r.id::text, r.tenant_id::text, t.name AS tenant_name, t.short_code,
+               r.status, r.created_at::text, r.requested_by_user_id::text,
+               u.full_name AS requested_by_name
+        FROM service_consultation_requests r
+        JOIN tenants t ON t.id = r.tenant_id
+        LEFT JOIN platform_users u ON u.id = r.requested_by_user_id
+        WHERE r.service_key = %s
+          AND r.status IN ('PENDING_CONSULTATION', 'UNDER_REVIEW')
+        ORDER BY r.created_at DESC
+        LIMIT %s;
+        """,
+        (service_key, limit),
+    )
+    return [
+        {
+            "id": r["id"],
+            "tenant_id": r["tenant_id"],
+            "tenant_name": r.get("tenant_name"),
+            "short_code": r.get("short_code"),
+            "status": r.get("status"),
+            "created_at": r.get("created_at"),
+            "requested_by_name": r.get("requested_by_name"),
+        }
+        for r in rows
+    ]
+
+
+@router.get("/admin/service-catalog")
+def admin_service_catalog(
+    current_user: Dict[str, Any] = Depends(
+        require_roles("platform_admin", "soc_manager", "soc_analyst")
+    ),
+) -> Dict[str, Any]:
+    from app.services.service_catalog_pricing import CATALOG_DEFAULTS
+
+    _ensure_pricing_seeded()
+    try:
+        rows = fetch_all(
+            """
+            SELECT service_key, service_name, pricing_display, pricing_notes,
+                   competitor_value, is_core, requestable, sort_order,
+                   updated_at::text, updated_by::text
+            FROM service_catalog_pricing
+            ORDER BY sort_order ASC, service_key ASC;
+            """
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Service catalog pricing table missing. Apply postgres/init/033_service_catalog_pricing.sql.",
+        ) from exc
+
+    by_key = {r["service_key"]: r for r in rows}
+    services: List[Dict[str, Any]] = []
+    for default in CATALOG_DEFAULTS:
+        key = default["service_key"]
+        row = by_key.get(key) or default
+        open_reqs = _open_requests_for_service(key)
+        services.append(
+            {
+                "service_key": key,
+                "service_name": row.get("service_name") or default["service_name"],
+                "pricing_display": row.get("pricing_display") or default["pricing_display"],
+                "pricing_notes": row.get("pricing_notes"),
+                "competitor_value": row.get("competitor_value")
+                if row.get("competitor_value") is not None
+                else default.get("competitor_value"),
+                "is_core": bool(row.get("is_core", default["is_core"])),
+                "requestable": bool(row.get("requestable", default["requestable"])),
+                "sort_order": int(row.get("sort_order") or default["sort_order"]),
+                "updated_at": row.get("updated_at"),
+                "active_tenant_count": _adoption_count(key),
+                "open_request_count": _open_request_count(key),
+                "open_requests": open_reqs,
+                "rollout_supported": key
+                in (
+                    "security_automation",
+                    "vulnerability_management",
+                    "continuous_compliance",
+                    "external_attack_surface",
+                    "cloud_identity_protection",
+                    "network_detection_response",
+                    "threat_intelligence",
+                    "endpoint_forensics_deception",
+                ),
+            }
+        )
+
+    return {"services": services}
+
+
+@router.get("/customer/service-catalog/pricing")
+def customer_service_catalog_pricing(
+    current_user: Dict[str, Any] = Depends(
+        require_roles(*CUSTOMER_ROLES, "customer_viewer", *ADMIN_SOC_ROLES)
+    ),
+) -> Dict[str, Any]:
+    """Customer-safe pricing overlay for the Service Catalog UI."""
+    from app.services.service_catalog_pricing import CATALOG_DEFAULTS
+
+    _ensure_pricing_seeded()
+    try:
+        rows = fetch_all(
+            """
+            SELECT service_key, pricing_display, competitor_value
+            FROM service_catalog_pricing;
+            """
+        )
+    except Exception:
+        rows = []
+    by_key = {r["service_key"]: r for r in rows}
+    items = []
+    for default in CATALOG_DEFAULTS:
+        key = default["service_key"]
+        row = by_key.get(key) or {}
+        items.append(
+            {
+                "service_key": key,
+                "pricing_display": row.get("pricing_display") or default["pricing_display"],
+                "competitor_value": row.get("competitor_value")
+                if row.get("competitor_value") is not None
+                else default.get("competitor_value"),
+            }
+        )
+    return {"pricing": items}
+
+
+@router.patch("/admin/service-catalog/{service_key}/pricing")
+def admin_patch_catalog_pricing(
+    service_key: str,
+    body: CatalogPricingPatch,
+    current_user: Dict[str, Any] = Depends(require_roles("platform_admin", "soc_manager")),
+) -> Dict[str, Any]:
+    from app.services.service_catalog_pricing import default_for
+
+    if service_key not in SERVICE_KEYS or service_key == "other":
+        raise HTTPException(status_code=404, detail="Unknown catalog service.")
+    _ensure_pricing_seeded()
+    base = default_for(service_key) or {"service_name": service_key}
+    before = fetch_one(
+        "SELECT pricing_display FROM service_catalog_pricing WHERE service_key = %s;",
+        (service_key,),
+    )
+    row = fetch_one(
+        """
+        INSERT INTO service_catalog_pricing (
+          service_key, service_name, pricing_display, pricing_notes, competitor_value,
+          is_core, requestable, sort_order, updated_at, updated_by
+        ) VALUES (
+          %s, %s, %s, %s, %s, %s, %s, %s, now(), %s::uuid
+        )
+        ON CONFLICT (service_key) DO UPDATE SET
+          pricing_display = EXCLUDED.pricing_display,
+          pricing_notes = EXCLUDED.pricing_notes,
+          competitor_value = EXCLUDED.competitor_value,
+          updated_at = now(),
+          updated_by = EXCLUDED.updated_by
+        RETURNING service_key, service_name, pricing_display, pricing_notes,
+                  competitor_value, is_core, requestable, sort_order,
+                  updated_at::text, updated_by::text;
+        """,
+        (
+            service_key,
+            base.get("service_name") or service_key,
+            body.pricing_display.strip(),
+            (body.pricing_notes or "").strip() or None,
+            (body.competitor_value if body.competitor_value is not None else base.get("competitor_value")),
+            bool(base.get("is_core")),
+            bool(base.get("requestable", True)),
+            int(base.get("sort_order") or 100),
+            current_user["id"],
+        ),
+    )
+    write_audit_event(
+        actor_user_id=current_user["id"],
+        action="service_catalog.pricing_updated",
+        entity_type="service_catalog_pricing",
+        entity_id=service_key,
+        details={
+            "before": (before or {}).get("pricing_display"),
+            "after": body.pricing_display.strip(),
+        },
+        actor_role=current_user.get("role"),
+        resource_type="service_catalog_pricing",
+        resource_id=service_key,
+    )
+    return dict(row or {})
+
+
+@router.post("/admin/service-catalog/{service_key}/rollout")
+def admin_rollout_catalog_service(
+    service_key: str,
+    body: CatalogRolloutRequest,
+    current_user: Dict[str, Any] = Depends(require_roles("platform_admin", "soc_manager")),
+) -> Dict[str, Any]:
+    from app.services.tenant_entitlement_defaults import (
+        CATALOG_KEY_TO_ENTITLEMENT_UPDATES,
+        enable_entitlement_for_catalog_key,
+        trigger_post_enable_sync,
+    )
+
+    if service_key not in CATALOG_KEY_TO_ENTITLEMENT_UPDATES:
+        raise HTTPException(
+            status_code=400,
+            detail="This service is Core or cannot be rolled out via entitlements.",
+        )
+
+    results: List[Dict[str, Any]] = []
+    for tid in body.tenant_ids:
+        tenant = fetch_one(
+            "SELECT id::text, name, short_code FROM tenants WHERE id = %s::uuid;",
+            (str(tid),),
+        )
+        if not tenant:
+            results.append({"tenant_id": str(tid), "ok": False, "error": "tenant_not_found"})
+            continue
+        try:
+            enable_entitlement_for_catalog_key(str(tid), service_key)
+            sync_detail = trigger_post_enable_sync(str(tid), service_key)
+            approved = 0
+            if body.mark_requests_approved:
+                with db_transaction() as cur:
+                    cur.execute(
+                        """
+                        UPDATE service_consultation_requests
+                        SET status = 'APPROVED',
+                            admin_notes = COALESCE(%s, admin_notes),
+                            updated_at = now()
+                        WHERE tenant_id = %s::uuid
+                          AND service_key = %s
+                          AND status IN ('PENDING_CONSULTATION', 'UNDER_REVIEW');
+                        """,
+                        (body.admin_notes, str(tid), service_key),
+                    )
+                    approved = cur.rowcount or 0
+            write_audit_event(
+                actor_user_id=current_user["id"],
+                action="service_catalog.rollout",
+                entity_type="tenant",
+                entity_id=str(tid),
+                details={
+                    "service_key": service_key,
+                    "approved_open_requests": approved,
+                    "sync": sync_detail,
+                },
+                tenant_id=str(tid),
+                actor_role=current_user.get("role"),
+                resource_type="service_catalog_rollout",
+                resource_id=service_key,
+            )
+            results.append(
+                {
+                    "tenant_id": str(tid),
+                    "tenant_name": tenant.get("name"),
+                    "short_code": tenant.get("short_code"),
+                    "ok": True,
+                    "approved_open_requests": approved,
+                }
+            )
+        except Exception as exc:
+            results.append(
+                {
+                    "tenant_id": str(tid),
+                    "tenant_name": tenant.get("name"),
+                    "short_code": tenant.get("short_code"),
+                    "ok": False,
+                    "error": str(exc)[:240],
+                }
+            )
+
+    return {
+        "service_key": service_key,
+        "rolled_out": sum(1 for r in results if r.get("ok")),
+        "failed": sum(1 for r in results if not r.get("ok")),
+        "results": results,
+    }

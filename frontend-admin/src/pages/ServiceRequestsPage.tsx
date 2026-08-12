@@ -21,6 +21,7 @@ const STATUS_OPTIONS: ConsultationRequestStatus[] = [
 export default function ServiceRequestsPage() {
   const [params] = useSearchParams();
   const highlightId = params.get("id");
+  const serviceKeyFilter = params.get("service_key") || "";
   const [rows, setRows] = useState<ConsultationRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +31,7 @@ export default function ServiceRequestsPage() {
 
   function refresh() {
     setLoading(true);
-    listConsultationRequests(statusFilter || undefined)
+    listConsultationRequests(statusFilter || undefined, serviceKeyFilter || undefined)
       .then((res) => {
         setRows(res.requests || []);
         setError(null);
@@ -45,7 +46,7 @@ export default function ServiceRequestsPage() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  }, [statusFilter, serviceKeyFilter]);
 
   const sorted = useMemo(() => {
     if (!highlightId) return rows;
@@ -89,6 +90,13 @@ export default function ServiceRequestsPage() {
       <p className="page-subtitle">
         Cross-tenant consultation and upgrade requests. Catalog view:{" "}
         <Link to="/services">Service Catalog</Link>.
+        {serviceKeyFilter ? (
+          <>
+            {" "}
+            Filtered by service <strong>{serviceKeyFilter}</strong>.{" "}
+            <Link to="/service-requests">Clear filter</Link>.
+          </>
+        ) : null}
       </p>
 
       <div className="form-grid" style={{ maxWidth: 280, marginBottom: "1rem" }}>

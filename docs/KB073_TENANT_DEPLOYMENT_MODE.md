@@ -17,6 +17,11 @@ When onboarding a customer in Admin → Customers, choose how that tenant connec
 `cloud_provider`: `aws` | `azure` | `gcp` | `other`  
 Required for `cloud` and `cloud_appliance`; optional for `hybrid`.
 
+## Appliance alert path (metadata only)
+
+For `on_prem_appliance` / `cloud_appliance` / `hybrid`, agents report to the **local appliance Manager**.  
+High/critical metadata is forwarded to the control plane over the secure channel — see **KB-093P**.
+
 ## What changed
 
 - DB: `tenants.deployment_mode`, `tenants.cloud_provider` (`008_kb073_*.sql`)
