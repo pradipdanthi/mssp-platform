@@ -13,15 +13,27 @@ PasswordAuthentication yes
 PermitRootLogin no
 EOF
 
+mkdir -p /var/lib/kevantic /var/log/kevantic /run/kevantic /etc/kevantic
+
 # Ensure engines stay idle if present
 for u in wazuh-manager fluent-bit suricata zeek podman.socket; do
   systemctl disable "$u" 2>/dev/null || true
   systemctl mask "$u" 2>/dev/null || true
 done
 
+# KB-093P — if firstboot/payload already staged appliance-src + unit, enable forwarder.
+# Full tree is normally applied by ISO firstboot ansible; mkosi N1 may be thinner.
+if [[ -f /etc/systemd/system/kevantic-critical-alert-forwarder.service ]]; then
+  systemctl enable kevantic-critical-alert-forwarder.service || true
+fi
+if [[ -f /opt/kevantic/appliance-src/appliance/telemetry/critical_alert_watcher.py ]]; then
+  echo "KB-093P critical-alert watcher present in image"
+fi
+
 cat >/etc/motd <<'EOF'
 Kevantic Appliance (immutable N1 — KB-093N)
 Factory: register with Admin Copy register command → Appliance Mgmt (VM 114)
+Critical alerts: local Manager → cloud SOC via kevantic-critical-alert-forwarder (KB-093P)
 EOF
 
 echo "kevantic postinst OK"

@@ -1,0 +1,33 @@
+[Unit]
+Description=Kevantic critical-alert forwarder (local Manager → cloud SOC metadata)
+Documentation=file:///opt/kevantic/docs/KB093P_APPLIANCE_CRITICAL_ALERT_FORWARD.md
+After=network-online.target
+Wants=network-online.target
+# Soft dependency — starts even if Manager is not yet entitled/started
+After=wazuh-manager.service
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/kevantic/appliance.env
+EnvironmentFile=-/etc/junexis/appliance.env
+Environment=PYTHONPATH=/opt/kevantic/appliance-src:/opt/junexis/appliance-src:/opt/kevantic:/opt/junexis
+Environment=KEVANTIC_STATE_DIR=/var/lib/kevantic
+Environment=KEVANTIC_LOG_DIR=/var/log/kevantic
+Environment=JUNEXIS_STATE_DIR=/var/lib/junexis
+Environment=JUNEXIS_LOG_DIR=/var/log/junexis
+# High + critical by default (Wazuh level >= 10). Set =12 for critical-only.
+Environment=KEVANTIC_FORWARD_MIN_LEVEL=10
+Environment=JUNEXIS_FORWARD_MIN_LEVEL=10
+Environment=KEVANTIC_WAZUH_ALERTS_PATH=/var/ossec/logs/alerts/alerts.json
+Environment=JUNEXIS_WAZUH_ALERTS_PATH=/var/ossec/logs/alerts/alerts.json
+ExecStartPre=/bin/mkdir -p /var/lib/kevantic /var/log/kevantic /run/kevantic /var/lib/junexis /var/log/junexis /run/junexis
+ExecStart=/usr/bin/python3 -m appliance.telemetry.critical_alert_watcher
+Restart=always
+RestartSec=5
+Nice=5
+NoNewPrivileges=true
+# Do not use ProtectSystem=strict with missing ReadWritePaths — breaks golden image boots.
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -143,6 +143,19 @@ def cmd_heartbeat(args: argparse.Namespace) -> int:
     return 0 if result.get("ok") else 4
 
 
+def cmd_forward_alerts(args: argparse.Namespace) -> int:
+    """Drain new high/critical local alerts once (manual / timer helper)."""
+    try:
+        from appliance.telemetry.critical_alert_watcher import drain_once
+
+        stats = drain_once()
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: {exc}", file=sys.stderr)
+        return 3
+    _out(stats, True)
+    return 0 if not stats.get("errors") else 4
+
+
 def cmd_bootstrap(args: argparse.Namespace) -> int:
     if args.bootstrap_cmd == "status":
         _out(state.load_bootstrap_state() | {"network_mode": state.get_network_mode()}, args.json)
@@ -311,6 +324,12 @@ def build_parser() -> argparse.ArgumentParser:
     hb = sub.add_parser("heartbeat", help="Push health + agent inventory; pull jobs", parents=[common])
     hb.add_argument("--no-inventory", action="store_true")
 
+    sub.add_parser(
+        "forward-alerts",
+        help="Forward new high/critical local Manager alerts to cloud SOC (one shot)",
+        parents=[common],
+    )
+
     boot = sub.add_parser("bootstrap", help="First-time critical updates", parents=[common])
     boot_sub = boot.add_subparsers(dest="bootstrap_cmd", required=True)
     boot_sub.add_parser("status", parents=[common])
@@ -361,6 +380,7 @@ def main(argv: list[str] | None = None) -> int:
         "setup": cmd_setup,
         "register": cmd_register,
         "heartbeat": cmd_heartbeat,
+        "forward-alerts": cmd_forward_alerts,
         "channel": cmd_channel,
         "bootstrap": cmd_bootstrap,
         "network": cmd_network,

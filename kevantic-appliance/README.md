@@ -27,6 +27,7 @@ Default user `kevantic` / password `ChangeMeNow!` — rotate after register.
 - **One ISO** for physical hardware and virtual appliances; on-prem or cloud-endpoint contracts
 - Keeps sensitive log payloads on-prem per customer preference
 - Sends **structured metadata + high-fidelity critical alerts** only to Kevantic Cloud SOC
+- **Critical-alert forwarder (KB-093P):** tails local Manager `alerts.json`, forwards level ≥ 10 only
 - **Bootstrap then lock:** temporary Internet for first critical OS/engine patches; then LAN + SOC channel only
 - **No TheHive / ticketing** on the box — cases stay in Cloud SOC
 
@@ -37,6 +38,14 @@ Local DuckDB/Parquet lake, anonymizing telemetry, retrospective hunt:
 - Code: `kevantic-appliance/appliance/`
 - Doc: `/opt/mssp-control/docs/KB093E_APPLIANCE_ENGINE_DATALAKE_TELEMETRY_HUNT.md`
 - Validate: `./scripts/kb093e_validate_appliance_engine.sh`
+
+## Critical-alert forward (KB-093P)
+
+Local Manager → anonymize → `POST /api/v1/telemetry/ingest`:
+
+- Doc: `/opt/mssp-control/docs/KB093P_APPLIANCE_CRITICAL_ALERT_FORWARD.md`
+- Install on a live box: `sudo ./kevantic-appliance/scripts/install_critical_alert_forwarder.sh`
+- Validate: `./scripts/kb093p_validate_appliance_critical_alert_forward.sh`
 
 ## What this is not
 

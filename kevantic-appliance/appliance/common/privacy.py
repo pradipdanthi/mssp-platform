@@ -96,10 +96,12 @@ def to_cloud_alert(event: dict[str, Any]) -> dict[str, Any]:
         or clean.get("event_type")
         or "Security alert"
     )
+    # Prefer explicit source_tool; never use agent hostname as the tool name.
+    decoder = clean.get("decoder") if isinstance(clean.get("decoder"), dict) else {}
     source_tool = str(
         clean.get("source_tool")
-        or clean.get("decoder", {}).get("name")
-        or clean.get("agent", {}).get("name")
+        or ("wazuh" if clean.get("rule") or clean.get("agent") else None)
+        or decoder.get("name")
         or "appliance"
     )[:100]
     external_id = str(
@@ -109,15 +111,27 @@ def to_cloud_alert(event: dict[str, Any]) -> dict[str, Any]:
         or clean.get("timestamp")
         or "unknown"
     )[:255]
+    agent = clean.get("agent") if isinstance(clean.get("agent"), dict) else {}
+    host = clean.get("destination_host") or agent.get("name")
+
+    description = clean.get("alert_description")
+    if not description:
+        parts = []
+        rule = clean.get("rule") if isinstance(clean.get("rule"), dict) else {}
+        if rule.get("id") is not None:
+            parts.append(f"rule={rule.get('id')}")
+        if rule.get("level") is not None:
+            parts.append(f"level={rule.get('level')}")
+        if agent.get("name"):
+            parts.append(f"agent={agent.get('name')}")
+        description = "; ".join(parts) if parts else None
 
     return {
         "source_tool": source_tool,
         "external_alert_id": external_id,
         "severity": severity,
         "alert_title": str(title)[:500],
-        "alert_description": str(clean.get("alert_description") or clean.get("full_log") or "")[:4000]
-        or None,
+        "alert_description": (str(description)[:4000] if description else None),
         "event_time": clean.get("event_time") or clean.get("timestamp"),
-        "destination_host": clean.get("destination_host")
-        or (clean.get("agent") or {}).get("name"),
+        "destination_host": str(host)[:255] if host else None,
     }

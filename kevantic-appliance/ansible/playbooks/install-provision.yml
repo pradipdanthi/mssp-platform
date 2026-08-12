@@ -56,3 +56,22 @@
         that:
           - kevantic_splash_png.stat.exists
         fail_msg: "Kevantic boot splash PNG missing after provision"
+
+    - name: Assert critical-alert forwarder unit installed (KB-093P golden image)
+      ansible.builtin.stat:
+        path: /etc/systemd/system/kevantic-critical-alert-forwarder.service
+      register: kevantic_fwd_unit
+
+    - name: Fail if critical-alert forwarder not baked into image
+      ansible.builtin.assert:
+        that:
+          - kevantic_fwd_unit.stat.exists
+        fail_msg: >-
+          kevantic-critical-alert-forwarder.service missing — golden image must
+          include local→cloud critical alert forwarding (KB-093P).
+
+    - name: Assert critical-alert forwarder enabled at boot
+      ansible.builtin.command: systemctl is-enabled kevantic-critical-alert-forwarder.service
+      register: kevantic_fwd_enabled
+      changed_when: false
+      failed_when: kevantic_fwd_enabled.stdout.strip() != "enabled"

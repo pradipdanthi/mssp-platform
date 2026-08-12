@@ -292,6 +292,71 @@ def _post_register_local_manager(app: dict[str, Any]) -> dict[str, Any]:
     except Exception:
         pass
 
+    # Enable local→cloud critical-alert forwarder (future default for appliance model)
+    try:
+        unit = Path("/etc/systemd/system/kevantic-critical-alert-forwarder.service")
+        if not unit.is_file():
+            # Best-effort copy from payload tree if present on image
+            for candidate in (
+                Path("/opt/kevantic/payload/configs/systemd/kevantic-critical-alert-forwarder.service"),
+                Path("/opt/kevantic/appliance-src/../configs/systemd/kevantic-critical-alert-forwarder.service"),
+            ):
+                if candidate.is_file():
+                    unit.write_text(candidate.read_text(encoding="utf-8"), encoding="utf-8")
+                    break
+        if unit.is_file():
+            base = str(app.get("control_plane") or "").rstrip("/")
+            if base:
+                env_path = Path("/etc/kevantic/appliance.env")
+                env_path.parent.mkdir(parents=True, exist_ok=True)
+                lines = []
+                if env_path.is_file():
+                    lines = env_path.read_text(encoding="utf-8").splitlines()
+                kv = {
+                    "KEVANTIC_TELEMETRY_URL": f"{base}/api/v1/telemetry/ingest",
+                    "KEVANTIC_APPLIANCE_ID": str(app.get("appliance_id") or ""),
+                    "KEVANTIC_FORWARD_MIN_LEVEL": "10",
+                }
+                out_lines = []
+                seen = set()
+                for line in lines:
+                    if "=" in line and not line.strip().startswith("#"):
+                        k = line.split("=", 1)[0].strip()
+                        if k in kv:
+                            out_lines.append(f"{k}={kv[k]}")
+                            seen.add(k)
+                            continue
+                    out_lines.append(line)
+                for k, v in kv.items():
+                    if k not in seen and v:
+                        out_lines.append(f"{k}={v}")
+                env_path.write_text("\n".join(out_lines).rstrip() + "\n", encoding="utf-8")
+                env_path.chmod(0o640)
+            subprocess.run(["systemctl", "daemon-reload"], check=False, timeout=30)
+            subprocess.run(
+                ["systemctl", "enable", "--now", "kevantic-critical-alert-forwarder.service"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            st = subprocess.run(
+                ["systemctl", "is-active", "kevantic-critical-alert-forwarder.service"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            result["critical_alert_forwarder"] = (st.stdout or "").strip() or "unknown"
+        else:
+            result["critical_alert_forwarder"] = "unit_missing"
+            result["errors"].append(
+                "critical-alert forwarder unit missing; run "
+                "kevantic-appliance/scripts/install_critical_alert_forwarder.sh"
+            )
+    except Exception as exc:  # noqa: BLE001
+        result["errors"].append(f"critical_alert_forwarder: {exc}")
+        result["critical_alert_forwarder"] = "error"
+
     return result
 
 

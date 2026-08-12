@@ -67,6 +67,8 @@ def ingest_appliance_alert(
             detail="Alert could not be ingested due to an internal error",
         )
 
+    incident_id = None
+    incident_number = None
     try:
         with db_transaction() as cur:
             # No schema change is allowed in KB-057. A transaction-scoped
@@ -131,6 +133,36 @@ def ingest_appliance_alert(
                 alert_row = cur.fetchone()
                 duplicate = False
 
+                cur.execute(
+                    "SELECT short_code FROM tenants WHERE id = %s::uuid;",
+                    (appliance["tenant_id"],),
+                )
+                tenant_row = cur.fetchone() or {}
+                short_code = str(tenant_row.get("short_code") or "TENANT")
+                from app.services.appliance_alert_incidents import (
+                    ensure_incident_for_appliance_alert,
+                )
+
+                incident = ensure_incident_for_appliance_alert(
+                    cur,
+                    tenant_id=str(appliance["tenant_id"]),
+                    short_code=short_code,
+                    alert_id=alert_row["id"],
+                    severity=payload.severity,
+                    alert_title=payload.alert_title,
+                    destination_host=payload.destination_host,
+                )
+                if incident:
+                    incident_id, incident_number = incident
+                    cur.execute(
+                        """
+                        SELECT id::text, customer_visible, status
+                        FROM security_alerts WHERE id = %s::uuid;
+                        """,
+                        (alert_row["id"],),
+                    )
+                    alert_row = cur.fetchone() or alert_row
+
             cur.execute(
                 """
                 UPDATE appliances
@@ -146,10 +178,14 @@ def ingest_appliance_alert(
             detail="Alert could not be ingested due to an internal error",
         )
 
-    return {
+    out: Dict[str, Any] = {
         "alert_id": alert_row["id"],
         "duplicate": duplicate,
         "customer_visible": alert_row["customer_visible"],
         "status": alert_row["status"],
         "message": "Alert already received" if duplicate else "Alert received for SOC triage",
     }
+    if incident_id and incident_number:
+        out["incident_id"] = incident_id
+        out["incident_number"] = incident_number
+    return out

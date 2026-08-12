@@ -9,6 +9,7 @@ import ssl
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from appliance.common import metadata_db
@@ -16,6 +17,33 @@ from appliance.common.paths import ensure_engine_dirs, telemetry_url
 from appliance.common.privacy import to_cloud_alert
 
 logger = logging.getLogger(__name__)
+
+
+def _env_first(*keys: str) -> str:
+    for k in keys:
+        v = (os.environ.get(k) or "").strip()
+        if v:
+            return v
+    return ""
+
+
+def _read_api_key_file() -> str:
+    candidates = [
+        os.environ.get("KEVANTIC_API_KEY_FILE"),
+        os.environ.get("JUNEXIS_API_KEY_FILE"),
+        "/var/lib/kevantic/secrets/appliance_api_key",
+        "/var/lib/junexis/secrets/appliance_api_key",
+    ]
+    for path in candidates:
+        if not path:
+            continue
+        try:
+            text = Path(path).read_text(encoding="utf-8").strip()
+            if text:
+                return text
+        except OSError:
+            continue
+    return ""
 
 
 def _parse_ts(s: str) -> datetime:
@@ -28,7 +56,7 @@ def _backoff_seconds(attempts: int) -> int:
 
 class TelemetryForwarder:
     """
-    Strip PII and POST normalized alerts to api.kevantic.com telemetry ingest.
+    Strip PII and POST normalized alerts to control-plane telemetry ingest.
     On failure, buffer to SQLite and retry with exponential backoff.
     """
 
@@ -42,8 +70,14 @@ class TelemetryForwarder:
     ) -> None:
         ensure_engine_dirs()
         self.url = url or telemetry_url()
-        self.appliance_id = appliance_id or os.environ.get("KEVANTIC_APPLIANCE_ID", "")
-        self.api_key = api_key or os.environ.get("KEVANTIC_APPLIANCE_API_KEY", "")
+        self.appliance_id = appliance_id or _env_first(
+            "KEVANTIC_APPLIANCE_ID", "JUNEXIS_APPLIANCE_ID"
+        )
+        self.api_key = (
+            api_key
+            or _env_first("KEVANTIC_APPLIANCE_API_KEY", "JUNEXIS_APPLIANCE_API_KEY")
+            or _read_api_key_file()
+        )
         self.timeout = timeout
 
     def forward_event(self, event: dict[str, Any]) -> dict[str, Any]:
@@ -62,8 +96,13 @@ class TelemetryForwarder:
         req = urllib.request.Request(
             self.url, data=data, headers=self._headers(), method="POST"
         )
-        ctx = ssl.create_default_context()
-        with urllib.request.urlopen(req, timeout=self.timeout, context=ctx) as resp:
+        # HTTP lab URLs must not force TLS context.
+        if str(self.url).startswith("https://"):
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=self.timeout, context=ctx) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                return int(resp.status), body
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return int(resp.status), body
 
@@ -71,7 +110,12 @@ class TelemetryForwarder:
         try:
             status, body = self._http_post(payload)
             return {"ok": True, "status": status, "body": body[:500], "buffered": False}
-        except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError) as exc:
+        except (
+            urllib.error.URLError,
+            urllib.error.HTTPError,
+            TimeoutError,
+            OSError,
+        ) as exc:
             self._enqueue(payload, error=str(exc))
             logger.warning("telemetry send failed; buffered: %s", exc)
             return {"ok": False, "buffered": True, "error": str(exc)}
