@@ -53,6 +53,7 @@ from app.api.routes.threatlens import router as threatlens_router
 from app.api.routes.endpoint_forensics import router as endpoint_forensics_router
 from app.api.routes.vuln_sync import router as vuln_sync_router
 from app.api.routes.vulnerability_management import router as vulnerability_management_router
+from app.api.routes.admin_ai_chat import router as admin_ai_chat_router
 from app.core.cors import get_cors_allowed_origins
 from app.core.error_handlers import validation_exception_handler
 
@@ -156,6 +157,9 @@ app.include_router(threatlens_router)
 app.include_router(endpoint_forensics_router)
 app.include_router(edr_router)
 
+# KB-096: Admin AI chat (SOC Q&A; dark behind AI_CHAT_ENABLED).
+app.include_router(admin_ai_chat_router)
+
 # KB-084: endpoint onboarding config packages (Sysmon/Osquery templates).
 app.include_router(admin_onboarding_configs_router)
 
@@ -180,6 +184,7 @@ app.include_router(delegated_user_management_v1_router)
 import asyncio
 from app.services.edr_sweeper import edr_sweeper_loop
 from app.services.shuffle_retry_queue import start_shuffle_retry_worker
+from app.services.ai_alert_queue import start_ai_alert_worker
 
 _sweeper_task = None
 
@@ -188,6 +193,7 @@ async def _start_background_tasks():
     global _sweeper_task
     _sweeper_task = asyncio.create_task(edr_sweeper_loop())
     start_shuffle_retry_worker()
+    start_ai_alert_worker()
 
 @app.on_event("shutdown")
 async def _stop_background_tasks():

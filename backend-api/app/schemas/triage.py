@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 AlertStatus = Literal["new", "triaged", "incident_created", "false_positive", "closed"]
+AiTriageStatus = Literal["draft", "accepted", "rejected", "stale"]
 IncidentStatus = Literal["open", "in_progress", "waiting_customer", "resolved", "closed"]
 CommentVisibility = Literal["internal", "customer"]
 
@@ -19,13 +20,15 @@ class AlertTriageUpdateRequest(BaseModel):
     # Customer-facing copy SOC can polish before enabling visibility.
     ai_plain_summary: Optional[str] = Field(default=None, max_length=4000)
     ai_recommended_action: Optional[str] = Field(default=None, max_length=4000)
+    # KB-096: human finalize of AI SOC triage draft (accept / reject).
+    ai_triage_status: Optional[AiTriageStatus] = None
 
     @model_validator(mode="after")
     def require_update(self) -> "AlertTriageUpdateRequest":
         if not self.model_fields_set:
             raise ValueError("At least one triage field must be provided")
         # Status / visibility flags cannot be null when sent.
-        for field in ("status", "customer_visible"):
+        for field in ("status", "customer_visible", "ai_triage_status"):
             if field in self.model_fields_set and getattr(self, field) is None:
                 raise ValueError(f"{field} cannot be null")
         # Text fields: blank string → store as NULL (clear).

@@ -139,10 +139,93 @@ export default function AlertDetailPage() {
             </tbody>
           </table>
 
+          <h2 className="section-title">AI SOC triage assist (draft)</h2>
+          <table className="data-table">
+            <tbody>
+              <tr><th>Triage status</th><td>{alert.ai_triage_status ?? "none"}</td></tr>
+              <tr><th>Risk score</th><td>{alert.ai_risk_score ?? "—"}</td></tr>
+              <tr><th>Risk rationale</th><td>{alert.ai_risk_rationale ?? "—"}</td></tr>
+              <tr><th>Enrichment notes</th><td>{alert.ai_enrichment_notes ?? "—"}</td></tr>
+              <tr><th>Correlation notes</th><td>{alert.ai_correlation_notes ?? "—"}</td></tr>
+              <tr>
+                <th>Containment suggestion</th>
+                <td>
+                  {alert.ai_containment_suggestion ?? "—"}
+                  <div className="page-subtitle" style={{ marginTop: "0.35rem" }}>
+                    Human decision only — the platform never auto-isolates, disables accounts,
+                    or blocks IOCs from this draft.
+                  </div>
+                </td>
+              </tr>
+              <tr><th>Triaged at</th><td>{alert.ai_triaged_at ?? "—"}</td></tr>
+            </tbody>
+          </table>
+
           <p className="page-subtitle" style={{ marginTop: "0.5rem" }}>
-            SOC analysis fields are rule-driven until the AI worker is enabled. High-severity Wazuh
-            alerts are forwarded to Shuffle for case creation via the control-plane ingress path.
+            SOC analysis fields are AI-assisted when the alert worker is enabled (high/critical).
+            Risk / enrich / correlate drafts (KB-096) consume Threat Intel IOC rows and related
+            alerts — they complement Threat Intel, they do not replace it. Analyst edits always win.
+            High-severity detection alerts are also forwarded to Shuffle for case creation.
           </p>
+
+          {canUpdate && (alert.ai_triage_status === "draft" || alert.ai_risk_score != null) ? (
+            <div className="credential-panel" style={{ marginBottom: "1rem" }}>
+              <p className="page-subtitle" style={{ marginTop: 0 }}>
+                Human finalize: accept keeps this draft for the case file; reject marks it discarded
+                so the worker may refresh later.
+              </p>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={saving}
+                onClick={async () => {
+                  if (!alertId) return;
+                  setSaving(true);
+                  setSaveMessage(null);
+                  try {
+                    await updateAlertTriage(alertId, { ai_triage_status: "accepted" });
+                    setSaveMessage("AI triage draft accepted.");
+                    refetch();
+                  } catch (error) {
+                    if (error instanceof ApiError && error.status === 401) {
+                      logout();
+                      return;
+                    }
+                    setSaveMessage("Unable to accept AI triage draft.");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                Accept AI draft
+              </button>{" "}
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={saving}
+                onClick={async () => {
+                  if (!alertId) return;
+                  setSaving(true);
+                  setSaveMessage(null);
+                  try {
+                    await updateAlertTriage(alertId, { ai_triage_status: "rejected" });
+                    setSaveMessage("AI triage draft rejected.");
+                    refetch();
+                  } catch (error) {
+                    if (error instanceof ApiError && error.status === 401) {
+                      logout();
+                      return;
+                    }
+                    setSaveMessage("Unable to reject AI triage draft.");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                Reject AI draft
+              </button>
+            </div>
+          ) : null}
 
           <h2 className="section-title">Triage</h2>
           <form className="credential-panel" onSubmit={handleSave}>

@@ -196,6 +196,14 @@ export interface AlertDetail extends Alert {
   ai_business_impact: string | null;
   ai_recommended_action: string | null;
   ai_false_positive_score: number | null;
+  /** KB-096 draft SOC triage assist (human must accept). */
+  ai_risk_score?: number | null;
+  ai_risk_rationale?: string | null;
+  ai_enrichment_notes?: string | null;
+  ai_correlation_notes?: string | null;
+  ai_containment_suggestion?: string | null;
+  ai_triage_status?: string | null;
+  ai_triaged_at?: string | null;
   mitre_mapping: Record<string, unknown>;
   updated_at: string;
   asset_criticality?: string | null;
@@ -218,6 +226,7 @@ export interface AlertTriageUpdate {
   customer_visible?: boolean;
   ai_plain_summary?: string | null;
   ai_recommended_action?: string | null;
+  ai_triage_status?: "draft" | "accepted" | "rejected" | "stale";
 }
 
 export interface Incident {
@@ -662,6 +671,41 @@ export function updateAlertTriage(
   return request<AlertDetailResponse>(`/admin/alerts/${encodeURIComponent(alertId)}`, {
     method: "PATCH",
     body: update,
+  });
+}
+
+/** KB-096 Admin AI chat */
+export interface AdminAiChatStatus {
+  enabled: boolean;
+  message: string;
+}
+
+export interface AdminAiChatRequest {
+  message: string;
+  tenant_id?: string;
+  tenant_short_code?: string;
+}
+
+export interface AdminAiChatResponse {
+  scope: string;
+  tenant: { id: string; name: string; short_code: string } | null;
+  answer: string;
+  sources: {
+    alerts: number;
+    incidents: number;
+    threat_intel_iocs: number;
+    recommendations: number;
+  };
+}
+
+export function getAdminAiChatStatus(): Promise<AdminAiChatStatus> {
+  return request<AdminAiChatStatus>("/admin/ai/chat/status");
+}
+
+export function postAdminAiChat(body: AdminAiChatRequest): Promise<AdminAiChatResponse> {
+  return request<AdminAiChatResponse>("/admin/ai/chat", {
+    method: "POST",
+    body,
   });
 }
 

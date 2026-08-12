@@ -56,6 +56,13 @@ def _alert_detail(alert_id: UUID) -> Dict[str, Any]:
             sa.ai_business_impact,
             sa.ai_recommended_action,
             sa.ai_false_positive_score,
+            sa.ai_risk_score,
+            sa.ai_risk_rationale,
+            sa.ai_enrichment_notes,
+            sa.ai_correlation_notes,
+            sa.ai_containment_suggestion,
+            sa.ai_triage_status,
+            sa.ai_triaged_at,
             sa.mitre_mapping,
             sa.customer_visible,
             sa.status,
@@ -186,6 +193,9 @@ def update_admin_alert_triage(
     if "ai_recommended_action" in payload.model_fields_set:
         assignments.append("ai_recommended_action = %s")
         values.append(payload.ai_recommended_action)
+    if "ai_triage_status" in payload.model_fields_set:
+        assignments.append("ai_triage_status = %s")
+        values.append(payload.ai_triage_status)
     assignments.append("updated_at = now()")
     values.append(alert_id)
 

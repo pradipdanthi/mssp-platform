@@ -90,6 +90,18 @@ services:
       PLATFORM_ROOT_DOMAIN: ${PLATFORM_ROOT_DOMAIN:-kevantic.com}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TZ: ${TZ}
+      # KB-092 AI alert analysis → dedicated Ollama VM (off by default)
+      AI_ALERT_ENABLED: ${AI_ALERT_ENABLED:-false}
+      AI_ALERT_PROVIDER: ${AI_ALERT_PROVIDER:-openai_compatible}
+      AI_ALERT_BASE_URL: ${AI_ALERT_BASE_URL:-}
+      AI_ALERT_API_KEY: ${AI_ALERT_API_KEY:-}
+      AI_ALERT_MODEL: ${AI_ALERT_MODEL:-qwen2.5:14b}
+      AI_ALERT_QUEUE_KEY: ${AI_ALERT_QUEUE_KEY:-mssp:ai:alert_analysis}
+      AI_ALERT_MIN_SEVERITY: ${AI_ALERT_MIN_SEVERITY:-high}
+      AI_ALERT_TIMEOUT_SECONDS: ${AI_ALERT_TIMEOUT_SECONDS:-90}
+      # KB-096: enrich/correlate/risk draft (default off — enable after validation)
+      AI_SOC_TRIAGE_ENABLED: ${AI_SOC_TRIAGE_ENABLED:-false}
+      AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy

@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -75,9 +76,20 @@ def configured() -> bool:
     return bool(tenant_id() and client_id() and client_secret())
 
 
+_cached_token: Optional[str] = None
+_cached_token_expires_at: float = 0.0
+
+
 def _token() -> str:
     if not configured():
         raise ItdrGraphError("Microsoft Graph credentials are not configured")
+
+    # Simple in-process token cache (KB-096 Phase 2 hardening).
+    global _cached_token, _cached_token_expires_at
+    now = time.time()
+    if _cached_token and _cached_token_expires_at > now + 60:
+        return _cached_token
+
     body = urllib.parse.urlencode(
         {
             "client_id": client_id(),
@@ -101,7 +113,10 @@ def _token() -> str:
     token = data.get("access_token")
     if not token:
         raise ItdrGraphError("Graph token response missing access_token")
-    return str(token)
+    expires_in = int(data.get("expires_in") or 3600)
+    _cached_token = str(token)
+    _cached_token_expires_at = now + max(60, expires_in)
+    return _cached_token
 
 
 def _get(path: str, *, top: int = 50) -> Dict[str, Any]:

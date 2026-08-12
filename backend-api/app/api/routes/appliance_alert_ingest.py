@@ -188,4 +188,18 @@ def ingest_appliance_alert(
     if incident_id and incident_number:
         out["incident_id"] = incident_id
         out["incident_number"] = incident_number
+
+    # KB-092: enqueue new high/critical appliance alerts for LLM fill (no-op if disabled).
+    if not duplicate:
+        try:
+            from app.services.ai_alert_queue import enqueue_ai_alert_analysis
+
+            enqueue_ai_alert_analysis(
+                alert_id=str(alert_row["id"]),
+                tenant_id=str(appliance["tenant_id"]),
+                severity=payload.severity,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("AI alert enqueue failed for alert_id=%s", alert_row["id"])
+
     return out

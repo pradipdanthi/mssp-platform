@@ -505,13 +505,24 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                     "status": "incident_created",
                 }
 
-        return (
-            {
-                "alert_id": alert_row["id"],
-                "incident_id": incident_id,
-                "incident_number": incident_number,
-                "customer_visible": bool(alert_row["customer_visible"]),
-                "status": alert_row["status"],
-            },
-            duplicate,
-        )
+        result = {
+            "alert_id": alert_row["id"],
+            "incident_id": incident_id,
+            "incident_number": incident_number,
+            "customer_visible": bool(alert_row["customer_visible"]),
+            "status": alert_row["status"],
+        }
+
+        # KB-092: enqueue high/critical alerts for LLM plain-English fill (no-op if disabled).
+        try:
+            from app.services.ai_alert_queue import enqueue_ai_alert_analysis
+
+            enqueue_ai_alert_analysis(
+                alert_id=str(alert_row["id"]),
+                tenant_id=str(tenant_id),
+                severity=payload.severity,
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("AI alert enqueue failed for alert_id=%s", alert_row["id"])
+
+        return result, duplicate

@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: "/appliances", label: "Appliances" },
   { to: "/retrospective-hunts", label: "Retro Hunts" },
   { to: "/threat-intel", label: "Threat Intel" },
+  { to: "/ai-assistant", label: "AI Assistant" },
   { to: "/assets", label: "Assets" },
   { to: "/alerts", label: "Alerts" },
   { to: "/incidents", label: "Incidents" },
