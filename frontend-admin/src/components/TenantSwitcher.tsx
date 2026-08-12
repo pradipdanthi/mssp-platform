@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { getTenants } from "../api/admin";
 
 const STORAGE_KEY = "mssp.admin.tenantFilter";
+export const TENANT_FILTER_EVENT = "mssp-tenant-filter";
 
 export function getStoredTenantFilter(): string {
   try {
@@ -11,7 +12,17 @@ export function getStoredTenantFilter(): string {
   }
 }
 
-/** Header tenant switcher — filters are stored for future list pages. */
+/** Persist header tenant scope and notify all listeners (dashboard, lists). */
+export function setStoredTenantFilter(next: string): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    /* ignore */
+  }
+  window.dispatchEvent(new CustomEvent(TENANT_FILTER_EVENT, { detail: next }));
+}
+
+/** Header tenant switcher — scopes Admin dashboard and listening pages. */
 export default function TenantSwitcher() {
   const [tenants, setTenants] = useState<{ id: string; name: string; short_code: string }[]>([]);
   const [value, setValue] = useState(getStoredTenantFilter);
@@ -37,6 +48,15 @@ export default function TenantSwitcher() {
     };
   }, []);
 
+  useEffect(() => {
+    const onTenant = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      if (typeof detail === "string") setValue(detail);
+    };
+    window.addEventListener(TENANT_FILTER_EVENT, onTenant as EventListener);
+    return () => window.removeEventListener(TENANT_FILTER_EVENT, onTenant as EventListener);
+  }, []);
+
   const count = tenants.length;
   const label =
     value === "all"
@@ -52,12 +72,7 @@ export default function TenantSwitcher() {
       onChange={(e) => {
         const next = e.target.value;
         setValue(next);
-        try {
-          localStorage.setItem(STORAGE_KEY, next);
-        } catch {
-          /* ignore */
-        }
-        window.dispatchEvent(new CustomEvent("mssp-tenant-filter", { detail: next }));
+        setStoredTenantFilter(next);
       }}
     >
       <option value="all">Tenant Scope: All Tenants ({count || 0})</option>

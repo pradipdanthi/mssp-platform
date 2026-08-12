@@ -1,7 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getDashboard, getIncidents, getTenants, getConsultationSummary, getApplianceCommandSummary, type Incident, type ApplianceCommandSummary } from "../api/admin";
-import { getStoredTenantFilter } from "../components/TenantSwitcher";
+import {
+  getDashboard,
+  getIncidents,
+  getTenants,
+  getConsultationSummary,
+  getApplianceCommandSummary,
+  type Incident,
+  type ApplianceCommandSummary,
+} from "../api/admin";
+import {
+  getStoredTenantFilter,
+  setStoredTenantFilter,
+  TENANT_FILTER_EVENT,
+} from "../components/TenantSwitcher";
 import GeoActivityHeatmap, { hubsFromActivity } from "../components/GeoActivityHeatmap";
 import MiniSparkline from "../components/MiniSparkline";
 import RadialGauge from "../components/RadialGauge";
@@ -48,39 +60,64 @@ function withinWindow(iso: string | null | undefined, window: TimeWindow): boole
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const dash = useAdminQuery(() => getDashboard(), []);
-  const incidentsQ = useAdminQuery(() => getIncidents({ page: 1, page_size: 200 }), []);
   const [feedSeverity, setFeedSeverity] = useState<string | null>(null);
   const [timeWindow, setTimeWindow] = useState<TimeWindow>("24h");
-  const [crossTenant, setCrossTenant] = useState(true);
   const [liveFeed, setLiveFeed] = useState(false);
   const [liveTick, setLiveTick] = useState(0);
   const [tenantFilter, setTenantFilter] = useState(getStoredTenantFilter);
-  const [tenantCodeById, setTenantCodeById] = useState<Record<string, string>>({});
+  const [tenantMetaById, setTenantMetaById] = useState<
+    Record<string, { name: string; short_code: string }>
+  >({});
   const [edrMetrics, setEdrMetrics] = useState<EdrMetricsSummary | null>(null);
   const [edrLoading, setEdrLoading] = useState(true);
   const [pendingServiceRequests, setPendingServiceRequests] = useState<number | null>(null);
   const [applianceCmd, setApplianceCmd] = useState<ApplianceCommandSummary | null>(null);
 
+  const scopedTenantId = tenantFilter !== "all" ? tenantFilter : undefined;
+  const crossTenant = !scopedTenantId;
+  const scopedTenantLabel = scopedTenantId
+    ? tenantMetaById[scopedTenantId]?.name ||
+      tenantMetaById[scopedTenantId]?.short_code ||
+      "Selected customer"
+    : "All tenants";
+
+  const dash = useAdminQuery(
+    () => getDashboard(scopedTenantId ? { tenant_id: scopedTenantId } : undefined),
+    [scopedTenantId]
+  );
+  const incidentsQ = useAdminQuery(
+    () =>
+      getIncidents({
+        page: 1,
+        page_size: 200,
+        ...(scopedTenantId ? { tenant_id: scopedTenantId } : {}),
+      }),
+    [scopedTenantId]
+  );
+
   useEffect(() => {
-    getConsultationSummary()
+    getConsultationSummary(scopedTenantId ? { tenant_id: scopedTenantId } : undefined)
       .then((s) => setPendingServiceRequests(s.unreviewed_total))
       .catch(() => setPendingServiceRequests(null));
-  }, []);
+  }, [scopedTenantId]);
 
   useEffect(() => {
-    getApplianceCommandSummary()
+    getApplianceCommandSummary(scopedTenantId ? { tenant_id: scopedTenantId } : undefined)
       .then(setApplianceCmd)
       .catch(() => setApplianceCmd(null));
-  }, [liveTick]);
+  }, [liveTick, scopedTenantId]);
 
   useEffect(() => {
+    const shortCode = scopedTenantId
+      ? tenantMetaById[scopedTenantId]?.short_code
+      : undefined;
+    if (scopedTenantId && !shortCode) return;
     setEdrLoading(true);
-    getEdrMetrics(tenantFilter || undefined)
+    getEdrMetrics(shortCode)
       .then(setEdrMetrics)
       .catch(() => setEdrMetrics(null))
       .finally(() => setEdrLoading(false));
-  }, [tenantFilter]);
+  }, [scopedTenantId, tenantMetaById]);
 
   useEffect(() => {
     publishLiveFeed(liveFeed);
@@ -99,8 +136,8 @@ export default function DashboardPage() {
       const detail = (e as CustomEvent<string>).detail;
       if (typeof detail === "string") setTenantFilter(detail);
     };
-    window.addEventListener("mssp-tenant-filter", onTenant as EventListener);
-    return () => window.removeEventListener("mssp-tenant-filter", onTenant as EventListener);
+    window.addEventListener(TENANT_FILTER_EVENT, onTenant as EventListener);
+    return () => window.removeEventListener(TENANT_FILTER_EVENT, onTenant as EventListener);
   }, []);
 
   useEffect(() => {
@@ -108,9 +145,11 @@ export default function DashboardPage() {
     getTenants({ page_size: 200 })
       .then((res) => {
         if (cancelled) return;
-        const map: Record<string, string> = {};
-        for (const t of res.tenants || []) map[t.id] = t.short_code;
-        setTenantCodeById(map);
+        const map: Record<string, { name: string; short_code: string }> = {};
+        for (const t of res.tenants || []) {
+          map[t.id] = { name: t.name, short_code: t.short_code };
+        }
+        setTenantMetaById(map);
       })
       .catch(() => undefined);
     return () => {
@@ -118,7 +157,6 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Live feed: poll dashboard + incidents; bump heatmap tick for visual refresh
   useEffect(() => {
     if (!liveFeed) return;
     const tick = () => {
@@ -129,26 +167,22 @@ export default function DashboardPage() {
     tick();
     const id = window.setInterval(tick, 8000);
     return () => window.clearInterval(id);
-  }, [liveFeed, dash.refetch, incidentsQ.refetch]);
+  }, [liveFeed, dash.refetch, incidentsQ.refetch, scopedTenantId]);
 
   const incidents: Incident[] = incidentsQ.data?.incidents ?? [];
 
   const scopedIncidents = useMemo(() => {
     let rows = incidents.filter((i) => withinWindow(i.opened_at || i.created_at, timeWindow));
-    if (!crossTenant) {
-      if (tenantFilter !== "all") {
-        const code = tenantCodeById[tenantFilter]?.toUpperCase();
-        rows = rows.filter((i) => {
-          if (code && i.short_code?.toUpperCase() === code) return true;
-          return i.short_code === tenantFilter || i.tenant_name === tenantFilter;
-        });
-      } else if (rows.length > 0) {
-        const first = rows[0].short_code;
-        rows = rows.filter((i) => i.short_code === first);
-      }
+    if (scopedTenantId) {
+      const meta = tenantMetaById[scopedTenantId];
+      const code = meta?.short_code?.toUpperCase();
+      rows = rows.filter((i) => {
+        if (code && i.short_code?.toUpperCase() === code) return true;
+        return i.short_code === scopedTenantId || i.tenant_name === meta?.name;
+      });
     }
     return rows;
-  }, [incidents, timeWindow, crossTenant, tenantFilter, tenantCodeById]);
+  }, [incidents, timeWindow, scopedTenantId, tenantMetaById]);
 
   const buckets = useMemo(
     () =>
@@ -240,12 +274,17 @@ export default function DashboardPage() {
             aria-pressed={crossTenant}
             title={
               crossTenant
-                ? "Showing all tenants — click to scope to header tenant filter / first tenant"
-                : "Scoped tenant view — click for cross-tenant"
+                ? "Showing all customers — pick one in the header Tenant Scope dropdown to filter"
+                : `Scoped to ${scopedTenantLabel} — click to show all customers`
             }
-            onClick={() => setCrossTenant((v) => !v)}
+            onClick={() => {
+              if (!crossTenant) {
+                setTenantFilter("all");
+                setStoredTenantFilter("all");
+              }
+            }}
           >
-            Cross-tenant
+            {crossTenant ? "Cross-tenant" : `Scoped: ${scopedTenantLabel}`}
           </button>
           <button
             type="button"
@@ -336,7 +375,7 @@ export default function DashboardPage() {
               </div>
               <div className="kpi-value kpi-value--critical">{overview.open_incidents}</div>
               <div className="kpi-foot">
-                {crossTenant ? "Cross-tenant" : "Scoped"} · {timeWindow}
+                {crossTenant ? "Cross-tenant" : scopedTenantLabel} · {timeWindow}
               </div>
             </Link>
 

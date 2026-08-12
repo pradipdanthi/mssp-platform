@@ -353,27 +353,37 @@ def _dispatch_appliance(job: Dict[str, Any], iocs: List[str], lookback: int) -> 
             )
 
 
-def appliance_command_summary() -> Dict[str, Any]:
+def appliance_command_summary(tenant_id: Optional[str] = None) -> Dict[str, Any]:
     """Admin dashboard tile metrics for connected appliances / Data Lake volume."""
+    tid = str(tenant_id).strip() if tenant_id else None
+    if tid and not is_valid_uuid(tid):
+        tid = None
+    appliance_where = "WHERE tenant_id = %s::uuid" if tid else ""
+    hunt_where = "WHERE tenant_id = %s::uuid" if tid else ""
+    params: tuple = (tid,) if tid else ()
     row = fetch_one(
-        """
+        f"""
         SELECT
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE status = 'ONLINE')::int AS online,
             COUNT(*) FILTER (WHERE status = 'OFFLINE')::int AS offline,
             COALESCE(SUM(disk_used_gb), 0)::float AS disk_used_gb_total,
             COALESCE(SUM(log_ingest_rate), 0)::float AS log_ingest_rate_total
-        FROM tenant_appliances;
-        """
+        FROM tenant_appliances
+        {appliance_where};
+        """,
+        params,
     ) or {}
     jobs = fetch_one(
-        """
+        f"""
         SELECT
             COUNT(*) FILTER (WHERE status = 'RUNNING')::int AS running,
             COUNT(*) FILTER (WHERE status = 'PENDING')::int AS pending,
             COUNT(*) FILTER (WHERE created_at > now() - interval '24 hours')::int AS last_24h
-        FROM retrospective_hunt_jobs;
-        """
+        FROM retrospective_hunt_jobs
+        {hunt_where};
+        """,
+        params,
     ) or {}
     return {
         "engine": ENGINE_LABEL,

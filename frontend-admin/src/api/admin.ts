@@ -330,8 +330,13 @@ function withFilters(path: string, filters?: TriageListFilters): string {
   return query ? `${path}?${query}` : path;
 }
 
-export function getDashboard(): Promise<DashboardResponse> {
-  return request<DashboardResponse>("/admin/dashboard");
+export function getDashboard(filters?: { tenant_id?: string }): Promise<DashboardResponse> {
+  const params = new URLSearchParams();
+  if (filters?.tenant_id && filters.tenant_id !== "all") {
+    params.set("tenant_id", filters.tenant_id);
+  }
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request<DashboardResponse>(`/admin/dashboard${q}`);
 }
 
 export function getTenants(filters?: TriageListFilters): Promise<TenantsListResponse> {
@@ -1463,18 +1468,99 @@ export interface ConsultationCreatePayload {
   tenant_short_code: string;
 }
 
-export function getConsultationSummary(): Promise<{
+export function getConsultationSummary(opts?: {
+  tenant_id?: string;
+}): Promise<{
   pending_consultation: number;
   under_review: number;
   unreviewed_total: number;
   resend_configured: boolean;
 }> {
-  return request("/admin/service-consultation-requests/summary");
+  const params = new URLSearchParams();
+  if (opts?.tenant_id && opts.tenant_id !== "all") {
+    params.set("tenant_id", opts.tenant_id);
+  }
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/admin/service-consultation-requests/summary${q}`);
 }
 
-export function listConsultationRequests(status?: string): Promise<{ requests: ConsultationRequest[] }> {
-  const q = status ? `?status=${encodeURIComponent(status)}` : "";
+export function listConsultationRequests(
+  status?: string,
+  serviceKey?: string
+): Promise<{ requests: ConsultationRequest[] }> {
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (serviceKey) params.set("service_key", serviceKey);
+  const q = params.toString() ? `?${params.toString()}` : "";
   return request(`/admin/service-consultation-requests${q}`);
+}
+
+export interface AdminCatalogService {
+  service_key: string;
+  service_name: string;
+  pricing_display: string;
+  pricing_notes?: string | null;
+  competitor_value?: string | null;
+  is_core: boolean;
+  requestable: boolean;
+  sort_order: number;
+  updated_at?: string | null;
+  active_tenant_count: number;
+  open_request_count: number;
+  open_requests: Array<{
+    id: string;
+    tenant_id: string;
+    tenant_name?: string | null;
+    short_code?: string | null;
+    status: string;
+    created_at?: string | null;
+    requested_by_name?: string | null;
+  }>;
+  rollout_supported: boolean;
+}
+
+export function getAdminServiceCatalog(): Promise<{ services: AdminCatalogService[] }> {
+  return request("/admin/service-catalog");
+}
+
+export function patchCatalogPricing(
+  serviceKey: string,
+  payload: {
+    pricing_display: string;
+    pricing_notes?: string | null;
+    competitor_value?: string | null;
+  }
+): Promise<Record<string, unknown>> {
+  return request(`/admin/service-catalog/${encodeURIComponent(serviceKey)}/pricing`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function rolloutCatalogService(
+  serviceKey: string,
+  payload: {
+    tenant_ids: string[];
+    admin_notes?: string | null;
+    mark_requests_approved?: boolean;
+  }
+): Promise<{
+  service_key: string;
+  rolled_out: number;
+  failed: number;
+  results: Array<{
+    tenant_id: string;
+    tenant_name?: string;
+    short_code?: string;
+    ok: boolean;
+    error?: string;
+    approved_open_requests?: number;
+  }>;
+}> {
+  return request(`/admin/service-catalog/${encodeURIComponent(serviceKey)}/rollout`, {
+    method: "POST",
+    body: payload,
+  });
 }
 
 export function patchConsultationRequest(
@@ -1527,8 +1613,15 @@ export interface RetrospectiveHuntJob {
   completed_at?: string | null;
 }
 
-export function getApplianceCommandSummary(): Promise<ApplianceCommandSummary> {
-  return request("/admin/appliances/command-summary");
+export function getApplianceCommandSummary(opts?: {
+  tenant_id?: string;
+}): Promise<ApplianceCommandSummary> {
+  const params = new URLSearchParams();
+  if (opts?.tenant_id && opts.tenant_id !== "all") {
+    params.set("tenant_id", opts.tenant_id);
+  }
+  const q = params.toString() ? `?${params.toString()}` : "";
+  return request(`/admin/appliances/command-summary${q}`);
 }
 
 export function getRetrospectiveHunts(opts?: {

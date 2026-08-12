@@ -38,32 +38,50 @@ ADMIN_SOC_ROLES = ("platform_admin", "soc_manager", "soc_analyst")
 
 @router.get("/dashboard")
 def admin_dashboard(
+    tenant_id: Optional[UUID] = Query(
+        default=None,
+        description="When set, KPI overview is scoped to this tenant only.",
+    ),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
+    tid = str(tenant_id) if tenant_id else None
+    tenant_clause = "tenant_id = %s::uuid" if tid else "TRUE"
+    tenant_params: tuple = (tid,) if tid else ()
+
     overview = fetch_one(
-        """
+        f"""
         SELECT
-            (SELECT count(*) FROM tenants) AS total_tenants,
-            (SELECT count(*) FROM tenants WHERE status = 'active') AS active_tenants,
-            (SELECT count(*) FROM appliances) AS total_appliances,
-            (SELECT count(*) FROM appliances WHERE status = 'online') AS online_appliances,
-            (SELECT count(*) FROM appliances WHERE status = 'offline') AS offline_appliances,
-            (SELECT count(*) FROM protected_assets) AS protected_assets,
-            (SELECT count(*) FROM security_alerts) AS total_alerts,
-            (SELECT count(*) FROM security_alerts WHERE severity IN ('high','critical')) AS high_or_critical_alerts,
-            (SELECT count(*) FROM security_alerts WHERE status = 'new') AS new_alerts,
-            (SELECT count(*) FROM incidents) AS total_incidents,
-            (SELECT count(*) FROM incidents WHERE status IN ('open','in_progress','waiting_customer')) AS open_incidents,
-            (SELECT count(*) FROM customer_recommendations WHERE status = 'open') AS open_recommendations,
-            (SELECT count(*) FROM notification_events WHERE status IN ('sent','delivered','acknowledged')) AS notifications_sent
+            (SELECT count(*) FROM tenants WHERE {('id = %s::uuid' if tid else 'TRUE')}) AS total_tenants,
+            (SELECT count(*) FROM tenants WHERE status = 'active'
+                AND {('id = %s::uuid' if tid else 'TRUE')}) AS active_tenants,
+            (SELECT count(*) FROM appliances WHERE {tenant_clause}) AS total_appliances,
+            (SELECT count(*) FROM appliances WHERE status = 'online' AND {tenant_clause}) AS online_appliances,
+            (SELECT count(*) FROM appliances WHERE status = 'offline' AND {tenant_clause}) AS offline_appliances,
+            (SELECT count(*) FROM protected_assets WHERE {tenant_clause}) AS protected_assets,
+            (SELECT count(*) FROM security_alerts WHERE {tenant_clause}) AS total_alerts,
+            (SELECT count(*) FROM security_alerts
+                WHERE severity IN ('high','critical') AND {tenant_clause}) AS high_or_critical_alerts,
+            (SELECT count(*) FROM security_alerts
+                WHERE status = 'new' AND {tenant_clause}) AS new_alerts,
+            (SELECT count(*) FROM incidents WHERE {tenant_clause}) AS total_incidents,
+            (SELECT count(*) FROM incidents
+                WHERE status IN ('open','in_progress','waiting_customer')
+                  AND {tenant_clause}) AS open_incidents,
+            (SELECT count(*) FROM customer_recommendations
+                WHERE status = 'open' AND {tenant_clause}) AS open_recommendations,
+            (SELECT count(*) FROM notification_events
+                WHERE status IN ('sent','delivered','acknowledged')
+                  AND {tenant_clause}) AS notifications_sent
         ;
-        """
+        """,
+        (tid,) * 13 if tid else (),
     )
 
     severity_breakdown = fetch_all(
-        """
+        f"""
         SELECT severity, count(*) AS count
         FROM security_alerts
+        WHERE {tenant_clause}
         GROUP BY severity
         ORDER BY
             CASE severity
@@ -73,11 +91,13 @@ def admin_dashboard(
                 WHEN 'low' THEN 4
                 ELSE 5
             END;
-        """
+        """,
+        tenant_params,
     )
 
+    risk_where = "WHERE t.id = %s::uuid" if tid else ""
     tenant_risk = fetch_all(
-        """
+        f"""
         SELECT
             t.name,
             t.short_code,
@@ -93,15 +113,18 @@ def admin_dashboard(
         LEFT JOIN appliances a ON a.tenant_id = t.id
         LEFT JOIN security_alerts sa ON sa.tenant_id = t.id
         LEFT JOIN incidents i ON i.tenant_id = t.id
+        {risk_where}
         GROUP BY t.name, t.short_code, t.sla_level, t.business_criticality
         ORDER BY high_or_critical_alerts DESC, open_incidents DESC, t.name;
-        """
+        """,
+        tenant_params,
     )
 
     return {
         "overview": overview,
         "severity_breakdown": severity_breakdown,
         "tenant_risk_summary": tenant_risk,
+        "scope": {"tenant_id": tid, "mode": "tenant" if tid else "all"},
     }
 
 

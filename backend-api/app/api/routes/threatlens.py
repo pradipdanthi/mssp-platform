@@ -268,10 +268,11 @@ def admin_retrospective_hunts(
 
 @router.get("/admin/appliances/command-summary")
 def admin_appliance_command_summary(
+    tenant_id: Optional[str] = Query(default=None),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
     _ = current_user
-    return retro.appliance_command_summary()
+    return retro.appliance_command_summary(tenant_id=tenant_id)
 
 
 @router.post("/admin/threat-intel/{tenant_ref}/stix-ingest")
