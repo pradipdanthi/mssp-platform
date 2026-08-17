@@ -107,6 +107,44 @@ Restart-Service -Name WazuhSvc -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 Get-Service -Name WazuhSvc | Format-List Name, Status
 
+# Keep isolate scripts current from Manager shared/ (hold-until-unisolate).
+$syncShared = Join-Path $agentRoot "shared\Sync-MsspEdrAr.ps1"
+$syncLocal = Join-Path $Here "Sync-MsspEdrAr.ps1"
+$syncDstDir = Join-Path $env:ProgramData "mssp-edr-ar"
+New-Item -ItemType Directory -Path $syncDstDir -Force | Out-Null
+$syncRun = Join-Path $syncDstDir "Sync-MsspEdrAr.ps1"
+if (Test-Path -LiteralPath $syncLocal) {
+  Copy-Item -LiteralPath $syncLocal -Destination $syncRun -Force
+}
+if (Test-Path -LiteralPath $syncShared) {
+  Copy-Item -LiteralPath $syncShared -Destination $syncRun -Force
+}
+if (Test-Path -LiteralPath $syncRun) {
+  & $syncRun
+  $tr = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$syncRun`""
+  schtasks.exe /Create /TN "MSSP-EDR-AR-Sync" /SC MINUTE /MO 1 /RU SYSTEM /RL HIGHEST /TR $tr /F | Out-Null
+  Write-Step "Scheduled MSSP-EDR-AR-Sync (every 1 minute)"
+}
+
+# Same trust as Active Response: Manager may refresh AR files via agent.conf wodle.
+$lio = Join-Path $agentRoot "local_internal_options.conf"
+$need = @(
+  "wazuh_command.remote_commands=1",
+  "logcollector.remote_commands=1"
+)
+$existing = ""
+if (Test-Path -LiteralPath $lio) {
+  $existing = Get-Content -LiteralPath $lio -Raw -ErrorAction SilentlyContinue
+}
+foreach ($line in $need) {
+  $key = $line.Split("=")[0]
+  if ($existing -notmatch [regex]::Escape($key)) {
+    Add-Content -LiteralPath $lio -Value $line -Encoding ASCII
+  }
+}
+Write-Step "Enabled Manager AR file-sync commands in local_internal_options.conf"
+Restart-Service -Name WazuhSvc -Force -ErrorAction SilentlyContinue
+
 Write-Host ""
 Write-Host "MSSP_WINDOWS_EDR_AR_OK"
 Write-Host "Installed: kill / isolate / block-hash into $dest"

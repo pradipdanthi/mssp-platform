@@ -64,52 +64,37 @@ def _exec_containment(job_type: str, payload: Dict[str, Any]) -> Tuple[bool, Dic
     arguments = payload.get("arguments") or []
     if not agent_id or not command:
         return False, {"error": "agent_id and ar_command required"}
-    user = os.environ.get("WAZUH_API_USER", "wazuh-wui")
-    password = os.environ.get("WAZUH_API_PASSWORD", "")
-    if not password:
-        # Stage the command for operator/heartbeat executor when API creds absent
-        staged = state_root() / "containment-pending"
-        staged.mkdir(parents=True, exist_ok=True)
-        path = staged / f"{int(time.time())}-{agent_id}.json"
-        path.write_text(
-            json.dumps(
-                {"agent_id": agent_id, "ar_command": command, "arguments": arguments},
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
+    try:
+        from kevantic_cli.register_ops import (  # type: ignore
+            _authenticate_local_wazuh,
+            _ensure_local_edr_ar_commands,
+            _wazuh_local_json,
         )
-        return True, {"staged": str(path), "mode": "queued_file", "message": "WAZUH_API_PASSWORD unset; staged"}
-    # Prefer curl to avoid SSL package complexity in minimal env
-    import base64
-    import urllib.request
-    import ssl
-
-    ctx = ssl._create_unverified_context()
-    auth = base64.b64encode(f"{user}:{password}".encode()).decode()
-    req = urllib.request.Request(
-        "https://127.0.0.1:55000/security/user/authenticate",
-        headers={"Authorization": f"Basic {auth}"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
-        token = (json.loads(resp.read().decode()).get("data") or {}).get("token")
-    if not token:
-        return False, {"error": "local Manager auth failed"}
+    except ImportError:
+        from junexis_cli.register_ops import (  # type: ignore
+            _authenticate_local_wazuh,
+            _ensure_local_edr_ar_commands,
+            _wazuh_local_json,
+        )
+    _ensure_local_edr_ar_commands()
+    token = _authenticate_local_wazuh()
     cmd = command if command.startswith("!") else f"!{command}"
-    body = json.dumps({"command": cmd, "arguments": [str(a) for a in arguments]}).encode()
-    req2 = urllib.request.Request(
-        f"https://127.0.0.1:55000/active-response?agents_list={agent_id}",
-        data=body,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-        },
-        method="PUT",
+    result = _wazuh_local_json(
+        "PUT",
+        f"/active-response?agents_list={agent_id}",
+        body={"command": cmd, "arguments": [str(a) for a in arguments]},
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=30,
     )
-    with urllib.request.urlopen(req2, context=ctx, timeout=30) as resp:
-        raw = resp.read().decode()
-    return True, {"dispatched": True, "agent_id": agent_id, "command": command, "manager_response": raw[:500]}
+    data = result.get("data") or {}
+    if int(data.get("total_failed_items") or 0) > 0 or int(result.get("error") or 0) != 0:
+        failed = data.get("failed_items") or []
+        detail = ""
+        if failed and isinstance(failed[0], dict):
+            err = failed[0].get("error") or {}
+            detail = str(err.get("message") or failed[0])[:300]
+        return False, {"error": detail or f"Active response failed for agent {agent_id}"}
+    return True, {"dispatched": True, "agent_id": agent_id, "command": command}
 
 
 def _exec_threat_intel(job_type: str, payload: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:

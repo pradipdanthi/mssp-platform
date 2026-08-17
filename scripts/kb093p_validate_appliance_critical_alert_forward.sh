@@ -52,6 +52,21 @@ grep -q 'ensure_incident_for_appliance_alert' \
   && pass "ingest creates high/critical incidents" \
   || fail "ingest missing incident hook"
 
+grep -q 'resolve_endpoint_asset' \
+  "$ROOT/backend-api/app/api/routes/appliance_alert_ingest.py" \
+  && pass "ingest links alerts to enrolled endpoint agents" \
+  || fail "ingest missing endpoint asset resolve"
+
+PYTHONPATH="$ROOT/backend-api${PYTHONPATH:+:$PYTHONPATH}" python3 - <<'PY'
+from app.services.endpoint_asset_resolve import hostname_candidates, agent_stub_raw_event
+assert "DESKTOP-23BFDI8" in hostname_candidates("DESKTOP-23BFDI8.local")
+assert "DESKTOP-23BFDI8" in hostname_candidates(None, "rule=92206; agent=DESKTOP-23BFDI8")
+stub = agent_stub_raw_event({"wazuh_agent_id": "002", "hostname": "DESKTOP-23BFDI8"})
+assert stub["agent"]["id"] == "002"
+print("ENDPOINT_RESOLVE_OK")
+PY
+[[ $? -eq 0 ]] && pass "endpoint hostname/agent resolve helper" || fail "endpoint resolve helper"
+
 grep -q 'telemetry_ingest' "$ROOT/backend-api/app/api/routes/telemetry_ingest.py" \
   && pass "telemetry ingest route present" \
   || fail "telemetry ingest missing"
@@ -109,6 +124,7 @@ PY
 python3 -m py_compile \
   "$APP/appliance/telemetry/critical_alert_watcher.py" \
   "$ROOT/backend-api/app/services/appliance_alert_incidents.py" \
+  "$ROOT/backend-api/app/services/endpoint_asset_resolve.py" \
   "$ROOT/backend-api/app/api/routes/appliance_alert_ingest.py" \
   && pass "python compile" || fail "python compile"
 

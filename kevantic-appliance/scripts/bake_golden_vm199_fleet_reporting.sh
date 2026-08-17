@@ -54,6 +54,13 @@ cp "$ROOT/configs/systemd/kevantic-heartbeat.timer" "$TMP/kevantic-heartbeat.tim
 cp "$ROOT/configs/systemd/junexis-heartbeat.service" "$TMP/junexis-heartbeat.service"
 cp "$ROOT/configs/systemd/junexis-heartbeat.timer" "$TMP/junexis-heartbeat.timer"
 cp "$ROOT/configs/image-release.json" "$TMP/image-release.json"
+AR_SRC="$CTRL/deploy/wazuh-active-response"
+[[ -x "$AR_SRC/mssp-isolate-host" ]] || die "missing Linux AR scripts in deploy/wazuh-active-response"
+cp "$AR_SRC/mssp-isolate-host" "$AR_SRC/mssp-kill-process" "$AR_SRC/mssp-block-hash" "$TMP/"
+WIN_AR="$AR_SRC/windows"
+[[ -f "$WIN_AR/mssp-isolate-host.ps1" ]] || die "missing Windows isolate script"
+mkdir -p "$TMP/win-ar"
+cp "$WIN_AR/mssp-isolate-host.ps1" "$WIN_AR/mssp-isolate-host.cmd" "$WIN_AR/Sync-MsspEdrAr.ps1" "$TMP/win-ar/"
 python3 - "$TMP/image-release.json" "$GIT_COMMIT" <<'PY'
 import json, sys
 path, commit = sys.argv[1], sys.argv[2]
@@ -71,6 +78,12 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/junexis-heartbeat.service" \
   "$TMP/junexis-heartbeat.timer" \
   "$TMP/image-release.json" \
+  "$TMP/mssp-isolate-host" \
+  "$TMP/mssp-kill-process" \
+  "$TMP/mssp-block-hash" \
+  "$TMP/win-ar/mssp-isolate-host.ps1" \
+  "$TMP/win-ar/mssp-isolate-host.cmd" \
+  "$TMP/win-ar/Sync-MsspEdrAr.ps1" \
   "${USER_NAME}@${HOST}:/tmp/"
 
 "${SSH[@]}" "bash -s" <<REMOTE
@@ -90,6 +103,23 @@ sudo install -m 0644 /tmp/kevantic-heartbeat.service /etc/systemd/system/kevanti
 sudo install -m 0644 /tmp/kevantic-heartbeat.timer /etc/systemd/system/kevantic-heartbeat.timer
 sudo install -m 0644 /tmp/junexis-heartbeat.service /etc/systemd/system/junexis-heartbeat.service
 sudo install -m 0644 /tmp/junexis-heartbeat.timer /etc/systemd/system/junexis-heartbeat.timer
+for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
+  sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
+done
+sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
+for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd Sync-MsspEdrAr.ps1; do
+  if [[ -f /tmp/\$f ]]; then
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
+  fi
+done
+# Register isolate/kill/block command names on the local Manager (Windows + Linux).
+if [[ -d /opt/junexis/cli/junexis_cli ]]; then
+  sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+else
+  sudo env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+fi
+sudo grep -q '<name>mssp-isolate-host.cmd</name>' /var/ossec/etc/ossec.conf
 
 if [[ -x /usr/bin/kevantic-list-local-agents ]] && [[ ! -e /usr/bin/junexis-list-local-agents ]]; then
   sudo ln -sf /usr/bin/kevantic-list-local-agents /usr/bin/junexis-list-local-agents
@@ -101,7 +131,7 @@ sudo systemctl restart kevantic-heartbeat.timer || true
 
 echo "== verify =="
 grep -F 'python3 -m kevantic_cli heartbeat' /etc/systemd/system/kevantic-heartbeat.service
-grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements' "\$CLI/register_ops.py" >/dev/null
+grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|_authenticate_local_wazuh|_ensure_local_edr_ar_commands' "\$CLI/register_ops.py" >/dev/null
 python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version")'
 # Do not seed entitlements — golden clones stay idle until a real license is applied.
 if [[ -f /var/lib/kevantic/entitlements.json ]]; then

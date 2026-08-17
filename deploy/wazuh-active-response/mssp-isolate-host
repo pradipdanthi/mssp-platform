@@ -45,8 +45,16 @@ def isolate_add(seconds: int) -> None:
     if check.returncode != 0:
         run(["iptables", "-I", "OUTPUT", "1", "-j", CHAIN])
     log(f"ISOLATE add seconds={seconds} manager={MANAGER}")
-    # Auto-remove in background
-    subprocess.Popen(["bash", "-c", f"sleep {seconds}; iptables -D OUTPUT -j {CHAIN} 2>/dev/null; iptables -F {CHAIN} 2>/dev/null; iptables -X {CHAIN} 2>/dev/null; echo \"$(date '+%Y/%m/%d %H:%M:%S') mssp-isolate-host: ISOLATE delete\" >> {LOG}"])
+    if seconds > 0:
+        subprocess.Popen(
+            [
+                "bash",
+                "-c",
+                f"sleep {seconds}; iptables -D OUTPUT -j {CHAIN} 2>/dev/null; "
+                f"iptables -F {CHAIN} 2>/dev/null; iptables -X {CHAIN} 2>/dev/null; "
+                f"echo \"$(date '+%Y/%m/%d %H:%M:%S') mssp-isolate-host: ISOLATE delete\" >> {LOG}",
+            ]
+        )
 
 
 def main() -> int:
@@ -62,13 +70,15 @@ def main() -> int:
     # Control-plane UNISOLATE_HOST sends arguments=["delete"].
     if args and str(args[0]).lower() in ("delete", "remove", "unisolate"):
         cmd = "delete"
-    seconds = 120
+    seconds = 0
     if args and cmd not in ("delete", "remove"):
         try:
             seconds = int(args[0])
         except ValueError:
-            seconds = 120
-    seconds = max(30, min(seconds, 600))
+            seconds = 0
+    seconds = max(0, min(seconds, 86400))
+    if os.environ.get("MSSP_ALLOW_TIMED_ISOLATE") != "1":
+        seconds = 0
     if cmd in ("delete", "remove"):
         isolate_delete()
     else:

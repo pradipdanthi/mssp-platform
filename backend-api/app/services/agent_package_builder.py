@@ -43,6 +43,7 @@ _WINDOWS_AR_FILES = (
     "mssp-block-hash.cmd",
     "mssp-block-hash.ps1",
     "Install-MsspWindowsEdrAr.ps1",
+    "Sync-MsspEdrAr.ps1",
 )
 
 

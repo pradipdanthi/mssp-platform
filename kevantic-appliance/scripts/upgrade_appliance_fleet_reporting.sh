@@ -42,6 +42,11 @@ echo "==> Install updated CLI modules on ${HOST}"
 "${SCP[@]}" "$TMP/register_ops.py" "${USER_NAME}@${HOST}:/tmp/register_ops.py"
 "${SCP[@]}" "$TMP/state.py" "${USER_NAME}@${HOST}:/tmp/state.py"
 "${SCP[@]}" "$ROOT/configs/image-release.json" "${USER_NAME}@${HOST}:/tmp/image-release.json"
+AR_SRC="$ROOT/../deploy/wazuh-active-response"
+if [[ -x "$AR_SRC/mssp-isolate-host" ]]; then
+  "${SCP[@]}" "$AR_SRC/mssp-isolate-host" "$AR_SRC/mssp-kill-process" "$AR_SRC/mssp-block-hash" \
+    "${USER_NAME}@${HOST}:/tmp/"
+fi
 
 "${SSH[@]}" "bash -s" <<REMOTE
 set -euo pipefail
@@ -62,6 +67,17 @@ for path in (Path("/etc/junexis/image-release.json"), Path("/etc/kevantic/image-
     data["git_commit"] = "${GIT_COMMIT}"
     path.write_text(json.dumps(data, indent=2) + "\n")
 PY
+
+for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
+  if [[ -f /tmp/\$f ]]; then
+    sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
+  fi
+done
+if [[ -d /opt/junexis/cli/junexis_cli ]]; then
+  sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+elif [[ -d /opt/kevantic/cli/kevantic_cli ]]; then
+  sudo env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+fi
 
 # Seed core entitlement when license file left engines idle (lab appliances).
 sudo python3 - <<'PY'
@@ -84,6 +100,11 @@ for state_dir in (Path("/var/lib/junexis"), Path("/var/lib/kevantic")):
 PY
 
 sudo systemctl daemon-reload
+for svc in junexis-channeld.service kevantic-channeld.service; do
+  if systemctl list-unit-files "\$svc" --no-legend 2>/dev/null | grep -q .; then
+    sudo systemctl restart "\$svc" || true
+  fi
+done
 for t in junexis-heartbeat.timer kevantic-heartbeat.timer; do
   if systemctl list-unit-files "\$t" --no-legend 2>/dev/null | grep -q .; then
     sudo systemctl restart "\$t"

@@ -211,13 +211,23 @@ async def appliance_channel_ws(websocket: WebSocket) -> None:
                     )
                 job_id = payload.get("job_id")
                 if job_id:
-                    appliance_jobs_service.complete_job(
+                    row = appliance_jobs_service.complete_job(
                         job_id=str(job_id),
                         appliance_id=appliance["id"],
                         success=bool(payload.get("success", True)),
                         result=payload.get("result"),
                         message=str(payload.get("message") or ""),
                     )
+                    if row and row.get("edr_execution_id"):
+                        try:
+                            apply_action_callback(
+                                execution_id=row["edr_execution_id"],
+                                status="success" if payload.get("success", True) else "failed",
+                                message=str(payload.get("message") or ""),
+                                payload=payload.get("result") or {},
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.warning("channel websocket job ack EDR callback failed: %s", exc)
             else:
                 channel_service.store_outbound(appliance["id"], appliance["tenant_id"], data)
     except WebSocketDisconnect:

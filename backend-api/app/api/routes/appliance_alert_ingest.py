@@ -1,5 +1,6 @@
 """KB-057 customer-safe, normalized alert ingestion from appliances."""
 
+import json
 import logging
 from typing import Any, Dict, Optional
 from uuid import UUID
@@ -15,6 +16,10 @@ from app.services.appliance_auth_service import (
     ApplianceRetiredError,
     InvalidApplianceCredentialsError,
     verify_appliance_credentials,
+)
+from app.services.endpoint_asset_resolve import (
+    agent_stub_raw_event,
+    resolve_endpoint_asset,
 )
 
 logger = logging.getLogger(__name__)
@@ -104,17 +109,25 @@ def ingest_appliance_alert(
                 response.status_code = status.HTTP_200_OK
                 duplicate = True
             else:
+                linked = resolve_endpoint_asset(
+                    str(appliance["tenant_id"]),
+                    hostname=payload.destination_host,
+                    alert_description=payload.alert_description,
+                    cur=cur,
+                )
+                dest_host = payload.destination_host or (linked or {}).get("hostname")
+                raw_stub = agent_stub_raw_event(linked)
                 cur.execute(
                     """
                     INSERT INTO security_alerts (
                         tenant_id, appliance_id, source_tool, external_alert_id,
                         severity, alert_title, alert_description, event_time,
-                        destination_host, customer_visible, status
+                        destination_host, asset_id, raw_event, customer_visible, status
                     )
                     VALUES (
                         %s, %s, %s, %s,
                         %s, %s, %s, COALESCE(%s, now()),
-                        %s, true, 'new'
+                        %s, %s::uuid, %s::jsonb, true, 'new'
                     )
                     RETURNING id::text, customer_visible, status;
                     """,
@@ -129,7 +142,9 @@ def ingest_appliance_alert(
                         payload.alert_title,
                         payload.alert_description,
                         payload.event_time,
-                        payload.destination_host,
+                        dest_host,
+                        (linked or {}).get("id"),
+                        json.dumps(raw_stub),
                     ),
                 )
                 alert_row = cur.fetchone()
@@ -152,7 +167,7 @@ def ingest_appliance_alert(
                     alert_id=alert_row["id"],
                     severity=payload.severity,
                     alert_title=payload.alert_title,
-                    destination_host=payload.destination_host,
+                    destination_host=dest_host,
                 )
                 if incident:
                     incident_id, incident_number = incident

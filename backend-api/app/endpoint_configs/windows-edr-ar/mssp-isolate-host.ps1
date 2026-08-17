@@ -61,7 +61,24 @@ if ($CallbackUrl) {
     if ($cbHost -and $cbHost -match '^\d{1,3}(\.\d{1,3}){3}$') {
       $ControlPlane = $cbHost
     }
-  } catch {}
+  } catch {  }
+}
+
+# Appliance-local Manager IP from the agent config when mssp-ar.env was never installed.
+if ($Manager -eq "192.168.0.211") {
+  foreach ($confPath in @(
+    "${env:ProgramFiles(x86)}\ossec-agent\ossec.conf",
+    "$env:ProgramFiles\ossec-agent\ossec.conf"
+  )) {
+    if (-not (Test-Path -LiteralPath $confPath)) { continue }
+    try {
+      [xml]$ox = Get-Content -LiteralPath $confPath
+      $addr = [string]$ox.ossec_config.client.server.address
+      if ($addr -match '^\d{1,3}(\.\d{1,3}){3}$') {
+        $Manager = $addr
+      }
+    } catch {}
+  }
 }
 
 function Write-ArLog([string]$Message) {
@@ -168,7 +185,13 @@ function Clear-MsspAllowRules {
     "MSSP_ISOLATE_ALLOW_LOOPBACK_IN",
     "MSSP_ISOLATE_BLOCK_ICMP_OUT",
     "MSSP_ISOLATE_BLOCK_OUT",
-    "MSSP_ISOLATE_BLOCK_IN"
+    "MSSP_ISOLATE_BLOCK_IN",
+    "MSSP_HOLD_BLOCK_RDP_IN",
+    "MSSP_HOLD_BLOCK_RDP_OUT",
+    "MSSP_HOLD_BLOCK_SMB_IN",
+    "MSSP_HOLD_BLOCK_WINRM_IN",
+    "MSSP_HOLD_BLOCK_ICMP_IN",
+    "MSSP_HOLD_BLOCK_ICMP_OUT"
   )) {
     [void](Invoke-Netsh @("advfirewall", "firewall", "delete", "rule", "name=$name"))
   }
@@ -266,7 +289,15 @@ function Add-LateralBlockRules {
     @{ Name = "MSSP_QUAR_BLOCK_SSH_OUT"; Dir = "out"; Extra = @("protocol=tcp", "remoteport=22") },
     # Explicit ICMP blocks (in addition to profile default-deny) for complete containment.
     @{ Name = "MSSP_QUAR_BLOCK_ICMP_IN"; Dir = "in"; Extra = @("protocol=icmpv4:8,any") },
-    @{ Name = "MSSP_QUAR_BLOCK_ICMP_OUT"; Dir = "out"; Extra = @("protocol=icmpv4:8,any") }
+    @{ Name = "MSSP_QUAR_BLOCK_ICMP_OUT"; Dir = "out"; Extra = @("protocol=icmpv4:8,any") },
+    # HOLD_* names are unknown to older auto-release scripts. They keep RDP/SMB
+    # down even if a stale 120s sleeper deletes MSSP_QUAR_* and restores defaults.
+    @{ Name = "MSSP_HOLD_BLOCK_RDP_IN"; Dir = "in"; Extra = @("protocol=tcp", "localport=3389") },
+    @{ Name = "MSSP_HOLD_BLOCK_RDP_OUT"; Dir = "out"; Extra = @("protocol=tcp", "remoteport=3389") },
+    @{ Name = "MSSP_HOLD_BLOCK_SMB_IN"; Dir = "in"; Extra = @("protocol=tcp", "localport=445") },
+    @{ Name = "MSSP_HOLD_BLOCK_WINRM_IN"; Dir = "in"; Extra = @("protocol=tcp", "localport=5985,5986") },
+    @{ Name = "MSSP_HOLD_BLOCK_ICMP_IN"; Dir = "in"; Extra = @("protocol=icmpv4:8,any") },
+    @{ Name = "MSSP_HOLD_BLOCK_ICMP_OUT"; Dir = "out"; Extra = @("protocol=icmpv4:8,any") }
   )
   foreach ($b in $blocks) {
     $args = @(
@@ -412,6 +443,30 @@ function Convert-ToMsspBool($Value, [bool]$Default = $true) {
   return $Default
 }
 
+function Repair-MsspEchoRequestRules {
+  # Ping (ICMPv4 echo) is not restored by "inbound Block / outbound Allow" defaults.
+  # Isolate disables File and Printer Sharing Echo Request allows; Un-isolate must
+  # turn them back on even if the snapshot was already consumed (double-lift).
+  try {
+    $rules = Get-NetFirewallRule -ErrorAction SilentlyContinue |
+      Where-Object { [string]$_.DisplayName -like "*Echo Request*" }
+    foreach ($rule in $rules) {
+      try {
+        Enable-NetFirewallRule -Name $rule.Name -ErrorAction Stop
+        Write-ArLog "Repair enabled echo rule name=$($rule.Name) display=$($rule.DisplayName)"
+      } catch {
+        Write-ArLog "WARN enable echo $($rule.Name): $($_.Exception.Message)"
+      }
+    }
+  } catch {
+    Write-ArLog "WARN echo repair: $($_.Exception.Message)"
+  }
+  foreach ($name in @("MSSP_QUAR_BLOCK_ICMP_IN", "MSSP_QUAR_BLOCK_ICMP_OUT", "MSSP_ISOLATE_BLOCK_ICMP_OUT")) {
+    [void](Invoke-Netsh @("advfirewall", "firewall", "delete", "rule", "name=$name"))
+  }
+}
+
+
 function Remove-IsolationRules {
   # IMPORTANT order:
   # 1) Restore profile defaults FIRST (outbound Allow) while Manager/control-plane
@@ -419,11 +474,17 @@ function Remove-IsolationRules {
   #    and the release callback cannot reach the control plane.
   # 2) Restore prior Enabled state for lateral/ICMP rules we touched.
   # 3) Remove temporary MSSP_* quarantine rules.
-  # 4) Clear marker.
+  # 4) Re-enable Echo Request (ping) even if snapshot was already consumed.
+  # 5) Clear marker.
+  $CancelFile = Join-Path $env:ProgramData "mssp-edr-isolate-cancel.flag"
+  try { "cancelled" | Set-Content -LiteralPath $CancelFile -Encoding ASCII } catch {}
+
+  $hadSnapshot = Test-Path -LiteralPath $StateFile
+  $hadMarker = Test-Path -LiteralPath $MarkerFile
   $savedRules = @()
   $executionIdFromState = ""
   $restoredProfiles = $false
-  if (Test-Path -LiteralPath $StateFile) {
+  if ($hadSnapshot) {
     try {
       $state = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
       try { $executionIdFromState = [string]$state.execution_id } catch { $executionIdFromState = "" }
@@ -464,25 +525,32 @@ function Remove-IsolationRules {
     }
   }
   if (-not $restoredProfiles) {
-    [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
-    Write-ArLog "QUARANTINE lift - fallback inbound=Block outbound=Allow"
+    if ($hadSnapshot -or $hadMarker) {
+      [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
+      Write-ArLog "QUARANTINE lift - fallback inbound=Block outbound=Allow"
+    } else {
+      Write-ArLog "QUARANTINE lift - already released; skip profile fallback"
+    }
   }
 
   # Verify outbound actually restored; retry fallback if still blocked.
   try {
     $stillBlocked = @(Get-NetFirewallProfile -Profile Domain, Private, Public -ErrorAction Stop |
       Where-Object { $_.DefaultOutboundAction -eq "Block" }).Count
-    if ($stillBlocked -gt 0) {
+    if ($stillBlocked -gt 0 -and ($hadSnapshot -or $hadMarker)) {
       Write-ArLog "WARN outbound still Block on $stillBlocked/3 profiles — forcing Allow"
       [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
     }
   } catch {
     Write-ArLog "WARN post-restore profile check failed: $($_.Exception.Message)"
-    [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
+    if ($hadSnapshot -or $hadMarker) {
+      [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
+    }
   }
 
   Restore-MsspLateralAllowRules -SavedRules $savedRules
   Clear-MsspAllowRules
+  Repair-MsspEchoRequestRules
   Remove-Item -LiteralPath $MarkerFile -Force -ErrorAction SilentlyContinue
   return $executionIdFromState
 }
@@ -551,17 +619,22 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
     Write-ArLog "QUARANTINE FAILED applied=false -- host NOT contained; do not trust UI dispatch alone"
   }
 
-  # Auto-release must pass execution_id so control plane clears isolation_status.
+  # 0 = hold until SOC Un-isolate. Positive = timed auto-release (lab/test only).
   if ($Seconds -gt 0) {
     $exeEsc = $ExecutionId -replace "'", "''"
+    $cancelPath = Join-Path $env:ProgramData "mssp-edr-isolate-cancel.flag"
+    Remove-Item -LiteralPath $cancelPath -Force -ErrorAction SilentlyContinue
     $releaseCmd = @"
 Start-Sleep -Seconds $Seconds
+if (Test-Path -LiteralPath '$cancelPath') { exit 0 }
 & '$PSCommandPath' delete '$exeEsc'
 "@
     Start-Process -FilePath "powershell.exe" -ArgumentList @(
       "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", $releaseCmd
     ) -WindowStyle Hidden | Out-Null
     Write-ArLog "auto-release armed seconds=$Seconds exec=$ExecutionId"
+  } else {
+    Write-ArLog "hold-until-unisolate exec=$ExecutionId"
   }
 
   return [bool]$effective
@@ -581,6 +654,27 @@ function Convert-ArArgToRaw([object]$Value) {
 
 $raw = ""
 $executionId = ""
+if (-not $env:MSSP_ISOLATE_REEXEC) {
+  $sharedPs1 = @(
+    "${env:ProgramFiles(x86)}\ossec-agent\shared\mssp-isolate-host.ps1",
+    "$env:ProgramFiles\ossec-agent\shared\mssp-isolate-host.ps1"
+  ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  if ($sharedPs1 -and $PSCommandPath -and (Test-Path -LiteralPath $PSCommandPath)) {
+    try {
+      $srcHash = (Get-FileHash -LiteralPath $sharedPs1 -Algorithm SHA256).Hash
+      $selfHash = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash
+      if ($srcHash -ne $selfHash) {
+        Copy-Item -LiteralPath $sharedPs1 -Destination $PSCommandPath -Force
+        $env:MSSP_ISOLATE_REEXEC = "1"
+        Write-ArLog "replaced stale isolate script from Manager shared; re-exec"
+        & $PSCommandPath @args
+        exit $LASTEXITCODE
+      }
+    } catch {
+      Write-ArLog "WARN shared self-sync: $($_.Exception.Message)"
+    }
+  }
+}
 Write-ArLog "STARTED args=$($args.Count)"
 if ($args.Count -gt 0) {
   $a0 = Convert-ArArgToRaw $args[0]
@@ -613,14 +707,23 @@ if ($extra.Count -gt 0 -and @("delete", "remove", "unisolate") -contains ([strin
   $cmd = "delete"
   if ($extra.Count -gt 1) { $executionId = [string]$extra[1] }
 }
-$seconds = 120
+$seconds = 0
 if ($extra.Count -gt 0 -and $cmd -ne "delete") {
-  try { $seconds = [int]$extra[0] } catch { $seconds = 120 }
+  try { $seconds = [int]$extra[0] } catch { $seconds = 0 }
   if ($extra.Count -gt 1) { $executionId = [string]$extra[1] }
 }
-if ($seconds -lt 30) { $seconds = 30 }
-if ($seconds -gt 600) { $seconds = 600 }
-Write-ArLog "execution_id=$executionId cmd=$cmd seconds=$seconds"
+if ($seconds -lt 0) { $seconds = 0 }
+if ($seconds -gt 86400) { $seconds = 86400 }
+$allowTimed = $false
+if (Test-Path -LiteralPath $envFile) {
+  Get-Content -LiteralPath $envFile | ForEach-Object {
+    if ($_ -match '^\s*MSSP_ALLOW_TIMED_ISOLATE\s*=\s*1\s*$') { $allowTimed = $true }
+  }
+}
+if (-not $allowTimed) {
+  $seconds = 0
+}
+Write-ArLog "execution_id=$executionId cmd=$cmd seconds=$seconds timed=$allowTimed"
 
 if (@("delete", "remove") -contains $cmd.ToLowerInvariant()) {
   $fromState = Remove-IsolationRules

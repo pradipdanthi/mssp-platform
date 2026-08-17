@@ -1,0 +1,13 @@
+<agent_config os="windows">
+  <!-- MSSP: keep isolate/unisolate scripts in sync from Manager shared files.
+       Same trust model as Active Response (Manager already executes AR as SYSTEM). -->
+  <wodle name="command">
+    <disabled>no</disabled>
+    <tag>mssp-edr-ar-sync</tag>
+    <interval>1m</interval>
+    <run_on_start>yes</run_on_start>
+    <timeout>60</timeout>
+    <ignore_output>yes</ignore_output>
+    <command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\Program Files (x86)\ossec-agent\shared\Sync-MsspEdrAr.ps1"</command>
+  </wodle>
+</agent_config>

@@ -25,7 +25,12 @@ from app.schemas.edr import (
     ProcessTreeResponse,
 )
 from app.services import edr_forensics_storage
-from app.services.edr_actions import apply_action_callback, execute_edr_action, normalize_status
+from app.services.edr_actions import (
+    apply_action_callback,
+    execute_edr_action,
+    lookup_endpoint_from_incident,
+    normalize_status,
+)
 from app.services.edr_metrics import (
     endpoint_context_from_events,
     get_edr_metrics,
@@ -554,6 +559,15 @@ def edr_incident_deep_dive(
             )
         )
     endpoint = endpoint_context_from_events(raw_events)
+    filled = lookup_endpoint_from_incident(tenant["id"], incident["id"])
+    if filled.get("agent_id") and not endpoint.get("agent_id"):
+        endpoint["agent_id"] = filled["agent_id"]
+    if filled.get("hostname") and not endpoint.get("hostname"):
+        endpoint["hostname"] = filled["hostname"]
+    if filled.get("os_name") and not endpoint.get("os_version"):
+        endpoint["os_version"] = filled["os_name"]
+    if filled.get("ip") and not endpoint.get("local_ip"):
+        endpoint["local_ip"] = filled["ip"]
     if current_user.get("role") == "customer_viewer":
         endpoint.pop("local_ip", None)
 

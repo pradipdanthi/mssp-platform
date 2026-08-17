@@ -13,9 +13,23 @@ from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
 
-from kevantic_cli import state
+try:
+    from kevantic_cli import state
+except ImportError:  # branded junexis image
+    from junexis_cli import state
 
 logger = logging.getLogger(__name__)
+
+
+def _cli_submodule(name: str):
+    """Load kevantic_cli.<name> or junexis_cli.<name> depending on image brand."""
+    last: Exception | None = None
+    for pkg in ("kevantic_cli", "junexis_cli"):
+        try:
+            return __import__(f"{pkg}.{name}", fromlist=["*"])
+        except ImportError as exc:
+            last = exc
+    raise ImportError(f"{name} not found in kevantic_cli or junexis_cli") from last
 
 _AGENT_INVENTORY_HELPERS = (
     "/usr/bin/kevantic-list-local-agents",
@@ -97,6 +111,230 @@ def _http_json(
         raise RuntimeError(f"HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"network error: {exc}") from exc
+
+
+def _read_secret_line(*paths: str) -> str:
+    for raw in paths:
+        try:
+            text = Path(raw).read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
+        if text:
+            return text.splitlines()[0].strip()
+    return ""
+
+
+def _wazuh_api_credential_candidates() -> list[tuple[str, str]]:
+    """Local Manager API users. Env/files first; factory package defaults last."""
+    user = (
+        os.environ.get("WAZUH_API_USER", "").strip()
+        or _read_secret_line(
+            "/var/lib/junexis/secrets/wazuh_api_user",
+            "/var/lib/kevantic/secrets/wazuh_api_user",
+        )
+        or "wazuh-wui"
+    )
+    password = os.environ.get("WAZUH_API_PASSWORD", "").strip() or _read_secret_line(
+        "/var/lib/junexis/secrets/wazuh_api_password",
+        "/var/lib/kevantic/secrets/wazuh_api_password",
+    )
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    if password:
+        pairs.append((user, password))
+        seen.add((user, password))
+    for cand in (("wazuh-wui", "wazuh-wui"), ("wazuh", "wazuh")):
+        if cand not in seen:
+            pairs.append(cand)
+            seen.add(cand)
+    return pairs
+
+
+def _wazuh_local_json(
+    method: str,
+    path: str,
+    *,
+    headers: Optional[dict] = None,
+    body: Optional[dict] = None,
+    timeout: float = 30.0,
+) -> dict[str, Any]:
+    """Call localhost Wazuh API (self-signed TLS)."""
+    import ssl
+
+    url = f"https://127.0.0.1:55000{path}"
+    hdrs = {"Accept": "application/json", "User-Agent": "kevantic-cli/local-wazuh"}
+    if headers:
+        hdrs.update(headers)
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        hdrs["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+    ctx = ssl._create_unverified_context()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout, context=ctx) as resp:
+            raw = resp.read().decode("utf-8")
+            return json.loads(raw) if raw else {}
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:400]
+        raise RuntimeError(f"Wazuh API HTTP {exc.code}: {detail}") from exc
+
+
+def _authenticate_local_wazuh() -> str:
+    import base64
+
+    last_err = "local Manager auth failed"
+    for user, password in _wazuh_api_credential_candidates():
+        auth = base64.b64encode(f"{user}:{password}".encode()).decode()
+        try:
+            token_resp = _wazuh_local_json(
+                "GET",
+                "/security/user/authenticate",
+                headers={"Authorization": f"Basic {auth}"},
+                timeout=10,
+            )
+        except Exception as exc:  # noqa: BLE001
+            last_err = str(exc)[:200]
+            continue
+        token = (token_resp.get("data") or {}).get("token")
+        if token:
+            return str(token)
+    raise RuntimeError(last_err)
+
+
+_EDR_AR_COMMAND_BLOCK = """
+  <!-- MSSP EDR Active Response (appliance-local Manager) -->
+  <command>
+    <name>mssp-isolate-host</name>
+    <executable>mssp-isolate-host</executable>
+    <timeout_allowed>yes</timeout_allowed>
+  </command>
+  <command>
+    <name>mssp-kill-process</name>
+    <executable>mssp-kill-process</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+  <command>
+    <name>mssp-block-hash</name>
+    <executable>mssp-block-hash</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+  <command>
+    <name>mssp-isolate-host.cmd</name>
+    <executable>mssp-isolate-host.cmd</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+  <command>
+    <name>mssp-kill-process.cmd</name>
+    <executable>mssp-kill-process.cmd</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+  <command>
+    <name>mssp-block-hash.cmd</name>
+    <executable>mssp-block-hash.cmd</executable>
+    <timeout_allowed>no</timeout_allowed>
+  </command>
+"""
+
+
+def _chown_wazuh(path: Path) -> None:
+    try:
+        import grp
+        import pwd
+
+        os.chown(path, pwd.getpwnam("wazuh").pw_uid, grp.getgrnam("wazuh").gr_gid)
+    except Exception:
+        pass
+
+
+def _publish_windows_edr_ar_shared() -> None:
+    """Push isolate scripts + sync helper into Manager shared groups."""
+    src_dirs = (
+        Path("/var/lib/junexis/edr-ar/windows"),
+        Path("/var/lib/kevantic/edr-ar/windows"),
+        Path("/opt/junexis/edr-ar/windows"),
+        Path("/opt/kevantic/edr-ar/windows"),
+    )
+    src = next((d for d in src_dirs if (d / "mssp-isolate-host.ps1").is_file()), None)
+    shared_root = Path("/var/ossec/etc/shared")
+    if not shared_root.is_dir():
+        return
+    files = (
+        "mssp-isolate-host.cmd",
+        "mssp-isolate-host.ps1",
+        "mssp-kill-process.cmd",
+        "mssp-kill-process.ps1",
+        "mssp-block-hash.cmd",
+        "mssp-block-hash.ps1",
+        "Sync-MsspEdrAr.ps1",
+    )
+    agent_conf = """<agent_config os="windows">
+  <wodle name="command">
+    <disabled>no</disabled>
+    <tag>mssp-edr-ar-sync</tag>
+    <interval>1m</interval>
+    <run_on_start>yes</run_on_start>
+    <timeout>60</timeout>
+    <ignore_output>yes</ignore_output>
+    <command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\Program Files (x86)\\ossec-agent\\shared\\Sync-MsspEdrAr.ps1"</command>
+  </wodle>
+</agent_config>
+"""
+    for group_dir in shared_root.iterdir():
+        if not group_dir.is_dir() or group_dir.name in ("agent-template",):
+            continue
+        if src:
+            for name in files:
+                p = src / name
+                if not p.is_file():
+                    continue
+                dest = group_dir / name
+                dest.write_bytes(p.read_bytes())
+                try:
+                    dest.chmod(0o640)
+                except OSError:
+                    pass
+                _chown_wazuh(dest)
+        conf_path = group_dir / "agent.conf"
+        try:
+            current = conf_path.read_text(encoding="utf-8") if conf_path.is_file() else ""
+        except OSError:
+            continue
+        if "mssp-edr-ar-sync" not in current:
+            conf_path.write_text(agent_conf, encoding="utf-8")
+            try:
+                conf_path.chmod(0o660)
+            except OSError:
+                pass
+            _chown_wazuh(conf_path)
+
+
+def _ensure_local_edr_ar_commands() -> None:
+    """Register isolate/kill/block-hash command names on the local Manager."""
+    _publish_windows_edr_ar_shared()
+    conf = Path("/var/ossec/etc/ossec.conf")
+    if not conf.is_file():
+        return
+    text = conf.read_text(encoding="utf-8")
+    if "<name>mssp-isolate-host.cmd</name>" in text and "<name>mssp-isolate-host</name>" in text:
+        return
+    marker = "</ossec_config>"
+    idx = text.rfind(marker)
+    if idx < 0:
+        logger.warning("ossec.conf missing </ossec_config>; cannot register EDR AR")
+        return
+    bak = conf.with_suffix(conf.suffix + ".bak.mssp-edr")
+    if not bak.is_file():
+        bak.write_text(text, encoding="utf-8")
+    conf.write_text(text[:idx] + _EDR_AR_COMMAND_BLOCK + "\n" + text[idx:], encoding="utf-8")
+    subprocess.run(
+        ["/var/ossec/bin/wazuh-control", "restart"],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    logger.info("registered MSSP EDR active-response commands on local Manager")
 
 
 def _persist_registration_locally(
@@ -292,6 +530,12 @@ def _post_register_local_manager(app: dict[str, Any]) -> dict[str, Any]:
             result["group_created"] = False
     except Exception as exc:  # noqa: BLE001
         result["errors"].append(f"agent_group: {exc}")
+
+    try:
+        _ensure_local_edr_ar_commands()
+        result["edr_ar_commands"] = "ensured"
+    except Exception as exc:  # noqa: BLE001
+        result["errors"].append(f"edr_ar: {exc}")
 
     # Persist expected group for operators
     try:
@@ -510,27 +754,11 @@ def _collect_agent_inventory() -> list[dict[str, Any]]:
         except Exception as exc:  # noqa: BLE001 — keep heartbeat alive
             logger.warning("agent inventory helper %s failed: %s", helper, exc)
     # Optional: Wazuh API on localhost (default appliance Manager)
-    user = os.environ.get("WAZUH_API_USER", "wazuh-wui")
-    password = os.environ.get("WAZUH_API_PASSWORD", "")
-    if not password:
-        return []
     try:
-        # Token
-        import base64
-
-        auth = base64.b64encode(f"{user}:{password}".encode()).decode()
-        token_resp = _http_json(
+        token = _authenticate_local_wazuh()
+        agents_resp = _wazuh_local_json(
             "GET",
-            "https://127.0.0.1:55000/security/user/authenticate",
-            headers={"Authorization": f"Basic {auth}"},
-            timeout=10,
-        )
-        token = (token_resp.get("data") or {}).get("token")
-        if not token:
-            return []
-        agents_resp = _http_json(
-            "GET",
-            "https://127.0.0.1:55000/agents?limit=500&select=id,name,status,ip,os.name,os.platform,lastKeepAlive",
+            "/agents?limit=500&select=id,name,status,ip,os.name,os.platform,lastKeepAlive",
             headers={"Authorization": f"Bearer {token}"},
             timeout=20,
         )
@@ -564,32 +792,25 @@ def _run_local_ar(job: dict[str, Any]) -> tuple[bool, str]:
     arguments = payload.get("arguments") or []
     if not agent_id or not command:
         return False, "missing agent_id or ar_command"
-    # Use wazuh API if creds present
-    user = os.environ.get("WAZUH_API_USER", "wazuh-wui")
-    password = os.environ.get("WAZUH_API_PASSWORD", "")
-    if not password:
-        return False, "WAZUH_API_PASSWORD not set on appliance"
     try:
-        import base64
-
-        auth = base64.b64encode(f"{user}:{password}".encode()).decode()
-        token_resp = _http_json(
-            "GET",
-            "https://127.0.0.1:55000/security/user/authenticate",
-            headers={"Authorization": f"Basic {auth}"},
-            timeout=10,
-        )
-        token = (token_resp.get("data") or {}).get("token")
-        if not token:
-            return False, "local Manager auth failed"
+        _ensure_local_edr_ar_commands()
+        token = _authenticate_local_wazuh()
         cmd = command if command.startswith("!") else f"!{command}"
-        _http_json(
+        result = _wazuh_local_json(
             "PUT",
-            f"https://127.0.0.1:55000/active-response?agents_list={agent_id}",
+            f"/active-response?agents_list={agent_id}",
             body={"command": cmd, "arguments": [str(a) for a in arguments]},
             headers={"Authorization": f"Bearer {token}"},
             timeout=30,
         )
+        data = result.get("data") or {}
+        if int(data.get("total_failed_items") or 0) > 0 or int(result.get("error") or 0) != 0:
+            failed = data.get("failed_items") or []
+            detail = ""
+            if failed and isinstance(failed[0], dict):
+                err = failed[0].get("error") or {}
+                detail = str(err.get("message") or failed[0])[:300]
+            return False, detail or f"Active response failed for agent {agent_id}"
         return True, f"AR {command} dispatched to agent {agent_id}"
     except Exception as exc:
         return False, str(exc)[:300]
@@ -597,11 +818,10 @@ def _run_local_ar(job: dict[str, Any]) -> tuple[bool, str]:
 
 def _dispatch_job(job: dict[str, Any]) -> tuple[bool, str]:
     """Route pending control-plane jobs to the correct local handler."""
-    from kevantic_cli import network as network_ops
-
     job_type = str(job.get("job_type") or "").strip()
     payload = job.get("payload") or {}
     if job_type == "set_agent_cidrs":
+        network_ops = _cli_submodule("network")
         cidrs = payload.get("cidrs") or []
         if not isinstance(cidrs, list):
             return False, "payload.cidrs must be a list"
@@ -670,11 +890,22 @@ def _dispatch_job(job: dict[str, Any]) -> tuple[bool, str]:
     return False, f"unsupported job_type: {job_type or 'missing'}"
 
 
+def _load_agent_cidrs_safe() -> list[str]:
+    try:
+        return list(_cli_submodule("network").load_agent_cidrs() or [])
+    except Exception:
+        return []
+
+
 def heartbeat(*, include_inventory: bool = True) -> dict[str, Any]:
     app = state.load_appliance_state()
     appliance_id = app.get("appliance_id")
     if not appliance_id:
         raise RuntimeError("not registered; run kevantic-cli register first")
+    try:
+        _publish_windows_edr_ar_shared()
+    except Exception:
+        pass
     _maybe_seed_core_entitlements()
     api_key = load_api_key()
     base = _control_plane_base(app)
@@ -692,9 +923,7 @@ def heartbeat(*, include_inventory: bool = True) -> dict[str, Any]:
         "disk_percent": metrics["disk_percent"],
         "health_snapshot": {
             "source": "kevantic-cli",
-            "agent_source_cidrs": __import__(
-                "kevantic_cli.network", fromlist=["load_agent_cidrs"]
-            ).load_agent_cidrs(),
+            "agent_source_cidrs": _load_agent_cidrs_safe(),
         },
     }
     if include_inventory:

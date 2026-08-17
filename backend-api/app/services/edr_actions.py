@@ -17,6 +17,7 @@ from app.services.appliance_manager_resolver import (
     tenant_uses_appliance_manager,
 )
 from app.services import appliance_jobs as appliance_jobs_service
+from app.services.endpoint_asset_resolve import resolve_endpoint_asset
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +125,8 @@ def _tenant_deployment_mode(tenant_id: str) -> Optional[str]:
     return (row or {}).get("deployment_mode")
 
 
-ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "120").strip()
+# 0 = hold until Un-isolate (MDR default). Timed auto-release only if env set.
+ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "0").strip()
 
 
 def _get_callback_base() -> str:
@@ -208,6 +210,98 @@ def _resolve_incident(
     return None
 
 
+def _wazuh_agent_from_asset(
+    tenant_id: str,
+    *,
+    asset_id: Optional[str] = None,
+    hostname: Optional[str] = None,
+    alert_description: Optional[str] = None,
+) -> Optional[str]:
+    """Resolve local Manager agent id from protected_assets (appliance inventory)."""
+    if asset_id:
+        row = fetch_one(
+            """
+            SELECT details->>'wazuh_agent_id' AS wazuh_agent_id
+            FROM protected_assets
+            WHERE tenant_id = %s::uuid
+              AND id = %s::uuid
+              AND coalesce(details->>'wazuh_agent_id', '') <> ''
+            LIMIT 1;
+            """,
+            (tenant_id, asset_id),
+        )
+        aid = str((row or {}).get("wazuh_agent_id") or "").strip()
+        if aid:
+            return aid
+    linked = resolve_endpoint_asset(
+        tenant_id, hostname=hostname, alert_description=alert_description
+    )
+    return (linked or {}).get("wazuh_agent_id")
+
+
+def lookup_endpoint_from_incident(tenant_id: str, incident_id: str) -> Dict[str, Optional[str]]:
+    """Hostname / agent id / IP from inventory when appliance alerts omit raw_event.agent."""
+    row = fetch_one(
+        """
+        SELECT
+            sa.destination_host,
+            sa.alert_description,
+            sa.asset_id::text AS asset_id,
+            sa.raw_event
+        FROM incidents i
+        LEFT JOIN security_alerts sa ON sa.id = i.primary_alert_id
+        WHERE i.tenant_id = %s::uuid AND i.id = %s::uuid
+        LIMIT 1;
+        """,
+        (tenant_id, incident_id),
+    )
+    if not row:
+        return {"agent_id": None, "hostname": None, "os_name": None, "ip": None}
+    raw = row.get("raw_event") or {}
+    raw_agent = raw.get("agent") if isinstance(raw, dict) and isinstance(raw.get("agent"), dict) else {}
+    raw_id = str(raw_agent.get("id") or "").strip() or None
+    linked = resolve_endpoint_asset(
+        tenant_id,
+        wazuh_agent_id=raw_id,
+        hostname=row.get("destination_host") or raw_agent.get("name"),
+        alert_description=row.get("alert_description"),
+    )
+    if row.get("asset_id") and not linked:
+        asset = fetch_one(
+            """
+            SELECT
+                hostname,
+                os_name,
+                CASE WHEN ip_address IS NOT NULL THEN host(ip_address) ELSE NULL END AS ip,
+                details->>'wazuh_agent_id' AS wazuh_agent_id
+            FROM protected_assets
+            WHERE tenant_id = %s::uuid AND id = %s::uuid
+            LIMIT 1;
+            """,
+            (tenant_id, row["asset_id"]),
+        )
+        if asset:
+            linked = {
+                "hostname": asset.get("hostname"),
+                "os_name": asset.get("os_name"),
+                "ip": asset.get("ip"),
+                "wazuh_agent_id": str(asset.get("wazuh_agent_id") or "").strip() or None,
+            }
+    if not linked:
+        return {
+            "agent_id": raw_id,
+            "hostname": row.get("destination_host"),
+            "os_name": None,
+            "ip": None,
+        }
+    return {
+        "agent_id": linked.get("wazuh_agent_id") or raw_id,
+        "hostname": linked.get("hostname") or row.get("destination_host"),
+        "os_name": linked.get("os_name"),
+        "ip": linked.get("ip"),
+    }
+
+
 def _agent_from_context(
     tenant_id: str,
     *,
@@ -220,23 +314,39 @@ def _agent_from_context(
     aid = alert_id
     if not aid and incident and incident.get("primary_alert_id"):
         aid = incident["primary_alert_id"]
-    if not aid:
-        return None
-    row = fetch_one(
-        """
-        SELECT raw_event
-        FROM security_alerts
-        WHERE id = %s::uuid AND tenant_id = %s::uuid;
-        """,
-        (aid, tenant_id),
+    hostname = None
+    asset_id = None
+    description = None
+    if aid:
+        row = fetch_one(
+            """
+            SELECT raw_event, destination_host, asset_id::text AS asset_id, alert_description
+            FROM security_alerts
+            WHERE id = %s::uuid AND tenant_id = %s::uuid;
+            """,
+            (aid, tenant_id),
+        )
+        if row:
+            raw = row.get("raw_event") or {}
+            if isinstance(raw, dict):
+                agent = raw.get("agent") if isinstance(raw.get("agent"), dict) else {}
+                ag = str(agent.get("id") or "").strip()
+                if ag:
+                    return ag
+            hostname = row.get("destination_host")
+            asset_id = row.get("asset_id")
+            description = row.get("alert_description")
+    found = _wazuh_agent_from_asset(
+        tenant_id,
+        asset_id=asset_id,
+        hostname=hostname,
+        alert_description=description,
     )
-    if not row:
-        return None
-    raw = row.get("raw_event") or {}
-    if isinstance(raw, dict):
-        agent = raw.get("agent") if isinstance(raw.get("agent"), dict) else {}
-        ag = str(agent.get("id") or "").strip()
-        return ag or None
+    if found:
+        return found
+    if incident and incident.get("id"):
+        filled = lookup_endpoint_from_incident(tenant_id, incident["id"])
+        return filled.get("agent_id")
     return None
 
 
@@ -658,9 +768,10 @@ def execute_edr_action(
             # Agent remaining "active" is expected (manager IP is allow-listed) and does
             # NOT prove network quarantine. Mark dispatched; require endpoint applied=true.
             _, verify_msg = verify_isolation_state(agent_id, expect_isolated=True)
+            hold = "until Un-isolate" if str(ISOLATE_SECONDS) in ("0", "") else f"auto-release ~{ISOLATE_SECONDS}s"
             msg = (
                 f"Network quarantine command dispatched to agent {agent_id} "
-                f"(auto-release ~{ISOLATE_SECONDS}s). "
+                f"({hold}). "
                 "This is default-deny all traffic except Manager/DHCP/loopback - not ICMP-only. "
                 "Confirm on host log: QUARANTINE ACTIVE applied=true (or FAILED applied=false)."
             )
@@ -938,6 +1049,7 @@ def execute_edr_action(
                 ar_msg = (
                     f"Hash block command dispatched to agent {agent_id} "
                     f"(denylist + AppLocker/WDAC attempt when available; "
+                    f"hash denylist alone does NOT prevent execution until WDAC/AppLocker applies; "
                     f"awaiting endpoint applied=true/false callback)."
                 )
             ok, shuffle_msg = shuffle_edr_client.post_edr_workflow(

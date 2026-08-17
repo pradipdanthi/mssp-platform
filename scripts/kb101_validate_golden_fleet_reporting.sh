@@ -29,6 +29,18 @@ grep -q 'apply_entitlements' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py
   && pass "CLI applies entitlement jobs" \
   || fail "register_ops.py missing apply_entitlements job handler"
 
+grep -q '_authenticate_local_wazuh' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI authenticates to local Manager without operator env" \
+  || fail "register_ops.py missing local Wazuh API auth helper"
+
+grep -q '_ensure_local_edr_ar_commands' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI registers isolate AR commands on local Manager" \
+  || fail "register_ops.py missing EDR AR command ensure"
+
+grep -q '_cli_submodule' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI loads branded junexis/kevantic modules without hard fail" \
+  || fail "register_ops.py missing branded CLI import helper"
+
 grep -q 'apply_entitlements' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
   && pass "golden bake verifies apply_entitlements" \
   || fail "bake script missing apply_entitlements verify"

@@ -135,7 +135,7 @@ export default function EdrControlPanel({
               "Quarantine this host?\n\n" +
                 "All network traffic will be blocked except the SOC Manager path " +
                 "(and DHCP/loopback). This is full network quarantine, not ping-only. " +
-                "Auto-release is about 2 minutes unless you Un-isolate sooner."
+                "The host stays isolated until you click Un-isolate."
             )) {
               void run("ISOLATE_HOST", { confirm_isolation: true });
             }
