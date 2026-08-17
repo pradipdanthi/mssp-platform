@@ -374,3 +374,41 @@ The user of this repository is not a programmer. Every AI agent must:
 ---
 
 This file is intended to be read by every AI agent at the start of every session in this repository, alongside `CLAUDE.md` and `.cursor/rules/mssp-control-plane.mdc`.
+
+---
+
+## Cursor Cloud specific instructions
+
+These notes are for the Cursor Cloud dev environment only. On VM 100 the canonical run is Docker Compose (`docker-compose.yml`), but Docker is **not** installed in the Cloud VM. Instead this environment runs the same stack **natively** for real development mode (backend hot-reload + Vite HMR). The `docker-compose.yml` production path is unchanged and must not be edited to make native dev work.
+
+### Services (native dev)
+
+| Service | How it runs | URL |
+|---|---|---|
+| PostgreSQL 16 | apt package; start with `sudo pg_ctlcluster 16 main start` | localhost:5432 |
+| Redis 7 | apt package; start with `sudo redis-server --daemonize yes --dir /var/lib/redis` | localhost:6379 (no auth in dev) |
+| Backend API (FastAPI) | `.venv/bin/uvicorn app.main:app --reload` run from `backend-api/` with env exported | localhost:8000 |
+| Admin/SOC portal (Vite) | `npm run dev -- --port 5174` in `frontend-admin/` | localhost:5174 |
+| Customer portal (Vite) | `npm run dev` in `frontend-customer/` | localhost:5173 |
+
+### Non-obvious caveats (read before running)
+
+- **Both Vite configs hardcode port `5173` with `strictPort: true`.** They collide if run together. Keep `frontend-customer` on 5173 and start `frontend-admin` on another port (`npm run dev -- --port 5174`). Do not edit the committed `vite.config.ts`.
+- **Vite proxies `/api` to the Docker hostname `backend-api:8000`.** For native dev, `/etc/hosts` maps `backend-api` → `127.0.0.1` so the proxy reaches the local uvicorn on :8000. If `/api` calls fail with DNS errors, re-add: `echo "127.0.0.1 backend-api" | sudo tee -a /etc/hosts`.
+- **`frontend-admin/package-lock.json` is missing the fully-resolved `@rollup/rollup-linux-x64-gnu` optional dependency** (customer's lockfile has it). A plain `npm install`/`npm ci` in `frontend-admin` therefore installs only the musl rollup binary and the Vite dev server crashes with `Cannot find module @rollup/rollup-linux-x64-gnu`. The startup/update script works around this by copying the (identical-version) binary from `frontend-customer/node_modules`. Do not "fix" this by editing the committed lockfile.
+- **The backend has no dotenv loader** — it reads `os.environ` directly. Export the env before launching uvicorn: `set -a; . /workspace/.env; set +a`. `/workspace/.env` and `/workspace/.secrets/*` are gitignored dev-only files created during environment setup (never commit them). The engine adapter secrets in `.secrets/*` are dev placeholders; live engines (Wazuh/TheHive/Shuffle/Greenbone) are not reachable from the Cloud VM, which is fine — those code paths are read lazily and only fail if you actually call them.
+- **DB schema is applied from `postgres/init/*.sql` in filename order** against the `mssp_control` DB (owner `mssp_admin`). Re-running them is safe (idempotent guards). There is no dev seed SQL (`postgres/seed/dev/` only has a README), so onboard data via the admin portal / API.
+- **A platform admin must exist to log in.** `scripts/bootstrap_platform_admin.sh` assumes Docker; in native dev create/reset one directly, hashing with the app's bcrypt helper, e.g.: `cd backend-api && H=$(/workspace/.venv/bin/python -c "from app.core.security import hash_password;print(hash_password('<pw>'))"); PGPASSWORD=$POSTGRES_PASSWORD psql -h localhost -U mssp_admin -d mssp_control -c "INSERT INTO platform_users (email,full_name,user_type,role,status,tenant_id,password_hash) VALUES ('admin@kestrel.local','Dev Admin','admin','platform_admin','active',NULL,'$H') ON CONFLICT (email) DO UPDATE SET password_hash=EXCLUDED.password_hash;"`. The dev admin is `admin@kestrel.local` (password set locally during setup). Log in on the Admin portal with `portal=admin`.
+- **KB validation scripts (`scripts/kb0NN_validate_*.sh`) target the Docker Compose stack** (`docker compose exec ...`) and do not run as-is in native dev. Treat them as reference for expected behavior; verify via the live API (`curl localhost:8000/...`) and the portals instead. There is no unit-test / ESLint framework; frontend "lint+build" is `npm run build` (`tsc -b && vite build`).
+
+### Quick start (after the update script has installed deps)
+
+```bash
+sudo pg_ctlcluster 16 main start
+sudo redis-server --daemonize yes --dir /var/lib/redis
+# backend
+cd /workspace/backend-api && set -a && . /workspace/.env && set +a && /workspace/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# frontends (separate shells)
+cd /workspace/frontend-customer && npm run dev              # :5173
+cd /workspace/frontend-admin && npm run dev -- --port 5174  # :5174
+```
