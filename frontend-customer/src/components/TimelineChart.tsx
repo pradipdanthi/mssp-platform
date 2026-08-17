@@ -59,21 +59,11 @@ function StackedTimeline({ buckets, title }: { buckets: SeverityBucket[]; title:
   const slot = plotW / n;
   const barW = Math.max(6, slot * 0.62);
 
-  // Soft activity floor so empty windows still show chart structure
-  const display = buckets.map((b, i) => {
+  const display = buckets.map((b) => {
     const c = b.critical;
     const h = b.high;
     const cyan = b.medium + b.low;
-    const total = c + h + cyan;
-    if (total > 0) return { ...b, critical: c, high: h, medium: cyan, low: 0 };
-    const wave = 2 + ((i * 5) % 7);
-    return {
-      ...b,
-      critical: i % 5 === 0 ? 2 : i % 3 === 0 ? 1 : 0,
-      high: 1 + (i % 4),
-      medium: wave,
-      low: 0,
-    };
+    return { ...b, critical: c, high: h, medium: cyan, low: 0 };
   });
 
   const yTicks = [0, 5, 10, 15, 20];

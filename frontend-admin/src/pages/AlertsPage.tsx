@@ -1,9 +1,11 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { getAlertTaxonomySummary, getAlerts } from "../api/admin";
 import AlertTaxonomyNav from "../components/AlertTaxonomyNav";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import ListToolbar from "../components/ListToolbar";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 import { useEffect, useState } from "react";
 
 type ColumnMode = "default" | "endpoints" | "network" | "vuln" | "data";
@@ -41,7 +43,17 @@ const STATUS_OPTIONS = [
   { value: "closed", label: "Closed" },
 ];
 
+function buildAlertsBase(severityFilter: string, statusFilter: string, category?: string | null): string {
+  const params = new URLSearchParams();
+  if (category && category !== "all") params.set("category", category);
+  if (severityFilter) params.set("severity", severityFilter);
+  if (statusFilter) params.set("status", statusFilter);
+  const q = params.toString();
+  return q ? `/alerts?${q}` : "/alerts";
+}
+
 export default function AlertsPage() {
+  const { tenantId: scopedTenantId, scopeAll, tenantName } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const severityFilter = params.get("severity") ?? "";
   const statusFilter = params.get("status") ?? "";
@@ -52,6 +64,7 @@ export default function AlertsPage() {
     ? Number(params.get("page_size"))
     : 25;
   const columnMode = columnModeForCategory(categoryFilter);
+  const alertsBase = buildAlertsBase(severityFilter, statusFilter, categoryFilter);
 
   function patchParams(updates: Record<string, string | null>) {
     const next = new URLSearchParams(params);
@@ -65,6 +78,7 @@ export default function AlertsPage() {
   const listFilters = {
     page,
     page_size: pageSize,
+    ...(scopedTenantId ? { tenant_id: scopedTenantId } : {}),
     ...(qFilter ? { q: qFilter } : {}),
     ...(statusFilter ? { status: statusFilter } : {}),
     ...(severityFilter ? { severity: severityFilter } : {}),
@@ -73,22 +87,24 @@ export default function AlertsPage() {
 
   const { status, data, errorMessage } = useAdminQuery(
     () => getAlerts(listFilters),
-    [severityFilter, statusFilter, categoryFilter, qFilter, page, pageSize]
+    [scopedTenantId, severityFilter, statusFilter, categoryFilter, qFilter, page, pageSize]
   );
 
   const [taxonomyCounts, setTaxonomyCounts] = useState<Record<string, number>>({ all: 0 });
 
   useEffect(() => {
-    getAlertTaxonomySummary(
-      severityFilter && !["urgent", "high_critical", "high,critical"].includes(severityFilter)
-        ? { severity: severityFilter }
-        : severityFilter
-          ? { severity: severityFilter }
-          : undefined
-    )
+    if (!scopedTenantId) {
+      setTaxonomyCounts({ all: 0 });
+      return;
+    }
+    getAlertTaxonomySummary({
+      tenant_id: scopedTenantId,
+      ...(statusFilter ? { status: statusFilter } : {}),
+      ...(severityFilter ? { severity: severityFilter } : {}),
+    })
       .then((res) => setTaxonomyCounts(res.counts))
       .catch(() => undefined);
-  }, [severityFilter, data]);
+  }, [scopedTenantId, severityFilter, statusFilter, data]);
 
   const alerts = status === "success" && data ? data.alerts : [];
   const meta =
@@ -110,40 +126,52 @@ export default function AlertsPage() {
         ? severityFilter
         : null;
 
+  const categoryLabel = categoryFilter ? categoryFilter.replace(/_/g, " ") : null;
+
   return (
     <div className="alerts-page-layout">
-      <AlertTaxonomyNav
-        counts={taxonomyCounts}
-        activeCategory={categoryFilter}
-        severityFilter={severityFilter || null}
-      />
+      {scopedTenantId ? (
+        <AlertTaxonomyNav
+          counts={taxonomyCounts}
+          activeCategory={categoryFilter}
+          severityFilter={severityFilter || null}
+          statusFilter={statusFilter || null}
+          tenantName={tenantName || "Customer"}
+        />
+      ) : null}
+
       <div className="alerts-page-main">
         <h1 className="page-title">Alerts</h1>
+        <CustomerScopeBanner />
         <p className="page-subtitle">
-          All-device SOC alert stream with derived taxonomy. Use search and filters to narrow the
-          queue; results are paginated.
-          {categoryFilter ? (
+          {scopeAll ? (
             <>
-              {" "}
-              Category: <strong>{categoryFilter.replace(/_/g, " ")}</strong>
-              {" · "}
-              <Link
-                to={`/alerts${severityFilter ? `?severity=${encodeURIComponent(severityFilter)}` : ""}`}
-              >
-                Clear category
-              </Link>
+              All customers — set <strong>Customer scope</strong> in the header to focus on one
+              customer and open device taxonomy.
             </>
-          ) : null}
-          {filterLabel ? (
+          ) : (
             <>
-              {" "}
-              Severity: <strong style={{ textTransform: "capitalize" }}>{filterLabel}</strong>
+              <strong>{tenantName || "Customer"}</strong>
+              {categoryLabel ? (
+                <>
+                  {" · "}
+                  Category: <strong>{categoryLabel}</strong>
+                  {" · "}
+                  <Link to={buildAlertsBase(severityFilter, statusFilter)}>Clear category</Link>
+                </>
+              ) : null}
+              {filterLabel ? (
+                <>
+                  {" · "}
+                  Severity: <strong style={{ textTransform: "capitalize" }}>{filterLabel}</strong>
+                </>
+              ) : null}
             </>
-          ) : null}
+          )}
         </p>
 
         <ListToolbar
-          searchPlaceholder="Search title, host, tenant, summary…"
+          searchPlaceholder="Search title, host, summary…"
           searchValue={qFilter}
           onSearchChange={(q) => patchParams({ q, page: "1" })}
           statusOptions={STATUS_OPTIONS}
@@ -175,8 +203,8 @@ export default function AlertsPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Tenant</th>
                   <th>Severity</th>
+                  {scopeAll ? <th>Customer</th> : null}
                   {columnMode === "endpoints" ? (
                     <>
                       <th>Hostname</th>
@@ -222,10 +250,17 @@ export default function AlertsPage() {
                   const ctx = alert.contextual || {};
                   return (
                     <tr key={alert.id}>
-                      <td>{alert.tenant_name}</td>
                       <td>
-                        <SeverityPill value={alert.severity} filterBase="/alerts" />
+                        <SeverityPill value={alert.severity} filterBase={alertsBase} />
                       </td>
+                      {scopeAll ? (
+                        <td>
+                          {alert.tenant_name || "—"}
+                          {alert.short_code ? (
+                            <span className="alert-customer-code"> {alert.short_code}</span>
+                          ) : null}
+                        </td>
+                      ) : null}
                       {columnMode === "endpoints" ? (
                         <>
                           <td className="cell-mono">{String(ctx.hostname ?? "—")}</td>
@@ -275,7 +310,11 @@ export default function AlertsPage() {
                         </>
                       )}
                       <td>
-                        <SeverityPill value={alert.status} kind="status" filterBase="/alerts" />
+                        <SeverityPill
+                          value={alert.status}
+                          kind="status"
+                          filterBase={alertsBase}
+                        />
                       </td>
                       <td className="cell-mono">{alert.created_at}</td>
                     </tr>

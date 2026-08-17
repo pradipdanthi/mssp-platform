@@ -47,17 +47,23 @@ function normalizeCounts(slices: SeveritySlice[]): Record<string, number> {
 }
 
 function buildSegments(counts: Record<string, number>) {
-  const raw = MITRE_SEGMENTS.map((seg, i) => {
+  const hasReal =
+    (counts.critical || 0) +
+      (counts.high || 0) +
+      (counts.medium || 0) +
+      (counts.low || 0) +
+      (counts.info || 0) >
+    0;
+
+  const raw = MITRE_SEGMENTS.map((seg) => {
     let n = counts[seg.severityKey] || 0;
-    // Split medium across privesc + discovery when both use medium
     if (seg.id === "discover") n = Math.max(0, Math.floor((counts.medium || 0) / 2));
     if (seg.id === "privesc") n = Math.max(0, Math.ceil((counts.medium || 0) / 2));
-    if (seg.id === "other") n = Math.max(n, Math.floor((counts.low || 0) / 3));
-    // Ensure visible multi-segment ring even with sparse operational data
-    if (n <= 0) n = 1 + (i % 3);
+    if (seg.id === "other") n = Math.max(0, Math.floor((counts.low || 0) / 3));
+    if (!hasReal) n = 0;
     return { ...seg, count: n };
   });
-  const total = raw.reduce((s, r) => s + r.count, 0) || 1;
+  const total = raw.reduce((s, r) => s + r.count, 0);
   return { segments: raw, total };
 }
 
@@ -80,18 +86,22 @@ export default function SeverityDonut({
   const cx = 100;
   const cy = 100;
   const circumference = 2 * Math.PI * radius;
+  const realTotal = Object.values(counts).reduce((a, b) => a + b, 0);
 
   let offset = 0;
-  const arcs = segments.map((seg) => {
-    const len = (seg.count / total) * circumference;
-    const arc = {
-      ...seg,
-      dash: len,
-      offset: -offset,
-    };
-    offset += len;
-    return arc;
-  });
+  const arcs =
+    total > 0
+      ? segments.map((seg) => {
+          const len = (seg.count / total) * circumference;
+          const arc = {
+            ...seg,
+            dash: len,
+            offset: -offset,
+          };
+          offset += len;
+          return arc;
+        })
+      : [];
 
   const handleSeg = (severityKey: string) => {
     if (onSeveritySelect) onSeveritySelect(severityKey);
@@ -142,10 +152,10 @@ export default function SeverityDonut({
               </circle>
             ))}
             <text className="severity-donut-center-value" x={cx} y={cy - 2}>
-              {Object.values(counts).reduce((a, b) => a + b, 0) || total}
+              {realTotal}
             </text>
             <text className="severity-donut-center-label" x={cx} y={cy + 16}>
-              {title}
+              {realTotal === 0 ? "No alerts" : title}
             </text>
           </svg>
         </div>
@@ -153,6 +163,9 @@ export default function SeverityDonut({
         {showMitre ? (
           <div className="mitre-legend-col">
             <div className="mitre-legend-heading">MITRE ATT&amp;CK Framework</div>
+            {realTotal === 0 ? (
+              <p className="mitre-empty-note">No alerts in this tenant scope yet.</p>
+            ) : (
             <ul className="mitre-legend-list">
               {segments.map((seg) => {
                 const active = activeSeverity?.toLowerCase() === seg.severityKey;
@@ -186,6 +199,7 @@ export default function SeverityDonut({
                 );
               })}
             </ul>
+            )}
           </div>
         ) : null}
       </div>

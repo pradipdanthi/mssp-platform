@@ -29,7 +29,8 @@ function publishLiveFeed(on: boolean) {
 }
 
 function sparkFromTotal(n: number): number[] {
-  const base = Math.max(n, 1);
+  if (n <= 0) return Array.from({ length: 12 }, () => 0);
+  const base = n;
   return Array.from({ length: 12 }, (_, i) =>
     Math.max(0, Math.round(base * (0.55 + 0.08 * Math.sin(i) + (i / 12) * 0.35)))
   );
@@ -107,9 +108,7 @@ export default function DashboardPage() {
       else if (key === "info") map.low += 1;
     }
     if ((data?.recent_alerts.length ?? 0) === 0 && data) {
-      const hc = data.kpis.high_critical_alerts || 0;
-      map.high = Math.ceil(hc / 2);
-      map.critical = Math.floor(hc / 2);
+      /* Keep zeros — do not invent severity slices when there are no alerts. */
     }
     return Object.entries(map).map(([severity, count]) => ({ severity, count }));
   }, [data]);
@@ -134,20 +133,20 @@ export default function DashboardPage() {
     );
   }
 
-  const eventsMonitored = data
-    ? data.kpis.high_critical_alerts + data.kpis.assets_monitored * 10 + data.recent_alerts.length
-    : 0;
+  const eventsMonitored = data ? data.kpis.total_alerts : 0;
 
   const hasStacked = stackedBuckets.some(
     (b) => b.critical + b.high + b.medium + b.low > 0
   );
 
   return (
-    <div className="command-dashboard">
+    <div className="command-dashboard" data-testid="customer-dashboard">
       <div className="sentinel-dashboard-head">
         <div className="dash-welcome">
           <p className="dash-welcome-kicker">Welcome back,</p>
-          <h1 className="dash-welcome-name">{user?.full_name || "Customer"}</h1>
+          <h1 className="dash-welcome-name" data-testid="customer-dashboard-welcome">
+            {user?.full_name || "Customer"}
+          </h1>
           <p className="page-subtitle">
             Priority KPIs for your organization — open a tile to dig in.
           </p>
@@ -216,7 +215,7 @@ export default function DashboardPage() {
                   : eventsMonitored.toLocaleString()}
               </div>
               <div className="kpi-foot">
-                Collectors online: {data.kpis.appliances_online} · alerts
+                {data.kpis.total_alerts} alerts · {data.kpis.assets_monitored} assets
               </div>
             </Link>
 
@@ -276,30 +275,41 @@ export default function DashboardPage() {
             queueHref="/incidents"
           />
 
-          <div className="analytics-row analytics-row--trio">
-            <Link className="timeline-panel-link" to="/incidents" aria-label="Open incidents">
+          <div className="analytics-row analytics-row--trio" data-testid="customer-analytics-row">
+            <Link
+              className="timeline-panel-link"
+              to="/incidents"
+              aria-label="Open incidents"
+              data-testid="widget-timeline"
+            >
               <TimelineChart
                 buckets={hasStacked ? stackedBuckets : buckets}
                 title="Incidents over time (24h)"
                 stacked={hasStacked}
               />
             </Link>
-            <SeverityDonut
-              slices={severitySlices}
-              title="Alerts"
-              showMitre
-              activeSeverity={feedSeverity}
-              onSeveritySelect={(sev) =>
-                setFeedSeverity((prev) => (prev?.toLowerCase() === sev.toLowerCase() ? null : sev))
-              }
-              severityHref={(sev) => `/alerts?severity=${encodeURIComponent(sev)}`}
-            />
-            <GeoActivityHeatmap
-              spots={heatSpots}
-              title="Activity heatmap"
-              liveTick={liveTick}
-              footnote="Aggregated overlay for your package — never raw IP locations."
-            />
+            <div data-testid="widget-severity-donut">
+              <SeverityDonut
+                slices={severitySlices}
+                title="Alerts"
+                showMitre
+                activeSeverity={feedSeverity}
+                onSeveritySelect={(sev) =>
+                  setFeedSeverity((prev) =>
+                    prev?.toLowerCase() === sev.toLowerCase() ? null : sev
+                  )
+                }
+                severityHref={(sev) => `/alerts?severity=${encodeURIComponent(sev)}`}
+              />
+            </div>
+            <div data-testid="widget-geo-heatmap">
+              <GeoActivityHeatmap
+                spots={heatSpots}
+                title="Activity heatmap"
+                liveTick={liveTick}
+                footnote="Aggregated overlay for your package — never raw IP locations."
+              />
+            </div>
           </div>
         </>
       )}

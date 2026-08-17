@@ -106,6 +106,7 @@ def _asset_detail(asset_id: UUID) -> Optional[Dict[str, Any]]:
 @router.get("/reports")
 def list_reports(
     report_status: Optional[str] = Query(default=None, alias="status"),
+    tenant_id: Optional[UUID] = None,
     q: Optional[str] = Query(
         default=None, max_length=200, description="Search title/summary/tenant"
     ),
@@ -120,6 +121,9 @@ def list_reports(
     if st in ("draft", "published", "archived"):
         where.append("mr.status = %s")
         params.append(st)
+    if tenant_id is not None:
+        where.append("mr.tenant_id = %s")
+        params.append(tenant_id)
     q_clean = (q or "").strip()
     if q_clean:
         where.append(
@@ -334,6 +338,7 @@ def download_report_xlsx(
 @router.get("/assets")
 def list_assets(
     asset_status: Optional[str] = Query(default=None, alias="status"),
+    tenant_id: Optional[UUID] = None,
     q: Optional[str] = Query(
         default=None, max_length=200, description="Search hostname/OS/tenant/type"
     ),
@@ -360,6 +365,9 @@ def list_assets(
     if st in ("active", "inactive", "unknown"):
         where.append("pa.status = %s")
         params.append(st)
+    if tenant_id is not None:
+        where.append("pa.tenant_id = %s")
+        params.append(tenant_id)
     q_clean = (q or "").strip()
     if q_clean:
         where.append(

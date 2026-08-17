@@ -16,8 +16,10 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 import { ASSET_FOLDERS, AssetFolderId, assetFolderId } from "../utils/assetFolders";
 
 const TYPES: AssetType[] = [
@@ -62,6 +64,7 @@ function emptyFolders(): Record<AssetFolderId, AdminAsset[]> {
 export default function AssetsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
+  const { tenantFilter, tenantId: scopedTenantId } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const statusFilter = params.get("status") ?? "";
   const qFilter = params.get("q") ?? "";
@@ -84,10 +87,11 @@ export default function AssetsPage() {
       getAssets({
         page,
         page_size: pageSize,
+        ...tenantFilter,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    [statusFilter, qFilter, page, pageSize]
+    [tenantFilter, statusFilter, qFilter, page, pageSize]
   );
   const meta =
     status === "success" && data
@@ -131,6 +135,10 @@ export default function AssetsPage() {
       .then((r) => setTenants(r.tenants))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (scopedTenantId) setTenantId(scopedTenantId);
+  }, [scopedTenantId]);
 
   const customerBuckets = useMemo(() => {
     const map = new Map<string, CustomerBucket>();
@@ -326,6 +334,7 @@ export default function AssetsPage() {
       <div className="page-header-row">
         <div>
           <h1 className="page-title">Protected Assets</h1>
+          <CustomerScopeBanner />
           <p className="page-subtitle">
             Customer folders with OS and device-type categories. New assets land in the matching
             folder automatically. IP addresses are SOC-visible only.

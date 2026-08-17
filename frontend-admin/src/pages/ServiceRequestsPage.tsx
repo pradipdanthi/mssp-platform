@@ -8,6 +8,8 @@ import {
   patchConsultationRequest,
 } from "../api/admin";
 import { formatScopeSummary } from "../data/serviceCatalog";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const STATUS_OPTIONS: ConsultationRequestStatus[] = [
   "PENDING_CONSULTATION",
@@ -19,6 +21,7 @@ const STATUS_OPTIONS: ConsultationRequestStatus[] = [
 ];
 
 export default function ServiceRequestsPage() {
+  const { tenantId } = useCustomerScope();
   const [params] = useSearchParams();
   const highlightId = params.get("id");
   const serviceKeyFilter = params.get("service_key") || "";
@@ -31,7 +34,7 @@ export default function ServiceRequestsPage() {
 
   function refresh() {
     setLoading(true);
-    listConsultationRequests(statusFilter || undefined, serviceKeyFilter || undefined)
+    listConsultationRequests(statusFilter || undefined, serviceKeyFilter || undefined, tenantId)
       .then((res) => {
         setRows(res.requests || []);
         setError(null);
@@ -46,7 +49,7 @@ export default function ServiceRequestsPage() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, serviceKeyFilter]);
+  }, [statusFilter, serviceKeyFilter, tenantId]);
 
   const sorted = useMemo(() => {
     if (!highlightId) return rows;
@@ -87,6 +90,7 @@ export default function ServiceRequestsPage() {
   return (
     <div>
       <h1 className="page-title">Service Request Management</h1>
+      <CustomerScopeBanner />
       <p className="page-subtitle">
         Cross-tenant consultation and upgrade requests. Catalog view:{" "}
         <Link to="/services">Service Catalog</Link>.

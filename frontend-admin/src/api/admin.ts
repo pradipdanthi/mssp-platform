@@ -169,6 +169,18 @@ export interface AlertTaxonomySummaryResponse {
   labels: Record<string, string>;
 }
 
+export interface AlertTenantSummaryRow {
+  tenant_id: string;
+  tenant_name: string;
+  short_code: string;
+  alert_count: number;
+  high_critical_count: number;
+}
+
+export interface AlertTenantSummaryResponse {
+  tenants: AlertTenantSummaryRow[];
+}
+
 export interface AlertsListResponse {
   alerts: Alert[];
   total?: number;
@@ -657,6 +669,14 @@ export function getAlertTaxonomySummary(
 ): Promise<AlertTaxonomySummaryResponse> {
   return request<AlertTaxonomySummaryResponse>(
     withFilters("/admin/alerts/taxonomy-summary", filters)
+  );
+}
+
+export function getAlertTenantSummary(
+  filters?: Pick<TriageListFilters, "status" | "severity">
+): Promise<AlertTenantSummaryResponse> {
+  return request<AlertTenantSummaryResponse>(
+    withFilters("/admin/alerts/tenant-summary", filters)
   );
 }
 
@@ -1530,11 +1550,13 @@ export function getConsultationSummary(opts?: {
 
 export function listConsultationRequests(
   status?: string,
-  serviceKey?: string
+  serviceKey?: string,
+  tenantId?: string
 ): Promise<{ requests: ConsultationRequest[] }> {
   const params = new URLSearchParams();
   if (status) params.set("status", status);
   if (serviceKey) params.set("service_key", serviceKey);
+  if (tenantId) params.set("tenant_id", tenantId);
   const q = params.toString() ? `?${params.toString()}` : "";
   return request(`/admin/service-consultation-requests${q}`);
 }

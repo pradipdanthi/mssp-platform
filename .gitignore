@@ -20,3 +20,15 @@ deploy/velociraptor-client/client.config.yaml
 # Appliance golden-image builder secrets / artifacts
 mssp-appliance-builder/.cache/
 mssp-appliance-builder/output-mssp-appliance/
+
+# Playwright E2E artifacts
+e2e/node_modules/
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
+
+# Raw brand-kit zip extracts (canonical kit is packages/brand/)
+kevantic-brand-kit-v1.1/
+appliance-mgmt/kevantic-brand-kit-v1.1/
+backend-api/kevantic-brand-kit-v1.1/
+

@@ -1,7 +1,9 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getAuditLogs } from "../api/admin";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const ACTION_OPTIONS = [
   { value: "EDR_ISOLATE_HOST", label: "Isolate / quarantine host" },
@@ -28,6 +30,7 @@ function downloadBlob(filename: string, content: string, mime: string) {
 
 export default function AuditLogsPage() {
   const navigate = useNavigate();
+  const { tenantShortCodeFilter } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const qFilter = params.get("q") ?? "";
   const actionFilter = params.get("action") ?? "";
@@ -50,10 +53,11 @@ export default function AuditLogsPage() {
       getAuditLogs({
         page,
         page_size: pageSize,
+        ...tenantShortCodeFilter,
         ...(qFilter ? { q: qFilter } : {}),
         ...(actionFilter ? { action_type: actionFilter } : {}),
       }),
-    [qFilter, actionFilter, page, pageSize]
+    [tenantShortCodeFilter, qFilter, actionFilter, page, pageSize]
   );
 
   const rows = status === "success" && data ? data.audit_logs : [];
@@ -74,6 +78,7 @@ export default function AuditLogsPage() {
       <div className="page-header-row">
         <div>
           <h1 className="page-title">Audit Log</h1>
+          <CustomerScopeBanner />
           <p className="page-subtitle">
             Who did what, when, from which portal/IP — including customer isolate actions. Click a row
             for full detail.

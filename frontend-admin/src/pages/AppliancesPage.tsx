@@ -23,9 +23,11 @@ import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ConfirmDangerModal from "../components/ConfirmDangerModal";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 import { APPLIANCE_GATEWAY_URL, applianceRegisterCommand } from "../config/applianceGateway";
 
 const STATUS_OPTIONS = [
@@ -47,6 +49,7 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function AppliancesPage() {
+  const { tenantFilter } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const statusFilter = params.get("status") ?? "";
   const qFilter = params.get("q") ?? "";
@@ -69,10 +72,11 @@ export default function AppliancesPage() {
       getAppliances({
         page,
         page_size: pageSize,
+        ...tenantFilter,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    [statusFilter, qFilter, page, pageSize]
+    [tenantFilter, statusFilter, qFilter, page, pageSize]
   );
   const appliances = status === "success" && data ? data.appliances : [];
   const meta =
@@ -90,6 +94,7 @@ export default function AppliancesPage() {
   return (
     <div>
       <h1 className="page-title">Appliances</h1>
+      <CustomerScopeBanner />
       <p className="page-subtitle">
         Appliance list with credential visibility/rotation, plus tenant activation-token
         management. Search by name, site, or tenant; filter and paginate as the fleet grows.

@@ -1,9 +1,11 @@
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getIncidents } from "../api/admin";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open (active)" },
@@ -23,6 +25,7 @@ const SEVERITY_OPTIONS = [
 
 export default function IncidentsPage() {
   const navigate = useNavigate();
+  const { tenantFilter } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const statusFilter = params.get("status") ?? "";
   const severityFilter = params.get("severity") ?? "";
@@ -46,11 +49,12 @@ export default function IncidentsPage() {
       getIncidents({
         page,
         page_size: pageSize,
+        ...tenantFilter,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(severityFilter ? { severity: severityFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    [statusFilter, severityFilter, qFilter, page, pageSize]
+    [tenantFilter, statusFilter, severityFilter, qFilter, page, pageSize]
   );
 
   const incidents = status === "success" && data ? data.incidents : [];
@@ -69,6 +73,7 @@ export default function IncidentsPage() {
   return (
     <div>
       <h1 className="page-title">Incidents</h1>
+      <CustomerScopeBanner />
       <p className="page-subtitle">
         Open and historical incidents across all tenants. Search by number, title, or tenant; use
         filters and pagination when queues grow large. Use the ⋯ menu to open the investigation

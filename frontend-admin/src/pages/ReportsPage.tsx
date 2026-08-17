@@ -17,7 +17,9 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const STATUSES: ReportStatus[] = ["draft", "published", "archived"];
 const STATUS_OPTIONS = STATUSES.map((s) => ({ value: s, label: s }));
@@ -108,6 +110,7 @@ function SectionsView({ detail }: { detail: ReportDetail }) {
 export default function ReportsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
+  const { tenantFilter, tenantId: scopedTenantId } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const statusFilter = params.get("status") ?? "";
   const qFilter = params.get("q") ?? "";
@@ -130,10 +133,11 @@ export default function ReportsPage() {
       getReports({
         page,
         page_size: pageSize,
+        ...tenantFilter,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    [statusFilter, qFilter, page, pageSize]
+    [tenantFilter, statusFilter, qFilter, page, pageSize]
   );
   const reports = status === "success" && data ? data.reports : [];
   const meta =
@@ -178,6 +182,10 @@ export default function ReportsPage() {
       .then((r) => setTenants(r.tenants))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (scopedTenantId) setTenantId(scopedTenantId);
+  }, [scopedTenantId]);
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault();
@@ -292,6 +300,7 @@ export default function ReportsPage() {
       <div className="page-header-row">
         <div>
           <h1 className="page-title">Monthly Reports</h1>
+          <CustomerScopeBanner />
           <p className="page-subtitle">
             Enterprise monthly deliverable: auto metrics from the platform, SOC narrative, on-screen
             preview, PDF and Excel download. Publish to share with the customer portal.

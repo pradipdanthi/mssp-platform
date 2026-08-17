@@ -15,8 +15,10 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const PRIORITIES: RecommendationPriority[] = ["low", "medium", "high", "critical"];
 const STATUSES: RecommendationStatus[] = [
@@ -73,6 +75,7 @@ const EMPTY_CREATE: CreateForm = {
 export default function RecommendationsPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
+  const { tenantFilter, tenantId: scopedTenantId } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const statusFilter = params.get("status") ?? "";
   const qFilter = params.get("q") ?? "";
@@ -95,10 +98,11 @@ export default function RecommendationsPage() {
       getRecommendations({
         page,
         page_size: pageSize,
+        ...tenantFilter,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    [statusFilter, qFilter, page, pageSize]
+    [tenantFilter, statusFilter, qFilter, page, pageSize]
   );
 
   const recommendations = status === "success" && data ? data.recommendations : [];
@@ -139,6 +143,11 @@ export default function RecommendationsPage() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!scopedTenantId) return;
+    setCreateForm((prev) => ({ ...prev, tenant_id: scopedTenantId }));
+  }, [scopedTenantId]);
 
   async function handleCreate(event: FormEvent) {
     event.preventDefault();
@@ -234,6 +243,7 @@ export default function RecommendationsPage() {
       <div className="page-header-row">
         <div>
           <h1 className="page-title">Recommendations</h1>
+          <CustomerScopeBanner />
           <p className="page-subtitle">
             Create customer action items and control whether the customer portal can see them.
           </p>

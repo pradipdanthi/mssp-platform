@@ -1,7 +1,9 @@
 import { useSearchParams } from "react-router-dom";
 import { getNotifications } from "../api/admin";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const STATUS_OPTIONS = [
   { value: "pending", label: "Pending" },
@@ -11,6 +13,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function NotificationsPage() {
+  const { tenantFilter } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const statusFilter = params.get("status") ?? "";
   const qFilter = params.get("q") ?? "";
@@ -33,10 +36,11 @@ export default function NotificationsPage() {
       getNotifications({
         page,
         page_size: pageSize,
+        ...tenantFilter,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    [statusFilter, qFilter, page, pageSize]
+    [tenantFilter, statusFilter, qFilter, page, pageSize]
   );
 
   const notifications = status === "success" && data ? data.notifications : [];
@@ -55,6 +59,7 @@ export default function NotificationsPage() {
   return (
     <div>
       <h1 className="page-title">Notifications</h1>
+      <CustomerScopeBanner />
       <p className="page-subtitle">
         Notification delivery history across tenants. Preview only — no raw recipient secrets.
         Search and paginate when the history grows large.

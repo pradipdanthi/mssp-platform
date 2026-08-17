@@ -12,6 +12,8 @@ import {
   syncThreatIntelTenant,
 } from "../api/admin";
 import { ApiError } from "../api/client";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 /**
  * Admin Threat Intelligence console — IOC/campaign visibility, STIX ingest, TAXII pull.
@@ -20,6 +22,7 @@ import { ApiError } from "../api/client";
 export default function ThreatIntelAdminPage() {
   const [params, setParams] = useSearchParams();
   const selected = params.get("tenant") || "";
+  const { scopeAll, tenantShortCode } = useCustomerScope();
 
   const [tenants, setTenants] = useState<ThreatIntelTenantSummary[]>([]);
   const [iocs, setIocs] = useState<ThreatIntelIoc[]>([]);
@@ -73,6 +76,14 @@ export default function ThreatIntelAdminPage() {
   useEffect(() => {
     loadSummary();
   }, []);
+
+  useEffect(() => {
+    if (scopeAll || !tenantShortCode) return;
+    if (params.get("tenant") === tenantShortCode) return;
+    const next = new URLSearchParams(params);
+    next.set("tenant", tenantShortCode);
+    setParams(next, { replace: true });
+  }, [scopeAll, tenantShortCode, params, setParams]);
 
   useEffect(() => {
     loadTenantDetail(selected);
@@ -170,6 +181,7 @@ export default function ThreatIntelAdminPage() {
         <Link to="/retrospective-hunts">Retro Hunts</Link>
       </p>
       <h1 className="page-title">Threat Intelligence &amp; Enrichment</h1>
+      <CustomerScopeBanner />
       <p className="page-subtitle">
         SOC console for tenant IOCs and campaigns, STIX 2.1 ingest, and TAXII 2.x pulls — same
         catalog service customers see as Threat Intelligence &amp; Enrichment / ThreatLens.

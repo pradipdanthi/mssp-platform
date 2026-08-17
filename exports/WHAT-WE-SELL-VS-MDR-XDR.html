@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>What we sell vs MDR / XDR</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 10.5px;
+      line-height: 1.35;
+      color: #111;
+      max-width: 190mm;
+      margin: 0 auto;
+      padding: 8px 12px 16px;
+    }
+    h1 { font-size: 16px; margin: 0 0 4px; }
+    h2 { font-size: 11.5px; margin: 10px 0 4px; border-bottom: 1.5px solid #222; padding-bottom: 2px; }
+    .sub { color: #444; margin: 0 0 8px; font-size: 10px; }
+    .pitch {
+      background: #f4f6f8;
+      border-left: 3px solid #1a5f9e;
+      padding: 6px 10px;
+      margin: 6px 0 8px;
+      font-size: 10.5px;
+    }
+    table { width: 100%; border-collapse: collapse; margin: 4px 0 8px; }
+    th, td { border: 1px solid #ccc; padding: 3px 5px; vertical-align: top; text-align: left; }
+    th { background: #eee; font-weight: 600; }
+    .yes { color: #0a7a2f; font-weight: 600; }
+    .no { color: #a30; font-weight: 600; }
+    .soft { color: #8a5a00; font-weight: 600; }
+    .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    ul { margin: 2px 0 6px; padding-left: 16px; }
+    li { margin: 1px 0; }
+    .foot { margin-top: 6px; font-size: 9px; color: #666; }
+    @media print {
+      body { padding: 0; }
+      .pitch { break-inside: avoid; }
+      table { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <h1>What we sell vs MDR / XDR</h1>
+  <p class="sub">One-page positioning · Kestrel / Kevantic MSSP Control Plane · Customer demo &amp; CISO Q&amp;A</p>
+
+  <div class="pitch">
+    <strong>One-line position:</strong>
+    We deliver <strong>Managed Detection &amp; Response (MDR)</strong> with a
+    <strong>co-managed customer portal</strong>, plus optional
+    <strong>MXDR add-ons</strong>. AI assists; analysts decide; customers see only approved summaries.
+    We are <strong>not</strong> a fully autonomous AI SOC and <strong>not</strong> a managed firewall vendor.
+  </div>
+
+  <h2>Market labels — when to use them</h2>
+  <table>
+    <tr><th>Phrase</th><th>Use?</th><th>How to say it</th></tr>
+    <tr><td>MSSP / SOC platform</td><td class="yes">Yes</td><td>Multi-tenant SOC with Admin + Customer portals.</td></tr>
+    <tr><td>MDR</td><td class="yes">Yes — core</td><td>We monitor, detect, investigate, and guide/contain response.</td></tr>
+    <tr><td>Co-managed MDR</td><td class="yes">Best phrase</td><td>We investigate and act; IT gets clear portal actions.</td></tr>
+    <tr><td>MXDR / emerging XDR</td><td class="yes">Yes</td><td>Endpoint + network + cases; we can contain hosts.</td></tr>
+    <tr><td>Full XDR replacement</td><td class="soft">Soft only</td><td>Multi-signal direction — not “replace CrowdStrike overnight.”</td></tr>
+    <tr><td>Fully autonomous AI SOC</td><td class="no">No</td><td>AI drafts; humans approve visibility and response.</td></tr>
+    <tr><td>Managed firewall</td><td class="no">No</td><td>FW events can feed detection; we don’t sell managed FW.</td></tr>
+    <tr><td>Managed M365 / ITDR</td><td class="soft">Soft</td><td>Workflow ready; live Entra when Graph is connected.</td></tr>
+  </table>
+
+  <h2>10 offerings → market language</h2>
+  <table>
+    <tr><th>#</th><th>What we sell</th><th>Bucket</th><th>MDR / XDR role</th></tr>
+    <tr><td>1</td><td>Log &amp; Event Monitoring</td><td>SIEM / telemetry</td><td><strong>MDR core</strong></td></tr>
+    <tr><td>2</td><td>Incident Response &amp; Casework</td><td>SOC casework</td><td><strong>MDR core</strong></td></tr>
+    <tr><td>3</td><td>Security Automation &amp; Containment</td><td>EDR / AR</td><td><strong>MXDR</strong> — isolate / kill / block</td></tr>
+    <tr><td>4</td><td>Vulnerability Management</td><td>VMaaS</td><td>Add-on (patch, not CVE-as-incident spam)</td></tr>
+    <tr><td>5</td><td>Continuous Compliance</td><td>CaaS</td><td>Add-on</td></tr>
+    <tr><td>6</td><td>Network Detection &amp; Response</td><td>NDR</td><td>XDR network signal</td></tr>
+    <tr><td>7</td><td>Threat Intelligence</td><td>TI</td><td>Enrich</td></tr>
+    <tr><td>8</td><td>Endpoint Forensics &amp; Deception</td><td>DFIR</td><td>Deep investigate</td></tr>
+    <tr><td>9</td><td>External Attack Surface</td><td>EASM</td><td>Outside-in</td></tr>
+    <tr><td>10</td><td>Cloud &amp; Identity Protection</td><td>ITDR</td><td>Identity layer (Graph for full live)</td></tr>
+  </table>
+  <p class="sub"><strong>Default package:</strong> new customer = #1 + #2 (core MDR). Rest = entitlement / consulting add-ons.</p>
+
+  <div class="two">
+    <div>
+      <h2>MDR pipeline we deliver</h2>
+      <ul>
+        <li>Detect → Ingest (control plane)</li>
+        <li>AI draft (optional) → Human SOC</li>
+        <li>Customer portal (approved only)</li>
+        <li>Remediate (contain + IT actions)</li>
+      </ul>
+      <h2>30-second pitch</h2>
+      <p class="pitch" style="margin:0;">
+        “We are an <strong>MDR provider</strong> with a co-managed portal.
+        We detect and investigate, explain in plain English, and can contain
+        endpoints. You see approved summaries and clear actions — not raw logs
+        or vendor consoles. Add-ons plug into the same portal as you grow.”
+      </p>
+    </div>
+    <div>
+      <h2>Do / Don’t</h2>
+      <table>
+        <tr><th>Do</th><th>Don’t</th></tr>
+        <tr><td>Say MDR / co-managed</td><td>Say fully autonomous AI SOC</td></tr>
+        <tr><td>Show Admin vs Customer</td><td>Give Wazuh/TheHive logins</td></tr>
+        <tr><td>One clean incident story</td><td>Show 50 noise tickets</td></tr>
+        <tr><td>Honest on Graph / samples</td><td>Claim live Entra if not connected</td></tr>
+        <tr><td>Containment as capability</td><td>Isolate mid-demo unplanned</td></tr>
+      </table>
+      <p class="sub" style="margin-top:6px;"><strong>Internal maturity:</strong> Level 3 — Co-managed MDR / emerging MXDR.</p>
+    </div>
+  </div>
+
+  <p class="foot">Print: open this file → Print → Save as PDF (A4). Source also: <code>exports/WHAT-WE-SELL-VS-MDR-XDR.md</code></p>
+</body>
+</html>

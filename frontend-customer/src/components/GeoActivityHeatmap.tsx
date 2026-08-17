@@ -58,6 +58,9 @@ function hubFromLonLat(h: LonLatHub): HeatSpot {
 export const DEFAULT_HUBS: HeatSpot[] = LON_LAT_HUBS.map(hubFromLonLat);
 
 export function hubsFromActivity(score: number, liveTick = 0): HeatSpot[] {
+  if (score <= 0) {
+    return [];
+  }
   const base = Math.min(1, Math.max(0.35, 0.45 + score / 50));
   return LON_LAT_HUBS.map((h, i) => {
     const wobble = liveTick ? 0.03 * Math.sin(liveTick / 2 + i) : 0;

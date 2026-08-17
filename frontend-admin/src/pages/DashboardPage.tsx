@@ -44,7 +44,8 @@ function publishLiveFeed(on: boolean) {
 type TimeWindow = "24h" | "7d";
 
 function sparkFromTotal(n: number): number[] {
-  const base = Math.max(n, 1);
+  if (n <= 0) return Array.from({ length: 12 }, () => 0);
+  const base = n;
   return Array.from({ length: 12 }, (_, i) =>
     Math.max(0, Math.round(base * (0.55 + 0.08 * Math.sin(i) + (i / 12) * 0.35)))
   );
@@ -205,9 +206,7 @@ export default function DashboardPage() {
   );
 
   const overview = dash.data?.overview;
-  const eventsMonitored = overview
-    ? overview.total_alerts + overview.protected_assets * 10 + liveTick * 3
-    : 0;
+  const eventsMonitored = overview ? overview.total_alerts : 0;
   const collectorCoverage = overview
     ? overview.online_appliances + overview.offline_appliances === 0
       ? 0
@@ -242,20 +241,28 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="command-dashboard">
+    <div className="command-dashboard" data-testid="admin-dashboard">
       <div className="sentinel-dashboard-head">
         <div className="dash-welcome">
           <p className="dash-welcome-kicker">Welcome back,</p>
-          <h1 className="dash-welcome-name">{user?.full_name || "Administrator"}</h1>
+          <h1 className="dash-welcome-name" data-testid="admin-dashboard-welcome">
+            {user?.full_name || "Administrator"}
+          </h1>
           <p className="page-subtitle">
             Priority KPIs and ops health — open a tile to dig in.
           </p>
         </div>
-        <div className="command-chip-row" role="toolbar" aria-label="Dashboard controls">
+        <div
+          className="command-chip-row"
+          role="toolbar"
+          aria-label="Dashboard controls"
+          data-testid="admin-dashboard-controls"
+        >
           <button
             type="button"
             className={"command-chip" + (timeWindow === "24h" ? " is-active" : "")}
             aria-pressed={timeWindow === "24h"}
+            data-testid="filter-window-24h"
             onClick={() => setTimeWindow("24h")}
           >
             Last 24h
@@ -264,6 +271,7 @@ export default function DashboardPage() {
             type="button"
             className={"command-chip" + (timeWindow === "7d" ? " is-active" : "")}
             aria-pressed={timeWindow === "7d"}
+            data-testid="filter-window-7d"
             onClick={() => setTimeWindow("7d")}
           >
             Last 7d
@@ -274,7 +282,7 @@ export default function DashboardPage() {
             aria-pressed={crossTenant}
             title={
               crossTenant
-                ? "Showing all customers — pick one in the header Tenant Scope dropdown to filter"
+                ? "Showing all customers — pick one in the header Customer scope dropdown to filter"
                 : `Scoped to ${scopedTenantLabel} — click to show all customers`
             }
             onClick={() => {
@@ -461,38 +469,49 @@ export default function DashboardPage() {
             offlineAppliances={overview.offline_appliances}
           />
 
-          <div className="analytics-row analytics-row--trio">
-            <Link className="timeline-panel-link" to="/incidents" aria-label="Open incidents timeline">
+          <div className="analytics-row analytics-row--trio" data-testid="admin-analytics-row">
+            <Link
+              className="timeline-panel-link"
+              to="/incidents"
+              aria-label="Open incidents timeline"
+              data-testid="widget-timeline"
+            >
               <TimelineChart
                 buckets={hasStacked ? stackedBuckets : buckets}
                 title={`Incidents over time (${timeWindow})`}
                 stacked={hasStacked}
               />
             </Link>
-            <SeverityDonut
-              slices={
-                (dash.data?.severity_breakdown?.length
-                  ? dash.data.severity_breakdown
-                  : [
-                      { severity: "high", count: overview.high_or_critical_alerts || 0 },
-                      { severity: "medium", count: 0 },
-                      { severity: "low", count: 0 },
-                      { severity: "critical", count: 0 },
-                    ]) as { severity: string; count: number }[]
-              }
-              title="Alerts"
-              showMitre
-              activeSeverity={feedSeverity}
-              onSeveritySelect={(sev) =>
-                setFeedSeverity((prev) => (prev?.toLowerCase() === sev.toLowerCase() ? null : sev))
-              }
-              severityHref={(sev) => `/alerts?severity=${encodeURIComponent(sev)}`}
-            />
-            <GeoActivityHeatmap
-              spots={heatSpots}
-              title="Log Source Anomaly Heatmap"
-              liveTick={liveTick}
-            />
+            <div data-testid="widget-severity-donut">
+              <SeverityDonut
+                slices={
+                  (dash.data?.severity_breakdown?.length
+                    ? dash.data.severity_breakdown
+                    : [
+                        { severity: "high", count: overview.high_or_critical_alerts || 0 },
+                        { severity: "medium", count: 0 },
+                        { severity: "low", count: 0 },
+                        { severity: "critical", count: 0 },
+                      ]) as { severity: string; count: number }[]
+                }
+                title="Alerts"
+                showMitre
+                activeSeverity={feedSeverity}
+                onSeveritySelect={(sev) =>
+                  setFeedSeverity((prev) =>
+                    prev?.toLowerCase() === sev.toLowerCase() ? null : sev
+                  )
+                }
+                severityHref={(sev) => `/alerts?severity=${encodeURIComponent(sev)}`}
+              />
+            </div>
+            <div data-testid="widget-geo-heatmap">
+              <GeoActivityHeatmap
+                spots={heatSpots}
+                title="Log Source Anomaly Heatmap"
+                liveTick={liveTick}
+              />
+            </div>
           </div>
         </>
       )}

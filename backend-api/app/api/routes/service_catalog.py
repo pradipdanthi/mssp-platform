@@ -334,6 +334,7 @@ def admin_consultation_summary(
 def admin_list_consultations(
     status_filter: Optional[str] = Query(default=None, alias="status"),
     service_key: Optional[str] = Query(default=None),
+    tenant_id: Optional[UUID] = Query(default=None),
     current_user: Dict[str, Any] = Depends(
         require_roles("platform_admin", "soc_manager", "soc_analyst")
     ),
@@ -348,6 +349,9 @@ def admin_list_consultations(
             raise HTTPException(status_code=400, detail="Unknown service_key.")
         clauses.append("r.service_key = %s")
         params.append(service_key)
+    if tenant_id is not None:
+        clauses.append("r.tenant_id = %s")
+        params.append(tenant_id)
     where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     rows = fetch_all(
         f"""

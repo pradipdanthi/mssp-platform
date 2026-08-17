@@ -81,9 +81,11 @@ export default function AlertDetailPage() {
     alert?.display_mac_address ??
     (alert?.mac_address_status ? alert.mac_address_status : "—");
 
+  const backHref = "/alerts";
+
   return (
     <div>
-      <p><Link to="/alerts">← Back to alerts</Link></p>
+      <p><Link to={backHref}>← Back to alerts</Link></p>
       <h1 className="page-title">Alert detail</h1>
       <p className="page-subtitle">Internal SOC evidence and customer visibility controls.</p>
 

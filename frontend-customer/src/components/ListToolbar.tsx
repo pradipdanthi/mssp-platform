@@ -60,25 +60,27 @@ export default function ListToolbar({
   const to = Math.min(page * (meta?.page_size ?? pageSize), total);
 
   return (
-    <div className="list-toolbar">
+    <div className="list-toolbar" data-testid="list-toolbar">
       <form className="list-toolbar-filters" onSubmit={submitSearch}>
         <label className="list-toolbar-field">
           <span className="visually-hidden">Search</span>
           <input
             type="search"
             className="list-toolbar-input"
+            data-testid="list-search"
             placeholder={searchPlaceholder}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
           />
         </label>
-        <button type="submit" className="btn btn-ghost btn-small">
+        <button type="submit" className="btn btn-ghost btn-small" data-testid="list-search-submit">
           Search
         </button>
         {statusOptions && onStatusChange ? (
           <label className="list-toolbar-field">
             <span>Status</span>
             <select
+              data-testid="list-status-filter"
               value={statusValue}
               onChange={(e) => onStatusChange(e.target.value)}
             >
@@ -95,6 +97,7 @@ export default function ListToolbar({
           <label className="list-toolbar-field">
             <span>Severity</span>
             <select
+              data-testid="list-severity-filter"
               value={severityValue}
               onChange={(e) => onSeverityChange(e.target.value)}
             >

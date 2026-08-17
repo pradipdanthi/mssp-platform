@@ -22,7 +22,7 @@ export function setStoredTenantFilter(next: string): void {
   window.dispatchEvent(new CustomEvent(TENANT_FILTER_EVENT, { detail: next }));
 }
 
-/** Header tenant switcher — scopes Admin dashboard and listening pages. */
+/** Header customer scope — filters Dashboard, AI Assistant, and SOC list pages. */
 export default function TenantSwitcher() {
   const [tenants, setTenants] = useState<{ id: string; name: string; short_code: string }[]>([]);
   const [value, setValue] = useState(getStoredTenantFilter);
@@ -60,14 +60,15 @@ export default function TenantSwitcher() {
   const count = tenants.length;
   const label =
     value === "all"
-      ? `All Tenants (${count || "—"})`
-      : tenants.find((t) => t.id === value)?.name || "Tenant";
+      ? `All customers (${count || "—"})`
+      : tenants.find((t) => t.id === value)?.name || "Customer";
 
   return (
     <select
       className="tenant-switcher"
-      aria-label="Tenant filter"
-      title={label}
+      aria-label="Customer scope"
+      data-testid="customer-scope"
+      title={`Customer scope: ${label}. Filters Dashboard, AI Assistant, Alerts, Incidents, and other list pages.`}
       value={value}
       onChange={(e) => {
         const next = e.target.value;
@@ -75,7 +76,7 @@ export default function TenantSwitcher() {
         setStoredTenantFilter(next);
       }}
     >
-      <option value="all">Tenant Scope: All Tenants ({count || 0})</option>
+      <option value="all">Customer scope: All customers ({count || 0})</option>
       {tenants.map((t) => (
         <option key={t.id} value={t.id}>
           {t.name} ({t.short_code})

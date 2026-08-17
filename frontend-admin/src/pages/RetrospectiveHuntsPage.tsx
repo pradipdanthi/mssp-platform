@@ -5,11 +5,14 @@ import {
   type RetrospectiveHuntJob,
 } from "../api/admin";
 import { ApiError } from "../api/client";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 /**
  * Global Retrospective Monitor — cross-tenant hunt jobs (appliance + cloud).
  */
 export default function RetrospectiveHuntsPage() {
+  const { tenantId } = useCustomerScope();
   const [jobs, setJobs] = useState<RetrospectiveHuntJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +24,7 @@ export default function RetrospectiveHuntsPage() {
     getRetrospectiveHunts({
       status: status || undefined,
       page_size: 100,
+      ...(tenantId ? { tenant_id: tenantId } : {}),
     })
       .then((res) => setJobs(res.jobs || []))
       .catch((err) => {
@@ -32,7 +36,7 @@ export default function RetrospectiveHuntsPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
+  }, [status, tenantId]);
 
   return (
     <div className="page">
@@ -40,6 +44,7 @@ export default function RetrospectiveHuntsPage() {
         <Link to="/dashboard">← Dashboard</Link>
       </p>
       <h1 className="page-title">Retrospective hunts</h1>
+      <CustomerScopeBanner />
       <p className="page-subtitle">
         Kevantic Retrospective Engine jobs across all tenants — LOCAL_APPLIANCE (Modes 2/4) and
         CLOUD_SOC (Modes 1/3).

@@ -25,7 +25,8 @@ function buildHref(kind: Kind, value: string, filterBase?: string): string | nul
   if (!key) return null;
   const param =
     kind === "status" ? "status" : kind === "priority" ? "priority" : "severity";
-  return `${filterBase}?${param}=${encodeURIComponent(key)}`;
+  const sep = filterBase.includes("?") ? "&" : "?";
+  return `${filterBase}${sep}${param}=${encodeURIComponent(key)}`;
 }
 
 function tooltipFor(kind: Kind, value: string): string {

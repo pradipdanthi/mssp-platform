@@ -206,6 +206,7 @@ def admin_tenants(
 @router.get("/appliances")
 def admin_appliances(
     appliance_status: Optional[str] = Query(default=None, alias="status"),
+    tenant_id: Optional[UUID] = None,
     q: Optional[str] = Query(
         default=None, max_length=200, description="Search name/site/tenant"
     ),
@@ -220,6 +221,9 @@ def admin_appliances(
     if st:
         where.append("a.status = %s")
         params.append(st)
+    if tenant_id is not None:
+        where.append("a.tenant_id = %s")
+        params.append(tenant_id)
     q_clean = (q or "").strip()
     if q_clean:
         where.append(
@@ -283,6 +287,54 @@ def admin_appliances(
         tuple(params + [page_size, offset]),
     )
     return {"appliances": rows, **pagination_meta(total, page, page_size)}
+
+
+@router.get("/alerts/tenant-summary")
+def admin_alerts_tenant_summary(
+    alert_status: Optional[
+        Literal["new", "triaged", "incident_created", "false_positive", "closed"]
+    ] = Query(default=None, alias="status"),
+    severity: Optional[str] = Query(
+        default=None,
+        description="low|medium|high|critical or urgent/high_critical for high+critical",
+    ),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Per-customer alert counts for Admin Alerts customer-first navigation."""
+    where = ["t.status = 'active'"]
+    params: list = []
+    sa_extra = ""
+    if alert_status is not None:
+        sa_extra += " AND sa.status = %s"
+        params.append(alert_status)
+    sev = (severity or "").strip().lower()
+    if sev in ("urgent", "high_critical", "high,critical"):
+        sa_extra += " AND sa.severity IN ('high', 'critical')"
+    elif sev in ("low", "medium", "high", "critical"):
+        sa_extra += " AND sa.severity = %s"
+        params.append(sev)
+    where_sql = " AND ".join(where)
+
+    rows = fetch_all(
+        f"""
+        SELECT
+            t.id::text AS tenant_id,
+            t.name AS tenant_name,
+            t.short_code,
+            count(sa.id)::int AS alert_count,
+            count(sa.id) FILTER (
+                WHERE sa.severity IN ('high', 'critical')
+            )::int AS high_critical_count
+        FROM tenants t
+        LEFT JOIN security_alerts sa
+          ON sa.tenant_id = t.id{sa_extra}
+        WHERE {where_sql}
+        GROUP BY t.id, t.name, t.short_code
+        ORDER BY t.name ASC;
+        """,
+        tuple(params),
+    )
+    return {"tenants": rows}
 
 
 @router.get("/alerts/taxonomy-summary")
@@ -532,6 +584,7 @@ def admin_incidents(
 @router.get("/recommendations")
 def admin_recommendations(
     rec_status: Optional[str] = Query(default=None, alias="status"),
+    tenant_id: Optional[UUID] = None,
     q: Optional[str] = Query(
         default=None, max_length=200, description="Search title/category/tenant"
     ),
@@ -547,6 +600,9 @@ def admin_recommendations(
     if st in ("open", "in_progress", "accepted_risk", "completed", "dismissed"):
         where.append("cr.status = %s")
         params.append(st)
+    if tenant_id is not None:
+        where.append("cr.tenant_id = %s")
+        params.append(tenant_id)
     q_clean = (q or "").strip()
     if q_clean:
         where.append(
@@ -613,6 +669,7 @@ def admin_recommendations(
 @router.get("/notifications")
 def admin_notifications(
     notif_status: Optional[str] = Query(default=None, alias="status"),
+    tenant_id: Optional[UUID] = None,
     q: Optional[str] = Query(
         default=None, max_length=200, description="Search type/preview/tenant"
     ),
@@ -628,6 +685,9 @@ def admin_notifications(
     if st:
         where.append("ne.status = %s")
         params.append(st)
+    if tenant_id is not None:
+        where.append("ne.tenant_id = %s")
+        params.append(tenant_id)
     q_clean = (q or "").strip()
     if q_clean:
         where.append(

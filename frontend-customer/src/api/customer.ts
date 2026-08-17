@@ -472,6 +472,7 @@ export interface CustomerDashboardV2Kpis {
   assets_monitored: number;
   appliances_online: number;
   appliances_other: number;
+  total_alerts: number;
 }
 
 export interface CustomerDashboardV2Response {
@@ -528,6 +529,7 @@ export async function getCustomerDashboardV2(
       assets_monitored: assetsRes.total ?? assetsRes.assets.length,
       appliances_online: appliancesOnline.length,
       appliances_other: appliancesOther.length,
+      total_alerts: recentAlertsRes.total ?? recentAlertsRes.alerts.length,
     },
     recent_incidents: recentIncidentsRes.incidents.slice(0, 5),
     recent_recommendations: recommendationsRes.recommendations.slice(0, 5),

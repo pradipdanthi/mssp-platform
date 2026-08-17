@@ -15,7 +15,9 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ListToolbar from "../components/ListToolbar";
+import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const STATUS_OPTIONS = [
   { value: "open", label: "Open" },
@@ -42,6 +44,7 @@ function apiErrorMessage(err: unknown, fallback: string): string {
 export default function VulnerabilitiesPage() {
   const { user } = useAuth();
   const canWrite = user?.role === "platform_admin" || user?.role === "soc_manager";
+  const { tenantShortCodeFilter } = useCustomerScope();
   const [params, setParams] = useSearchParams();
   const statusFilter = params.get("status") ?? "";
   const sourceFilter = params.get("source") ?? "";
@@ -65,11 +68,12 @@ export default function VulnerabilitiesPage() {
       getVulnerabilities({
         page,
         page_size: pageSize,
+        ...tenantShortCodeFilter,
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(sourceFilter ? { source_platform: sourceFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
       }),
-    [statusFilter, sourceFilter, qFilter, page, pageSize]
+    [tenantShortCodeFilter, statusFilter, sourceFilter, qFilter, page, pageSize]
   );
   const rows = data?.vulnerabilities ?? [];
   const meta =
@@ -265,6 +269,7 @@ export default function VulnerabilitiesPage() {
       <div className="page-header">
         <div>
           <h1>Vulnerabilities</h1>
+          <CustomerScopeBanner />
           <p className="page-subtitle">
             Findings from Nuclei, Vuls, and optional Greenbone — normalized in the control plane.
             Customers never see raw scan output. Promote items to recommendations when ready.

@@ -41,8 +41,8 @@ done
 
 BUILD_OPTS=(--build)
 if [[ "${MSSP_FORCE_REBUILD:-}" == "1" ]]; then
-  BUILD_OPTS+=(--no-cache)
-  log "MSSP_FORCE_REBUILD=1 — no-cache frontend/backend images"
+  log "MSSP_FORCE_REBUILD=1 — no-cache rebuild of backend + frontends"
+  docker compose build --no-cache backend-api frontend-admin frontend-customer
 fi
 
 log "Starting postgres + redis (if needed)"
