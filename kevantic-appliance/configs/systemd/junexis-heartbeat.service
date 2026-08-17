@@ -1,0 +1,15 @@
+[Unit]
+Description=Junexis appliance heartbeat (health + agent inventory + job pull)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/junexis/appliance.env
+Environment=PYTHONPATH=/opt/junexis/cli:/opt/junexis
+# Invoke the Python module directly — direct ExecStart of the bash wrapper drops agent inventory.
+ExecStart=/usr/bin/python3 -m junexis_cli heartbeat --json
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

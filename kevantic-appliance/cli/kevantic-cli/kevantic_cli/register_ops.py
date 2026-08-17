@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -13,6 +14,13 @@ from typing import Any, Optional
 from uuid import uuid4
 
 from kevantic_cli import state
+
+logger = logging.getLogger(__name__)
+
+_AGENT_INVENTORY_HELPERS = (
+    "/usr/bin/kevantic-list-local-agents",
+    "/usr/bin/junexis-list-local-agents",
+)
 
 
 def _secrets_dir() -> Path:
@@ -362,22 +370,145 @@ def _post_register_local_manager(app: dict[str, Any]) -> dict[str, Any]:
 
 def _read_enabled_services() -> list[str]:
     ents = state.load_entitlements()
-    svcs = ents.get("service_ids") or []
-    return [str(s) for s in svcs]
+    svcs: list[str] = []
+    seen: set[str] = set()
+    for raw in ents.get("service_ids") or []:
+        sid = str(raw).strip().lower()
+        if sid and sid not in seen:
+            seen.add(sid)
+            svcs.append(sid)
+    if _local_manager_active() and "svc-01" not in seen:
+        svcs.insert(0, "svc-01")
+    elif not svcs and bool(ents.get("core", True)):
+        svcs = ["svc-01"]
+    return svcs
+
+
+def _local_manager_active() -> bool:
+    try:
+        proc = subprocess.run(
+            ["systemctl", "is-active", "wazuh-manager"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        return (proc.stdout or "").strip() == "active"
+    except Exception:
+        return False
+
+
+def _maybe_seed_core_entitlements() -> None:
+    ents = state.load_entitlements()
+    if ents.get("service_ids"):
+        return
+    if not _local_manager_active():
+        return
+    try:
+        state.save_entitlements(
+            {
+                **ents,
+                "service_ids": ["svc-01"],
+                "core": True,
+                "note": "Auto-seeded core entitlement (local Manager active)",
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("could not seed core entitlements: %s", exc)
+
+
+def _collect_resource_metrics() -> dict[str, Optional[float]]:
+    metrics: dict[str, Optional[float]] = {
+        "cpu_percent": None,
+        "memory_percent": None,
+        "disk_percent": None,
+    }
+    try:
+        meminfo: dict[str, int] = {}
+        with Path("/proc/meminfo").open("r", encoding="utf-8") as fh:
+            for line in fh:
+                key, value = line.split(":", 1)
+                meminfo[key.strip()] = int(value.split()[0])
+        total = meminfo.get("MemTotal", 0)
+        avail = meminfo.get("MemAvailable", meminfo.get("MemFree", 0))
+        if total > 0:
+            metrics["memory_percent"] = round(100.0 * (1 - avail / total), 1)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("memory metric unavailable: %s", exc)
+
+    try:
+        st = os.statvfs("/")
+        total = st.f_blocks * st.f_frsize
+        free = st.f_bavail * st.f_frsize
+        if total > 0:
+            metrics["disk_percent"] = round(100.0 * (1 - free / total), 1)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("disk metric unavailable: %s", exc)
+
+    try:
+        import time
+
+        def _cpu_idle_total() -> tuple[int, int]:
+            with Path("/proc/stat").open("r", encoding="utf-8") as fh:
+                parts = fh.readline().split()
+            nums = [int(x) for x in parts[1:]]
+            idle = nums[3] + (nums[4] if len(nums) > 4 else 0)
+            return idle, sum(nums)
+
+        idle1, total1 = _cpu_idle_total()
+        time.sleep(0.1)
+        idle2, total2 = _cpu_idle_total()
+        dt = total2 - total1
+        di = idle2 - idle1
+        if dt > 0:
+            metrics["cpu_percent"] = round(max(0.0, min(100.0, 100.0 * (1 - di / dt))), 1)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("cpu metric unavailable: %s", exc)
+
+    return metrics
+
+
+def _read_image_metadata(app: dict[str, Any]) -> dict[str, str]:
+    meta = {
+        "config_version": str(app.get("config_version") or "track1"),
+        "git_commit": str(app.get("git_commit") or ""),
+    }
+    for candidate in (
+        state.config_root() / "image-release.json",
+        Path("/etc/junexis/image-release.json"),
+        Path("/etc/kevantic/image-release.json"),
+    ):
+        if not candidate.is_file():
+            continue
+        try:
+            data = json.loads(candidate.read_text(encoding="utf-8"))
+            if data.get("config_version"):
+                meta["config_version"] = str(data["config_version"])
+            commit = data.get("git_commit") or data.get("version") or ""
+            if commit:
+                meta["git_commit"] = str(commit)
+            break
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("image metadata read failed for %s: %s", candidate, exc)
+    env_commit = os.environ.get("KEVANTIC_GIT_COMMIT") or os.environ.get("JUNEXIS_GIT_COMMIT")
+    if env_commit:
+        meta["git_commit"] = env_commit.strip()
+    return meta
 
 
 def _collect_agent_inventory() -> list[dict[str, Any]]:
     """Best-effort local Manager agent list via wazuh-control / API if present."""
-    # Prefer a tiny helper script if present; else empty (heartbeat still works).
-    helper = Path("/usr/bin/kevantic-list-local-agents")
-    if helper.is_file():
+    for helper_path in _AGENT_INVENTORY_HELPERS:
+        helper = Path(helper_path)
+        if not helper.is_file():
+            continue
         try:
             out = subprocess.check_output([str(helper)], timeout=20, text=True)
             data = json.loads(out)
             if isinstance(data, list):
                 return data
-        except Exception:
-            pass
+            logger.warning("agent inventory helper %s returned non-list JSON", helper)
+        except Exception as exc:  # noqa: BLE001 — keep heartbeat alive
+            logger.warning("agent inventory helper %s failed: %s", helper, exc)
     # Optional: Wazuh API on localhost (default appliance Manager)
     user = os.environ.get("WAZUH_API_USER", "wazuh-wui")
     password = os.environ.get("WAZUH_API_PASSWORD", "")
@@ -495,13 +626,21 @@ def heartbeat(*, include_inventory: bool = True) -> dict[str, Any]:
     appliance_id = app.get("appliance_id")
     if not appliance_id:
         raise RuntimeError("not registered; run kevantic-cli register first")
+    _maybe_seed_core_entitlements()
     api_key = load_api_key()
     base = _control_plane_base(app)
+    image_meta = _read_image_metadata(app)
+    metrics = _collect_resource_metrics()
     body: dict[str, Any] = {
         "health_status": "healthy",
         "local_ip": app.get("local_ip") or _guess_local_ip(),
         "agent_version": "0.1.0-dev",
+        "config_version": image_meta["config_version"],
+        "git_commit": image_meta["git_commit"] or None,
         "enabled_services": _read_enabled_services(),
+        "cpu_percent": metrics["cpu_percent"],
+        "memory_percent": metrics["memory_percent"],
+        "disk_percent": metrics["disk_percent"],
         "health_snapshot": {
             "source": "kevantic-cli",
             "agent_source_cidrs": __import__(

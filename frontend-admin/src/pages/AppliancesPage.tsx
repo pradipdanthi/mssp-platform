@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, type FormEvent } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Appliance,
   Tenant,
@@ -26,6 +26,12 @@ import ListToolbar from "../components/ListToolbar";
 import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SeverityPill from "../components/SeverityPill";
+import {
+  ApplianceHealthCell,
+  ApplianceHeartbeatCell,
+  ApplianceServicesCell,
+  ApplianceVersionCell,
+} from "../components/appliance/ApplianceFleetCells";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 import { useCustomerScope } from "../hooks/useCustomerScope";
 import { APPLIANCE_GATEWAY_URL, applianceRegisterCommand } from "../config/applianceGateway";
@@ -135,7 +141,12 @@ export default function AppliancesPage() {
                 <th>Site</th>
                 <th>Status</th>
                 <th>Last Seen</th>
+                <th>Version</th>
+                <th>Agents</th>
+                <th>Seats</th>
+                <th>Jobs</th>
                 <th>Health</th>
+                <th>Services</th>
                 <th>Credential</th>
                 <th>Actions</th>
               </tr>
@@ -313,13 +324,43 @@ function ApplianceRow({
     <React.Fragment>
       <tr>
         <td>{appliance.tenant_name}</td>
-        <td>{appliance.appliance_name}</td>
+        <td>
+          <Link to={`/appliances/${encodeURIComponent(appliance.id)}`}>{appliance.appliance_name}</Link>
+        </td>
         <td>{appliance.site_name}</td>
         <td>
           <SeverityPill value={appliance.status} kind="status" filterBase="/appliances" />
         </td>
-        <td>{appliance.last_seen_at ?? "Never"}</td>
-        <td>{appliance.health_status ?? "Unknown"}</td>
+        <td>
+          <ApplianceHeartbeatCell appliance={appliance} />
+        </td>
+        <td>
+          <ApplianceVersionCell appliance={appliance} />
+        </td>
+        <td>
+          <ApplianceAgentsCell
+            reporting={appliance.agents_reporting ?? 0}
+            total={appliance.agents_total ?? 0}
+          />
+        </td>
+        <td>
+          <ApplianceSeatsCell
+            reporting={appliance.agents_reporting ?? 0}
+            licensed={appliance.licensed_endpoints}
+          />
+        </td>
+        <td>
+          <ApplianceJobsCell
+            pending={appliance.pending_jobs_count ?? 0}
+            failed={appliance.failed_jobs_count ?? 0}
+          />
+        </td>
+        <td>
+          <ApplianceHealthCell appliance={appliance} />
+        </td>
+        <td>
+          <ApplianceServicesCell services={appliance.enabled_services} />
+        </td>
         <td>
           <button className="btn btn-ghost btn-small" type="button" onClick={handleExpandToggle}>
             {expanded ? "Hide" : "View"}
@@ -365,7 +406,7 @@ function ApplianceRow({
 
       {actionMsg && (
         <tr>
-          <td colSpan={8}>
+          <td colSpan={13}>
             <div className="state-message">{actionMsg}</div>
           </td>
         </tr>
@@ -383,7 +424,7 @@ function ApplianceRow({
 
       {expanded && (
         <tr className="credential-row">
-          <td colSpan={8}>
+          <td colSpan={13}>
             {credentialLoading && <div className="state-message">Loading credential metadata...</div>}
             {credentialError && <div className="state-message state-error">{credentialError}</div>}
 
@@ -931,6 +972,63 @@ function ActivationTokensSection() {
       )}
     </section>
     </>
+  );
+}
+
+function ApplianceSeatsCell({
+  reporting,
+  licensed,
+}: {
+  reporting: number;
+  licensed: number | null | undefined;
+}) {
+  if (licensed == null || licensed <= 0) {
+    return (
+      <span className="appliance-seats-cell appliance-seats-cell--unset" title="Tenant licensed endpoint count not set">
+        —
+      </span>
+    );
+  }
+  const over = reporting > licensed;
+  return (
+    <span
+      className={`appliance-seats-cell${over ? " appliance-seats-cell--over" : ""}`}
+      title={`${reporting} reporting agents vs ${licensed} licensed seats`}
+    >
+      {reporting} / {licensed}
+    </span>
+  );
+}
+
+function ApplianceJobsCell({ pending, failed }: { pending: number; failed: number }) {
+  if (pending <= 0 && failed <= 0) {
+    return <span className="appliance-jobs-cell appliance-jobs-cell--idle">—</span>;
+  }
+  return (
+    <span className="appliance-jobs-cell" title={`${pending} pending · ${failed} failed`}>
+      {pending > 0 ? <span className="appliance-jobs-cell__pending">{pending} pending</span> : null}
+      {pending > 0 && failed > 0 ? " · " : null}
+      {failed > 0 ? <span className="appliance-jobs-cell__failed">{failed} failed</span> : null}
+    </span>
+  );
+}
+
+function ApplianceAgentsCell({ reporting, total }: { reporting: number; total: number }) {
+  if (total <= 0) {
+    return (
+      <span className="appliance-agents-cell appliance-agents-cell--empty" title="No enrolled agents synced yet">
+        0 / 0
+      </span>
+    );
+  }
+  const allReporting = reporting >= total;
+  return (
+    <span
+      className={`appliance-agents-cell${allReporting ? "" : " appliance-agents-cell--partial"}`}
+      title={`${reporting} reporting · ${total} enrolled`}
+    >
+      {reporting} active / {total}
+    </span>
   );
 }
 

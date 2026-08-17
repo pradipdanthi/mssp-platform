@@ -1914,6 +1914,130 @@ a.badge:focus-visible {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.appliance-agents-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.appliance-agents-cell--empty {
+  color: rgba(214, 226, 233, 0.55);
+}
+.appliance-agents-cell--partial {
+  color: #f0ad4e;
+}
+.appliance-heartbeat-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.appliance-heartbeat-cell--never {
+  color: rgba(214, 226, 233, 0.55);
+}
+.appliance-heartbeat-cell--fresh {
+  color: #5cb85c;
+}
+.appliance-heartbeat-cell--warn {
+  color: #f0ad4e;
+}
+.appliance-heartbeat-cell--stale {
+  color: #d9534f;
+}
+.appliance-version-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 5.5rem;
+}
+.appliance-version-cell__primary {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.appliance-version-cell__secondary {
+  font-size: 0.78rem;
+  color: rgba(214, 226, 233, 0.65);
+  white-space: nowrap;
+}
+.appliance-health-cell {
+  min-width: 9rem;
+}
+.appliance-health-cell__status {
+  display: inline-block;
+  text-transform: capitalize;
+  margin-bottom: 0.15rem;
+}
+.appliance-health-cell__status--healthy {
+  color: #5cb85c;
+}
+.appliance-health-cell__status--warning {
+  color: #f0ad4e;
+}
+.appliance-health-cell__status--critical {
+  color: #d9534f;
+}
+.appliance-health-cell__resources {
+  font-size: 0.78rem;
+  color: rgba(214, 226, 233, 0.82);
+  white-space: nowrap;
+}
+.appliance-health-cell__resources--empty {
+  color: rgba(214, 226, 233, 0.5);
+}
+.appliance-health-cell__sep {
+  margin: 0 0.2rem;
+  opacity: 0.55;
+}
+.appliance-resource--warn {
+  color: #f0ad4e;
+}
+.appliance-resource--critical {
+  color: #d9534f;
+  font-weight: 600;
+}
+.appliance-services-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-width: 11rem;
+}
+.appliance-services-cell--empty {
+  color: rgba(214, 226, 233, 0.55);
+  font-size: 0.85rem;
+}
+.appliance-service-badge {
+  display: inline-block;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  line-height: 1.2;
+  border: 1px solid rgba(214, 226, 233, 0.35);
+  background: rgba(214, 226, 233, 0.08);
+  white-space: nowrap;
+}
+.appliance-service-badge--more {
+  opacity: 0.75;
+}
+.appliance-seats-cell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.appliance-seats-cell--unset {
+  color: rgba(214, 226, 233, 0.55);
+}
+.appliance-seats-cell--over {
+  color: #d9534f;
+  font-weight: 600;
+}
+.appliance-jobs-cell {
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+.appliance-jobs-cell--idle {
+  color: rgba(214, 226, 233, 0.55);
+}
+.appliance-jobs-cell__pending {
+  color: #f0ad4e;
+}
+.appliance-jobs-cell__failed {
+  color: #d9534f;
+}
 .filter-chip {
   border: 1px solid rgba(214, 226, 233, 0.4);
   background: rgba(214, 226, 233, 0.1);

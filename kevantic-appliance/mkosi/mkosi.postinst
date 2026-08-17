@@ -29,6 +29,18 @@ fi
 if [[ -f /opt/kevantic/appliance-src/appliance/telemetry/critical_alert_watcher.py ]]; then
   echo "KB-093P critical-alert watcher present in image"
 fi
+if [[ -f /etc/systemd/system/kevantic-heartbeat.service ]]; then
+  if ! grep -q 'python3 -m kevantic_cli heartbeat' /etc/systemd/system/kevantic-heartbeat.service; then
+    echo "ERROR: kevantic-heartbeat.service must ExecStart python3 -m (not bash wrapper)" >&2
+    exit 1
+  fi
+  systemctl enable kevantic-heartbeat.timer || true
+fi
+mkdir -p /etc/kevantic /etc/junexis
+if [[ ! -f /etc/kevantic/image-release.json ]]; then
+  printf '%s\n' '{"config_version":"track1","git_commit":"unknown"}' >/etc/kevantic/image-release.json
+  cp /etc/kevantic/image-release.json /etc/junexis/image-release.json
+fi
 
 cat >/etc/motd <<'EOF'
 Kevantic Appliance (immutable N1 — KB-093N)

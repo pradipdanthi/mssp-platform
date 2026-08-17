@@ -160,11 +160,13 @@ _APPLIANCE_DETAIL_QUERY = """
         t.name AS tenant_name,
         t.short_code AS tenant_short_code,
         t.deployment_mode,
+        t.licensed_endpoints,
         a.appliance_name,
         a.site_name,
         a.status,
         a.agent_version,
         a.config_version,
+        a.git_commit,
         a.update_status,
         a.local_ip::text,
         a.last_source_ip::text,
@@ -174,20 +176,36 @@ _APPLIANCE_DETAIL_QUERY = """
         COALESCE(a.enabled_services, '{}'::text[]) AS enabled_services,
         COALESCE(a.agent_source_cidrs, '{}'::text[]) AS agent_source_cidrs,
         count(DISTINCT pa.id) AS protected_assets,
+        count(DISTINCT pa.id) FILTER (WHERE lower(pa.status) = 'active') AS agents_reporting,
+        COALESCE(job_counts.pending_jobs_count, 0) AS pending_jobs_count,
+        COALESCE(job_counts.failed_jobs_count, 0) AS failed_jobs_count,
         h.health_status AS latest_health_status,
-        h.heartbeat_at::text AS latest_heartbeat_at
+        h.heartbeat_at::text AS latest_heartbeat_at,
+        h.cpu_percent,
+        h.memory_percent,
+        h.disk_percent
     FROM appliances a
     JOIN tenants t ON t.id = a.tenant_id
     LEFT JOIN protected_assets pa ON pa.appliance_id = a.id
     LEFT JOIN LATERAL (
-        SELECT health_status, heartbeat_at
+        SELECT
+            count(*) FILTER (WHERE aj.status IN ('pending', 'dispatched', 'executing'))::int
+                AS pending_jobs_count,
+            count(*) FILTER (WHERE aj.status = 'failed')::int AS failed_jobs_count
+        FROM appliance_jobs aj
+        WHERE aj.appliance_id = a.id
+    ) job_counts ON true
+    LEFT JOIN LATERAL (
+        SELECT health_status, heartbeat_at, cpu_percent, memory_percent, disk_percent
         FROM appliance_heartbeats hb
         WHERE hb.appliance_id = a.id
         ORDER BY hb.heartbeat_at DESC
         LIMIT 1
     ) h ON true
     WHERE a.id = %s
-    GROUP BY a.id, t.name, t.short_code, t.deployment_mode, h.health_status, h.heartbeat_at;
+    GROUP BY a.id, t.name, t.short_code, t.deployment_mode, t.licensed_endpoints,
+        h.health_status, h.heartbeat_at, h.cpu_percent, h.memory_percent, h.disk_percent,
+        job_counts.pending_jobs_count, job_counts.failed_jobs_count;
 """
 
 _TOKEN_METADATA_COLUMNS = """

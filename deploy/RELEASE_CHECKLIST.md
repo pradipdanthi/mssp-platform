@@ -65,6 +65,7 @@ MSSP_ENGINE_DEPLOY_APPROVED=1 ./scripts/production_deploy_engines.sh
 ## 8. Appliances
 
 - [ ] Golden image **VM 199** (or cloud equivalent) updated from git tag
+- [ ] Fleet reporting baked (`./scripts/kb101_validate_golden_fleet_reporting.sh`; live bake: `kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh`)
 - [ ] Clone/register per customer; forwarder enabled (KB-093P)
 - [ ] Telemetry → SOC control plane; heartbeat → appliance mgmt plane
 

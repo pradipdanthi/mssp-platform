@@ -7,6 +7,7 @@ import DashboardPage from "./pages/DashboardPage";
 import TenantsPage from "./pages/TenantsPage";
 import UsersPage from "./pages/UsersPage";
 import AppliancesPage from "./pages/AppliancesPage";
+import ApplianceDetailPage from "./pages/ApplianceDetailPage";
 import AlertsPage from "./pages/AlertsPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import AlertDetailPage from "./pages/AlertDetailPage";
@@ -67,6 +68,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <AppliancesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/appliances/:applianceId"
+        element={
+          <ProtectedRoute>
+            <ApplianceDetailPage />
           </ProtectedRoute>
         }
       />

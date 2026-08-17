@@ -114,6 +114,7 @@ export interface Appliance {
   status: string;
   agent_version: string | null;
   config_version: string | null;
+  git_commit: string | null;
   update_status: string | null;
   local_ip: string | null;
   last_source_ip: string | null;
@@ -125,6 +126,22 @@ export interface Appliance {
   heartbeat_at: string | null;
   enabled_services?: string[] | null;
   agent_source_cidrs?: string[] | null;
+  agents_total?: number;
+  agents_reporting?: number;
+  licensed_endpoints?: number | null;
+  pending_jobs_count?: number;
+  failed_jobs_count?: number;
+}
+
+export interface ApplianceDetail extends Appliance {
+  tenant_id: string;
+  tenant_short_code: string;
+  protected_assets: number;
+  created_at: string;
+  updated_at: string;
+  latest_health_status?: string | null;
+  latest_heartbeat_at?: string | null;
+  deployment_mode?: string | null;
 }
 
 export interface AppliancesListResponse {
@@ -1278,6 +1295,10 @@ export function updateAppliance(
     method: "PATCH",
     body: payload,
   });
+}
+
+export function getApplianceDetail(applianceId: string): Promise<ApplianceDetail> {
+  return request<ApplianceDetail>(`/admin/appliances/${encodeURIComponent(applianceId)}`);
 }
 
 export interface ApplianceAgentCidrsResponse {

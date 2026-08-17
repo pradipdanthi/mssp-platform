@@ -254,18 +254,24 @@ def admin_appliances(
         SELECT
             t.name AS tenant_name,
             t.short_code,
+            t.licensed_endpoints,
             a.id::text,
             a.appliance_name,
             a.site_name,
             a.status,
             a.agent_version,
             a.config_version,
+            a.git_commit,
             a.update_status,
             a.local_ip::text,
             a.last_source_ip::text,
             a.last_seen_at,
             COALESCE(a.enabled_services, '{{}}'::text[]) AS enabled_services,
             COALESCE(a.agent_source_cidrs, '{{}}'::text[]) AS agent_source_cidrs,
+            COALESCE(agent_counts.agents_total, 0) AS agents_total,
+            COALESCE(agent_counts.agents_reporting, 0) AS agents_reporting,
+            COALESCE(job_counts.pending_jobs_count, 0) AS pending_jobs_count,
+            COALESCE(job_counts.failed_jobs_count, 0) AS failed_jobs_count,
             h.health_status,
             h.cpu_percent,
             h.memory_percent,
@@ -273,6 +279,21 @@ def admin_appliances(
             h.heartbeat_at
         FROM appliances a
         JOIN tenants t ON t.id = a.tenant_id
+        LEFT JOIN LATERAL (
+            SELECT
+                count(*)::int AS agents_total,
+                count(*) FILTER (WHERE lower(pa.status) = 'active')::int AS agents_reporting
+            FROM protected_assets pa
+            WHERE pa.appliance_id = a.id
+        ) agent_counts ON true
+        LEFT JOIN LATERAL (
+            SELECT
+                count(*) FILTER (WHERE aj.status IN ('pending', 'dispatched', 'executing'))::int
+                    AS pending_jobs_count,
+                count(*) FILTER (WHERE aj.status = 'failed')::int AS failed_jobs_count
+            FROM appliance_jobs aj
+            WHERE aj.appliance_id = a.id
+        ) job_counts ON true
         LEFT JOIN LATERAL (
             SELECT *
             FROM appliance_heartbeats h

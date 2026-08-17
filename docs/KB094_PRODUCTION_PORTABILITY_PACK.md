@@ -59,6 +59,7 @@ MSSP_ENGINE_DEPLOY_APPROVED=1 ./scripts/production_deploy_engines.sh
 | Master golden disk | Proxmox **VM 199** `mssp-appliance-golden-build` |
 | New customer appliance | Clone from 199 → register → entitlements |
 | Improvements | Commit to git → update/rebuild 199 → future clones inherit |
+| Fleet reporting (day one) | Heartbeat uses `python3 -m … heartbeat` (agent inventory), CLI sends CPU/mem/disk + `enabled_services`, `/etc/kevantic/image-release.json` stamps version. Bake live disk: `kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh`. Future full rebuilds inherit via `kevantic_runtime` Ansible. Do **not** seed lab entitlements on 199. |
 
 Optional mkosi factory **VM 113** is a workshop, not the golden customers clone from.
 

@@ -58,6 +58,11 @@ if echo "$CHANGED" | grep -qE '^kevantic-appliance/.*(telemetry|forwarder|093[Pp
   run ./scripts/kb093p_validate_appliance_critical_alert_forward.sh
 fi
 
+if echo "$CHANGED" | grep -qE 'heartbeat|image-release|register_ops|bake_golden_vm199|upgrade_appliance_fleet|upgrade_appliance_heartbeat|^scripts/kb101'; then
+  matched=1
+  run ./scripts/kb101_validate_golden_fleet_reporting.sh
+fi
+
 if echo "$CHANGED" | grep -qE '^deploy/|^docs/KB094|^scripts/production_deploy|^scripts/kb094|^scripts/run_post_change|^scripts/load_validation'; then
   matched=1
   run ./scripts/kb094_validate_production_portability_pack.sh

@@ -7,8 +7,8 @@ Wants=network-online.target
 Type=oneshot
 EnvironmentFile=-/etc/kevantic/appliance.env
 Environment=PYTHONPATH=/opt/kevantic/cli:/opt/kevantic
-# API key is read from /var/lib/kevantic/secrets/appliance_api_key by kevantic-cli
-ExecStart=/usr/bin/kevantic-cli heartbeat --json
+# Invoke the Python module directly — direct ExecStart of the bash wrapper drops agent inventory.
+ExecStart=/usr/bin/python3 -m kevantic_cli heartbeat --json
 Nice=10
 
 [Install]

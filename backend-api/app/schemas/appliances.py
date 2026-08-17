@@ -77,6 +77,14 @@ class ApplianceDetail(BaseModel):
     # LAN CIDRs allowed to reach local Manager agent ports
     agent_source_cidrs: List[str] = Field(default_factory=list)
     deployment_mode: Optional[str] = None
+    licensed_endpoints: Optional[int] = None
+    agents_reporting: Optional[int] = None
+    pending_jobs_count: Optional[int] = None
+    failed_jobs_count: Optional[int] = None
+    git_commit: Optional[str] = None
+    cpu_percent: Optional[float] = None
+    memory_percent: Optional[float] = None
+    disk_percent: Optional[float] = None
     # No health_snapshot (raw agent JSON blob) - not needed for admin
     # metadata management in this foundation module.
 

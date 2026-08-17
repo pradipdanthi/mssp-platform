@@ -9,11 +9,19 @@ from typing import Any
 
 
 def state_root() -> Path:
-    return Path(os.environ.get("KEVANTIC_STATE_DIR", "/var/lib/kevantic"))
+    return Path(
+        os.environ.get("KEVANTIC_STATE_DIR")
+        or os.environ.get("JUNEXIS_STATE_DIR")
+        or "/var/lib/kevantic"
+    )
 
 
 def config_root() -> Path:
-    return Path(os.environ.get("KEVANTIC_CONFIG_DIR", "/etc/kevantic"))
+    return Path(
+        os.environ.get("KEVANTIC_CONFIG_DIR")
+        or os.environ.get("JUNEXIS_CONFIG_DIR")
+        or "/etc/kevantic"
+    )
 
 
 def nft_profiles_dir() -> Path:
@@ -139,7 +147,14 @@ def entitlements_path() -> Path:
 
 
 def load_entitlements() -> dict[str, Any]:
-    return _read_json(entitlements_path(), {"service_ids": ["svc-01"], "raw": None})
+    default = {"service_ids": ["svc-01"], "core": True, "raw": None}
+    data = _read_json(entitlements_path(), default)
+    if not isinstance(data, dict):
+        return default
+    svc = data.get("service_ids")
+    if not isinstance(svc, list):
+        data["service_ids"] = list(default["service_ids"])
+    return data
 
 
 def save_entitlements(data: dict[str, Any]) -> None:

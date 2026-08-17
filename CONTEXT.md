@@ -24,7 +24,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | Shared TheHive org | `THEHIVE_DEFAULT_ORG` default **`MSSP`** (override in `.env` if existing org name differs) |
 | Cloud | Same architecture; migrate later — do not invent a second product |
 | **Appliance Management (production)** | **VM 114** `kevantic-appliance-mgmt` (`192.168.0.224`) — channel/register/heartbeat edge (KB-093L); Admin/Customer + Postgres stay on VM 100 |
-| **Appliance golden image (master clone source)** | Proxmox **VM 199** `mssp-appliance-golden-build` (`192.168.0.225`) — permanent golden disk; improvements commit to repo then bake/update 199; new customer appliances clone from 199 |
+| **Appliance golden image (master clone source)** | Proxmox **VM 199** `mssp-appliance-golden-build` (`192.168.0.225`) — permanent golden disk; improvements commit to repo then bake/update 199; new customer appliances clone from 199. Fleet reporting is in the golden recipe — bake with `kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh` |
 | **Appliance image factory (optional mkosi/ISO workshop)** | **VM 113** when needed (KB-093F); may be stopped/destroyed between builds — not the same as golden 199 |
 | **KB-093P critical-alert forward** | Baked in golden recipe (`ada21fe`+); Beta field-upgraded; telemetry → VM 100, heartbeat → VM 114 |
 | **KB-094 production portability** | Env templates (`deploy/environments/`), `production_deploy_control_plane.sh`, release checklist — cloud-agnostic deploy path |

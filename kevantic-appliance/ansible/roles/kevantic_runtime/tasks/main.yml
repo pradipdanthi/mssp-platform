@@ -38,6 +38,7 @@
     mode: "{{ '0750' if 'secrets' in item else '0755' }}"
   loop:
     - /etc/kevantic
+    - /etc/junexis
     - /etc/kevantic/nftables
     - /etc/kevantic/trust
     - /var/lib/kevantic
@@ -122,6 +123,8 @@
   loop:
     - kevantic-heartbeat.service
     - kevantic-heartbeat.timer
+    - junexis-heartbeat.service
+    - junexis-heartbeat.timer
     - kevantic-critical-alert-forwarder.service
     - junexis-critical-alert-forwarder.service
 
@@ -130,6 +133,49 @@
     src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/scripts/kevantic-list-local-agents"
     dest: /usr/bin/kevantic-list-local-agents
     mode: "0755"
+
+- name: Symlink branded agent-inventory helper
+  ansible.builtin.file:
+    src: /usr/bin/kevantic-list-local-agents
+    dest: /usr/bin/junexis-list-local-agents
+    state: link
+    force: true
+
+- name: Resolve git commit for image-release metadata
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/.."
+      - rev-parse
+      - --short
+      - HEAD
+  register: kevantic_image_git
+  delegate_to: localhost
+  become: false
+  changed_when: false
+  failed_when: false
+
+- name: Install image-release metadata (fleet version / git commit)
+  ansible.builtin.copy:
+    dest: "{{ item }}"
+    mode: "0644"
+    content: |
+      {
+        "config_version": "track1",
+        "git_commit": "{{ kevantic_image_git.stdout | default('unknown', true) }}"
+      }
+  loop:
+    - /etc/kevantic/image-release.json
+    - /etc/junexis/image-release.json
+
+- name: Assert heartbeat unit invokes Python module (not bash CLI wrapper)
+  ansible.builtin.command: grep -F "ExecStart=/usr/bin/python3 -m kevantic_cli heartbeat" /etc/systemd/system/kevantic-heartbeat.service
+  changed_when: false
+
+- name: Assert fleet-reporting helpers exist in installed CLI
+  ansible.builtin.command: grep -E "_collect_resource_metrics|_read_enabled_services|_read_image_metadata" /opt/kevantic/cli/kevantic_cli/register_ops.py
+  changed_when: false
 
 - name: Enable kevantic-appliance-engine (loopback job API)
   ansible.builtin.systemd:

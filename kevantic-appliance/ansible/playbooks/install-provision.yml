@@ -75,3 +75,20 @@
       register: kevantic_fwd_enabled
       changed_when: false
       failed_when: kevantic_fwd_enabled.stdout.strip() != "enabled"
+
+    - name: Assert image-release metadata baked into golden image
+      ansible.builtin.stat:
+        path: /etc/kevantic/image-release.json
+      register: kevantic_image_release
+
+    - name: Fail if image-release.json missing from golden image
+      ansible.builtin.assert:
+        that:
+          - kevantic_image_release.stat.exists
+        fail_msg: >-
+          /etc/kevantic/image-release.json missing — golden image must stamp
+          config_version/git_commit for Admin fleet Version column.
+
+    - name: Assert heartbeat unit uses python -m (agent inventory)
+      ansible.builtin.command: grep -F "python3 -m kevantic_cli heartbeat" /etc/systemd/system/kevantic-heartbeat.service
+      changed_when: false
