@@ -27,6 +27,8 @@ services:
     container_name: mssp-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD}"]
+    environment:
+      TZ: ${TZ}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -129,6 +131,8 @@ services:
       context: ./frontend-admin
     container_name: mssp-frontend-admin
     restart: unless-stopped
+    environment:
+      TZ: ${TZ}
     depends_on:
       - backend-api
     ports:
@@ -142,6 +146,8 @@ services:
       context: ./frontend-customer
     container_name: mssp-frontend-customer
     restart: unless-stopped
+    environment:
+      TZ: ${TZ}
     depends_on:
       - backend-api
     ports:

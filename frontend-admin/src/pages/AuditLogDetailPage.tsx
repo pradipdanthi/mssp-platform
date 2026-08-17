@@ -50,7 +50,7 @@ export default function AuditLogDetailPage() {
                 <td>{row.summary || row.action_label || row.action}</td>
               </tr>
               <tr>
-                <th>When (UTC)</th>
+                <th>When (IST)</th>
                 <td className="cell-mono">{row.timestamp || row.created_at}</td>
               </tr>
               <tr>
