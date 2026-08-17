@@ -141,17 +141,30 @@ export default function AlertsPage() {
       ) : null}
 
       <div className="alerts-page-main">
-        <h1 className="page-title">Alerts</h1>
+        <h1 className="page-title">
+          Alerts
+          {meta ? (
+            <span className="page-title-count"> · {meta.total.toLocaleString()}</span>
+          ) : null}
+        </h1>
         <CustomerScopeBanner />
         <p className="page-subtitle">
           {scopeAll ? (
             <>
               All customers — set <strong>Customer scope</strong> in the header to focus on one
               customer and open device taxonomy.
+              {meta ? (
+                <>
+                  {" "}
+                  Showing {meta.total === 0 ? 0 : (meta.page - 1) * meta.page_size + 1}–
+                  {Math.min(meta.page * meta.page_size, meta.total)} of {meta.total}.
+                </>
+              ) : null}
             </>
           ) : (
             <>
               <strong>{tenantName || "Customer"}</strong>
+              {meta ? <> · {meta.total.toLocaleString()} matching this view</> : null}
               {categoryLabel ? (
                 <>
                   {" · "}

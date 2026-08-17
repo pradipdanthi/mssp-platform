@@ -101,7 +101,7 @@ sudo systemctl restart kevantic-heartbeat.timer || true
 
 echo "== verify =="
 grep -F 'python3 -m kevantic_cli heartbeat' /etc/systemd/system/kevantic-heartbeat.service
-grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata' "\$CLI/register_ops.py" >/dev/null
+grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements' "\$CLI/register_ops.py" >/dev/null
 python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version")'
 # Do not seed entitlements — golden clones stay idle until a real license is applied.
 if [[ -f /var/lib/kevantic/entitlements.json ]]; then

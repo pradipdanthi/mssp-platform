@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import require_roles
-from app.db.session import db_transaction, fetch_all, fetch_one
+from app.db.session import db_transaction, fetch_all, fetch_one, fetch_one_write
 from app.services.audit_service import write_audit_event
 from app.services.resend_mailer import (
     build_consultation_request_html,
@@ -566,6 +566,10 @@ class CatalogRolloutRequest(BaseModel):
     tenant_ids: List[UUID] = Field(min_length=1, max_length=200)
     admin_notes: Optional[str] = Field(default=None, max_length=2000)
     mark_requests_approved: bool = True
+    action: Literal["enable", "disable"] = "enable"
+    customer_order_number: str = Field(min_length=1, max_length=80)
+    confirmation_email: str = Field(min_length=5, max_length=200)
+    asset_ids: List[UUID] = Field(default_factory=list, max_length=2000)
 
 
 def _ensure_pricing_seeded() -> None:
@@ -829,8 +833,14 @@ def admin_rollout_catalog_service(
     body: CatalogRolloutRequest,
     current_user: Dict[str, Any] = Depends(require_roles("platform_admin", "soc_manager")),
 ) -> Dict[str, Any]:
+    from app.services.appliance_entitlement_sync import (
+        appliance_ids_for_assets,
+        enqueue_tenant_entitlement_jobs,
+    )
+    from app.services.asset_service_coverage import replace_coverage
     from app.services.tenant_entitlement_defaults import (
         CATALOG_KEY_TO_ENTITLEMENT_UPDATES,
+        disable_entitlement_for_catalog_key,
         enable_entitlement_for_catalog_key,
         trigger_post_enable_sync,
     )
@@ -839,6 +849,17 @@ def admin_rollout_catalog_service(
         raise HTTPException(
             status_code=400,
             detail="This service is Core or cannot be rolled out via entitlements.",
+        )
+    order_number = body.customer_order_number.strip()
+    confirm_email = body.confirmation_email.strip()
+    if "@" not in confirm_email or "." not in confirm_email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="confirmation_email is not a valid email.")
+    if body.action not in ("enable", "disable"):
+        raise HTTPException(status_code=400, detail="action must be enable or disable.")
+    if len(body.tenant_ids) > 1 and body.asset_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Asset-level rollout can target one customer at a time.",
         )
 
     results: List[Dict[str, Any]] = []
@@ -851,10 +872,60 @@ def admin_rollout_catalog_service(
             results.append({"tenant_id": str(tid), "ok": False, "error": "tenant_not_found"})
             continue
         try:
-            enable_entitlement_for_catalog_key(str(tid), service_key)
-            sync_detail = trigger_post_enable_sync(str(tid), service_key)
+            asset_ids = [str(a) for a in body.asset_ids]
+            scope = "assets" if asset_ids else "account"
+            from app.services.asset_service_coverage import list_covered_asset_ids
+
+            if body.action == "enable":
+                enable_entitlement_for_catalog_key(str(tid), service_key)
+                if asset_ids:
+                    replace_coverage(
+                        tenant_id=str(tid),
+                        service_key=service_key,
+                        asset_ids=asset_ids,
+                        actor_user_id=current_user.get("id"),
+                    )
+                sync_detail = trigger_post_enable_sync(str(tid), service_key)
+            elif asset_ids:
+                current = list_covered_asset_ids(str(tid), service_key)
+                drop = set(asset_ids)
+                remaining = [aid for aid in current if aid not in drop]
+                replace_coverage(
+                    tenant_id=str(tid),
+                    service_key=service_key,
+                    asset_ids=remaining,
+                    actor_user_id=current_user.get("id"),
+                )
+                if not remaining:
+                    disable_entitlement_for_catalog_key(str(tid), service_key)
+                sync_detail = {
+                    "catalog_key": service_key,
+                    "synced": True,
+                    "action": "disable_assets",
+                    "remaining": len(remaining),
+                }
+            else:
+                disable_entitlement_for_catalog_key(str(tid), service_key)
+                replace_coverage(
+                    tenant_id=str(tid),
+                    service_key=service_key,
+                    asset_ids=[],
+                    actor_user_id=current_user.get("id"),
+                )
+                sync_detail = {"catalog_key": service_key, "synced": True, "action": "disable"}
+
+            appliance_filter = appliance_ids_for_assets(str(tid), asset_ids) if asset_ids else None
+            job_info = enqueue_tenant_entitlement_jobs(
+                tenant_id=str(tid),
+                catalog_key=service_key,
+                action=body.action,
+                actor_user_id=current_user.get("id"),
+                order_number=order_number,
+                asset_ids=asset_ids,
+                appliance_ids=appliance_filter or None,
+            )
             approved = 0
-            if body.mark_requests_approved:
+            if body.action == "enable" and body.mark_requests_approved:
                 with db_transaction() as cur:
                     cur.execute(
                         """
@@ -869,6 +940,66 @@ def admin_rollout_catalog_service(
                         (body.admin_notes, str(tid), service_key),
                     )
                     approved = cur.rowcount or 0
+
+            order_row = fetch_one_write(
+                """
+                INSERT INTO service_rollout_orders (
+                    tenant_id, service_key, action, scope, customer_order_number,
+                    confirmation_email, asset_ids, requested_by_user_id, admin_notes, jobs_queued
+                )
+                VALUES (
+                    %s::uuid, %s, %s, %s, %s, %s, %s::uuid[], %s::uuid, %s, %s
+                )
+                RETURNING id::text;
+                """,
+                (
+                    str(tid),
+                    service_key,
+                    body.action,
+                    scope,
+                    order_number,
+                    confirm_email,
+                    asset_ids,
+                    current_user.get("id"),
+                    body.admin_notes,
+                    int(job_info.get("jobs_queued") or 0),
+                ),
+            )
+            html = (
+                "<p>This confirms a controlled service change on your MSSP account.</p>"
+                f"<p><strong>Order:</strong> {order_number}<br>"
+                f"<strong>Customer:</strong> {tenant.get('name')} ({tenant.get('short_code')})<br>"
+                f"<strong>Service:</strong> {service_key}<br>"
+                f"<strong>Action:</strong> {body.action}<br>"
+                f"<strong>Scope:</strong> {scope}"
+                f"{' · ' + str(len(asset_ids)) + ' asset(s)' if asset_ids else ''}</p>"
+            )
+            mail = send_resend_email(
+                subject=f"[SERVICE {body.action.upper()}] {service_key} · {order_number}",
+                html=html,
+                to=[confirm_email],
+            )
+            if order_row:
+                with db_transaction() as cur:
+                    if mail.get("ok"):
+                        cur.execute(
+                            """
+                            UPDATE service_rollout_orders
+                            SET email_dispatched_at = now(), email_dispatch_error = NULL
+                            WHERE id = %s::uuid;
+                            """,
+                            (order_row["id"],),
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            UPDATE service_rollout_orders
+                            SET email_dispatch_error = %s
+                            WHERE id = %s::uuid;
+                            """,
+                            ((mail.get("error") or "send_failed")[:500], order_row["id"]),
+                        )
+
             write_audit_event(
                 actor_user_id=current_user["id"],
                 action="service_catalog.rollout",
@@ -876,8 +1007,14 @@ def admin_rollout_catalog_service(
                 entity_id=str(tid),
                 details={
                     "service_key": service_key,
+                    "action": body.action,
+                    "order_number": order_number,
+                    "scope": scope,
+                    "assets": len(asset_ids),
                     "approved_open_requests": approved,
                     "sync": sync_detail,
+                    "jobs": job_info,
+                    "email_ok": bool(mail.get("ok")),
                 },
                 tenant_id=str(tid),
                 actor_role=current_user.get("role"),
@@ -891,6 +1028,10 @@ def admin_rollout_catalog_service(
                     "short_code": tenant.get("short_code"),
                     "ok": True,
                     "approved_open_requests": approved,
+                    "jobs_queued": job_info.get("jobs_queued"),
+                    "service_ids": job_info.get("service_ids"),
+                    "order_id": (order_row or {}).get("id"),
+                    "email_ok": bool(mail.get("ok")),
                 }
             )
         except Exception as exc:
@@ -906,6 +1047,7 @@ def admin_rollout_catalog_service(
 
     return {
         "service_key": service_key,
+        "action": body.action,
         "rolled_out": sum(1 for r in results if r.get("ok")),
         "failed": sum(1 for r in results if not r.get("ok")),
         "results": results,

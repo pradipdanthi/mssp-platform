@@ -390,7 +390,7 @@ export default function DashboardPage() {
             <Link
               className="kpi-card kpi-card--accent card-surface kpi-card--link"
               to="/alerts"
-              aria-label="Open security alerts / events"
+              aria-label="Open all collected alerts"
             >
               <div className="kpi-card-top">
                 <KpiIcon name="activity" />
@@ -403,14 +403,14 @@ export default function DashboardPage() {
                   : eventsMonitored.toLocaleString()}
               </div>
               <div className="kpi-foot">
-                {overview.total_alerts} alerts · {overview.protected_assets} assets
+                {overview.total_alerts} total alerts · {overview.protected_assets} assets · all time
               </div>
             </Link>
 
             <Link
               className="kpi-card kpi-card--high card-surface kpi-card--link"
-              to="/alerts?severity=high"
-              aria-label="Open high severity alerts"
+              to="/alerts?severity=urgent"
+              aria-label="Open high and critical alerts"
             >
               <div className="kpi-card-top">
                 <KpiIcon name="bell" />
@@ -418,7 +418,10 @@ export default function DashboardPage() {
                 <span className="kpi-orb kpi-orb--high" aria-hidden="true" />
               </div>
               <div className="kpi-value kpi-value--high">{overview.high_or_critical_alerts}</div>
-              <div className="kpi-foot">High / critical</div>
+              <div className="kpi-foot">
+                {(overview.critical_alerts ?? 0).toLocaleString()} critical ·{" "}
+                {(overview.high_alerts ?? 0).toLocaleString()} high · all time
+              </div>
             </Link>
 
             <Link

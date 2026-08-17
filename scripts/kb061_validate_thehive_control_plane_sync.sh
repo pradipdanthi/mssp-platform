@@ -73,7 +73,7 @@ if [[ -f .secrets/soc_sync_api_key ]]; then
     -H "X-SOC-Sync-Key: $KEY" \
     -d "{\"source_tool\":\"thehive\",\"external_alert_id\":\"$EXT\",\"severity\":\"high\",\"alert_title\":\"KB-061 validation alert\",\"alert_description\":\"validator\",\"tenant_short_code\":\"DEMO\"}")
   [[ "$CODE" == "201" ]] || { cat /tmp/kb061_sync.json; fail "sync create expected 201 got $CODE"; }
-  jq -e '.customer_visible == false and .duplicate == false and (.incident_number|type=="string")' /tmp/kb061_sync.json >/dev/null \
+  jq -e '.customer_visible == true and .duplicate == false and (.incident_number|type=="string")' /tmp/kb061_sync.json >/dev/null \
     || { cat /tmp/kb061_sync.json; fail "sync response shape unexpected"; }
   CODE2=$(curl -sS -o /tmp/kb061_sync2.json -w '%{http_code}' -X POST http://127.0.0.1:8000/integrations/soc/sync \
     -H 'Content-Type: application/json' \

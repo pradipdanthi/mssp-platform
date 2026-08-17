@@ -729,6 +729,12 @@ img.kestrel-master-logo--full {
   margin: 0 0 4px;
 }
 
+.page-title-count {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+}
+
 .page-subtitle {
   color: var(--text-muted);
   margin: 0 0 24px;
@@ -2011,8 +2017,12 @@ a.badge:focus-visible {
   background: rgba(214, 226, 233, 0.08);
   white-space: nowrap;
 }
-.appliance-service-badge--more {
-  opacity: 0.75;
+.appliance-services-cell--full {
+  max-width: 22rem;
+}
+.appliance-service-badge--inactive {
+  opacity: 0.4;
+  border-style: dashed;
 }
 .appliance-seats-cell {
   font-variant-numeric: tabular-nums;

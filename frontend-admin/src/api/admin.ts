@@ -14,6 +14,8 @@ export interface DashboardOverview {
   protected_assets: number;
   total_alerts: number;
   high_or_critical_alerts: number;
+  critical_alerts?: number;
+  high_alerts?: number;
   new_alerts: number;
   total_incidents: number;
   open_incidents: number;
@@ -1630,9 +1632,14 @@ export function rolloutCatalogService(
     tenant_ids: string[];
     admin_notes?: string | null;
     mark_requests_approved?: boolean;
+    action?: "enable" | "disable";
+    customer_order_number: string;
+    confirmation_email: string;
+    asset_ids?: string[];
   }
 ): Promise<{
   service_key: string;
+  action?: string;
   rolled_out: number;
   failed: number;
   results: Array<{
@@ -1642,6 +1649,8 @@ export function rolloutCatalogService(
     ok: boolean;
     error?: string;
     approved_open_requests?: number;
+    jobs_queued?: number;
+    email_ok?: boolean;
   }>;
 }> {
   return request(`/admin/service-catalog/${encodeURIComponent(serviceKey)}/rollout`, {

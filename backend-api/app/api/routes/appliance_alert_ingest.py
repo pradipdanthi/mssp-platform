@@ -114,10 +114,12 @@ def ingest_appliance_alert(
                     VALUES (
                         %s, %s, %s, %s,
                         %s, %s, %s, COALESCE(%s, now()),
-                        %s, false, 'new'
+                        %s, true, 'new'
                     )
                     RETURNING id::text, customer_visible, status;
                     """,
+                    # Appliance cannot choose visibility. Server publishes
+                    # customer-safe rows; SOC can later set false for noise.
                     (
                         appliance["tenant_id"],
                         appliance["id"],

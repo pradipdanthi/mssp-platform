@@ -25,6 +25,14 @@ grep -q '_collect_resource_metrics' "$APP/cli/kevantic-cli/kevantic_cli/register
   && pass "CLI collects CPU/mem/disk" \
   || fail "register_ops.py missing _collect_resource_metrics"
 
+grep -q 'apply_entitlements' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI applies entitlement jobs" \
+  || fail "register_ops.py missing apply_entitlements job handler"
+
+grep -q 'apply_entitlements' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake verifies apply_entitlements" \
+  || fail "bake script missing apply_entitlements verify"
+
 grep -q '_read_enabled_services' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
   && pass "CLI reports enabled_services" \
   || fail "register_ops.py missing _read_enabled_services"

@@ -5,9 +5,11 @@ import {
   AdminCatalogService,
   Tenant,
   getAdminServiceCatalog,
+  getTenantAssetServiceCoverage,
   getTenants,
   patchCatalogPricing,
   rolloutCatalogService,
+  type AssetServiceCoverageAsset,
 } from "../api/admin";
 import { getCatalogItem } from "../data/serviceCatalog";
 
@@ -39,6 +41,12 @@ export default function ServiceCatalogPage() {
   const [rolloutNotes, setRolloutNotes] = useState("");
   const [rolloutBusy, setRolloutBusy] = useState(false);
   const [rolloutError, setRolloutError] = useState<string | null>(null);
+  const [rolloutAction, setRolloutAction] = useState<"enable" | "disable">("enable");
+  const [orderNumber, setOrderNumber] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
+  const [assetIds, setAssetIds] = useState<string[]>([]);
+  const [assetOptions, setAssetOptions] = useState<AssetServiceCoverageAsset[]>([]);
+  const [assetsLoading, setAssetsLoading] = useState(false);
 
   function refresh() {
     setLoading(true);
@@ -114,7 +122,37 @@ export default function ServiceCatalogPage() {
     setSelectedTenantIds([]);
     setRolloutNotes("");
     setRolloutError(null);
+    setRolloutAction("enable");
+    setOrderNumber("");
+    setConfirmEmail("");
+    setAssetIds([]);
+    setAssetOptions([]);
   }
+
+  useEffect(() => {
+    if (!rolloutItem || selectedTenantIds.length !== 1) {
+      setAssetOptions([]);
+      setAssetIds([]);
+      return;
+    }
+    let cancelled = false;
+    setAssetsLoading(true);
+    getTenantAssetServiceCoverage(selectedTenantIds[0], rolloutItem.service_key)
+      .then((res) => {
+        if (cancelled) return;
+        setAssetOptions(res.assets || []);
+        setAssetIds(res.covered_asset_ids || []);
+      })
+      .catch(() => {
+        if (!cancelled) setAssetOptions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setAssetsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [rolloutItem, selectedTenantIds]);
 
   function toggleTenant(id: string) {
     setSelectedTenantIds((prev) =>
@@ -129,18 +167,30 @@ export default function ServiceCatalogPage() {
       setRolloutError("Select at least one customer.");
       return;
     }
+    if (!orderNumber.trim()) {
+      setRolloutError("Customer order number is required.");
+      return;
+    }
+    if (!confirmEmail.trim() || !confirmEmail.includes("@")) {
+      setRolloutError("Confirmation email is required.");
+      return;
+    }
     setRolloutBusy(true);
     setRolloutError(null);
     try {
       const res = await rolloutCatalogService(rolloutItem.service_key, {
         tenant_ids: selectedTenantIds,
         admin_notes: rolloutNotes.trim() || null,
-        mark_requests_approved: true,
+        mark_requests_approved: rolloutAction === "enable",
+        action: rolloutAction,
+        customer_order_number: orderNumber.trim(),
+        confirmation_email: confirmEmail.trim(),
+        asset_ids: selectedTenantIds.length === 1 ? assetIds : [],
       });
       setSuccess(
-        `Rolled out ${rolloutItem.service_name} to ${res.rolled_out} customer(s)` +
+        `${rolloutAction === "disable" ? "Disabled" : "Rolled out"} ${rolloutItem.service_name} for ${res.rolled_out} customer(s)` +
           (res.failed ? ` (${res.failed} failed)` : "") +
-          "."
+          ` · order ${orderNumber.trim()}.`
       );
       setRolloutItem(null);
       refresh();
@@ -365,9 +415,41 @@ export default function ServiceCatalogPage() {
               Roll out — {rolloutItem.service_name}
             </h2>
             <p className="page-subtitle">
-              Enables this add-on for selected customers and marks their open consulting requests as
-              approved.
+              Controlled change: customer order number and confirmation email are required. Leave
+              assets unchecked for the whole account, or pick hosts when one customer is selected.
             </p>
+            <label className="form-label">
+              Action
+              <select
+                className="form-input"
+                value={rolloutAction}
+                onChange={(e) => setRolloutAction(e.target.value as "enable" | "disable")}
+              >
+                <option value="enable">Enable / roll out</option>
+                <option value="disable">Disable / remove</option>
+              </select>
+            </label>
+            <label className="form-label">
+              Customer order number
+              <input
+                className="form-input"
+                value={orderNumber}
+                onChange={(e) => setOrderNumber(e.target.value)}
+                placeholder="PO-10482 / SO-…"
+                required
+              />
+            </label>
+            <label className="form-label">
+              Confirmation email
+              <input
+                className="form-input"
+                type="email"
+                value={confirmEmail}
+                onChange={(e) => setConfirmEmail(e.target.value)}
+                placeholder="customer.admin@example.com"
+                required
+              />
+            </label>
             <div className="rollout-tenant-list">
               {tenants.map((t) => (
                 <label key={t.id} className="rollout-tenant-row">
@@ -383,6 +465,37 @@ export default function ServiceCatalogPage() {
               ))}
               {tenants.length === 0 && <div className="state-message">No tenants found.</div>}
             </div>
+            {selectedTenantIds.length === 1 ? (
+              <div className="rollout-tenant-list" style={{ marginTop: "0.75rem" }}>
+                <div className="form-label">Assets (optional — empty = whole account)</div>
+                {assetsLoading && <div className="state-message">Loading assets…</div>}
+                {!assetsLoading && assetOptions.length === 0 && (
+                  <div className="state-message">No assets for this customer yet.</div>
+                )}
+                {assetOptions.map((a) => (
+                  <label key={a.id} className="rollout-tenant-row">
+                    <input
+                      type="checkbox"
+                      checked={assetIds.includes(a.id)}
+                      onChange={() =>
+                        setAssetIds((prev) =>
+                          prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id]
+                        )
+                      }
+                    />
+                    <span>
+                      {a.hostname || a.id}
+                      {a.asset_type ? ` · ${a.asset_type}` : ""}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
+                Select a single customer to target individual assets. Multiple customers apply at
+                account level.
+              </p>
+            )}
             <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>
               Notes (optional)
               <textarea
@@ -395,9 +508,9 @@ export default function ServiceCatalogPage() {
             {rolloutError && <div className="form-error">{rolloutError}</div>}
             <div className="confirm-actions">
               <button className="btn btn-primary" type="submit" disabled={rolloutBusy}>
-                {rolloutBusy
-                  ? "Rolling out…"
-                  : `Enable for ${selectedTenantIds.length || 0} customer(s)`}
+                  {rolloutBusy
+                    ? "Saving…"
+                    : `${rolloutAction === "disable" ? "Disable" : "Enable"} for ${selectedTenantIds.length || 0} customer(s)`}
               </button>
               <button
                 className="btn btn-ghost"

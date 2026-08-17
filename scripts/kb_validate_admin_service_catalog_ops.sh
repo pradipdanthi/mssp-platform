@@ -7,6 +7,7 @@ echo "=== KB: Admin Service Catalog ops (pricing / rollout / request badges) ===
 
 need() { [ -f "$1" ] || { echo "FAIL missing $1"; exit 1; }; }
 need postgres/init/033_service_catalog_pricing.sql
+need postgres/init/035_kb103_service_rollout_orders.sql
 need backend-api/app/services/service_catalog_pricing.py
 need backend-api/app/api/routes/service_catalog.py
 need frontend-admin/src/pages/ServiceCatalogPage.tsx
@@ -18,9 +19,17 @@ if rg -n '>\s*Request for Consulting\s*<' frontend-admin/src/pages/ServiceCatalo
 fi
 echo "OK: Admin catalog consulting CTA button removed"
 
-# Pricing API routes present
-rg -n 'admin/service-catalog|customer/service-catalog/pricing|rollout' backend-api/app/api/routes/service_catalog.py >/dev/null
-echo "OK: catalog pricing/rollout routes present"
+rg -n 'customer_order_number|confirmation_email|asset_ids' backend-api/app/api/routes/service_catalog.py >/dev/null \
+  || { echo "FAIL: rollout missing order/email/asset fields"; exit 1; }
+echo "OK: controlled rollout fields present"
+
+rg -n 'customer_order_number|Confirmation email' frontend-admin/src/pages/ServiceCatalogPage.tsx >/dev/null \
+  || { echo "FAIL: Admin rollout UI missing order/email"; exit 1; }
+echo "OK: Admin rollout UI requires order + email"
+
+docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\d service_rollout_orders"' >/dev/null \
+  || { echo "FAIL: service_rollout_orders table missing — apply 035 migration"; exit 1; }
+echo "OK: service_rollout_orders table exists"
 
 # Migration applied?
 docker compose exec -T postgres sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "\d service_catalog_pricing"' >/dev/null \

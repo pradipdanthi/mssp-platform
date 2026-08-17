@@ -221,7 +221,7 @@ export default function DashboardPage() {
 
             <Link
               className="kpi-card kpi-card--high card-surface kpi-card--link"
-              to="/alerts?severity=high"
+              to="/alerts?severity=urgent"
             >
               <div className="kpi-card-top">
                 <KpiIcon name="bell" />

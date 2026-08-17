@@ -109,6 +109,34 @@ export function serviceFullLabel(serviceId: string): string {
   return SERVICE_FULL_LABELS[key] || serviceId;
 }
 
+export const CATALOGUE_SERVICE_IDS = [
+  "svc-01",
+  "svc-02",
+  "svc-03",
+  "svc-04",
+  "svc-05",
+  "svc-06",
+  "svc-07",
+  "svc-08",
+  "svc-09",
+  "svc-10",
+] as const;
+
 export function sortServiceIds(services: string[] | null | undefined): string[] {
   return [...(services || [])].sort((a, b) => a.localeCompare(b));
+}
+
+export function catalogueServiceStatus(enabled: string[] | null | undefined): Array<{
+  id: string;
+  label: string;
+  full: string;
+  active: boolean;
+}> {
+  const on = new Set((enabled || []).map((s) => s.trim().toLowerCase()));
+  return CATALOGUE_SERVICE_IDS.map((id) => ({
+    id,
+    label: serviceShortLabel(id),
+    full: serviceFullLabel(id),
+    active: on.has(id),
+  }));
 }

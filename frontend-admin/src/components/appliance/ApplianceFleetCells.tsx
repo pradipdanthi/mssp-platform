@@ -8,6 +8,7 @@ import {
   heartbeatFreshness,
   pickHeartbeatTimestamp,
   resourceStressClass,
+  catalogueServiceStatus,
   serviceFullLabel,
   serviceShortLabel,
   sortServiceIds,
@@ -86,7 +87,29 @@ export function ApplianceHealthCell({ appliance }: { appliance: Appliance }) {
   );
 }
 
-export function ApplianceServicesCell({ services }: { services: string[] | null | undefined }) {
+export function ApplianceServicesCell({
+  services,
+  showInactive = false,
+}: {
+  services: string[] | null | undefined;
+  showInactive?: boolean;
+}) {
+  if (showInactive) {
+    const rows = catalogueServiceStatus(services);
+    return (
+      <div className="appliance-services-cell appliance-services-cell--full" title={rows.map((r) => `${r.full}: ${r.active ? "active" : "inactive"}`).join(" · ")}>
+        {rows.map((row) => (
+          <span
+            key={row.id}
+            className={`appliance-service-badge${row.active ? "" : " appliance-service-badge--inactive"}`}
+            title={`${row.full} — ${row.active ? "active" : "inactive"}`}
+          >
+            {row.label}
+          </span>
+        ))}
+      </div>
+    );
+  }
   const sorted = sortServiceIds(services);
   if (sorted.length === 0) {
     return (

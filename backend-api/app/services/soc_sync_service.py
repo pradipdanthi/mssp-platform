@@ -340,7 +340,8 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
     """
     Insert or return existing security_alerts row; optionally create incident.
 
-    Always customer_visible=false. Dedup key: tenant + source_tool + external_alert_id.
+    Customer-visible for real events (status is not false_positive). Dedup key:
+    tenant + source_tool + external_alert_id.
     Phase-1: correlated bursts reuse one open incident; known noise skips incident.
     """
     with db_transaction() as cur:
@@ -453,6 +454,9 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
             initial_status = (
                 "false_positive" if payload.create_incident is False else "new"
             )
+            # Customer-safe normalized rows are visible on the tenant portal.
+            # False positives stay hidden. SOC can still hide a row in triage.
+            customer_visible = initial_status != "false_positive"
             cur.execute(
                 """
                 INSERT INTO security_alerts (
@@ -466,7 +470,7 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                     %s, %s, %s,
                     %s, %s, %s, %s,
                     %s, %s::inet, %s::inet, %s,
-                    %s::uuid, false, %s,
+                    %s::uuid, %s, %s,
                     %s, %s
                 )
                 RETURNING id::text AS id, customer_visible, status;
@@ -484,6 +488,7 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                     source_ip,
                     source_user,
                     asset_id,
+                    customer_visible,
                     initial_status,
                     payload.customer_visible_summary,
                     technical_summary,
@@ -501,7 +506,7 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                 )
                 alert_row = {
                     "id": alert_row["id"],
-                    "customer_visible": False,
+                    "customer_visible": bool(alert_row["customer_visible"]),
                     "status": "incident_created",
                 }
 

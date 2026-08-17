@@ -615,6 +615,55 @@ def _dispatch_job(job: dict[str, Any]) -> tuple[bool, str]:
         post = _post_register_local_manager(app)
         ok = post.get("wazuh_manager") == "active"
         return ok, json.dumps(post)[:500]
+    if job_type == "apply_entitlements":
+        raw_ids = payload.get("service_ids") or []
+        service_ids: list[str] = []
+        seen: set[str] = set()
+        for raw in raw_ids:
+            sid = str(raw).strip().lower()
+            if sid and sid not in seen:
+                seen.add(sid)
+                service_ids.append(sid)
+        if "svc-01" not in seen:
+            service_ids.insert(0, "svc-01")
+        ents = state.load_entitlements()
+        state.save_entitlements(
+            {
+                **ents,
+                "service_ids": service_ids,
+                "core": "svc-01" in service_ids,
+                "order_number": payload.get("order_number"),
+                "catalog_key": payload.get("catalog_key"),
+            }
+        )
+        reconcile: dict[str, Any] | None = None
+        for helper in (
+            "/usr/bin/junexis-reconcile-services",
+            "/usr/bin/kevantic-reconcile-services",
+        ):
+            if not Path(helper).is_file():
+                continue
+            try:
+                proc = subprocess.run(
+                    [helper],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=120,
+                )
+            except Exception as exc:  # noqa: BLE001
+                reconcile = {"error": str(exc)[:200]}
+                break
+            try:
+                reconcile = json.loads(proc.stdout or "{}")
+            except json.JSONDecodeError:
+                reconcile = {
+                    "stdout": (proc.stdout or "")[:300],
+                    "stderr": (proc.stderr or "")[:300],
+                    "rc": proc.returncode,
+                }
+            break
+        return True, json.dumps({"service_ids": service_ids, "reconcile": reconcile})[:500]
     # Default: Active Response / isolate-style jobs
     if payload.get("ar_command") or payload.get("agent_id"):
         return _run_local_ar(job)

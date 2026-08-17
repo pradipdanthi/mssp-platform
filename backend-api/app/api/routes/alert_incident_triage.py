@@ -184,7 +184,13 @@ def update_admin_alert_triage(
     if "status" in payload.model_fields_set:
         assignments.append("status = %s")
         values.append(payload.status)
-    if "customer_visible" in payload.model_fields_set:
+    hide_from_customer = (
+        "status" in payload.model_fields_set and payload.status == "false_positive"
+    )
+    if hide_from_customer:
+        assignments.append("customer_visible = %s")
+        values.append(False)
+    elif "customer_visible" in payload.model_fields_set:
         assignments.append("customer_visible = %s")
         values.append(payload.customer_visible)
     if "ai_plain_summary" in payload.model_fields_set:

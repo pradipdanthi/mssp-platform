@@ -34,6 +34,35 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 # Customer roles (customer_admin, customer_viewer) are never in this tuple,
 # so they are rejected with 403 on /admin/* automatically.
 ADMIN_SOC_ROLES = ("platform_admin", "soc_manager", "soc_analyst")
+_TAXONOMY_FETCH_BATCH = 2000
+_TAXONOMY_FETCH_MAX = 50000
+
+
+def _append_alert_severity_filter(where: list, params: list, severity: Optional[str]) -> None:
+    sev = (severity or "").strip().lower()
+    if sev in ("urgent", "high_critical", "high,critical"):
+        where.append("sa.severity IN ('high', 'critical')")
+    elif sev in ("low", "medium", "high", "critical"):
+        where.append("sa.severity = %s")
+        params.append(sev)
+
+
+def _fetch_alert_rows_batched(select_sql: str, params: tuple) -> list:
+    """Load taxonomy-classified alert rows without a silent 500/2000 cap."""
+    rows: list = []
+    offset = 0
+    while len(rows) < _TAXONOMY_FETCH_MAX:
+        chunk = fetch_all(
+            select_sql + " LIMIT %s OFFSET %s;",
+            tuple(list(params) + [_TAXONOMY_FETCH_BATCH, offset]),
+        )
+        if not chunk:
+            break
+        rows.extend(chunk)
+        if len(chunk) < _TAXONOMY_FETCH_BATCH:
+            break
+        offset += _TAXONOMY_FETCH_BATCH
+    return rows
 
 
 @router.get("/dashboard")
@@ -62,6 +91,10 @@ def admin_dashboard(
             (SELECT count(*) FROM security_alerts
                 WHERE severity IN ('high','critical') AND {tenant_clause}) AS high_or_critical_alerts,
             (SELECT count(*) FROM security_alerts
+                WHERE severity = 'critical' AND {tenant_clause}) AS critical_alerts,
+            (SELECT count(*) FROM security_alerts
+                WHERE severity = 'high' AND {tenant_clause}) AS high_alerts,
+            (SELECT count(*) FROM security_alerts
                 WHERE status = 'new' AND {tenant_clause}) AS new_alerts,
             (SELECT count(*) FROM incidents WHERE {tenant_clause}) AS total_incidents,
             (SELECT count(*) FROM incidents
@@ -74,7 +107,7 @@ def admin_dashboard(
                   AND {tenant_clause}) AS notifications_sent
         ;
         """,
-        (tid,) * 13 if tid else (),
+        (tid,) * 15 if tid else (),
     )
 
     severity_breakdown = fetch_all(
@@ -363,7 +396,10 @@ def admin_alerts_taxonomy_summary(
     alert_status: Optional[
         Literal["new", "triaged", "incident_created", "false_positive", "closed"]
     ] = Query(default=None, alias="status"),
-    severity: Optional[Literal["low", "medium", "high", "critical"]] = None,
+    severity: Optional[str] = Query(
+        default=None,
+        description="low|medium|high|critical or urgent/high_critical for high+critical",
+    ),
     tenant_id: Optional[UUID] = None,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
@@ -373,16 +409,13 @@ def admin_alerts_taxonomy_summary(
     if alert_status is not None:
         where.append("sa.status = %s")
         params.append(alert_status)
-    if severity is not None:
-        where.append("sa.severity = %s")
-        params.append(severity)
+    _append_alert_severity_filter(where, params, severity)
     if tenant_id is not None:
         where.append("sa.tenant_id = %s")
         params.append(tenant_id)
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
-    rows = fetch_all(
-        f"""
+    tax_sql = f"""
         SELECT
             sa.source_tool,
             sa.alert_title,
@@ -393,10 +426,8 @@ def admin_alerts_taxonomy_summary(
         FROM security_alerts sa
         {where_sql}
         ORDER BY sa.created_at DESC
-        LIMIT 500;
-        """,
-        tuple(params),
-    )
+    """
+    rows = _fetch_alert_rows_batched(tax_sql, tuple(params))
     enriched = [enrich_alert_row(r) for r in rows]
     return {
         "counts": taxonomy_counts(enriched),
@@ -430,12 +461,7 @@ def admin_alerts(
     if alert_status is not None:
         where.append("sa.status = %s")
         params.append(alert_status)
-    sev = (severity or "").strip().lower()
-    if sev in ("urgent", "high_critical", "high,critical"):
-        where.append("sa.severity IN ('high', 'critical')")
-    elif sev in ("low", "medium", "high", "critical"):
-        where.append("sa.severity = %s")
-        params.append(sev)
+    _append_alert_severity_filter(where, params, severity)
     if tenant_id is not None:
         where.append("sa.tenant_id = %s")
         params.append(tenant_id)
@@ -486,7 +512,7 @@ def admin_alerts(
     # Taxonomy category is derived in Python; when filtering by category we
     # page after enrichment. Otherwise use SQL LIMIT/OFFSET.
     if asset_category and asset_category != "all":
-        rows = fetch_all(select_sql + " LIMIT 2000;", tuple(params))
+        rows = _fetch_alert_rows_batched(select_sql, tuple(params))
         enriched = filter_by_asset_category(
             [enrich_alert_row(r) for r in rows], asset_category
         )

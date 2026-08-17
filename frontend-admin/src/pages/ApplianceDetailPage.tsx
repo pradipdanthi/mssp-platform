@@ -128,9 +128,9 @@ export default function ApplianceDetailPage() {
               </td>
             </tr>
             <tr>
-              <th>Enabled services</th>
+              <th>Services</th>
               <td>
-                <ApplianceServicesCell services={data.enabled_services} />
+                <ApplianceServicesCell services={data.enabled_services} showInactive />
               </td>
             </tr>
             <tr>

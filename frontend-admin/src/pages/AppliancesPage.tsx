@@ -359,7 +359,7 @@ function ApplianceRow({
           <ApplianceHealthCell appliance={appliance} />
         </td>
         <td>
-          <ApplianceServicesCell services={appliance.enabled_services} />
+          <ApplianceServicesCell services={appliance.enabled_services} showInactive />
         </td>
         <td>
           <button className="btn btn-ghost btn-small" type="button" onClick={handleExpandToggle}>
