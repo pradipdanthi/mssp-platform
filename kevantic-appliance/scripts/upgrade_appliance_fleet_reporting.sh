@@ -47,6 +47,19 @@ if [[ -x "$AR_SRC/mssp-isolate-host" ]]; then
   "${SCP[@]}" "$AR_SRC/mssp-isolate-host" "$AR_SRC/mssp-kill-process" "$AR_SRC/mssp-block-hash" \
     "${USER_NAME}@${HOST}:/tmp/"
 fi
+WIN_AR="$AR_SRC/windows"
+if [[ -f "$WIN_AR/mssp-isolate-host.ps1" ]]; then
+  "${SCP[@]}" \
+    "$WIN_AR/mssp-isolate-host.ps1" \
+    "$WIN_AR/mssp-isolate-host.cmd" \
+    "$WIN_AR/mssp-kill-process.ps1" \
+    "$WIN_AR/mssp-kill-process.cmd" \
+    "$WIN_AR/mssp-block-hash.ps1" \
+    "$WIN_AR/mssp-block-hash.cmd" \
+    "$WIN_AR/Sync-MsspEdrAr.ps1" \
+    "$WIN_AR/Watch-MsspQuarantine.ps1" \
+    "${USER_NAME}@${HOST}:/tmp/"
+fi
 
 "${SSH[@]}" "bash -s" <<REMOTE
 set -euo pipefail
@@ -71,6 +84,13 @@ PY
 for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
   if [[ -f /tmp/\$f ]]; then
     sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
+  fi
+done
+sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
+for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1; do
+  if [[ -f /tmp/\$f ]]; then
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
   fi
 done
 if [[ -d /opt/junexis/cli/junexis_cli ]]; then

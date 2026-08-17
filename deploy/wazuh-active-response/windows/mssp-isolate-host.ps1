@@ -1,4 +1,4 @@
-﻿# MSSP Windows Active Response -- HOST NETWORK QUARANTINE (EDR-style)
+# MSSP Windows Active Response -- HOST NETWORK QUARANTINE (EDR-style)
 #
 # Industry meaning of "isolate host" (MDR/XDR/PDR containment):
 #   Place the endpoint in NETWORK QUARANTINE -- default DENY for all IP traffic
@@ -162,6 +162,11 @@ function Clear-MsspAllowRules {
     "MSSP_QUAR_ALLOW_MANAGER_IN",
     "MSSP_QUAR_ALLOW_CTRLPLANE_OUT",
     "MSSP_QUAR_ALLOW_CTRLPLANE_IN",
+    "MSSP_QUAR_ALLOW_WAZUH_OUT_1514",
+    "MSSP_QUAR_ALLOW_WAZUH_OUT_1515",
+    "MSSP_QUAR_ALLOW_WAZUH_IN_1514",
+    "MSSP_QUAR_ALLOW_WAZUH_IN_1515",
+    "MSSP_QUAR_ALLOW_WAZUH_OUT_UDP1514",
     "MSSP_QUAR_ALLOW_DHCP",
     "MSSP_QUAR_ALLOW_LOOPBACK_OUT",
     "MSSP_QUAR_ALLOW_LOOPBACK_IN",
@@ -198,50 +203,20 @@ function Clear-MsspAllowRules {
 }
 
 function Disable-MsspLateralAllowRules {
-  # Default-deny alone is NOT enough: Windows keeps explicit ALLOW rules for
-  # Remote Desktop / SMB / WinRM / File Sharing. Those still permit traffic (and
-  # established RDP sessions keep flowing). Disable those allows during quarantine
-  # and remember EXACT prior Enabled state for restore.
-  $saved = @()
-  $patterns = @(
-    "*Remote Desktop*",
-    "*Remote Assistance*",
-    "*File and Printer Sharing*",
-    "*Windows Remote Management*",
-    "*WinRM*",
-    "*Remote Event Log*",
-    "*Remote Service Management*",
-    "*Remote Scheduled Tasks*",
-    "*Echo Request*"
+  # Do NOT call Get-NetFirewallRule (enumerating every rule hangs 32-bit execd).
+  $groups = @(
+    "Remote Desktop",
+    "Remote Assistance",
+    "File and Printer Sharing",
+    "Windows Remote Management",
+    "World Wide Web Services (HTTP)",
+    "Secure World Wide Web Services (HTTPS)"
   )
-  try {
-    $rules = Get-NetFirewallRule -ErrorAction SilentlyContinue |
-      Where-Object {
-        $dn = [string]$_.DisplayName
-        $dg = [string]$_.DisplayGroup
-        foreach ($p in $patterns) {
-          if ($dn -like $p -or $dg -like $p) { return $true }
-        }
-        return $false
-      }
-    foreach ($rule in $rules) {
-      $wasEnabled = [bool]($rule.Enabled -eq "True" -or $rule.Enabled -eq $true)
-      $saved += [ordered]@{
-        name        = [string]$rule.Name
-        display     = [string]$rule.DisplayName
-        was_enabled = $wasEnabled
-      }
-      if ($wasEnabled) {
-        try {
-          Disable-NetFirewallRule -Name $rule.Name -ErrorAction Stop
-          Write-ArLog "Disabled allow rule name=$($rule.Name) display=$($rule.DisplayName)"
-        } catch {
-          Write-ArLog "WARN disable rule $($rule.Name): $($_.Exception.Message)"
-        }
-      }
-    }
-  } catch {
-    Write-ArLog "WARN enumerating lateral allow rules: $($_.Exception.Message)"
+  $saved = @()
+  foreach ($g in $groups) {
+    $r = Invoke-Netsh @("advfirewall", "firewall", "set", "rule", "group=$g", "new", "enable=no")
+    Write-ArLog "disable group '$g' rc=$($r.ExitCode)"
+    $saved += [ordered]@{ group = $g; was_enabled = $true }
   }
   return @($saved)
 }
@@ -249,10 +224,16 @@ function Disable-MsspLateralAllowRules {
 function Restore-MsspLateralAllowRules([object]$SavedRules) {
   if (-not $SavedRules) { return }
   foreach ($item in @($SavedRules)) {
+    $group = $null
+    try { $group = [string]$item.group } catch { $group = $null }
+    if ($group) {
+      $r = Invoke-Netsh @("advfirewall", "firewall", "set", "rule", "group=$group", "new", "enable=yes")
+      Write-ArLog "restore group '$group' rc=$($r.ExitCode)"
+      continue
+    }
     $name = $null
     $wasEnabled = $true
     if ($item -is [string]) {
-      # legacy state format: bare rule name list
       $name = $item
       $wasEnabled = $true
     } else {
@@ -262,17 +243,9 @@ function Restore-MsspLateralAllowRules([object]$SavedRules) {
       } catch {}
     }
     if (-not $name) { continue }
-    try {
-      if ($wasEnabled) {
-        Enable-NetFirewallRule -Name $name -ErrorAction Stop
-        Write-ArLog "Restored ENABLED allow rule name=$name"
-      } else {
-        Disable-NetFirewallRule -Name $name -ErrorAction SilentlyContinue
-        Write-ArLog "Restored DISABLED allow rule name=$name"
-      }
-    } catch {
-      Write-ArLog ("WARN restore rule ${name}: " + $_.Exception.Message)
-    }
+    $enable = if ($wasEnabled) { "yes" } else { "no" }
+    [void](Invoke-Netsh @("advfirewall", "firewall", "set", "rule", "name=$name", "new", "enable=$enable"))
+    Write-ArLog "Restored rule name=$name enable=$enable"
   }
 }
 
@@ -404,30 +377,14 @@ function Test-QuarantineEffect {
     $result.notes += "profile_read_failed=$($_.Exception.Message)"
   }
 
-  $rules = Invoke-Netsh @("advfirewall", "firewall", "show", "rule", "name=MSSP_QUAR_ALLOW_MANAGER_OUT")
-  if ($rules.StdOut -match "MSSP_QUAR_ALLOW_MANAGER_OUT" -and $rules.StdOut -notmatch "No rules match") {
+  $rules = Invoke-Netsh @("advfirewall", "firewall", "show", "rule", "name=MSSP_QUAR_ALLOW_WAZUH_OUT_1514")
+  if ($rules.StdOut -match "MSSP_QUAR_ALLOW_WAZUH_OUT_1514" -and $rules.StdOut -notmatch "No rules match") {
     $result.manager_allow_rule = $true
   }
 
-  # Best-effort gateway probe (ICMP). Failure/timeout = expected under quarantine.
-  # Success = quarantine NOT effective for at least ICMP (policy not applied / overridden).
-  try {
-    $gw = $null
-    $cfg = Get-NetIPConfiguration -ErrorAction SilentlyContinue |
-      Where-Object { $_.IPv4DefaultGateway -and $_.NetAdapter.Status -eq "Up" } |
-      Select-Object -First 1
-    if ($cfg) { $gw = [string]$cfg.IPv4DefaultGateway.NextHop }
-    if ($gw) {
-      $ping = Test-Connection -ComputerName $gw -Count 1 -Quiet -ErrorAction SilentlyContinue
-      $result.gateway_probe_blocked = (-not $ping)
-      $result.notes += "gateway=$gw icmp_blocked=$($result.gateway_probe_blocked)"
-    } else {
-      $result.notes += "gateway_unknown"
-    }
-  } catch {
-    $result.notes += "gateway_probe_error"
-    $result.gateway_probe_blocked = $true
-  }
+  # Do not probe the gateway here -- CIM/WMI probes can hang 32-bit execd.
+  $result.gateway_probe_blocked = $null
+  $result.notes += "gateway_probe_skipped"
 
   $effective = [bool]$result.profiles_outbound_block -and [bool]$result.manager_allow_rule
   Write-ArLog ("VERIFY effective=$effective " + ($result.notes -join "; "))
@@ -441,6 +398,100 @@ function Convert-ToMsspBool($Value, [bool]$Default = $true) {
   if ($s -in @("true", "1", "yes")) { return $true }
   if ($s -in @("false", "0", "no")) { return $false }
   return $Default
+}
+
+function Stop-StaleAutoRelease {
+  Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match 'Start-Sleep' -and $_.CommandLine -match 'mssp-isolate-host' } |
+    ForEach-Object {
+      try {
+        Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop
+        Write-ArLog "killed stale auto-release pid=$($_.ProcessId)"
+      } catch {}
+    }
+}
+
+function Install-MsspQuarantineWatchdog {
+  $dir = Join-Path $env:ProgramData "mssp-edr-ar"
+  New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  $watchSrc = Join-Path $PSScriptRoot "Watch-MsspQuarantine.ps1"
+  $watchDst = Join-Path $dir "Watch-MsspQuarantine.ps1"
+  foreach ($candidate in @(
+    $watchSrc,
+    (Join-Path $PSScriptRoot "..\..\shared\Watch-MsspQuarantine.ps1")
+  )) {
+    if (Test-Path -LiteralPath $candidate) {
+      Copy-Item -LiteralPath $candidate -Destination $watchDst -Force
+      break
+    }
+  }
+  if (-not (Test-Path -LiteralPath $watchDst)) {
+    Write-ArLog "WARN watchdog script missing; containment will not re-assert"
+    return
+  }
+  $tr = "powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$watchDst`""
+  schtasks.exe /Create /TN "MSSP-Quarantine-Watchdog" /SC MINUTE /MO 1 /RU SYSTEM /RL HIGHEST /TR $tr /F | Out-Null
+  try {
+    $task = Get-ScheduledTask -TaskName "MSSP-Quarantine-Watchdog" -ErrorAction Stop
+    $trig = $task.Triggers | Select-Object -First 1
+    if ($trig) {
+      $trig.Repetition.Interval = "PT15S"
+      $trig.Repetition.Duration = "P1D"
+      Set-ScheduledTask -InputObject $task | Out-Null
+    }
+  } catch {}
+  schtasks.exe /Run /TN "MSSP-Quarantine-Watchdog" | Out-Null
+  Write-ArLog "watchdog installed (re-asserts Wazuh-only contain while marker exists)"
+}
+
+function Stop-MsspQuarantineWatchdog {
+  schtasks.exe /Delete /TN "MSSP-Quarantine-Watchdog" /F 2>$null | Out-Null
+}
+
+function Save-And-DropDefaultRoutes {
+  $saved = @()
+  try {
+    foreach ($rt in @(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue)) {
+      $saved += [ordered]@{
+        ifIndex  = [int]$rt.InterfaceIndex
+        nextHop  = [string]$rt.NextHop
+        metric   = [int]$rt.RouteMetric
+      }
+      try {
+        Remove-NetRoute -InterfaceIndex $rt.InterfaceIndex -DestinationPrefix "0.0.0.0/0" -NextHop $rt.NextHop -Confirm:$false -ErrorAction Stop
+        Write-ArLog "dropped default route if=$($rt.InterfaceIndex) gw=$($rt.NextHop)"
+      } catch {
+        Write-ArLog "WARN drop default route: $($_.Exception.Message)"
+      }
+    }
+  } catch {
+    Write-ArLog "WARN enumerate default routes: $($_.Exception.Message)"
+  }
+  return @($saved)
+}
+
+function Restore-DefaultRoutes([object]$Saved) {
+  if (-not $Saved) { return }
+  foreach ($item in @($Saved)) {
+    try {
+      $ifIndex = [int]$item.ifIndex
+      $nextHop = [string]$item.nextHop
+      $metric = 0
+      try { $metric = [int]$item.metric } catch { $metric = 0 }
+      if (-not $nextHop) { continue }
+      $params = @{
+        InterfaceIndex     = $ifIndex
+        DestinationPrefix  = "0.0.0.0/0"
+        NextHop            = $nextHop
+        ErrorAction        = "Stop"
+      }
+      if ($metric -gt 0) { $params["RouteMetric"] = $metric }
+      New-NetRoute @params | Out-Null
+      Write-ArLog "restored default route if=$ifIndex gw=$nextHop"
+    } catch {
+      Write-ArLog "WARN restore default route: $($_.Exception.Message)"
+    }
+  }
 }
 
 function Repair-MsspEchoRequestRules {
@@ -470,7 +521,7 @@ function Repair-MsspEchoRequestRules {
 function Remove-IsolationRules {
   # IMPORTANT order:
   # 1) Restore profile defaults FIRST (outbound Allow) while Manager/control-plane
-  #    allow rules still exist — otherwise default-deny + clearing allows traps the host
+  #    allow rules still exist -- otherwise default-deny + clearing allows traps the host
   #    and the release callback cannot reach the control plane.
   # 2) Restore prior Enabled state for lateral/ICMP rules we touched.
   # 3) Remove temporary MSSP_* quarantine rules.
@@ -478,6 +529,8 @@ function Remove-IsolationRules {
   # 5) Clear marker.
   $CancelFile = Join-Path $env:ProgramData "mssp-edr-isolate-cancel.flag"
   try { "cancelled" | Set-Content -LiteralPath $CancelFile -Encoding ASCII } catch {}
+  Stop-StaleAutoRelease
+  Stop-MsspQuarantineWatchdog
 
   $hadSnapshot = Test-Path -LiteralPath $StateFile
   $hadMarker = Test-Path -LiteralPath $MarkerFile
@@ -518,6 +571,7 @@ function Remove-IsolationRules {
       if ($state.disabled_allow_rules) {
         $savedRules = @($state.disabled_allow_rules)
       }
+      try { Restore-DefaultRoutes -Saved $state.default_routes } catch {}
       Remove-Item -LiteralPath $StateFile -Force -ErrorAction SilentlyContinue
       Write-ArLog "QUARANTINE lift - snapshot applied (profiles first)"
     } catch {
@@ -538,7 +592,7 @@ function Remove-IsolationRules {
     $stillBlocked = @(Get-NetFirewallProfile -Profile Domain, Private, Public -ErrorAction Stop |
       Where-Object { $_.DefaultOutboundAction -eq "Block" }).Count
     if ($stillBlocked -gt 0 -and ($hadSnapshot -or $hadMarker)) {
-      Write-ArLog "WARN outbound still Block on $stillBlocked/3 profiles — forcing Allow"
+      Write-ArLog "WARN outbound still Block on $stillBlocked/3 profiles -- forcing Allow"
       [void](Set-FirewallDefaultActions -Inbound "Block" -Outbound "Allow")
     }
   } catch {
@@ -556,38 +610,28 @@ function Remove-IsolationRules {
 }
 
 function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
-  Write-ArLog "QUARANTINE begin manager=$Manager control_plane=$ControlPlane seconds=$Seconds exec=$ExecutionId"
+  Write-ArLog "QUARANTINE begin manager=$Manager seconds=$Seconds exec=$ExecutionId (Wazuh ports only; hold until unisolate)"
+  Stop-StaleAutoRelease
+
+  $state = Get-FirewallStateObject
+  $state["seconds"] = 0
+  $state["execution_id"] = $ExecutionId
+
+  # Contain FIRST. Clearing leftover MSSP rules is fine; never enumerate every
+  # Windows firewall rule (that hung 32-bit execd and skipped default-deny).
   Clear-MsspAllowRules
 
-  # Snapshot BEFORE mutating anything so lift returns to exact prior state.
-  $state = Get-FirewallStateObject
-  $state["seconds"] = $Seconds
-  $state["execution_id"] = $ExecutionId
-  $state["disabled_allow_rules"] = @(Disable-MsspLateralAllowRules)
-
-  try {
-    $dir = Split-Path $StateFile -Parent
-    if (-not (Test-Path -LiteralPath $dir)) {
-      New-Item -ItemType Directory -Path $dir -Force | Out-Null
-    }
-    ($state | ConvertTo-Json -Compress -Depth 6) | Set-Content -LiteralPath $StateFile -Encoding ASCII
-    Write-ArLog ("STATE saved rules=" + @($state.disabled_allow_rules).Count)
-  } catch {
-    Write-ArLog "WARN state file: $($_.Exception.Message)"
-  }
-
-  # SOC continuity allow-list BEFORE default-deny
-  # Control plane must stay reachable for applied=true callback (else UI never Verified).
   $allowSpecs = @(
-    @{ Name = "MSSP_QUAR_ALLOW_MANAGER_OUT"; Dir = "out"; Extra = @("remoteip=$Manager") },
-    @{ Name = "MSSP_QUAR_ALLOW_MANAGER_IN"; Dir = "in"; Extra = @("remoteip=$Manager") },
-    @{ Name = "MSSP_QUAR_ALLOW_CTRLPLANE_OUT"; Dir = "out"; Extra = @("remoteip=$ControlPlane") },
-    @{ Name = "MSSP_QUAR_ALLOW_CTRLPLANE_IN"; Dir = "in"; Extra = @("remoteip=$ControlPlane") },
+    @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1514"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1514") },
+    @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1515"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1515") },
+    @{ Name = "MSSP_QUAR_ALLOW_WAZUH_IN_1514"; Dir = "in"; Extra = @("protocol=tcp", "remoteip=$Manager", "localport=1514") },
+    @{ Name = "MSSP_QUAR_ALLOW_WAZUH_IN_1515"; Dir = "in"; Extra = @("protocol=tcp", "remoteip=$Manager", "localport=1515") },
+    @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_UDP1514"; Dir = "out"; Extra = @("protocol=udp", "remoteip=$Manager", "remoteport=1514") },
     @{ Name = "MSSP_QUAR_ALLOW_DHCP"; Dir = "out"; Extra = @("protocol=udp", "remoteport=67,68") },
     @{ Name = "MSSP_QUAR_ALLOW_LOOPBACK_OUT"; Dir = "out"; Extra = @("remoteip=127.0.0.1") },
     @{ Name = "MSSP_QUAR_ALLOW_LOOPBACK_IN"; Dir = "in"; Extra = @("remoteip=127.0.0.1") }
   )
-  Write-ArLog "allow-list manager=$Manager control_plane=$ControlPlane"
+  Write-ArLog "allow-list wazuh_manager=$Manager ports=1514,1515"
   foreach ($spec in $allowSpecs) {
     $args = @(
       "advfirewall", "firewall", "add", "rule",
@@ -602,8 +646,20 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
 
   Add-LateralBlockRules
   $ok = Set-FirewallDefaultActions -Inbound "Block" -Outbound "Block"
-  # Drop live RDP/etc. -- default-deny alone often leaves established sessions up.
+  $state["disabled_allow_rules"] = @(Disable-MsspLateralAllowRules)
+  $state["default_routes"] = @(Save-And-DropDefaultRoutes)
+  try {
+    $dir = Split-Path $StateFile -Parent
+    if (-not (Test-Path -LiteralPath $dir)) {
+      New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    }
+    ($state | ConvertTo-Json -Compress -Depth 6) | Set-Content -LiteralPath $StateFile -Encoding ASCII
+  } catch {
+    Write-ArLog "WARN state file: $($_.Exception.Message)"
+  }
+
   Stop-InteractiveRemoteSessions
+  Install-MsspQuarantineWatchdog
 
   $effective = $false
   if ($ok) {
@@ -614,29 +670,15 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
 
   if ($effective) {
     "active manager=$Manager since=$(Get-Date -Format o)" | Set-Content -LiteralPath $MarkerFile -Encoding ASCII
-    Write-ArLog "QUARANTINE ACTIVE applied=true (default-deny + RDP/SMB/WinRM/ICMP blocked; sessions reset)"
+    try {
+      icacls $MarkerFile /inheritance:r /grant:r "SYSTEM:F" /grant:r "BUILTIN\Administrators:F" | Out-Null
+    } catch {}
+    Write-ArLog "QUARANTINE ACTIVE applied=true (Wazuh 1514/1515 only; hold until Un-isolate)"
   } else {
     Write-ArLog "QUARANTINE FAILED applied=false -- host NOT contained; do not trust UI dispatch alone"
   }
 
-  # 0 = hold until SOC Un-isolate. Positive = timed auto-release (lab/test only).
-  if ($Seconds -gt 0) {
-    $exeEsc = $ExecutionId -replace "'", "''"
-    $cancelPath = Join-Path $env:ProgramData "mssp-edr-isolate-cancel.flag"
-    Remove-Item -LiteralPath $cancelPath -Force -ErrorAction SilentlyContinue
-    $releaseCmd = @"
-Start-Sleep -Seconds $Seconds
-if (Test-Path -LiteralPath '$cancelPath') { exit 0 }
-& '$PSCommandPath' delete '$exeEsc'
-"@
-    Start-Process -FilePath "powershell.exe" -ArgumentList @(
-      "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-Command", $releaseCmd
-    ) -WindowStyle Hidden | Out-Null
-    Write-ArLog "auto-release armed seconds=$Seconds exec=$ExecutionId"
-  } else {
-    Write-ArLog "hold-until-unisolate exec=$ExecutionId"
-  }
-
+  Write-ArLog "hold-until-unisolate exec=$ExecutionId (timed auto-release disabled)"
   return [bool]$effective
 }
 
@@ -656,6 +698,7 @@ $raw = ""
 $executionId = ""
 if (-not $env:MSSP_ISOLATE_REEXEC) {
   $sharedPs1 = @(
+    (Join-Path $PSScriptRoot "..\..\shared\mssp-isolate-host.ps1"),
     "${env:ProgramFiles(x86)}\ossec-agent\shared\mssp-isolate-host.ps1",
     "$env:ProgramFiles\ossec-agent\shared\mssp-isolate-host.ps1"
   ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1

@@ -772,7 +772,7 @@ def execute_edr_action(
             msg = (
                 f"Network quarantine command dispatched to agent {agent_id} "
                 f"({hold}). "
-                "This is default-deny all traffic except Manager/DHCP/loopback - not ICMP-only. "
+                "This is default-deny except Wazuh Manager TCP/UDP 1514 and TCP 1515 (plus DHCP/loopback). "
                 "Confirm on host log: QUARANTINE ACTIVE applied=true (or FAILED applied=false)."
             )
             _update_execution(

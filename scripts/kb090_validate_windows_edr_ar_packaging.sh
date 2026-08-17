@@ -14,7 +14,9 @@ for f in \
   deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
   deploy/wazuh-active-response/windows/mssp-block-hash.cmd \
   deploy/wazuh-active-response/windows/mssp-block-hash.ps1 \
-  deploy/wazuh-active-response/windows/Install-MsspWindowsEdrAr.ps1
+  deploy/wazuh-active-response/windows/Install-MsspWindowsEdrAr.ps1 \
+  deploy/wazuh-active-response/windows/Sync-MsspEdrAr.ps1 \
+  deploy/wazuh-active-response/windows/Watch-MsspQuarantine.ps1
 do
   [ -f "$f" ] || fail "missing $f"
   # PowerShell on Windows can choke on UTF-8 punctuation in scripts we ship.
@@ -32,6 +34,12 @@ grep -q 'Install-MsspWindowsEdrAr.ps1' backend-api/app/services/agent_package_bu
   || fail "windows installer must call Install-MsspWindowsEdrAr.ps1"
 grep -q 'mssp-kill-process.cmd' backend-api/app/services/edr_actions.py \
   || fail "edr_actions WIN kill default must be mssp-kill-process.cmd"
+grep -q 'EDR_ISOLATE_SECONDS") or "0"' backend-api/app/services/edr_actions.py \
+  || fail "isolate default must be hold-until-unisolate (0)"
+grep -q '_publish_windows_edr_ar_shared' kevantic-appliance/cli/kevantic-cli/kevantic_cli/register_ops.py \
+  || fail "appliance CLI must publish Windows isolate scripts to Manager shared"
+grep -q 'hold-until-unisolate' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows isolate must hold until Un-isolate"
 echo "OK: package + API command defaults"
 
 section "3. Build a sample Windows ZIP and assert AR members"
@@ -52,12 +60,19 @@ needed = {
     "windows/edr-ar/mssp-isolate-host.cmd",
     "windows/edr-ar/mssp-block-hash.cmd",
     "windows/edr-ar/Install-MsspWindowsEdrAr.ps1",
+    "windows/edr-ar/Sync-MsspEdrAr.ps1",
+    "windows/edr-ar/Watch-MsspQuarantine.ps1",
     "windows/install-windows-agent.ps1",
 }
 missing = sorted(needed - names)
 assert not missing, missing
 script = zf.read("windows/install-windows-agent.ps1").decode("utf-8")
 assert "Install-MsspWindowsEdrAr.ps1" in script
+cmd = zf.read("windows/edr-ar/mssp-isolate-host.cmd").decode("utf-8")
+assert r"%~dp0..\..\shared" in cmd, "isolate cmd must copy Manager shared scripts into bin"
+ps1 = zf.read("windows/edr-ar/mssp-isolate-host.ps1").decode("utf-8")
+assert "hold-until-unisolate" in ps1
+assert "Get-NetFirewallRule -Enabled True" not in ps1
 print("OK: zip", name, "contains EDR AR pack")
 PY
 

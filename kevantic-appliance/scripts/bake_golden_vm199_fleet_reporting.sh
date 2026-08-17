@@ -59,8 +59,18 @@ AR_SRC="$CTRL/deploy/wazuh-active-response"
 cp "$AR_SRC/mssp-isolate-host" "$AR_SRC/mssp-kill-process" "$AR_SRC/mssp-block-hash" "$TMP/"
 WIN_AR="$AR_SRC/windows"
 [[ -f "$WIN_AR/mssp-isolate-host.ps1" ]] || die "missing Windows isolate script"
+[[ -f "$WIN_AR/Watch-MsspQuarantine.ps1" ]] || die "missing Windows isolate watchdog"
 mkdir -p "$TMP/win-ar"
-cp "$WIN_AR/mssp-isolate-host.ps1" "$WIN_AR/mssp-isolate-host.cmd" "$WIN_AR/Sync-MsspEdrAr.ps1" "$TMP/win-ar/"
+WIN_AR_FILES=(
+  mssp-isolate-host.ps1 mssp-isolate-host.cmd
+  mssp-kill-process.ps1 mssp-kill-process.cmd
+  mssp-block-hash.ps1 mssp-block-hash.cmd
+  Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1
+)
+for f in "${WIN_AR_FILES[@]}"; do
+  [[ -f "$WIN_AR/$f" ]] || die "missing Windows AR file: $f"
+  cp "$WIN_AR/$f" "$TMP/win-ar/"
+done
 python3 - "$TMP/image-release.json" "$GIT_COMMIT" <<'PY'
 import json, sys
 path, commit = sys.argv[1], sys.argv[2]
@@ -83,7 +93,12 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/mssp-block-hash" \
   "$TMP/win-ar/mssp-isolate-host.ps1" \
   "$TMP/win-ar/mssp-isolate-host.cmd" \
+  "$TMP/win-ar/mssp-kill-process.ps1" \
+  "$TMP/win-ar/mssp-kill-process.cmd" \
+  "$TMP/win-ar/mssp-block-hash.ps1" \
+  "$TMP/win-ar/mssp-block-hash.cmd" \
   "$TMP/win-ar/Sync-MsspEdrAr.ps1" \
+  "$TMP/win-ar/Watch-MsspQuarantine.ps1" \
   "${USER_NAME}@${HOST}:/tmp/"
 
 "${SSH[@]}" "bash -s" <<REMOTE
@@ -107,7 +122,7 @@ for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
   sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
 done
 sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
-for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd Sync-MsspEdrAr.ps1; do
+for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1; do
   if [[ -f /tmp/\$f ]]; then
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"

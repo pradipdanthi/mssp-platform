@@ -11,7 +11,7 @@ for f in \
   mssp-isolate-host.cmd mssp-isolate-host.ps1 \
   mssp-kill-process.cmd mssp-kill-process.ps1 \
   mssp-block-hash.cmd mssp-block-hash.ps1 \
-  Sync-MsspEdrAr.ps1
+  Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1
 do
   if [[ -f "$SRC/$f" ]]; then
     cp -a "$SRC/$f" "$DST/$f"

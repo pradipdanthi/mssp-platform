@@ -37,6 +37,18 @@ grep -q '_ensure_local_edr_ar_commands' "$APP/cli/kevantic-cli/kevantic_cli/regi
   && pass "CLI registers isolate AR commands on local Manager" \
   || fail "register_ops.py missing EDR AR command ensure"
 
+grep -q '_publish_windows_edr_ar_shared' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI publishes Windows isolate scripts to Manager shared groups" \
+  || fail "register_ops.py missing Windows EDR shared publish"
+
+grep -q 'Watch-MsspQuarantine.ps1' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake ships Windows isolate watchdog" \
+  || fail "bake script missing Watch-MsspQuarantine.ps1"
+
+grep -q 'mssp-kill-process.cmd' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake ships full Windows EDR AR pack" \
+  || fail "bake script missing Windows kill/block-hash AR files"
+
 grep -q '_cli_submodule' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
   && pass "CLI loads branded junexis/kevantic modules without hard fail" \
   || fail "register_ops.py missing branded CLI import helper"

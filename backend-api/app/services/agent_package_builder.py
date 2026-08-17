@@ -44,6 +44,7 @@ _WINDOWS_AR_FILES = (
     "mssp-block-hash.ps1",
     "Install-MsspWindowsEdrAr.ps1",
     "Sync-MsspEdrAr.ps1",
+    "Watch-MsspQuarantine.ps1",
 )
 
 

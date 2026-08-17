@@ -29,7 +29,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-# Fingerprint — refuse to run if this file was overwritten with another AR script.
+# Fingerprint -- refuse to run if this file was overwritten with another AR script.
 $selfHead = Get-Content -LiteralPath $PSCommandPath -TotalCount 5 -ErrorAction SilentlyContinue
 if (-not ($selfHead -join "`n" | Select-String -SimpleMatch "Install MSSP Windows EDR Active Response")) {
   throw "Wrong installer file content. Re-copy mssp-windows-edr-ar-remediate.zip from the control plane and extract fresh."
@@ -51,7 +51,9 @@ if (-not $Here) { $Here = Split-Path -Parent $MyInvocation.MyCommand.Path }
 $required = @(
   "mssp-kill-process.cmd", "mssp-kill-process.ps1",
   "mssp-isolate-host.cmd", "mssp-isolate-host.ps1",
-  "mssp-block-hash.cmd", "mssp-block-hash.ps1"
+  "mssp-block-hash.cmd", "mssp-block-hash.ps1",
+  "Sync-MsspEdrAr.ps1",
+  "Watch-MsspQuarantine.ps1"
 )
 # Optional proof helper (not required on agent bin)
 $optionalCopy = @("Test-MsspQuarantineProof.ps1")
@@ -79,6 +81,10 @@ Write-Step "Installing AR scripts into $dest"
 foreach ($f in $required) {
   Copy-Item -LiteralPath (Join-Path $Here $f) -Destination (Join-Path $dest $f) -Force
 }
+$pd = Join-Path $env:ProgramData "mssp-edr-ar"
+New-Item -ItemType Directory -Path $pd -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $Here "Watch-MsspQuarantine.ps1") -Destination (Join-Path $pd "Watch-MsspQuarantine.ps1") -Force
+Copy-Item -LiteralPath (Join-Path $Here "Sync-MsspEdrAr.ps1") -Destination (Join-Path $pd "Sync-MsspEdrAr.ps1") -Force
 foreach ($f in $optionalCopy) {
   $src = Join-Path $Here $f
   if (Test-Path -LiteralPath $src) {
@@ -147,4 +153,4 @@ Restart-Service -Name WazuhSvc -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "MSSP_WINDOWS_EDR_AR_OK"
-Write-Host "Installed: kill / isolate / block-hash into $dest"
+Write-Host "Installed: kill / isolate / block-hash + quarantine watchdog into $dest"

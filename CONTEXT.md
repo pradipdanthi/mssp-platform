@@ -27,6 +27,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | **Appliance golden image (master clone source)** | Proxmox **VM 199** `mssp-appliance-golden-build` (`192.168.0.225`) — permanent golden disk; improvements commit to repo then bake/update 199; new customer appliances clone from 199. Fleet reporting is in the golden recipe — bake with `kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh` |
 | **Appliance image factory (optional mkosi/ISO workshop)** | **VM 113** when needed (KB-093F); may be stopped/destroyed between builds — not the same as golden 199 |
 | **KB-093P critical-alert forward** | Baked in golden recipe (`ada21fe`+); Beta field-upgraded; telemetry → VM 100, heartbeat → VM 114 |
+| **Host isolate (KB-104)** | **Hold until Un-isolate** (no 2-minute auto-lift). Windows: default-deny except Manager TCP/UDP **1514** and TCP **1515**, plus DHCP/loopback, plus quarantine watchdog. Day-one agent ZIP installs the scripts; appliance heartbeat publishes them to Manager shared groups. Bake into VM **199** with `kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh`. Isolate buttons travel **VM 100 → VM 114 channel → appliance Manager → agent**. Do not use unsigned WPK as the update path. |
 | **KB-094 production portability** | Env templates (`deploy/environments/`), `production_deploy_control_plane.sh`, release checklist — cloud-agnostic deploy path |
 
 **Do not** treat this platform as a lab prototype in planning, user-facing copy, dashboards, or runtime defaults. Lab shortcuts need explicit user acceptance + upgrade plan.
@@ -47,7 +48,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 
 | Item | Value |
 |---|---|
-| Latest feature tag | **KB-035** — Customer Appliance Detail (`1ac1df3`, `kb035-customer-appliance-detail-validated`) |
+| Latest feature tag | **KB-104 isolate standard** — `kb104-isolate-standard-golden-validated` (hold until Un-isolate; baked into golden VM 199). Historical UI baseline: **KB-035** Customer Appliance Detail (`1ac1df3`) |
 | Post-KB-035 stack (git) | **KB-083/084 EDR** committed through `73376d6`; **KB-088 snapshot** (user mgmt, portal auth, `/assets` SPA, Windows telemetry) — see `docs/KB088_USER_MGMT_PORTAL_AUTH_WINDOWS_TELEMETRY.md` |
 | Roadmap docs | **KB-036–KB-060** (+ later ops/integration KBs) |
 | Active branch (typical) | `main` (control plane VM 100) |

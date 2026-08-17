@@ -133,8 +133,8 @@ export default function EdrControlPanel({
           onClick={() => {
             if (window.confirm(
               "Quarantine this host?\n\n" +
-                "All network traffic will be blocked except the SOC Manager path " +
-                "(and DHCP/loopback). This is full network quarantine, not ping-only. " +
+                "All network traffic will be blocked except Wazuh Manager ports 1514/1515 " +
+                "(plus DHCP/loopback so the agent can stay reachable for Un-isolate). " +
                 "The host stays isolated until you click Un-isolate."
             )) {
               void run("ISOLATE_HOST", { confirm_isolation: true });

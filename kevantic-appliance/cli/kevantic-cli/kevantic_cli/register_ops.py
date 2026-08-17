@@ -266,6 +266,7 @@ def _publish_windows_edr_ar_shared() -> None:
         "mssp-kill-process.ps1",
         "mssp-block-hash.cmd",
         "mssp-block-hash.ps1",
+        "Watch-MsspQuarantine.ps1",
         "Sync-MsspEdrAr.ps1",
     )
     agent_conf = """<agent_config os="windows">
