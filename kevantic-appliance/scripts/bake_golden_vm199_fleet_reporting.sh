@@ -71,6 +71,14 @@ for f in "${WIN_AR_FILES[@]}"; do
   [[ -f "$WIN_AR/$f" ]] || die "missing Windows AR file: $f"
   cp "$WIN_AR/$f" "$TMP/win-ar/"
 done
+LINUX_EDR_RULES="$CTRL/deploy/wazuh-manager/mssp_linux_exec_rules.xml"
+LINUX_EDR_SH="$CTRL/backend-api/app/endpoint_configs/linux-edr-telemetry/install-mssp-linux-telemetry.sh"
+LINUX_EDR_AUDIT="$CTRL/backend-api/app/endpoint_configs/linux-edr-telemetry/mssp-exec.rules"
+[[ -f "$LINUX_EDR_RULES" ]] || die "missing $LINUX_EDR_RULES"
+[[ -f "$LINUX_EDR_SH" ]] || die "missing $LINUX_EDR_SH"
+cp "$LINUX_EDR_RULES" "$TMP/mssp_linux_exec_rules.xml"
+cp "$LINUX_EDR_SH" "$TMP/install-mssp-linux-telemetry.sh"
+cp "$LINUX_EDR_AUDIT" "$TMP/mssp-exec.rules"
 python3 - "$TMP/image-release.json" "$GIT_COMMIT" <<'PY'
 import json, sys
 path, commit = sys.argv[1], sys.argv[2]
@@ -99,6 +107,9 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/win-ar/mssp-block-hash.cmd" \
   "$TMP/win-ar/Sync-MsspEdrAr.ps1" \
   "$TMP/win-ar/Watch-MsspQuarantine.ps1" \
+  "$TMP/mssp_linux_exec_rules.xml" \
+  "$TMP/install-mssp-linux-telemetry.sh" \
+  "$TMP/mssp-exec.rules" \
   "${USER_NAME}@${HOST}:/tmp/"
 
 "${SSH[@]}" "bash -s" <<REMOTE
@@ -122,10 +133,17 @@ for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
   sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
 done
 sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
+sudo install -d -m 0755 /var/lib/junexis/edr-ar/linux /var/lib/kevantic/edr-ar/linux
 for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1; do
   if [[ -f /tmp/\$f ]]; then
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
+  fi
+done
+for f in mssp_linux_exec_rules.xml install-mssp-linux-telemetry.sh mssp-exec.rules; do
+  if [[ -f /tmp/\$f ]]; then
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/linux/\$f"
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/linux/\$f"
   fi
 done
 # Register isolate/kill/block command names on the local Manager (Windows + Linux).
@@ -146,7 +164,8 @@ sudo systemctl restart kevantic-heartbeat.timer || true
 
 echo "== verify =="
 grep -F 'python3 -m kevantic_cli heartbeat' /etc/systemd/system/kevantic-heartbeat.service
-grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|_authenticate_local_wazuh|_ensure_local_edr_ar_commands' "\$CLI/register_ops.py" >/dev/null
+grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|_authenticate_local_wazuh|_ensure_local_edr_ar_commands|_publish_linux_midlayer_shared' "\$CLI/register_ops.py" >/dev/null
+sudo test -f /var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml
 python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version")'
 # Do not seed entitlements — golden clones stay idle until a real license is applied.
 if [[ -f /var/lib/kevantic/entitlements.json ]]; then

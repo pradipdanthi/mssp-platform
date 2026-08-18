@@ -309,7 +309,12 @@ def _publish_windows_edr_ar_shared() -> None:
             continue
         if "mssp-edr-ar-sync" not in current:
             try:
-                conf_path.write_text(agent_conf, encoding="utf-8")
+                new = (
+                    current.rstrip() + "\n" + agent_conf
+                    if current.strip()
+                    else agent_conf
+                )
+                conf_path.write_text(new, encoding="utf-8")
             except OSError as exc:
                 logger.warning("skip shared agent.conf %s: %s", conf_path, exc)
                 continue
@@ -320,12 +325,128 @@ def _publish_windows_edr_ar_shared() -> None:
             _chown_wazuh(conf_path)
 
 
+_LINUX_EXEC_AGENT_CONF = """<agent_config os="linux">
+  <!-- mssp-linux-exec-localfile -->
+  <localfile>
+    <log_format>audit</log_format>
+    <location>/var/log/audit/audit.log</location>
+  </localfile>
+  <wodle name="command">
+    <disabled>no</disabled>
+    <tag>mssp-linux-exec-sync</tag>
+    <interval>60m</interval>
+    <run_on_start>yes</run_on_start>
+    <timeout>120</timeout>
+    <ignore_output>yes</ignore_output>
+    <command>bash /var/ossec/etc/shared/install-mssp-linux-telemetry.sh</command>
+  </wodle>
+</agent_config>
+"""
+
+_LINUX_EXEC_RULES_SRC = (
+    Path("/var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml"),
+    Path("/var/lib/junexis/edr-ar/linux/mssp_linux_exec_rules.xml"),
+    Path("/opt/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml"),
+    Path("/opt/junexis/edr-ar/linux/mssp_linux_exec_rules.xml"),
+    Path("/tmp/mssp_linux_exec_rules.xml"),
+)
+
+_LINUX_TELEMETRY_SRC = (
+    Path("/var/lib/kevantic/edr-ar/linux/install-mssp-linux-telemetry.sh"),
+    Path("/var/lib/junexis/edr-ar/linux/install-mssp-linux-telemetry.sh"),
+    Path("/opt/kevantic/edr-ar/linux/install-mssp-linux-telemetry.sh"),
+    Path("/opt/junexis/edr-ar/linux/install-mssp-linux-telemetry.sh"),
+    Path("/tmp/install-mssp-linux-telemetry.sh"),
+)
+
+_LINUX_EXEC_RULES_DST = Path("/var/ossec/etc/rules/mssp_linux_exec_rules.xml")
+
+
+def _first_existing_file(paths) -> Optional[Path]:
+    for path in paths:
+        if path.is_file():
+            return path
+    return None
+
+
+def _publish_linux_midlayer_shared() -> None:
+    """Drop Linux execve helper into Manager shared groups; APPEND agent.conf."""
+    shared_root = Path("/var/ossec/etc/shared")
+    helper = _first_existing_file(_LINUX_TELEMETRY_SRC)
+    rules_src = _first_existing_file(_LINUX_EXEC_RULES_SRC)
+    if rules_src is not None:
+        try:
+            _LINUX_EXEC_RULES_DST.parent.mkdir(parents=True, exist_ok=True)
+            current = (
+                _LINUX_EXEC_RULES_DST.read_bytes()
+                if _LINUX_EXEC_RULES_DST.is_file()
+                else b""
+            )
+            payload = rules_src.read_bytes()
+            if current != payload:
+                _LINUX_EXEC_RULES_DST.write_bytes(payload)
+                try:
+                    _LINUX_EXEC_RULES_DST.chmod(0o640)
+                except OSError:
+                    pass
+                _chown_wazuh(_LINUX_EXEC_RULES_DST)
+                logger.info("published Linux execve Manager rules %s", _LINUX_EXEC_RULES_DST)
+                subprocess.run(
+                    ["/var/ossec/bin/wazuh-control", "restart"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+        except OSError as exc:
+            logger.warning("skip Linux execve Manager rules: %s", exc)
+
+    if not shared_root.is_dir():
+        return
+    for group_dir in shared_root.iterdir():
+        if not group_dir.is_dir() or group_dir.name in ("agent-template",):
+            continue
+        if helper is not None:
+            dest = group_dir / "install-mssp-linux-telemetry.sh"
+            try:
+                dest.write_bytes(helper.read_bytes())
+                try:
+                    dest.chmod(0o640)
+                except OSError:
+                    pass
+                _chown_wazuh(dest)
+            except OSError as exc:
+                logger.warning("skip shared linux telemetry %s: %s", dest, exc)
+        conf_path = group_dir / "agent.conf"
+        try:
+            current = conf_path.read_text(encoding="utf-8") if conf_path.is_file() else ""
+        except OSError:
+            continue
+        if "mssp-linux-exec-localfile" in current:
+            continue
+        try:
+            new = current.rstrip() + "\n" + _LINUX_EXEC_AGENT_CONF if current.strip() else _LINUX_EXEC_AGENT_CONF
+            conf_path.write_text(new, encoding="utf-8")
+        except OSError as exc:
+            logger.warning("skip shared linux agent.conf %s: %s", conf_path, exc)
+            continue
+        try:
+            conf_path.chmod(0o660)
+        except OSError:
+            pass
+        _chown_wazuh(conf_path)
+
+
 def _ensure_local_edr_ar_commands() -> None:
     """Register isolate/kill/block-hash command names on the local Manager."""
     try:
         _publish_windows_edr_ar_shared()
     except OSError as exc:
         logger.warning("shared AR publish skipped: %s", exc)
+    try:
+        _publish_linux_midlayer_shared()
+    except OSError as exc:
+        logger.warning("linux mid-layer publish skipped: %s", exc)
     conf = Path("/var/ossec/etc/ossec.conf")
     if not conf.is_file():
         return

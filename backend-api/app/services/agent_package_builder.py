@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import os
+import urllib.request
 import zipfile
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -47,6 +48,45 @@ _WINDOWS_AR_FILES = (
     "Watch-MsspQuarantine.ps1",
 )
 
+_SYSMON_BIN_CANDIDATES = (
+    Path(__file__).resolve().parents[1] / "endpoint_configs" / "Sysmon64.exe",
+    Path("/app/app/endpoint_configs/Sysmon64.exe"),
+    Path("/var/lib/mssp/sysmon-cache/Sysmon64.exe"),
+    Path(__file__).resolve().parents[3] / ".cache" / "sysmon" / "Sysmon64.exe",
+    Path("/opt/mssp-control/.cache/sysmon/Sysmon64.exe"),
+    Path("/opt/mssp-control/deploy/windows-endpoint-telemetry/Sysmon64.exe"),
+)
+
+_LINUX_EXEC_RULES_CANDIDATES = (
+    Path(__file__).resolve().parents[1]
+    / "endpoint_configs"
+    / "linux-edr-telemetry"
+    / "mssp-exec.rules",
+    Path("/app/app/endpoint_configs/linux-edr-telemetry/mssp-exec.rules"),
+    Path("/opt/mssp-control/backend-api/app/endpoint_configs/linux-edr-telemetry/mssp-exec.rules"),
+)
+
+_LINUX_TELEMETRY_SH_CANDIDATES = (
+    Path(__file__).resolve().parents[1]
+    / "endpoint_configs"
+    / "linux-edr-telemetry"
+    / "install-mssp-linux-telemetry.sh",
+    Path("/app/app/endpoint_configs/linux-edr-telemetry/install-mssp-linux-telemetry.sh"),
+    Path(
+        "/opt/mssp-control/backend-api/app/endpoint_configs/"
+        "linux-edr-telemetry/install-mssp-linux-telemetry.sh"
+    ),
+)
+
+_LINUX_EXEC_RULES_DEFAULT = """## MSSP Linux execve collection (collect != alert)
+## Captures pid, ppid, comm, exe, uid/auid, cwd, command line (EXECVE a0..).
+-a always,exit -F arch=b64 -S execve,execveat -F key=mssp_exec
+-a always,exit -F arch=b32 -S execve,execveat -F key=mssp_exec
+"""
+
+_SYSMON_DOWNLOAD_URL = "https://download.sysinternals.com/files/Sysmon.zip"
+
+
 
 def _first_existing(paths: tuple[Path, ...]) -> Optional[Path]:
     for path in paths:
@@ -88,6 +128,95 @@ def load_windows_edr_ar_files() -> Dict[str, str]:
             raise FileNotFoundError(f"Windows AR file missing: {path}")
         out[name] = path.read_text(encoding="utf-8")
     return out
+
+
+def load_linux_exec_rules() -> str:
+    path = _first_existing(_LINUX_EXEC_RULES_CANDIDATES)
+    if path:
+        return path.read_text(encoding="utf-8")
+    return _LINUX_EXEC_RULES_DEFAULT
+
+
+def load_linux_telemetry_installer() -> str:
+    path = _first_existing(_LINUX_TELEMETRY_SH_CANDIDATES)
+    if not path:
+        raise FileNotFoundError("install-mssp-linux-telemetry.sh not found")
+    return path.read_text(encoding="utf-8")
+
+
+def resolve_sysmon_binary() -> Optional[Path]:
+    """Return a local Sysmon64.exe if cached or freshly downloaded (best-effort)."""
+    found = _first_existing(_SYSMON_BIN_CANDIDATES)
+    if found:
+        return found
+    return _try_cache_sysmon_binary()
+
+
+def _try_cache_sysmon_binary() -> Optional[Path]:
+    dest_dirs = (
+        Path("/var/lib/mssp/sysmon-cache"),
+        Path("/opt/mssp-control/.cache/sysmon"),
+        Path("/tmp/mssp-sysmon-cache"),
+    )
+    for folder in dest_dirs:
+        candidate = folder / "Sysmon64.exe"
+        if candidate.is_file() and candidate.stat().st_size > 10_000:
+            return candidate
+    skip = (os.getenv("MSSP_SKIP_SYSMON_CACHE_DOWNLOAD") or "").strip().lower()
+    if skip in ("1", "true", "yes"):
+        return None
+    dest: Optional[Path] = None
+    for folder in dest_dirs:
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            dest = folder
+            break
+        except OSError:
+            continue
+    if dest is None:
+        return None
+    zip_path = dest / "Sysmon.zip"
+    timeout = float(os.getenv("MSSP_SYSMON_CACHE_TIMEOUT") or "12")
+    try:
+        req = urllib.request.Request(
+            _SYSMON_DOWNLOAD_URL,
+            headers={"User-Agent": "MSSP-agent-packager"},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            zip_path.write_bytes(resp.read())
+        with zipfile.ZipFile(zip_path) as zf:
+            names = zf.namelist()
+            member = next((n for n in names if n.lower().endswith("sysmon64.exe")), None)
+            if member is None:
+                member = next((n for n in names if n.lower().endswith("sysmon.exe")), None)
+            if member is None:
+                return None
+            data = zf.read(member)
+        out = dest / "Sysmon64.exe"
+        out.write_bytes(data)
+        return out if out.stat().st_size > 10_000 else None
+    except Exception:
+        return None
+
+
+def _linux_midlayer_suffix() -> str:
+    """Fail-open auditd hook appended after wazuh-agent enrollment."""
+    body = load_linux_telemetry_installer()
+    if body.startswith("#!"):
+        body = body.split("\n", 1)[-1]
+    return (
+        "\n"
+        "# Fail-open Linux mid-layer (auditd execve). Subshell so enrollment stays intact.\n"
+        '_mssp_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"\n'
+        'if [[ -n "${_mssp_script_dir}" && -f "${_mssp_script_dir}/install-mssp-linux-telemetry.sh" ]]; then\n'
+        '  bash "${_mssp_script_dir}/install-mssp-linux-telemetry.sh" \\\n'
+        '    || echo "[MSSP-TELEMETRY] WARN: Linux mid-layer telemetry skipped (agent still enrolled)" >&2\n'
+        "else\n"
+        "  bash -s <<'MSSP_LINUX_TELEMETRY' || echo \"[MSSP-TELEMETRY] WARN: Linux mid-layer telemetry skipped (agent still enrolled)\" >&2\n"
+        f"{body.rstrip()}\n"
+        "MSSP_LINUX_TELEMETRY\n"
+        "fi\n"
+    )
 
 
 def manager_address() -> str:
@@ -168,6 +297,11 @@ def build_agent_package_zip(
         )
         if os_key in ("linux", "all"):
             zf.writestr("linux/install-linux-agent.sh", _linux_script(manager, group, version, code))
+            zf.writestr("linux/mssp-exec.rules", load_linux_exec_rules())
+            zf.writestr(
+                "linux/install-mssp-linux-telemetry.sh",
+                load_linux_telemetry_installer(),
+            )
             zf.writestr(
                 "linux/INSTALL.txt",
                 _linux_install_txt(group, manager, customer_facing=customer_facing),
@@ -183,6 +317,9 @@ def build_agent_package_zip(
                 ) from exc
             zf.writestr("windows/sysmon-windows-baseline.xml", sysmon_xml)
             zf.writestr("windows/Enable-MsspWindowsTelemetry.ps1", telemetry_ps1)
+            sysmon_bin = resolve_sysmon_binary()
+            if sysmon_bin is not None:
+                zf.write(sysmon_bin, "windows/Sysmon64.exe")
             for name, text in ar_files.items():
                 zf.writestr(f"windows/edr-ar/{name}", text)
             zf.writestr(
@@ -222,6 +359,7 @@ Linux
 -----
 1. Copy the linux/ folder to the computer.
 2. Run:  sudo bash linux/install-linux-agent.sh
+   (Installs the agent plus process-execution telemetry on this computer.)
 3. Confirm the device appears under Assets in your security portal.
 
 Windows
@@ -256,6 +394,8 @@ Linux
 -----
 1. Copy the linux/ folder to the endpoint.
 2. Run:  sudo bash linux/install-linux-agent.sh
+   This also installs auditd execve collection and wires the agent to
+   /var/log/audit/audit.log (collect != alert).
 3. Confirm the agent is Active on the SOC platform.
 
 Windows
@@ -280,12 +420,15 @@ def _linux_install_txt(group: str, manager: str, *, customer_facing: bool = Fals
         return (
             "Run as root:\n"
             "  sudo bash install-linux-agent.sh\n\n"
+            "Also enables process-execution telemetry on this computer.\n\n"
             f"Enrollment server: {manager}\n"
             f"Organization bucket: {group}\n"
         )
     return (
         "Run as root:\n"
         "  sudo bash install-linux-agent.sh\n\n"
+        "Also installs auditd execve collection and adds a Wazuh <localfile>\n"
+        "reader for /var/log/audit/audit.log before restarting the agent.\n\n"
         f"Manager: {manager}\n"
         f"Group:   {group}\n"
     )
@@ -304,7 +447,9 @@ def _windows_install_txt(group: str, manager: str, *, customer_facing: bool = Fa
         "Run PowerShell as Administrator:\n"
         "  powershell -ExecutionPolicy Bypass -File .\\install-windows-agent.ps1\n\n"
         "Also installs/updates Sysmon (filtered), enables 4688+cmdline auditing,\n"
-        "and wires ossec.conf localfile channels. Re-run Enable-MsspWindowsTelemetry.ps1\n"
+        "and wires ossec.conf localfile channels. The package prefers Sysmon64.exe\n"
+        "in this folder (offline); it downloads Sysinternals only if that file is\n"
+        "missing and the host has network. Re-run Enable-MsspWindowsTelemetry.ps1\n"
         "alone if the agent is already installed.\n\n"
         f"Manager: {manager}\n"
         f"Group:   {group}\n"
@@ -365,7 +510,7 @@ systemctl restart wazuh-agent
 sleep 2
 /var/ossec/bin/wazuh-control status || true
 echo "OK: agent installed for group $GROUP (tenant {short_code})"
-"""
+""" + _linux_midlayer_suffix()
 
 
 def _windows_script(manager: str, group: str, version: str, short_code: str) -> str:

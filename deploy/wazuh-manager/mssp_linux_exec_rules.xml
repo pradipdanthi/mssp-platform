@@ -1,0 +1,64 @@
+<!--
+  MSSP Linux execve high-signal rules (Wazuh Manager).
+  Rule IDs 110001-110019 reserved for kernel/mid-layer EDR.
+  Collect-all execve stays in auditd; these rules only raise level >= 10 so
+  the existing integratord hook (POST /integrations/soc/hooks/wazuh/{token})
+  receives SOC-worthy events. Do not reuse 92057, 92213, or 100049.
+
+  Field matching uses type="pcre2" on audit.exe / audit.key only.
+  Do not use audit.command: Wazuh OSRegex rejects some patterns and
+  analysisd will refuse to start.
+-->
+<group name="local,mssp,linux,audit,auditd,">
+  <rule id="110001" level="10">
+    <if_group>audit</if_group>
+    <field name="audit.key" type="pcre2">^mssp_exec$</field>
+    <field name="audit.exe" type="pcre2">/tmp/|/dev/shm/|/var/tmp/</field>
+    <description>MSSP Linux: process executed from world-writable path</description>
+    <mitre>
+      <id>T1059</id>
+      <id>T1105</id>
+    </mitre>
+    <group>mssp_linux_exec,pci_dss_10.2.7,</group>
+  </rule>
+  <rule id="110002" level="10">
+    <if_group>audit</if_group>
+    <field name="audit.key" type="pcre2">^mssp_exec$</field>
+    <field name="audit.exe" type="pcre2">/home/.*/Downloads/|/home/.*/\.cache/</field>
+    <description>MSSP Linux: process executed from user Downloads or cache</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+    <group>mssp_linux_exec,</group>
+  </rule>
+  <rule id="110003" level="12">
+    <if_group>audit</if_group>
+    <field name="audit.key" type="pcre2">^mssp_exec$</field>
+    <field name="audit.exe" type="pcre2">/usr/bin/python[0-9.]*$|/usr/bin/perl$|/usr/bin/ruby$|/usr/bin/php$|/usr/bin/base64$</field>
+    <description>MSSP Linux: interpreter or decoder executed</description>
+    <mitre>
+      <id>T1059</id>
+    </mitre>
+    <group>mssp_linux_exec,</group>
+  </rule>
+  <rule id="110004" level="10">
+    <if_group>audit</if_group>
+    <field name="audit.key" type="pcre2">^mssp_exec$</field>
+    <field name="audit.exe" type="pcre2">/usr/bin/wget$|/usr/bin/curl$|/usr/bin/nc$|/usr/bin/ncat$|/usr/bin/socat$</field>
+    <description>MSSP Linux: network utility executed (wget/curl/nc/socat)</description>
+    <mitre>
+      <id>T1105</id>
+    </mitre>
+    <group>mssp_linux_exec,</group>
+  </rule>
+  <rule id="110005" level="10">
+    <if_group>audit</if_group>
+    <field name="audit.key" type="pcre2">^mssp_exec$</field>
+    <field name="audit.exe" type="pcre2">/usr/bin/chmod$|/bin/chmod$|/usr/bin/chattr$</field>
+    <description>MSSP Linux: chmod/chattr executed</description>
+    <mitre>
+      <id>T1222</id>
+    </mitre>
+    <group>mssp_linux_exec,</group>
+  </rule>
+</group>

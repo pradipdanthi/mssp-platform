@@ -1,0 +1,6 @@
+## MSSP Linux execve collection (collect != alert)
+## pid, ppid, comm, exe, uid, cwd, command line via audit EXECVE records.
+## Wazuh ships /var/log/audit/audit.log (log_format=audit) → data.audit.*
+## which edr_process_tree.normalize_process_event maps to raw_source=endpoint_audit_exec.
+-a always,exit -F arch=b64 -S execve,execveat -F key=mssp_exec
+-a always,exit -F arch=b32 -S execve,execveat -F key=mssp_exec

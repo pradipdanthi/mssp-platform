@@ -68,6 +68,12 @@ if echo "$CHANGED" | grep -qE '^deploy/|^docs/KB094|^scripts/production_deploy|^
   run ./scripts/kb094_validate_production_portability_pack.sh
 fi
 
+if echo "$CHANGED" | grep -qE '^backend-api/.*agent_package_builder|^backend-api/.*agent_install_repo|^backend-api/app/endpoint_configs/|^scripts/Enable-MsspWindowsTelemetry|^scripts/bootstrap_windows_telemetry|^scripts/kb088_validate_windows|^scripts/kb105_'; then
+  matched=1
+  run ./scripts/kb088_validate_windows_telemetry_onboarding.sh
+  run ./scripts/kb105_validate_linux_midlayer_edr.sh
+fi
+
 if echo "$CHANGED" | grep -qE '^frontend-admin/'; then
   matched=1
   run ./scripts/kb018_validate_admin_frontend_foundation.sh

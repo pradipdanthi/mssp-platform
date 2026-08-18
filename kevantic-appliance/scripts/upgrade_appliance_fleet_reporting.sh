@@ -60,6 +60,13 @@ if [[ -f "$WIN_AR/mssp-isolate-host.ps1" ]]; then
     "$WIN_AR/Watch-MsspQuarantine.ps1" \
     "${USER_NAME}@${HOST}:/tmp/"
 fi
+LINUX_EDR_RULES="$ROOT/../deploy/wazuh-manager/mssp_linux_exec_rules.xml"
+LINUX_EDR_SH="$ROOT/../backend-api/app/endpoint_configs/linux-edr-telemetry/install-mssp-linux-telemetry.sh"
+LINUX_EDR_AUDIT="$ROOT/../backend-api/app/endpoint_configs/linux-edr-telemetry/mssp-exec.rules"
+if [[ -f "$LINUX_EDR_RULES" && -f "$LINUX_EDR_SH" ]]; then
+  "${SCP[@]}" "$LINUX_EDR_RULES" "$LINUX_EDR_SH" "$LINUX_EDR_AUDIT" \
+    "${USER_NAME}@${HOST}:/tmp/"
+fi
 
 "${SSH[@]}" "bash -s" <<REMOTE
 set -euo pipefail
@@ -87,10 +94,17 @@ for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
   fi
 done
 sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
+sudo install -d -m 0755 /var/lib/junexis/edr-ar/linux /var/lib/kevantic/edr-ar/linux
 for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1; do
   if [[ -f /tmp/\$f ]]; then
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
+  fi
+done
+for f in mssp_linux_exec_rules.xml install-mssp-linux-telemetry.sh mssp-exec.rules; do
+  if [[ -f /tmp/\$f ]]; then
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/linux/\$f"
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/linux/\$f"
   fi
 done
 if [[ -d /opt/junexis/cli/junexis_cli ]]; then

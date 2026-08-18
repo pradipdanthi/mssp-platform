@@ -16,6 +16,10 @@ grep -q 'Microsoft-Windows-Sysmon/Operational' scripts/bootstrap_windows_telemet
 grep -q 'EventID=4688' scripts/bootstrap_windows_telemetry.ps1 && ok "bootstrap wires 4688" || bad "4688 localfile"
 grep -q 'ProcessCreationIncludeCmdLine_Enabled' scripts/bootstrap_windows_telemetry.ps1 && ok "bootstrap enables cmdline audit" || bad "cmdline audit"
 
+grep -q 'Resolve-BundledSysmonBinary' scripts/bootstrap_windows_telemetry.ps1 && ok "offline Sysmon prefers local binary" || bad "local Sysmon resolver"
+grep -q 'download.sysinternals.com' backend-api/app/endpoint_configs/Enable-MsspWindowsTelemetry.ps1 && ok "Sysinternals download is fallback only" || bad "sysinternals fallback missing"
+grep -q 'SkipDownload' backend-api/app/endpoint_configs/Enable-MsspWindowsTelemetry.ps1 && ok "SkipSysmonDownload still installs bundled binary" || bad "SkipDownload flag"
+
 if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
   docker compose exec -T backend-api python - <<'PY' && ok "builder embeds telemetry files" || bad "builder embed check"
 from app.services.agent_package_builder import build_agent_package_zip
@@ -34,7 +38,10 @@ missing = need - names
 assert not missing, missing
 script = z.read("windows/install-windows-agent.ps1").decode()
 assert "Enable-MsspWindowsTelemetry.ps1" in script
-print("zip_ok", name)
+ps1 = z.read("windows/Enable-MsspWindowsTelemetry.ps1").decode()
+assert "Resolve-BundledSysmonBinary" in ps1
+assert "download.sysinternals.com" in ps1
+print("zip_ok", name, "sysmon_embedded", "windows/Sysmon64.exe" in names)
 PY
 fi
 

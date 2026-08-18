@@ -1,4 +1,9 @@
-"""Publish / serve per-tenant Linux agent install one-liners (headless hosts)."""
+"""Publish / serve per-tenant Linux agent install one-liners (headless hosts).
+
+The generated script installs wazuh-agent, then fail-open auditd execve
+collection (mid-layer EDR) and a Wazuh <localfile> reader for
+/var/log/audit/audit.log so Manager alerts parse as endpoint_audit_exec.
+"""
 
 from __future__ import annotations
 
@@ -114,9 +119,10 @@ def linux_install_commands(*, short_code: str, token: str) -> Dict[str, str]:
     tok = quote(token.strip(), safe="")
     script_url = f"{base}/v1/agent-install/{code}/{tok}/linux.sh"
     # Single command: download from control-plane repo and install (apt under the hood).
+    # Script also configures auditd execve telemetry (fail-open if auditd is unavailable).
     one_liner = f'curl -fsSL "{script_url}" | sudo bash'
     apt_style = (
-        f'# Headless Linux install (downloads tenant package from MSSP repo, then apt-get installs agent)\n'
+        f'# Headless Linux install (downloads tenant package from MSSP repo, then apt-get installs agent + auditd execve telemetry)\n'
         f'{one_liner}'
     )
     return {

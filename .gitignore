@@ -21,6 +21,13 @@ deploy/velociraptor-client/client.config.yaml
 mssp-appliance-builder/.cache/
 mssp-appliance-builder/output-mssp-appliance/
 
+# Sysmon redistributable cache (not in git). Package build embeds it when present.
+.cache/sysmon/
+backend-api/app/endpoint_configs/Sysmon64.exe
+backend-api/app/endpoint_configs/Sysmon.exe
+deploy/windows-endpoint-telemetry/Sysmon64.exe
+deploy/windows-endpoint-telemetry/Sysmon.exe
+
 # Playwright E2E artifacts
 e2e/node_modules/
 e2e/test-results/

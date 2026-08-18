@@ -109,6 +109,22 @@ grep -q 'Do not seed entitlements' "$APP/scripts/bake_golden_vm199_fleet_reporti
   && pass "golden bake documents no entitlement seed" \
   || fail "bake script missing no-seed guard"
 
+grep -q '_publish_linux_midlayer_shared' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI publishes Linux auditd mid-layer to local Manager" \
+  || fail "register_ops.py missing _publish_linux_midlayer_shared"
+
+grep -q 'mssp-linux-exec-localfile' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI appends Linux execve localfile without replacing Windows agent.conf" \
+  || fail "register_ops.py missing Linux agent.conf marker"
+
+grep -q 'mssp_linux_exec_rules.xml' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake ships Linux execve Manager rules" \
+  || fail "bake script missing mssp_linux_exec_rules.xml"
+
+grep -q 'install-mssp-linux-telemetry.sh' "$APP/scripts/upgrade_appliance_fleet_reporting.sh" \
+  && pass "field upgrade ships Linux telemetry helper" \
+  || fail "upgrade script missing Linux telemetry helper"
+
 if [[ "$FAIL" -ne 0 ]]; then
   echo
   echo "KB-101 VALIDATION FAILED"

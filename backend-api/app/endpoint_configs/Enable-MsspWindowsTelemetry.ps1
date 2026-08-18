@@ -15,7 +15,8 @@
   or process-telemetry-baseline.xml.
 
 .PARAMETER SkipSysmonDownload
-  If set, only enable audit policies + agent localfile (no Sysmon binary install).
+  If set, only enable audit policies + agent localfile (no Sysmon binary install
+  and no Sysinternals download). Bundled/local Sysmon64.exe is still used when present.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\bootstrap_windows_telemetry.ps1
@@ -71,16 +72,45 @@ function Enable-ProcessCreationAuditing {
   Write-Step "Audit policy OK"
 }
 
+function Resolve-BundledSysmonBinary {
+  $here = $PSScriptRoot
+  if (-not $here) {
+    $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+  }
+  foreach ($p in @(
+    (Join-Path $here "Sysmon64.exe"),
+    (Join-Path $here "Sysmon.exe"),
+    (Join-Path $here "windows\Sysmon64.exe"),
+    (Join-Path $here "windows\Sysmon.exe")
+  )) {
+    if (Test-Path -LiteralPath $p) {
+      return (Resolve-Path -LiteralPath $p).Path
+    }
+  }
+  return $null
+}
+
 function Install-OrUpdateSysmon {
-  param([string]$ConfigPath)
+  param(
+    [string]$ConfigPath,
+    [switch]$SkipDownload
+  )
 
   $sysmonExe = $null
-  foreach ($name in @("Sysmon64", "Sysmon")) {
-    $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
-    if ($svc) {
-      $cmd = Get-Command "$name.exe" -ErrorAction SilentlyContinue
-      if ($cmd) { $sysmonExe = $cmd.Source }
-      break
+  $bundled = Resolve-BundledSysmonBinary
+  if ($bundled) {
+    Write-Step "Using bundled Sysmon binary: $bundled"
+    $sysmonExe = $bundled
+  }
+
+  if (-not $sysmonExe) {
+    foreach ($name in @("Sysmon64", "Sysmon")) {
+      $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+      if ($svc) {
+        $cmd = Get-Command "$name.exe" -ErrorAction SilentlyContinue
+        if ($cmd) { $sysmonExe = $cmd.Source }
+        break
+      }
     }
   }
   # Common install locations
@@ -99,10 +129,26 @@ function Install-OrUpdateSysmon {
   $work = Join-Path $env:TEMP ("mssp-sysmon-" + [guid]::NewGuid().ToString("n"))
   New-Item -ItemType Directory -Path $work -Force | Out-Null
   try {
+    $alreadyInstalled = $false
+    foreach ($name in @("Sysmon64", "Sysmon")) {
+      if (Get-Service -Name $name -ErrorAction SilentlyContinue) {
+        $alreadyInstalled = $true
+        break
+      }
+    }
+
     if (-not $sysmonExe) {
-      Write-Step "Downloading Microsoft Sysmon..."
+      if ($SkipDownload) {
+        throw "Sysmon64.exe not found next to this script and -SkipSysmonDownload was set. Place Sysmon64.exe in the installer folder."
+      }
+      Write-Step "No local Sysmon binary — attempting Sysinternals download..."
       $zip = Join-Path $work "Sysmon.zip"
-      Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Sysmon.zip" -OutFile $zip
+      try {
+        Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Sysmon.zip" -OutFile $zip -UseBasicParsing
+      } catch {
+        throw ("Sysmon.exe not found next to this script and download failed. " +
+          "Place Sysmon64.exe in the installer folder for offline install. ($($_.Exception.Message))")
+      }
       Expand-Archive -Path $zip -DestinationPath $work -Force
       $sysmonExe = Join-Path $work "Sysmon64.exe"
       if (-not (Test-Path -LiteralPath $sysmonExe)) {
@@ -111,15 +157,18 @@ function Install-OrUpdateSysmon {
       if (-not (Test-Path -LiteralPath $sysmonExe)) {
         throw "Sysmon executable missing after download"
       }
+    }
+
+    if ($alreadyInstalled) {
+      Write-Step "Sysmon already present — updating config with $sysmonExe"
+      & $sysmonExe -accepteula -c $ConfigPath
+    } else {
       Write-Step "Installing Sysmon with MSSP baseline config..."
       & $sysmonExe -accepteula -i $ConfigPath
       if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null -and $LASTEXITCODE -notin @(0, 1)) {
         # Sysmon often returns 0; treat hard failures only
         Write-Step "Sysmon install exit code: $LASTEXITCODE (continuing if service present)"
       }
-    } else {
-      Write-Step "Sysmon already present ($sysmonExe) - updating config..."
-      & $sysmonExe -accepteula -c $ConfigPath
     }
 
     $svc = Get-Service -Name "Sysmon64" -ErrorAction SilentlyContinue
@@ -222,7 +271,8 @@ $config = Resolve-SysmonConfig -Explicit $SysmonConfigPath
 Write-Step "Using Sysmon config: $config"
 
 if ($SkipSysmonDownload) {
-  Write-Step "Skipping Sysmon binary install (-SkipSysmonDownload)"
+  Write-Step "SkipSysmonDownload set — using bundled/local Sysmon only (no Sysinternals download)"
+  Install-OrUpdateSysmon -ConfigPath $config -SkipDownload
 } else {
   Install-OrUpdateSysmon -ConfigPath $config
 }
