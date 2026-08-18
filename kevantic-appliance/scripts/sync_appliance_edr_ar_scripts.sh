@@ -94,7 +94,7 @@ stat -c '%U:%G %a %n' /var/ossec/active-response/bin/mssp-isolate-host
 stat -c '%U:%G %a %n' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
   stat -c '%U:%G %a %n' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
 
-SHARED=\$(ls -d /var/ossec/etc/shared/*/mssp-isolate-host.ps1 2>/dev/null | head -1)
+SHARED=\$(find /var/ossec/etc/shared -name mssp-isolate-host.ps1 2>/dev/null | head -1)
 [[ -n "\$SHARED" ]] || { echo "FAIL: no shared mssp-isolate-host.ps1" >&2; exit 2; }
 grep -q 'Invoke-MsspUnisolate' "\$SHARED" || { echo "FAIL: shared script stale (no Invoke-MsspUnisolate)" >&2; exit 2; }
 grep -q 'Repair-MsspDnsConnectivity' "\$SHARED" || { echo "FAIL: shared script missing DNS restore" >&2; exit 2; }

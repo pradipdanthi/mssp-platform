@@ -193,10 +193,10 @@ grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|a
 sudo test -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
 sudo test -f /var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml
 python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version") and d.get("edr_ar_version")'
-grep -q 'Invoke-MsspUnisolate' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
-  grep -q 'Invoke-MsspUnisolate' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
-SHARED=\$(ls -d /var/ossec/etc/shared/*/mssp-isolate-host.ps1 2>/dev/null | head -1)
-[[ -n "\$SHARED" ]] && grep -q 'Repair-MsspDnsConnectivity' "\$SHARED"
+sudo grep -q 'Invoke-MsspUnisolate' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
+  sudo grep -q 'Invoke-MsspUnisolate' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
+SHARED=\$(sudo find /var/ossec/etc/shared -name mssp-isolate-host.ps1 2>/dev/null | head -1)
+[[ -n "\$SHARED" ]] && sudo grep -q 'Repair-MsspDnsConnectivity' "\$SHARED"
 # Do not seed entitlements — golden clones stay idle until a real license is applied.
 if [[ -f /var/lib/kevantic/entitlements.json ]]; then
   python3 - <<'PY'
