@@ -40,11 +40,11 @@ import yaml
 d = yaml.safe_load(Path("ansible/roles/greenbone/defaults/main.yml").read_text())
 assert d["greenbone_execution_mode"] == "preflight"
 assert d["greenbone_live_install_approved"] is False
-assert d["greenbone_management_address"] == "192.168.0.219"
+assert "{{ ansible_host }}" in str(d["greenbone_management_address"])
 assert int(d["greenbone_minimum_memory_mb"]) >= 7800
 assert int(d["greenbone_gsa_https_port"]) == 443
 tasks = Path("ansible/roles/greenbone/tasks/main.yml").read_text()
-assert "(vm_id | int) == 109" in tasks
+assert "ansible_host is defined" in tasks
 assert 'deployment_role == "greenbone"' in tasks
 assert "greenbone_live_install_approved | bool" in tasks
 assert "compose.yaml" in tasks

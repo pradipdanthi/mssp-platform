@@ -13,9 +13,10 @@
 - name: Validate Suricata sensor inventory identity
   ansible.builtin.assert:
     that:
-      - (vm_id | int) == 106
       - deployment_role == "suricata_sensor"
-    fail_msg: "KB-044 Suricata→Wazuh role may target only VM 106 (suricata-sensor)."
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
+    fail_msg: suricata_wazuh requires deployment_role=suricata_sensor and ansible_host from inventory.
 
 - name: Validate supported OS and resources
   ansible.builtin.assert:
@@ -24,7 +25,7 @@
       - ansible_distribution_version in suricata_wazuh_supported_ubuntu_releases
       - (ansible_memtotal_mb | int) >= (suricata_wazuh_minimum_memory_mb | int)
     fail_msg: >-
-      VM 106 must use an approved Ubuntu release with at least
+      Network sensor host must use an approved Ubuntu release with at least
       {{ suricata_wazuh_minimum_memory_mb }} MB RAM.
 
 - name: Resolve root filesystem size

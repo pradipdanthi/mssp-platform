@@ -93,7 +93,7 @@ import yaml
 defaults = yaml.safe_load(Path("ansible/roles/suricata_sensor/defaults/main.yml").read_text())
 assert defaults["suricata_execution_mode"] == "preflight"
 assert defaults["suricata_live_install_approved"] is False
-assert defaults["suricata_management_address"] == "192.168.0.216"
+assert "{{ ansible_host }}" in str(defaults["suricata_management_address"])
 assert defaults["suricata_capture_interface"]
 assert defaults["suricata_package_name"] == "suricata"
 
@@ -101,7 +101,6 @@ tasks = Path("ansible/roles/suricata_sensor/tasks/main.yml").read_text()
 for needle in (
     'suricata_execution_mode == "preflight"',
     'suricata_execution_mode == "install"',
-    "(vm_id | int) == 106",
     'deployment_role == "suricata_sensor"',
     "suricata_live_install_approved | bool",
     "check_mode: false",

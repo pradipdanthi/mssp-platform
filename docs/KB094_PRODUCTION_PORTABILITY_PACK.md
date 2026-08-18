@@ -130,7 +130,7 @@ cd /opt/mssp-control
 python3 scripts/verify_platform_state.py --release
 ```
 
-`verify_platform_state.py` is the **master** architecture verifier (EDR pipeline, engine playbooks/adapters, API↔schema, Sysmon cache). `--release` fails on documented GAPs so a cloud cutover cannot skip Zeek/MISP/Velociraptor or lab VM-ID locks.
+`verify_platform_state.py` is the **master** architecture verifier (EDR pipeline, engine playbooks/adapters, API↔schema, Sysmon cache). `--release` must return **CLOUD-READY: YES** (0 FAILED, 0 GAP). Zeek, MISP, and Velociraptor have inventory-driven playbooks; roles use `deployment_role` + `ansible_host` (no lab `vm_id` spoofing).
 
 Whenever architecture, API schemas, engine rules, or agent installers change, **extend that script and re-run it** before declaring the work complete. See `docs/RELEASE_CHECKLIST.md`.
 
@@ -161,6 +161,6 @@ These steps are now part of the portable recipe — do not re-invent them in clo
 | Lab shortcut | `scripts/kb105_apply_linux_midlayer_manager.sh` with `WAZUH_MANAGER_HOST` / `WAZUH_SSH_KEY` |
 | Proof | `python3 scripts/verify_e2e_midlayer_edr.py` |
 
-**Lab identity lock (do not ignore on cloud):** `wazuh-stack-install.yml` still asserts `vm_id == 101` (KB-041). On cloud inventory set `vm_id: 101` on the Wazuh host (and the matching IDs on other engine roles) until a later KB lifts those asserts. The mid-layer playbook does **not** use that lock.
+**Host identity (cloud-portable):** Engine roles assert `deployment_role` and `ansible_host` from inventory. Do **not** spoof lab VM IDs. `group_vars/all.yml` sets `wazuh_manager_ip` from `[wazuh_stack][0].ansible_host` and `mssp_control_plane_url` from `[control_plane][0].ansible_host`. Override `mssp_home_net` per site in inventory.
 
 ---

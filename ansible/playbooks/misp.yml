@@ -1,0 +1,12 @@
+---
+# KB-050: MISP-compatible threat intel on any [threat_intel] host.
+# Safe default is preflight. Live install: -e misp_execution_mode=install
+# -e misp_live_install_approved=true. No secrets in Git.
+
+- name: MSSP MISP threat-intel API
+  hosts: threat_intel
+  gather_facts: true
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: misp

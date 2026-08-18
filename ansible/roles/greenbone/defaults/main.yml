@@ -7,7 +7,7 @@ greenbone_execution_mode: "preflight"
 greenbone_live_install_approved: false
 
 greenbone_hostname: "greenbone"
-greenbone_management_address: "192.168.0.219"
+greenbone_management_address: "{{ ansible_host }}"
 
 greenbone_supported_linux_distributions:
   - Ubuntu

@@ -7,8 +7,9 @@ programmatic test assertions for the new capability, and executed to confirm
 0 failures before declaring work complete.
 
 Standalone. Does not write to PostgreSQL, mutate running engines, or open ports.
-Exit 0 when there are no FAILED checks. GAP findings mean the platform is not
-cloud-complete (Zeek/MISP/Velociraptor live install, lab VM-ID locks, etc.).
+Exit 0 when there are no FAILED checks. With --release, GAP findings also fail
+the process (required for production/cloud cutover). Day-to-day runs without
+--release still exit 0 when only WARNINGs remain.
 
 Usage:
   python3 scripts/verify_platform_state.py
@@ -89,19 +90,18 @@ ENGINE_CATALOG = (
     },
     {
         "name": "zeek",
-        "playbook": ROOT / "ansible" / "playbooks" / "zeek-on-suricata-sensor.yml",
+        "playbook": ROOT / "ansible" / "playbooks" / "zeek.yml",
         "adapters": (
             ROOT / "backend-api" / "app" / "services" / "ndr_service.py",
             ROOT / "backend-api" / "app" / "api" / "routes" / "ndr.py",
         ),
         "persist": "INSERT INTO tenant_ndr_events",
         "source_tool": "zeek",
-        "live_required": False,
-        "gap_reason": "KB-045/046 — Zeek sensor not installed in lab; adapter + playbook exist",
+        "live_required": True,
     },
     {
         "name": "misp",
-        "playbook": None,  # no dedicated MISP install playbook yet
+        "playbook": ROOT / "ansible" / "playbooks" / "misp.yml",
         "adapters": (
             ROOT / "backend-api" / "app" / "services" / "misp_client.py",
             ROOT / "backend-api" / "app" / "services" / "threat_intel_service.py",
@@ -109,8 +109,7 @@ ENGINE_CATALOG = (
         ),
         "persist": "INSERT INTO tenant_threat_intel_iocs",
         "source_tool": "misp",
-        "live_required": False,
-        "gap_reason": "KB-050 — MISP VM 108 not deployed; client + persistence exist",
+        "live_required": True,
     },
     {
         "name": "velociraptor",
@@ -122,8 +121,7 @@ ENGINE_CATALOG = (
         ),
         "persist": "INSERT INTO tenant_forensics_collections",
         "source_tool": "velociraptor",
-        "live_required": False,
-        "gap_reason": "KB-054 — Velociraptor VM 110 not deployed; client + persistence exist",
+        "live_required": True,
     },
 )
 
@@ -579,16 +577,45 @@ def check_engines() -> CheckResult:
             path=engine["adapters"][-1],
             pattern=re.escape(engine["persist"].split()[-1]),
         )
-        if not engine["live_required"]:
-            f.append(
-                Finding(
-                    "GAP",
-                    f"{name}: live engine install is not part of the current lab/production cutover",
-                    detail=str(engine.get("gap_reason") or "documented KB still pending"),
-                )
-            )
 
-    # Lab VM-ID identity locks (KB-041 etc.) — honest cloud gap.
+    expect(
+        f,
+        "playbooks/misp.yml" in read(engines_deploy) and "playbooks/zeek.yml" in read(engines_deploy),
+        "engine deploy order includes Zeek and MISP playbooks",
+        path=engines_deploy,
+        pattern=r"playbooks/misp.yml",
+    )
+    expect(
+        f,
+        "playbooks/velociraptor.yml" in read(engines_deploy),
+        "engine deploy order includes Velociraptor playbook",
+        path=engines_deploy,
+        pattern=r"playbooks/velociraptor.yml",
+    )
+    inv_ex = read(inventory_example)
+    expect(
+        f,
+        "threat_intel:" in inv_ex and "deployment_role: misp" in inv_ex,
+        "production inventory example includes MISP (threat_intel)",
+        path=inventory_example,
+        pattern=r"threat_intel:",
+    )
+    expect(
+        f,
+        "dfir:" in inv_ex and "deployment_role: velociraptor" in inv_ex,
+        "production inventory example includes Velociraptor (dfir)",
+        path=inventory_example,
+        pattern=r"deployment_role: velociraptor",
+    )
+    expect(
+        f,
+        "windows-endpoint-lab:" in inv_ex and "deployment_role: wazuh_agent_windows" in inv_ex,
+        "production inventory example includes Windows agent host",
+        path=inventory_example,
+        pattern=r"wazuh_agent_windows",
+    )
+
+    # Lab VM-ID identity locks must stay gone (cloud inventory uses ansible_host).
     roles = ROOT / "ansible" / "roles"
     locked: List[Tuple[Path, int]] = []
     if roles.is_dir():
@@ -606,15 +633,15 @@ def check_engines() -> CheckResult:
                 path=ROOT / "ansible" / "inventory" / "production.example.yml",
             )
         )
-        expect(
-            f,
-            "vm_id: 101" in read(inventory_example),
-            "production.example.yml documents vm_id: 101 workaround for wazuh_stack",
-            path=inventory_example,
-            pattern=r"vm_id: 101",
-        )
     else:
         f.append(Finding("PASSED", "no Ansible role asserts a lab vm_id"))
+        expect(
+            f,
+            "wazuh_manager_ip" in read(ROOT / "ansible" / "group_vars" / "all.yml"),
+            "group_vars resolve wazuh_manager_ip from inventory wazuh_stack",
+            path=ROOT / "ansible" / "group_vars" / "all.yml",
+            pattern=r"wazuh_manager_ip",
+        )
 
     midlayer = ROOT / "ansible" / "playbooks" / "mssp-linux-midlayer-manager.yml"
     mid_role = ROOT / "ansible" / "roles" / "mssp_linux_midlayer" / "tasks" / "main.yml"

@@ -7,11 +7,13 @@
       - zeek_wazuh_execution_mode in ["preflight", "apply", "validate"]
     fail_msg: zeek_wazuh_execution_mode must be preflight, apply, or validate.
 
-- name: Guard VM 106
+- name: Guard network-sensor inventory identity
   ansible.builtin.assert:
     that:
-      - (vm_id | int) == 106
-    fail_msg: Zeek→Wazuh integration applies only on VM 106.
+      - deployment_role in ["suricata_sensor", "zeek_sensor_colocated"]
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
+    fail_msg: Zeek→Wazuh integration applies on the inventory network sensor host.
 
 - name: Require Wazuh agent
   ansible.builtin.stat:

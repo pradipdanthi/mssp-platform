@@ -1,4 +1,24 @@
 ---
+# KB-050: MISP-compatible threat-intel API for the control-plane adapter.
+# Safe default is preflight. Live install requires misp_live_install_approved=true.
+# No secrets in Git — API key is generated on the target host.
+
+misp_execution_mode: "preflight"
+misp_live_install_approved: false
+
 misp_bind_host: "0.0.0.0"
 misp_port: 8080
 misp_install_dir: /opt/mssp-misp
+misp_state_directory: /var/lib/mssp/misp
+misp_install_marker: "{{ misp_state_directory }}/installed"
+misp_api_key_file: "{{ misp_install_dir }}/secrets/admin_key"
+misp_db_path: "{{ misp_install_dir }}/data/iocs.sqlite3"
+
+misp_supported_linux_distributions:
+  - Ubuntu
+misp_supported_ubuntu_releases:
+  - "22.04"
+  - "24.04"
+misp_minimum_memory_mb: 2048
+misp_minimum_root_disk_gb: 20
+misp_minimum_vcpus: 2

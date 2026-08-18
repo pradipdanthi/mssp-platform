@@ -2,8 +2,7 @@
 # KB-042: Wazuh agent onboarding — Linux.
 # Safe default is preflight only. Live enrollment requires separate approval
 # and a Vault-supplied enrollment secret — no secrets in Git.
-# Target: VM 105 slot (linux-endpoint-lab) when defined in inventory.
-# Manager: VM 101 (192.168.0.211). Host removed from inventory until manual Ubuntu reinstall.
+# Manager address: wazuh_manager_ip from inventory (wazuh_stack ansible_host).
 
 - name: KB-042 Wazuh Linux agent preflight or enrollment
   hosts: linux-endpoint-lab

@@ -7,7 +7,7 @@ case_soar_execution_mode: "preflight"
 case_soar_live_install_approved: false
 
 case_soar_hostname: "thehive_shuffle"
-case_soar_management_address: "192.168.0.212"
+case_soar_management_address: "{{ ansible_host }}"
 
 case_soar_supported_linux_distributions:
   - Ubuntu

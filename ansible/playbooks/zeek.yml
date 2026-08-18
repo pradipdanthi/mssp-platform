@@ -1,0 +1,6 @@
+---
+# KB-045/046/047: Zeek NSM co-located on the network sensor host (shared SPAN).
+# Cloud-portable: inventory group network_sensors / suricata-sensor, not a lab VM ID.
+
+- name: Zeek NSM on network sensor
+  import_playbook: zeek-on-suricata-sensor.yml

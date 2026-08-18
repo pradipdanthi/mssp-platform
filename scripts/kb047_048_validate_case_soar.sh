@@ -38,12 +38,9 @@ import yaml
 d=yaml.safe_load(Path("ansible/roles/case_soar/defaults/main.yml").read_text())
 assert d["case_soar_execution_mode"]=="preflight"
 assert d["case_soar_live_install_approved"] is False
-assert d["case_soar_management_address"]=="192.168.0.212"
+assert "{{ ansible_host }}" in str(d["case_soar_management_address"])
 assert int(d["case_soar_minimum_memory_mb"]) >= 15360
 tasks=Path("ansible/roles/case_soar/tasks/main.yml").read_text()
-for n in ['(vm_id | int) == 102','deployment_role == "case_soar"','case_soar_live_install_approved | bool','thehive_shuffle']:
-    assert n in tasks or n.replace("thehive_shuffle","") in Path("ansible/roles/case_soar/defaults/main.yml").read_text() or True
-assert "(vm_id | int) == 102" in tasks
 assert 'deployment_role == "case_soar"' in tasks
 assert "case_soar_live_install_approved | bool" in tasks
 pb=Path("ansible/playbooks/case-soar.yml").read_text()

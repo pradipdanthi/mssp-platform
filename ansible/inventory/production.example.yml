@@ -1,8 +1,15 @@
 # KB-094 — Production / cloud inventory EXAMPLE (no secrets).
 # Copy to hosts.yml on the Ansible controller (VM 112 or cloud bastion) and replace
 # <PLACEHOLDER> values. Lab inventory remains ansible/inventory/hosts.yml.
+#
+# Addresses come from each host's ansible_host. group_vars/all.yml then sets:
+#   wazuh_manager_ip        <- wazuh_stack[0].ansible_host
+#   mssp_control_plane_url  <- control_plane[0].ansible_host
+# Override mssp_home_net per site (CIDR used by Suricata/Zeek).
 ---
 all:
+  vars:
+    mssp_home_net: "<HOME_NET_CIDR>"
   children:
     automation_controller:
       hosts:
@@ -28,8 +35,6 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: wazuh_cluster
-          # wazuh-stack-install.yml asserts vm_id==101 (KB-041 lab lock). Keep 101 on cloud until that assert is lifted.
-          vm_id: 101
 
     case_management:
       hosts:
@@ -39,7 +44,6 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: case_soar
-          vm_id: 102
 
     network_sensors:
       hosts:
@@ -49,7 +53,24 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: suricata_sensor
-          vm_id: 106
+
+    threat_intel:
+      hosts:
+        misp:
+          ansible_host: <MISP_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: misp
+
+    dfir:
+      hosts:
+        velociraptor:
+          ansible_host: <VELOCIRAPTOR_HOST>
+          ansible_user: <SSH_USER>
+          ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
+          ansible_become: true
+          deployment_role: velociraptor
 
     vulnerability:
       hosts:
@@ -59,7 +80,6 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: greenbone
-          vm_id: 109
 
     vuln_free_stack:
       hosts:
@@ -70,7 +90,14 @@ all:
           ansible_become: true
           deployment_role: vuln_free_stack
           colocated_with: greenbone
-          vm_id: 109
+
+    windows_endpoints:
+      hosts:
+        windows-endpoint-lab:
+          ansible_host: <WINDOWS_ENDPOINT_IP>
+          ansible_user: <WINRM_USER>
+          ansible_connection: winrm
+          deployment_role: wazuh_agent_windows
 
     appliance_management:
       hosts:

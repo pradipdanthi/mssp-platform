@@ -43,8 +43,8 @@ check "live install gated" \
   file_has ansible/roles/vuln_free_stack/defaults/main.yml "vuln_free_live_install_approved: false"
 check "role defaults install on /opt/mssp-vuln-free" \
   file_has ansible/roles/vuln_free_stack/defaults/main.yml "/opt/mssp-vuln-free"
-check "role asserts VM 109" \
-  grep -Fq '(vm_id | int) == 109' ansible/roles/vuln_free_stack/tasks/main.yml
+check "role asserts deployment_role vuln_free_stack" \
+  grep -Fq 'deployment_role == "vuln_free_stack"' ansible/roles/vuln_free_stack/tasks/main.yml
 check "inventory has vuln_free_stack" \
   file_has ansible/inventory/hosts.yml "vuln_free_stack:"
 check "inventory targets 192.168.0.219" \

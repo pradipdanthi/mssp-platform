@@ -38,13 +38,15 @@ upgrade any SOC component.
 
 | Area | Playbook | Notes |
 |------|----------|--------|
-| Wazuh | `playbooks/wazuh-stack-install.yml` | Defaults to preflight; live install needs explicit flags + snapshot. Asserts `vm_id==101`. |
-| Linux mid-layer EDR | `playbooks/mssp-linux-midlayer-manager.yml` | After Manager exists. Rules 110001–110005 + Linux shared helper. Cloud-portable (no VM 101 identity assert). |
-| TheHive/Shuffle | `playbooks/case-soar.yml` | Co-located VM 102 |
-| Suricata | `playbooks/suricata-sensor.yml` (+ wazuh forward) | VM 106 |
-| Greenbone | `playbooks/greenbone.yml` | VM 109 |
-| Nuclei/Vuls | `playbooks/vuln-free-stack.yml` | VM 109 |
-| Velociraptor / MISP / Zeek / EASM | respective playbooks | Only when that KB is approved |
+| Wazuh | `playbooks/wazuh-stack-install.yml` | Defaults to preflight; live install needs explicit flags + snapshot. Identity: `deployment_role=wazuh_cluster` + `ansible_host`. |
+| Linux mid-layer EDR | `playbooks/mssp-linux-midlayer-manager.yml` | After Manager exists. Rules 110001–110005 + Linux shared helper. Cloud-portable (no VM ID assert). |
+| TheHive/Shuffle | `playbooks/case-soar.yml` | `[case_management]` / `deployment_role=case_soar` |
+| Suricata | `playbooks/suricata-sensor.yml` (+ wazuh forward) | `[network_sensors]` |
+| Zeek | `playbooks/zeek.yml` | Co-located on the network sensor; preflight until `zeek_live_install_approved=true` |
+| MISP | `playbooks/misp.yml` | `[threat_intel]`; systemd REST bridge; preflight until `misp_live_install_approved=true` |
+| Greenbone | `playbooks/greenbone.yml` | `[vulnerability]` |
+| Nuclei/Vuls | `playbooks/vuln-free-stack.yml` | Co-located with Greenbone |
+| Velociraptor | `playbooks/velociraptor.yml` | `[dfir]`; preflight until `velociraptor_live_install_approved=true` |
 
 There is **no** single playbook that tears down and rebuilds every VM safely.
 Treat “full stack redeploy” as: sync controller → snapshot targets → run each

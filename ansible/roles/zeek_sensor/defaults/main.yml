@@ -8,7 +8,7 @@ zeek_apt_repo: "deb [signed-by=/usr/share/keyrings/zeek-archive-keyring.gpg] htt
 zeek_package_name: zeek
 
 zeek_capture_interface: "enp6s20"
-zeek_home_net: "192.168.0.0/24"
+zeek_home_net: "{{ mssp_home_net }}"
 zeek_log_directory: /opt/zeek/logs
 zeek_state_directory: /var/lib/mssp/zeek
 zeek_install_marker: "{{ zeek_state_directory }}/installed"

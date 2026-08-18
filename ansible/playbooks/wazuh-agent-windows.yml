@@ -1,38 +1,43 @@
 ---
-# KB-042 stub: Wazuh agent onboarding — Windows — NOT for live execution yet.
-# Target: VM 104 (windows-endpoint-lab)
-# Manager: VM 101 (wazuh-stack) is live; Windows endpoint VM is still deferred.
-#
-# Security: enrollment key via Ansible Vault — no secrets in Git.
-# Customer safety: agent telemetry processed by SOC; customers see summaries only.
+# KB-042: Wazuh agent onboarding — Windows.
+# Manager address comes from inventory (wazuh_stack ansible_host), never a lab IP.
+# Enrollment key via Ansible Vault — no secrets in Git.
+# Safe default is preflight. Live enroll requires wazuh_agent_live_enroll_approved.
 
-- name: Wazuh agent install — Windows (stub)
+- name: Wazuh agent install — Windows
   hosts: windows-endpoint-lab
   gather_facts: false
   vars:
     wazuh_agent_windows_stub_mode: true
-    wazuh_manager_host_placeholder: "192.168.0.211"
+    wazuh_manager_ip: "{{ hostvars[groups['wazuh_stack'][0]]['ansible_host'] }}"
     wazuh_agent_execution_mode: "preflight"
     wazuh_agent_live_enroll_approved: false
   tasks:
-    - name: "Step 1 — Install Wazuh agent MSI (stub)"
-      ansible.builtin.debug:
-        msg: "Deferred: Install wazuh-agent MSI on VM 104 via win_package."
+    - name: Require inventory-driven Manager address
+      ansible.builtin.assert:
+        that:
+          - wazuh_manager_ip is defined
+          - (wazuh_manager_ip | string | length) > 0
+        fail_msg: wazuh_manager_ip must resolve from inventory group wazuh_stack.
 
-    - name: "Step 2 — Configure manager address (stub)"
+    - name: "Step 1 — Install Wazuh agent MSI (preflight)"
       ansible.builtin.debug:
-        msg: "Deferred: Set WAZUH_MANAGER to 192.168.0.211 — enrollment secret from Vault."
+        msg: "Deferred until live enroll: Install wazuh-agent MSI via win_package."
 
-    - name: "Step 3 — Register and start agent service (stub)"
+    - name: "Step 2 — Configure manager address from inventory"
       ansible.builtin.debug:
-        msg: "Deferred: Enrollment with auth key from Vault; start WazuhSvc."
+        msg: "WAZUH_MANAGER={{ wazuh_manager_ip }} — enrollment secret from Vault."
 
-    - name: "Step 4 — Verify agent in manager (stub)"
+    - name: "Step 3 — Register and start agent service (preflight)"
       ansible.builtin.debug:
-        msg: "Deferred: Confirm agent ID in Manager — admin API only."
+        msg: "Deferred until live enroll: Enrollment with auth key from Vault; start WazuhSvc."
 
-    - name: Explain Windows stub safety gate
+    - name: "Step 4 — Verify agent in manager (preflight)"
+      ansible.builtin.debug:
+        msg: "Deferred until live enroll: Confirm agent ID in Manager — admin API only."
+
+    - name: Explain Windows safety gate
       ansible.builtin.debug:
         msg: >-
-          Windows agent playbook remains a deferred stub until VM 104 exists
-          and separate live-enrollment approval is granted.
+          Windows agent playbook stays preflight until the inventory host
+          windows-endpoint-lab exists and wazuh_agent_live_enroll_approved=true.

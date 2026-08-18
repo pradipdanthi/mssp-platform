@@ -19,7 +19,7 @@ easm_amass_tarball: "amass_Linux_amd64.zip"
 easm_amass_url: >-
   https://github.com/owasp-amass/amass/releases/download/v{{ easm_amass_version }}/amass_Linux_amd64.zip
 
-easm_control_plane_url: "http://192.168.0.201:8000"
+easm_control_plane_url: "{{ mssp_control_plane_url }}"
 easm_sync_api_key_file: "{{ easm_install_root }}/secrets/easm_sync_api_key"
 
 easm_supported_linux_distributions:

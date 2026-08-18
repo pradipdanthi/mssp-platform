@@ -14,10 +14,11 @@
   ansible.builtin.assert:
     that:
       - deployment_role == "vuln_free_stack"
-      - (vm_id | int) == 109
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
     fail_msg: >-
-      vuln_free_stack role may target only VM 109 (co-located with Greenbone).
-      Do not install scanners on the control plane (VM 100).
+      vuln_free_stack requires deployment_role=vuln_free_stack and ansible_host
+      from inventory. Do not install scanners on the control plane.
 
 - name: Validate supported OS and resources
   ansible.builtin.assert:

@@ -95,7 +95,7 @@ assert defaults["wazuh_agent_version"] == "4.14.6"
 assert defaults["wazuh_agent_package_version"] == "4.14.6-1"
 assert defaults["wazuh_agent_execution_mode"] == "preflight"
 assert defaults["wazuh_agent_live_enroll_approved"] is False
-assert defaults["wazuh_manager_address"] == "192.168.0.211"
+assert "{{ wazuh_manager_ip }}" in str(defaults["wazuh_manager_address"])
 assert defaults["wazuh_agent_authd_passwordless"] is True
 assert defaults["wazuh_agent_enrollment_password"].startswith("<SET_")
 
@@ -103,7 +103,6 @@ tasks = Path("ansible/roles/wazuh_agent/tasks/main.yml").read_text()
 for needle in (
     'wazuh_agent_execution_mode == "preflight"',
     'wazuh_agent_execution_mode == "enroll"',
-    "(vm_id | int) == 105",
     'deployment_role == "wazuh_agent_linux"',
     "wazuh_agent_live_enroll_approved | bool",
     "no_log: true",

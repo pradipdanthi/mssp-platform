@@ -97,7 +97,7 @@ assert defaults["suricata_wazuh_execution_mode"] == "preflight"
 assert defaults["suricata_wazuh_live_enroll_approved"] is False
 assert defaults["wazuh_agent_version"] == "4.14.6"
 assert defaults["wazuh_agent_package_version"] == "4.14.6-1"
-assert defaults["wazuh_manager_address"] == "192.168.0.211"
+assert "{{ wazuh_manager_ip }}" in str(defaults["wazuh_manager_address"])
 assert defaults["wazuh_agent_name"] == "suricata-sensor"
 assert defaults["wazuh_agent_authd_passwordless"] is True
 assert defaults["suricata_eve_log_path"] == "/var/log/suricata/eve.json"
@@ -107,7 +107,6 @@ tasks = Path("ansible/roles/suricata_wazuh/tasks/main.yml").read_text()
 for needle in (
     'suricata_wazuh_execution_mode == "preflight"',
     'suricata_wazuh_execution_mode == "enroll"',
-    "(vm_id | int) == 106",
     'deployment_role == "suricata_sensor"',
     "suricata_wazuh_live_enroll_approved | bool",
     "no_log: true",

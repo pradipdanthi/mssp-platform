@@ -13,9 +13,10 @@
 - name: Validate inventory identity
   ansible.builtin.assert:
     that:
-      - (vm_id | int) == 109
       - deployment_role == "greenbone"
-    fail_msg: "greenbone role may target only VM 109 (greenbone)."
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
+    fail_msg: greenbone requires deployment_role=greenbone and ansible_host from inventory.
 
 - name: Validate supported OS and resources
   ansible.builtin.assert:
@@ -25,7 +26,7 @@
       - (ansible_memtotal_mb | int) >= (greenbone_minimum_memory_mb | int)
       - (ansible_processor_vcpus | int) >= (greenbone_minimum_vcpus | int)
     fail_msg: >-
-      VM 109 must use approved Ubuntu with at least
+      Vulnerability scanner host must use approved Ubuntu with at least
       {{ greenbone_minimum_memory_mb }} MB RAM and
       {{ greenbone_minimum_vcpus }} vCPUs.
 

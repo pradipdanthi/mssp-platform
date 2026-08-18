@@ -10,9 +10,14 @@
 - name: Validate Linux endpoint inventory identity
   ansible.builtin.assert:
     that:
-      - (vm_id | int) == 105
       - deployment_role == "wazuh_agent_linux"
-    fail_msg: "KB-042 Linux agent role may target only VM 105 (linux-endpoint-lab)."
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
+      - wazuh_manager_ip is defined
+      - (wazuh_manager_ip | string | length) > 0
+    fail_msg: >-
+      Linux Wazuh agent requires deployment_role=wazuh_agent_linux, ansible_host,
+      and wazuh_manager_ip from inventory (Wazuh Manager ansible_host).
 
 - name: Validate supported Linux OS and resources
   ansible.builtin.assert:
@@ -21,7 +26,7 @@
       - ansible_distribution_version in wazuh_agent_supported_ubuntu_releases
       - (ansible_memtotal_mb | int) >= (wazuh_agent_minimum_memory_mb | int)
     fail_msg: >-
-      VM 105 must use an approved Ubuntu release with at least
+      Linux endpoint must use an approved Ubuntu release with at least
       {{ wazuh_agent_minimum_memory_mb }} MB RAM.
 
 - name: Resolve root filesystem size
@@ -67,7 +72,7 @@
     that:
       - wazuh_agent_manager_ports.results | map(attribute='failed') | select | list | length == 0
     fail_msg: >-
-      VM 105 cannot reach Wazuh Manager {{ wazuh_manager_address }} on ports
+      Endpoint cannot reach Wazuh Manager {{ wazuh_manager_address }} on ports
       {{ wazuh_manager_port }}/{{ wazuh_manager_enrollment_port }}.
   when: wazuh_agent_execution_mode in ["preflight", "enroll"]
 

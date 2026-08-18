@@ -9,8 +9,9 @@ wazuh_repository_major_minor: "4.14"
 wazuh_agent_execution_mode: "preflight"
 wazuh_agent_live_enroll_approved: false
 
-# Public manager address for lab agents (cloud/hybrid). Not a secret.
-wazuh_manager_address: "192.168.0.211"
+# Manager address comes from inventory (wazuh_stack ansible_host).
+wazuh_manager_ip: "{{ hostvars[groups['wazuh_stack'][0]].ansible_host }}"
+wazuh_manager_address: "{{ wazuh_manager_ip }}"
 wazuh_manager_port: 1514
 wazuh_manager_enrollment_port: 1515
 wazuh_agent_name: "linux-endpoint-lab"

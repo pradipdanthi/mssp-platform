@@ -7,12 +7,14 @@
       wazuh_execution_mode must be preflight, install, or validate.
       The safe default is preflight.
 
-- name: Validate VM 101 inventory identity
+- name: Validate Wazuh inventory identity
   ansible.builtin.assert:
     that:
-      - (vm_id | int) == 101
       - deployment_role == "wazuh_cluster"
-    fail_msg: "KB-041 may target only VM 101 with deployment_role=wazuh_cluster."
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
+    fail_msg: >-
+      wazuh_stack requires deployment_role=wazuh_cluster and ansible_host from inventory.
 
 - name: Validate supported operating system and architecture
   ansible.builtin.assert:
@@ -23,7 +25,7 @@
       - (ansible_processor_vcpus | int) >= (wazuh_minimum_vcpus | int)
       - (ansible_memtotal_mb | int) >= (wazuh_minimum_memory_mb | int)
     fail_msg: >-
-      VM 101 must use an approved Ubuntu release/architecture and have at
+      Wazuh Manager host must use an approved Ubuntu release/architecture and have at
       least {{ wazuh_minimum_vcpus }} vCPUs and
       {{ wazuh_minimum_memory_mb }} MB RAM.
 

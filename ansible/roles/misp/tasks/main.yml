@@ -1,13 +1,135 @@
 ---
-- name: Ensure MISP bridge install directory exists
-  ansible.builtin.file:
-    path: "{{ misp_install_dir }}"
-    state: directory
-    mode: "0755"
+# KB-050: MISP-compatible threat-intel API on [threat_intel] hosts.
+# Identity is deployment_role + ansible_host from inventory (not a lab VM ID).
 
-- name: Hint — prefer scripts/kb108_install_misp_direct.sh for first install
+- name: Validate MISP execution controls
+  ansible.builtin.assert:
+    that:
+      - misp_execution_mode in ["preflight", "install", "validate"]
+    fail_msg: misp_execution_mode must be preflight, install, or validate.
+
+- name: Validate MISP inventory identity
+  ansible.builtin.assert:
+    that:
+      - deployment_role == "misp"
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
+    fail_msg: >-
+      misp role requires deployment_role=misp and ansible_host from inventory.
+
+- name: Validate supported OS and resources
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution in misp_supported_linux_distributions
+      - ansible_distribution_version in misp_supported_ubuntu_releases
+      - (ansible_memtotal_mb | int) >= (misp_minimum_memory_mb | int)
+      - (ansible_processor_vcpus | int) >= (misp_minimum_vcpus | int)
+    fail_msg: Target host does not meet MISP resource requirements.
+
+- name: Explain the preflight-only result
   ansible.builtin.debug:
     msg: >-
-      Deploy MISP-compatible threat-intel bridge via
-      /opt/mssp-control/scripts/kb108_install_misp_direct.sh on {{ inventory_hostname }}.
-      Role reserves inventory/group for automation follow-up.
+      MISP preflight passed for {{ inventory_hostname }} ({{ ansible_host }}).
+      Approve live install with misp_execution_mode=install misp_live_install_approved=true.
+  when: misp_execution_mode == "preflight"
+
+- name: Check install marker
+  ansible.builtin.stat:
+    path: "{{ misp_install_marker }}"
+  register: misp_marker
+
+- name: Install MISP-compatible API (systemd) and Docker engine
+  when:
+    - misp_execution_mode == "install"
+    - not misp_marker.stat.exists
+  block:
+    - name: Enforce explicit live-install approval
+      ansible.builtin.assert:
+        that:
+          - misp_live_install_approved | bool
+        fail_msg: Live MISP install blocked until misp_live_install_approved=true.
+
+    - name: Install Docker engine and Python runtime
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - openssl
+          - python3
+          - docker.io
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Enable Docker
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Create MISP directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+      loop:
+        - "{{ misp_install_dir }}"
+        - "{{ misp_install_dir }}/secrets"
+        - "{{ misp_install_dir }}/data"
+        - "{{ misp_state_directory }}"
+
+    - name: Generate API key on the host (never from Git)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        KEYFILE="{{ misp_api_key_file }}"
+        if [ ! -s "$KEYFILE" ]; then
+          openssl rand -hex 24 > "$KEYFILE"
+          chmod 0600 "$KEYFILE"
+        fi
+      args:
+        creates: "{{ misp_api_key_file }}"
+
+    - name: Install MISP REST bridge
+      ansible.builtin.copy:
+        src: misp_api.py
+        dest: "{{ misp_install_dir }}/misp_api.py"
+        mode: "0755"
+
+    - name: Install systemd unit
+      ansible.builtin.template:
+        src: mssp-misp-api.service.j2
+        dest: /etc/systemd/system/mssp-misp-api.service
+        mode: "0644"
+      notify: Reload systemd
+
+    - name: Enable and start MISP API
+      ansible.builtin.systemd:
+        name: mssp-misp-api
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    - name: Write install marker
+      ansible.builtin.copy:
+        dest: "{{ misp_install_marker }}"
+        content: "installed {{ ansible_date_time.iso8601 }} host={{ ansible_host }}\n"
+        mode: "0640"
+
+- name: Validate MISP API
+  when: misp_execution_mode in ["install", "validate"]
+  block:
+    - name: Health-check MISP API
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ misp_port }}/health"
+        return_content: true
+        status_code: 200
+      register: misp_health
+
+    - name: Show validate result
+      ansible.builtin.debug:
+        msg: >-
+          MISP validate OK on {{ inventory_hostname }} ({{ ansible_host }}):
+          {{ misp_health.json | default({}) }}.
+          Copy {{ misp_api_key_file }} into control-plane .secrets/misp_api_key.

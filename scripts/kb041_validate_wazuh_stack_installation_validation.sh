@@ -140,7 +140,7 @@ required_tasks = [
     "wazuh_install_assistant_sha256",
     'checksum: "sha256:',
     "no_log: true",
-    "vm_id | int",
+    "ansible_host is defined",
     'deployment_role == "wazuh_cluster"',
     "package_facts:",
     "service_facts:",

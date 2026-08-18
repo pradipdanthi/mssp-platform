@@ -12,10 +12,11 @@
   ansible.builtin.assert:
     that:
       - deployment_role == "velociraptor"
-      - (vm_id | int) == 110
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
     fail_msg: >-
-      velociraptor role may target only VM 110 (192.168.0.220).
-      Do not install DFIR server on the control plane (VM 100).
+      velociraptor requires deployment_role=velociraptor and ansible_host from
+      inventory. Do not install DFIR server on the control plane.
 
 - name: Validate supported OS and resources
   ansible.builtin.assert:

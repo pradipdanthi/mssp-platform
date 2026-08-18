@@ -7,19 +7,22 @@
       - zeek_execution_mode in ["preflight", "install", "validate"]
     fail_msg: zeek_execution_mode must be preflight, install, or validate.
 
-- name: Guard VM identity (co-located network sensor)
+- name: Guard network-sensor identity (Zeek co-located with Suricata)
   ansible.builtin.assert:
     that:
-      - (vm_id | int) == 106
-      - deployment_role == "suricata_sensor"
-    fail_msg: "Zeek co-install targets only VM 106 suricata-sensor."
+      - deployment_role in ["suricata_sensor", "zeek_sensor_colocated"]
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
+    fail_msg: >-
+      Zeek co-install targets the network sensor host (deployment_role
+      suricata_sensor or zeek_sensor_colocated) from inventory.
 
 - name: Guard OS resources
   ansible.builtin.assert:
     that:
       - (ansible_memtotal_mb | int) >= (zeek_minimum_memory_mb | int)
       - (ansible_processor_vcpus | int) >= (zeek_minimum_vcpus | int)
-    fail_msg: "VM 106 needs at least {{ zeek_minimum_memory_mb }} MB RAM and {{ zeek_minimum_vcpus }} vCPUs for Suricata+Zeek."
+    fail_msg: "Network sensor needs at least {{ zeek_minimum_memory_mb }} MB RAM and {{ zeek_minimum_vcpus }} vCPUs for Suricata+Zeek."
 
 - name: Ensure capture interface exists
   ansible.builtin.assert:
@@ -30,7 +33,7 @@
 - name: Zeek preflight summary
   ansible.builtin.debug:
     msg: >-
-      KB-047 Zeek preflight passed on VM 106 (interface {{ zeek_capture_interface }}).
+      KB-047 Zeek preflight passed on {{ inventory_hostname }} (interface {{ zeek_capture_interface }}).
       Set zeek_execution_mode=install and zeek_live_install_approved=true to install.
   when: zeek_execution_mode == "preflight"
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=MSSP MISP-compatible threat intel API
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=MISP_DB={{ misp_db_path }}
+Environment=MISP_API_KEY_FILE={{ misp_api_key_file }}
+Environment=MISP_BIND={{ misp_bind_host }}
+Environment=MISP_PORT={{ misp_port }}
+ExecStart=/usr/bin/python3 {{ misp_install_dir }}/misp_api.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

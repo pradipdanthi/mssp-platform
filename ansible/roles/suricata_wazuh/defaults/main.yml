@@ -8,7 +8,7 @@ suricata_wazuh_live_enroll_approved: false
 
 wazuh_agent_version: "4.14.6"
 wazuh_agent_package_version: "4.14.6-1"
-wazuh_manager_address: "192.168.0.211"
+wazuh_manager_address: "{{ wazuh_manager_ip }}"
 wazuh_manager_port: 1514
 wazuh_manager_enrollment_port: 1515
 wazuh_agent_name: "suricata-sensor"

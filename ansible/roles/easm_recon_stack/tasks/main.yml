@@ -10,10 +10,13 @@
 - name: Validate inventory identity
   ansible.builtin.assert:
     that:
-      - (vm_id | int) == 109
       - deployment_role in ["easm_recon_stack", "vuln_free_stack", "greenbone"]
+      - ansible_host is defined
+      - (ansible_host | string | length) > 0
     fail_msg: >-
-      easm_recon_stack may only target VM 109. Do not install Amass on VM 100.
+      easm_recon_stack requires an inventory host with deployment_role
+      easm_recon_stack, vuln_free_stack, or greenbone. Do not install Amass
+      on the control plane.
 
 - name: Validate supported OS and resources
   ansible.builtin.assert:

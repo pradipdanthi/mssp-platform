@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 from urllib import error, request
 
-CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "http://192.168.0.201:8000").rstrip("/")
+CONTROL_PLANE_URL = os.environ.get("CONTROL_PLANE_URL", "").rstrip("/")
 KEY_FILE = os.environ.get(
     "EASM_SYNC_API_KEY_FILE", "/opt/mssp-easm-agent/secrets/easm_sync_api_key"
 )

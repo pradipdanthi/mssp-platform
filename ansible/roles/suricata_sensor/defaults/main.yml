@@ -21,10 +21,10 @@ suricata_minimum_memory_mb: 4096
 suricata_minimum_root_disk_gb: 40
 suricata_minimum_vcpus: 2
 
-# Management NIC holds the static lab IP. Capture NIC must have no IP.
-suricata_management_address: "192.168.0.216"
+# Management NIC is inventory ansible_host. Capture NIC must have no IP.
+suricata_management_address: "{{ ansible_host }}"
 suricata_capture_interface: "enp6s19"
-suricata_home_net: "[192.168.0.0/24]"
+suricata_home_net: "[{{ mssp_home_net }}]"
 
 # EVE JSON alert output (SOC-only; never customer portal).
 suricata_eve_log_path: /var/log/suricata/eve.json

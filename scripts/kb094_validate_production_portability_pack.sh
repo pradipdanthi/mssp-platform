@@ -81,9 +81,17 @@ grep -q 'verify_e2e_midlayer_edr' deploy/RELEASE_CHECKLIST.md \
   || fail "release checklist must run mid-layer EDR verifier"
 pass "mid-layer EDR wired into cloud deploy path"
 
-grep -q 'vm_id: 101' ansible/inventory/production.example.yml \
-  || fail "production inventory example must set wazuh vm_id 101 (KB-041 lock)"
-pass "production inventory documents engine vm_id locks"
+grep -q 'wazuh_manager_ip' ansible/group_vars/all.yml \
+  || fail "group_vars must resolve wazuh_manager_ip from inventory"
+grep -q 'threat_intel:' ansible/inventory/production.example.yml \
+  || fail "production inventory example must include threat_intel / MISP"
+grep -q 'deployment_role: velociraptor' ansible/inventory/production.example.yml \
+  || fail "production inventory example must include Velociraptor dfir host"
+grep -q 'playbooks/zeek.yml' scripts/production_deploy_engines.sh \
+  || fail "engine deploy order must include playbooks/zeek.yml"
+grep -q 'playbooks/misp.yml' scripts/production_deploy_engines.sh \
+  || fail "engine deploy order must include playbooks/misp.yml"
+pass "production inventory is cloud-portable (no lab vm_id spoof required)"
 
 need scripts/verify_platform_state.py
 [[ -x scripts/verify_platform_state.py ]] || fail "verify_platform_state.py not executable"

@@ -1,7 +1,10 @@
 # KB-039: Placeholder group variables — NO SECRETS IN GIT
 ---
 mssp_project_root: /opt/mssp-control
-mssp_control_plane_url: "http://192.168.0.201:8000"
+# Resolved from inventory hosts (not a lab IP literal).
+mssp_control_plane_url: "http://{{ hostvars[groups['control_plane'][0]].ansible_host }}:8000"
+wazuh_manager_ip: "{{ hostvars[groups['wazuh_stack'][0]].ansible_host }}"
+mssp_home_net: "10.0.0.0/8"
 
 # Placeholder — set via Ansible Vault or runtime -e at deploy time
 ansible_user_placeholder: "<SET_VIA_VAULT_OR_ENV>"
