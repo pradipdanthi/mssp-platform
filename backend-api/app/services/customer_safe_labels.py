@@ -20,6 +20,9 @@ def customer_safe_alert_source(source_tool: Optional[str]) -> str:
         "thehive": "Incident response",
         "misp": "Threat intelligence",
         "velociraptor": "Endpoint forensics",
+        "endpoint_kernel": "Endpoint process telemetry",
+        "endpoint_audit_exec": "Endpoint process telemetry",
+        "endpoint_process_create": "Endpoint process telemetry",
     }
     if key in mapping:
         return mapping[key]

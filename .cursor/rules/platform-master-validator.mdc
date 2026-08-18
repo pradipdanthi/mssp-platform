@@ -1,0 +1,14 @@
+---
+description: Master platform verifier must be extended and run after architecture changes.
+alwaysApply: true
+---
+
+# Master platform verifier (mandatory)
+
+Whenever a change is made to **platform architecture, API schemas, engine rules, or agent installers**:
+
+1. Update `/opt/mssp-control/scripts/verify_platform_state.py` with programmatic assertions for the new capability.
+2. Run `python3 scripts/verify_platform_state.py` and confirm **0 FAILED** before declaring work complete.
+3. Before production or cloud cutover, run `python3 scripts/verify_platform_state.py --release` (GAP counts as failure).
+
+Do not treat a feature as done if the master verifier was not updated and executed.

@@ -42,6 +42,7 @@ Skip deploy; run doc/module validator if applicable.
 | Service catalog | kb_validate_admin_service_catalog_ops.sh |
 | Appliance forwarder | kb093p_validate_appliance_critical_alert_forward.sh |
 | Deploy pack | kb094_validate_production_portability_pack.sh |
+| Architecture / engines / agent installers / API schemas | `python3 scripts/verify_platform_state.py` (extend the script first; `--release` before cloud cutover) |
 | Admin frontend | kb018_validate_admin_frontend_foundation.sh |
 
 ## Report to operator

@@ -40,9 +40,10 @@ cd /opt/mssp-control
 4. Populate `.secrets/` from vault
 5. `./scripts/production_deploy_control_plane.sh`  
    (downloads `Sysmon64.exe` when missing so Windows agent ZIPs work offline; air-gapped: copy the binary into `backend-api/app/endpoint_configs/` first)
-6. `./scripts/bootstrap_platform_admin.sh` (KB-020)
-7. Engines: fill `ansible/inventory/production.example.yml` → sync → playbooks (see `ansible/README.md`)
-8. After Wazuh Manager exists: `playbooks/mssp-linux-midlayer-manager.yml` (KB-105; listed in `production_deploy_engines.sh`)
+6. `python3 scripts/verify_platform_state.py --release` — must print **CLOUD-READY: YES**
+7. `./scripts/bootstrap_platform_admin.sh` (KB-020)
+8. Engines: fill `ansible/inventory/production.example.yml` → sync → playbooks (see `ansible/README.md`)
+9. After Wazuh Manager exists: `playbooks/mssp-linux-midlayer-manager.yml` (KB-105; listed in `production_deploy_engines.sh`)
 
 ### Engines (dry-run default)
 
@@ -126,7 +127,12 @@ docs/KB094_PRODUCTION_PORTABILITY_PACK.md   # this file
 ```bash
 cd /opt/mssp-control
 ./scripts/kb094_validate_production_portability_pack.sh
+python3 scripts/verify_platform_state.py --release
 ```
+
+`verify_platform_state.py` is the **master** architecture verifier (EDR pipeline, engine playbooks/adapters, API↔schema, Sysmon cache). `--release` fails on documented GAPs so a cloud cutover cannot skip Zeek/MISP/Velociraptor or lab VM-ID locks.
+
+Whenever architecture, API schemas, engine rules, or agent installers change, **extend that script and re-run it** before declaring the work complete. See `docs/RELEASE_CHECKLIST.md`.
 
 ---
 

@@ -28,7 +28,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | **Appliance image factory (optional mkosi/ISO workshop)** | **VM 113** when needed (KB-093F); may be stopped/destroyed between builds — not the same as golden 199 |
 | **KB-093P critical-alert forward** | Baked in golden recipe (`ada21fe`+); Beta field-upgraded; telemetry → VM 100, heartbeat → VM 114 |
 | **Host isolate (KB-104)** | **Hold until Un-isolate** (no 2-minute auto-lift). Windows: default-deny except Manager TCP/UDP **1514** and TCP **1515**, plus DHCP/loopback, plus quarantine watchdog. Day-one agent ZIP installs the scripts; appliance heartbeat publishes them to Manager shared groups. Bake into VM **199** with `kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh`. Isolate buttons travel **VM 100 → VM 114 channel → appliance Manager → agent**. Do not use unsigned WPK as the update path. |
-| **KB-094 production portability** | Env templates (`deploy/environments/`), `production_deploy_control_plane.sh`, release checklist — cloud-agnostic deploy path. **KB-105** is wired in: Sysmon cache before image build; Linux Manager rules playbook after Wazuh. |
+| **KB-094 production portability** | Env templates (`deploy/environments/`), `production_deploy_control_plane.sh`, release checklist — cloud-agnostic deploy path. **KB-105** is wired in: Sysmon cache before image build; Linux Manager rules playbook after Wazuh. Master verifier: `python3 scripts/verify_platform_state.py` (`--release` before cloud). |
 
 **Do not** treat this platform as a lab prototype in planning, user-facing copy, dashboards, or runtime defaults. Lab shortcuts need explicit user acceptance + upgrade plan.
 

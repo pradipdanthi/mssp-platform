@@ -140,6 +140,12 @@ def derive_asset_category(row: Dict[str, Any]) -> Tuple[str, str]:
 
     if tool in ("suricata", "zeek"):
         return "network_ids_sensors", tool or "network_sensor"
+    if tool == "misp":
+        return "uncategorized", "threat_intel_feed"
+    if tool == "velociraptor":
+        return "uncategorized", "endpoint_forensics"
+    if tool in ("endpoint_kernel", "endpoint_audit_exec", "endpoint_process_create"):
+        return "endpoints_linux", "endpoint_process"
     if tool == "nuclei":
         return "vuln_web_app", "web_scanner"
     if tool in ("vuls", "greenbone", "openvas"):

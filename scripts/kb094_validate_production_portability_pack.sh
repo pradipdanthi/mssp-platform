@@ -85,5 +85,15 @@ grep -q 'vm_id: 101' ansible/inventory/production.example.yml \
   || fail "production inventory example must set wazuh vm_id 101 (KB-041 lock)"
 pass "production inventory documents engine vm_id locks"
 
+need scripts/verify_platform_state.py
+[[ -x scripts/verify_platform_state.py ]] || fail "verify_platform_state.py not executable"
+grep -q 'verify_platform_state' deploy/RELEASE_CHECKLIST.md \
+  || fail "release checklist must run verify_platform_state.py"
+grep -q 'verify_platform_state' docs/RELEASE_CHECKLIST.md \
+  || fail "docs/RELEASE_CHECKLIST.md must run verify_platform_state.py"
+grep -q 'verify_platform_state' docs/KB094_PRODUCTION_PORTABILITY_PACK.md \
+  || fail "KB-094 doc must require verify_platform_state.py before cloud deploy"
+pass "master platform verifier wired into release path"
+
 echo "RESULT: PASSED"
 echo "KB-094 PRODUCTION PORTABILITY PACK VALIDATION PASSED"

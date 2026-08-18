@@ -37,10 +37,18 @@ require_kb011_creds() {
 
 matched=0
 
+if echo "$CHANGED" | grep -qE '^scripts/verify_platform_state|^ansible/playbooks/|^ansible/roles/|^docs/RELEASE_CHECKLIST'; then
+  matched=1
+  log "RUN python3 ./scripts/verify_platform_state.py"
+  python3 ./scripts/verify_platform_state.py
+fi
+
 if echo "$CHANGED" | grep -qE '^backend-api/|^frontend-admin/|^frontend-customer/'; then
   matched=1
   require_kb011_creds
   run ./scripts/kb011_validate_protected_apis.sh
+  log "RUN python3 ./scripts/verify_platform_state.py"
+  python3 ./scripts/verify_platform_state.py
 fi
 
 if echo "$CHANGED" | grep -qE '^frontend-customer/.*(Entitlement|entitlement|navEntitlement)|frontend-customer/src/(App|main|components/Layout)'; then
