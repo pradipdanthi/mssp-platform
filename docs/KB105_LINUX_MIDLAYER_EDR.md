@@ -14,6 +14,24 @@ Purpose: Fill the two packaging gaps without changing Windows active-response sc
 2. Downloads Sysinternals **only** when the binary is missing **and** the host can reach the network.
 3. Agent ZIP embeds `windows/Sysmon64.exe` when the control plane can cache it.
 
+**Air-gapped / restricted Windows sites:** cache the Microsoft Sysinternals binary on the control plane (never commit it), then rebuild:
+
+```bash
+cd /opt/mssp-control
+./scripts/cache_sysmon_offline.sh
+./scripts/production_deploy_control_plane.sh
+```
+
+That writes `Sysmon64.exe` to `.cache/sysmon/` and `backend-api/app/endpoint_configs/` (gitignored). New tenant Windows ZIPs then include `windows/Sysmon64.exe`, so the installer does not need Sysinternals at runtime.
+
+Confirm with:
+
+```bash
+python3 scripts/verify_e2e_midlayer_edr.py
+```
+
+The offline-embed line should be PASSED (no “ZIP has no Sysmon64.exe” warning).
+
 ### Linux (primary gap)
 
 Linux installers (ZIP + `curl | sudo bash` one-liner) now:
@@ -37,6 +55,8 @@ cd /opt/mssp-control
 ./scripts/kb105_validate_linux_midlayer_edr.sh
 ./scripts/kb088_validate_windows_telemetry_onboarding.sh
 ./scripts/kb105_apply_linux_midlayer_manager.sh    # VM 101
+python3 ./scripts/verify_e2e_midlayer_edr.py
+./scripts/cache_sysmon_offline.sh                  # optional; offline Windows Sysmon ZIP embed
 ./kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh
 ./kevantic-appliance/scripts/upgrade_appliance_fleet_reporting.sh 192.168.0.226 junexis
 ```
