@@ -107,7 +107,7 @@ export default function AlertDetailPage() {
                 <td>{data.alert.detected_at ?? "—"}</td>
               </tr>
               <tr>
-                <th>Wazuh rule</th>
+                <th>Detection rule</th>
                 <td>
                   {data.alert.wazuh_rule_id
                     ? `${data.alert.wazuh_rule_id}${data.alert.wazuh_rule_level ? ` (level ${data.alert.wazuh_rule_level})` : ""}`

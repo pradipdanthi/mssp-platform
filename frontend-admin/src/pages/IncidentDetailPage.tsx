@@ -187,7 +187,7 @@ export default function IncidentDetailPage() {
                   <tr><th>Recommended action</th><td>{incidentQuery.data.primary_alert.ai_recommended_action ?? "—"}</td></tr>
                   <tr><th>Likely attack type</th><td>{incidentQuery.data.primary_alert.ai_likely_attack_type ?? "—"}</td></tr>
                   <tr>
-                    <th>Wazuh rule</th>
+                    <th>Detection rule</th>
                     <td>
                       {incidentQuery.data.primary_alert.wazuh_rule_id
                         ? `${incidentQuery.data.primary_alert.wazuh_rule_id}${

@@ -40,6 +40,7 @@ import {
 } from "../data/contractOptions";
 import { COUNTRY_OPTIONS, getTimezoneOptions } from "../data/geoOptions";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { NIKTIAR } from "../config/niktiairBrands";
 
 const TIMEZONE_OPTIONS = getTimezoneOptions();
 
@@ -619,7 +620,7 @@ export default function TenantsPage() {
       setCreateSuccess(
         `Customer "${created.name}" (${created.short_code}) onboarded as ${deploymentModeLabel(created.deployment_mode)}.` +
           (created.engine_binding
-            ? ` Engines: Wazuh ${created.engine_binding.wazuh_agent_group} (${created.engine_binding.wazuh_group_status}); TheHive ${created.engine_binding.thehive_org_status}.`
+            ? ` Engines: ${NIKTIAR.coreTelemetry} ${created.engine_binding.wazuh_agent_group} (${created.engine_binding.wazuh_group_status}); ${NIKTIAR.apexOrchestrator} ${created.engine_binding.thehive_org_status}.`
             : " Engine binding pending.") +
           (ob?.portal_user_created
             ? ` Portal admin created (${ob.portal_user_email}).`
@@ -773,7 +774,7 @@ export default function TenantsPage() {
       const binding = await provisionTenantEngines(tenant.id);
       setEngineBinding(binding);
       setEditSuccess(
-        `Engine provision refreshed for ${tenant.short_code}: Wazuh ${binding.wazuh_group_status}, TheHive ${binding.thehive_org_status}.`
+        `Engine provision refreshed for ${tenant.short_code}: ${NIKTIAR.coreTelemetry} ${binding.wazuh_group_status}, ${NIKTIAR.apexOrchestrator} ${binding.thehive_org_status}.`
       );
       refetch();
     } catch (err) {
@@ -905,7 +906,7 @@ export default function TenantsPage() {
           </div>
           <p className="page-subtitle" style={{ marginTop: 0 }}>
             Download a preconfigured agent package for this customer. The installer enrolls the
-            endpoint into the Wazuh group below automatically.
+            endpoint into the Core Telemetry agent group below automatically.
           </p>
           <div className="state-message" style={{ marginBottom: "0.75rem" }}>
             Each ZIP is tied to <strong>this customer only</strong> (folder name includes their
@@ -914,17 +915,17 @@ export default function TenantsPage() {
           </div>
           <ul style={{ margin: 0, paddingLeft: "1.2rem", lineHeight: 1.6 }}>
             <li>
-              <strong>Wazuh group:</strong> <code>{engineBinding.wazuh_agent_group}</code> —{" "}
+              <strong>Core Telemetry group:</strong> <code>{engineBinding.wazuh_agent_group}</code> —{" "}
               {engineBinding.wazuh_group_status}
               {engineBinding.wazuh_last_error ? ` (${engineBinding.wazuh_last_error})` : ""}
             </li>
             <li>
-              <strong>TheHive org:</strong> <code>{engineBinding.thehive_org_name}</code> —{" "}
+              <strong>Orchestrator org:</strong> <code>{engineBinding.thehive_org_name}</code> —{" "}
               {engineBinding.thehive_org_status}
               {engineBinding.thehive_last_error ? ` (${engineBinding.thehive_last_error})` : ""}
             </li>
             <li>
-              <strong>TheHive tag:</strong> <code>{engineBinding.thehive_tenant_tag}</code>
+              <strong>Orchestrator tag:</strong> <code>{engineBinding.thehive_tenant_tag}</code>
             </li>
           </ul>
           {canWrite && engineTenant && (
@@ -1090,7 +1091,7 @@ export default function TenantsPage() {
                   pattern="[A-Za-z0-9_-]+"
                   value={createForm.short_code}
                   onChange={(e) => onShortCodeChange(e.target.value)}
-                  title="Used for Wazuh group tenant_<CODE> and engine bindings. Locked after create."
+                  title="Used for Core Telemetry agent group tenant_<CODE> and engine bindings. Locked after create."
                 />
                 <button
                   type="button"
@@ -1112,7 +1113,7 @@ export default function TenantsPage() {
                 )}
               </div>
               <span className="muted-text">
-                Auto format: <code>NAME-XXXX</code> (e.g. <code>MELVIK-K7M2</code>) → Wazuh group{" "}
+                Auto format: <code>NAME-XXXX</code> (e.g. <code>MELVIK-K7M2</code>) → Core Telemetry group{" "}
                 <code>tenant_{createForm.short_code || "…"}</code>
                 {shortCodeManual ? " · manual override" : ""}. Locked after save.
               </span>

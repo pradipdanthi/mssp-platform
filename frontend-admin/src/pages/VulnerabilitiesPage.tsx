@@ -17,6 +17,7 @@ import { useAuth } from "../auth/AuthContext";
 import ListToolbar from "../components/ListToolbar";
 import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { NIKTIAR } from "../config/niktiairBrands";
 import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const STATUS_OPTIONS = [
@@ -26,9 +27,9 @@ const STATUS_OPTIONS = [
   { value: "false_positive", label: "False positive" },
 ];
 const SOURCE_OPTIONS = [
-  { value: "nuclei", label: "Nuclei" },
-  { value: "vuls", label: "Vuls" },
-  { value: "greenbone", label: "Greenbone" },
+  { value: "nuclei", label: `${NIKTIAR.aegisScanning} (templates)` },
+  { value: "vuls", label: `${NIKTIAR.aegisScanning} (agents)` },
+  { value: "greenbone", label: `${NIKTIAR.aegisScanning} (network)` },
 ];
 
 function apiErrorMessage(err: unknown, fallback: string): string {
@@ -271,7 +272,7 @@ export default function VulnerabilitiesPage() {
           <h1>Vulnerabilities</h1>
           <CustomerScopeBanner />
           <p className="page-subtitle">
-            Findings from Nuclei, Vuls, and optional Greenbone — normalized in the control plane.
+            Findings from {NIKTIAR.aegisScanning} — normalized in the control plane.
             Customers never see raw scan output. Promote items to recommendations when ready.
             Customer upgrade requests appear below.
           </p>
@@ -544,7 +545,7 @@ export default function VulnerabilitiesPage() {
         </p>
       {status === "success" && rows.length === 0 && (
         <p className="muted">
-          No vulnerability findings yet. Run Nuclei/Vuls sync from VM 109 or ingest via Greenbone
+          No vulnerability findings yet. Sync {NIKTIAR.aegisScanning} from the scanning service
           when ready.
         </p>
       )}

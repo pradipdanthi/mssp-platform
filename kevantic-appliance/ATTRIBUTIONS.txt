@@ -1,0 +1,85 @@
+Kevantic NikTiar™ Appliance — Open Source Software Attributions
+================================================================
+
+Copyright (c) Kevantic Cyber Security. All rights reserved.
+
+This Kevantic NikTiar™ appliance execution environment incorporates third-party
+open-source security and telemetry components. The notices below acknowledge the
+copyright holders and license terms of those components. Product branding,
+customer-facing dashboards, and public marketing materials refer to Kevantic
+NikTiar™ capability names only; upstream project names appear here for legal
+compliance on the appliance filesystem.
+
+DISCLAIMER
+----------
+THE THIRD-PARTY SOFTWARE LISTED BELOW IS PROVIDED "AS IS" WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO
+EVENT SHALL THE COPYRIGHT HOLDERS OR CONTRIBUTORS BE LIABLE FOR ANY CLAIM,
+DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+Kevantic NikTiar™ maps these backend components to branded capabilities as
+follows (customer-visible names only):
+  • NikTiar™ Core Telemetry      — endpoint and log telemetry pipeline
+  • NikTiar™ DeepSight NDR       — network detection and traffic analysis
+  • NikTiar™ Aegis Scanning      — vulnerability assessment services
+  • NikTiar™ Apex Orchestrator   — security automation and case orchestration
+  • NikTiar™ Spectre Forensics   — endpoint forensics and live response
+
+THIRD-PARTY COMPONENTS
+----------------------
+
+Wazuh
+  Copyright (c) Wazuh Inc.
+  License: GNU General Public License v2.0 (GPL-2.0)
+  https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+Fluent Bit
+  Copyright (c) Fluent Bit authors / Treasure Data, Inc. and contributors
+  License: Apache License 2.0
+  https://www.apache.org/licenses/LICENSE-2.0
+
+Suricata
+  Copyright (c) OISF (Open Information Security Foundation) and contributors
+  License: GNU General Public License v2.0 (GPL-2.0)
+  https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+Zeek
+  Copyright (c) The Regents of the University of California and contributors
+  License: BSD 3-Clause License
+  https://opensource.org/licenses/BSD-3-Clause
+
+Nuclei
+  Copyright (c) ProjectDiscovery, Inc.
+  License: MIT License
+  https://opensource.org/licenses/MIT
+
+Vuls
+  Copyright (c) Future Corporation and contributors
+  License: Apache License 2.0
+  https://www.apache.org/licenses/LICENSE-2.0
+
+Greenbone GVM (OpenVAS components)
+  Copyright (c) Greenbone AG and contributors
+  License: GNU General Public License v3.0 (GPL-3.0)
+  https://www.gnu.org/licenses/gpl-3.0.html
+
+Velociraptor
+  Copyright (c) Rapid7 and contributors
+  License: GNU Affero General Public License v3.0 (AGPL-3.0)
+  https://www.gnu.org/licenses/agpl-3.0.html
+
+SOURCE CODE AVAILABILITY
+------------------------
+Corresponding source code for copyleft-licensed components (GPL-2.0, GPL-3.0,
+AGPL-3.0) is available from the respective upstream projects listed above and,
+where required by license, may be obtained by contacting Kevantic Cyber Security
+support with your appliance identifier and software version.
+
+This file is installed at:
+  /usr/share/doc/kevantic/ATTRIBUTIONS.txt
+
+Generated as part of the Kevantic appliance image build. See repository
+ATTRIBUTIONS.md for the control-plane attribution record.

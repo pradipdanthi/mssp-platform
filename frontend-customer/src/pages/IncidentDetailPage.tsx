@@ -175,7 +175,7 @@ export default function IncidentDetailPage() {
                     <td>{data.primary_alert.recommended_action ?? "—"}</td>
                   </tr>
                   <tr>
-                    <th>Wazuh rule</th>
+                    <th>Detection rule</th>
                     <td>
                       {data.primary_alert.wazuh_rule_id
                         ? `${data.primary_alert.wazuh_rule_id}${data.primary_alert.wazuh_rule_level ? ` (level ${data.primary_alert.wazuh_rule_level})` : ""}`

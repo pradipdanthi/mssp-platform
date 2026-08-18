@@ -1070,6 +1070,117 @@ def check_appliance_licensing() -> CheckResult:
     return cr
 
 
+# ---------------------------------------------------------------------------
+# CHECK 6 — Open-source compliance attributions + UI brand isolation
+# ---------------------------------------------------------------------------
+FORBIDDEN_UI_ENGINE_NAMES = re.compile(
+    r"\b(Wazuh|Suricata|Zeek|Nuclei|Vuls|Greenbone|Velociraptor|Fluent\s*Bit|TheHive|Shuffle|MISP|OpenVAS)\b",
+    re.I,
+)
+
+
+def _tsx_line_exposes_engine_brand(line: str) -> bool:
+    stripped = line.strip()
+    if stripped.startswith("//") or stripped.startswith("*"):
+        return False
+    # Internal API/filter enum keys — not rendered UI copy.
+    if re.search(
+        r'\bvalue:\s*["\'](?:wazuh|suricata|zeek|nuclei|vuls|greenbone|velociraptor|misp|shuffle|thehive|openvas)["\']',
+        line,
+        re.I,
+    ):
+        return False
+    # Schema field names (wazuh_rule_id, thehive_case_id, …) are not product branding.
+    scrubbed = re.sub(
+        r"\b(?:wazuh|thehive|greenbone|nuclei|vuls|shuffle|suricata|zeek|velociraptor|misp|openvas)_[a-z0-9_]+\b",
+        "",
+        line,
+        flags=re.I,
+    )
+    return bool(FORBIDDEN_UI_ENGINE_NAMES.search(scrubbed))
+
+
+def check_open_source_compliance() -> CheckResult:
+    cr = CheckResult("CHECK 6: Open-source compliance & UI brand isolation")
+    f = cr.findings
+    repo_attrib = ROOT / "ATTRIBUTIONS.md"
+    appliance_attrib = ROOT / "kevantic-appliance" / "ATTRIBUTIONS.txt"
+    build_sh = ROOT / "kevantic-appliance" / "mkosi" / "build.sh"
+    runtime_tasks = (
+        ROOT / "kevantic-appliance" / "ansible" / "roles" / "kevantic_runtime" / "tasks" / "main.yml"
+    )
+    postinst = ROOT / "kevantic-appliance" / "mkosi" / "mkosi.postinst"
+
+    require_file(f, repo_attrib, "repository ATTRIBUTIONS.md")
+    require_file(f, appliance_attrib, "appliance ATTRIBUTIONS.txt")
+    require_file(f, build_sh, "mkosi build.sh")
+    require_file(f, runtime_tasks, "kevantic_runtime tasks")
+    require_file(f, postinst, "mkosi.postinst")
+
+    build_txt = read(build_sh)
+    runtime_txt = read(runtime_tasks)
+    postinst_txt = read(postinst)
+    attrib_txt = read(appliance_attrib)
+
+    for needle in ("GPL-2.0", "Apache License 2.0", "AGPL-3.0", "BSD 3-Clause", "MIT License"):
+        expect(
+            f,
+            needle in attrib_txt,
+            f"appliance ATTRIBUTIONS.txt mentions {needle}",
+            path=appliance_attrib,
+            pattern=re.escape(needle),
+        )
+
+    expect(
+        f,
+        "usr/share/doc/kevantic/ATTRIBUTIONS.txt" in build_txt,
+        "mkosi build.sh stages ATTRIBUTIONS.txt under /usr/share/doc/kevantic/",
+        path=build_sh,
+        pattern=r"usr/share/doc/kevantic/ATTRIBUTIONS\.txt",
+    )
+    expect(
+        f,
+        "/usr/share/doc/kevantic/ATTRIBUTIONS.txt" in runtime_txt,
+        "kevantic_runtime installs /usr/share/doc/kevantic/ATTRIBUTIONS.txt",
+        path=runtime_tasks,
+        pattern=r"/usr/share/doc/kevantic/ATTRIBUTIONS\.txt",
+    )
+    expect(
+        f,
+        "/usr/share/doc/kevantic/ATTRIBUTIONS.txt" in postinst_txt,
+        "mkosi.postinst asserts baked ATTRIBUTIONS.txt exists",
+        path=postinst,
+        pattern=r"/usr/share/doc/kevantic/ATTRIBUTIONS\.txt",
+    )
+
+    ui_roots = (ROOT / "frontend-admin" / "src", ROOT / "frontend-customer" / "src")
+    violations: List[str] = []
+    for ui_root in ui_roots:
+        if not ui_root.is_dir():
+            continue
+        for path in sorted(ui_root.rglob("*.tsx")):
+            rel = path.relative_to(ROOT)
+            for idx, line in enumerate(read(path).splitlines(), start=1):
+                if _tsx_line_exposes_engine_brand(line):
+                    violations.append(f"{rel}:{idx}: {line.strip()[:120]}")
+    expect(
+        f,
+        not violations,
+        "customer/admin .tsx UI files contain no upstream engine product names",
+        detail="; ".join(violations[:8]) + (" …" if len(violations) > 8 else ""),
+        status_if_false="FAILED",
+    )
+    if not violations:
+        f.append(
+            Finding(
+                "PASSED",
+                "customer/admin .tsx UI files contain no upstream engine product names",
+                path=ui_roots[0],
+            )
+        )
+    return cr
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="MSSP platform master verifier")
     parser.add_argument(
@@ -1091,6 +1202,7 @@ def main() -> int:
         check_backend_schemas(),
         check_portability(),
         check_appliance_licensing(),
+        check_open_source_compliance(),
     ]
 
     passed = failed = warnings = gaps = 0

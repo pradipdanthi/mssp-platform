@@ -53,6 +53,15 @@ mkdir -p "$MKOSI_DIR/mkosi.extra/etc/kevantic/trust/keys"
 cp -f "$PUBKEY" "$MKOSI_DIR/mkosi.extra/etc/kevantic/trust/keys/licensing-ed25519-v1.pub"
 echo "Staged license public key into mkosi.extra"
 
+ATTRIB="$ROOT/ATTRIBUTIONS.txt"
+if [[ ! -f "$ATTRIB" ]]; then
+  echo "ERROR: missing $ATTRIB — required for open-source compliance bake" >&2
+  exit 2
+fi
+mkdir -p "$MKOSI_DIR/mkosi.extra/usr/share/doc/kevantic"
+cp -f "$ATTRIB" "$MKOSI_DIR/mkosi.extra/usr/share/doc/kevantic/ATTRIBUTIONS.txt"
+echo "Staged ATTRIBUTIONS.txt into mkosi.extra"
+
 sudo_run() {
   if [[ "$(id -u)" -eq 0 ]]; then
     "$@"

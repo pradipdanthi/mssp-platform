@@ -43,6 +43,10 @@ if [[ ! -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub ]]; then
   echo "ERROR: baked license public key missing under /etc/kevantic/trust/keys/" >&2
   exit 1
 fi
+if [[ ! -f /usr/share/doc/kevantic/ATTRIBUTIONS.txt ]]; then
+  echo "ERROR: open-source ATTRIBUTIONS.txt missing under /usr/share/doc/kevantic/" >&2
+  exit 1
+fi
 mkdir -p /etc/kevantic /etc/junexis
 if [[ ! -f /etc/kevantic/image-release.json ]]; then
   printf '%s\n' '{"config_version":"track1","git_commit":"unknown"}' >/etc/kevantic/image-release.json

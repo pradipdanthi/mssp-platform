@@ -8,6 +8,7 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { NIKTIAR } from "../config/niktiairBrands";
 
 type AlertStatus = NonNullable<AlertTriageUpdate["status"]>;
 
@@ -103,7 +104,7 @@ export default function AlertDetailPage() {
               <tr><th>Severity</th><td><span className={`badge badge-${alert.severity}`}>{alert.severity}</span></td></tr>
               <tr><th>Status</th><td>{alert.status}</td></tr>
               <tr><th>Source</th><td>{alert.source_tool} / {alert.external_alert_id ?? "—"}</td></tr>
-              <tr><th>Wazuh rule</th><td>{alert.wazuh_rule_id ?? "—"}</td></tr>
+              <tr><th>Detection rule</th><td>{alert.wazuh_rule_id ?? "—"}</td></tr>
               <tr><th>Event time</th><td>{alert.event_time ?? "—"}</td></tr>
               <tr><th>Description</th><td>{alert.alert_description ?? "—"}</td></tr>
             </tbody>
@@ -118,7 +119,7 @@ export default function AlertDetailPage() {
               <tr><th>Location</th><td>{alert.asset_location ?? "—"}</td></tr>
               <tr><th>Asset</th><td>{alert.asset_hostname ?? "—"}</td></tr>
               <tr><th>Asset owner</th><td>{alert.asset_owner ?? "—"}</td></tr>
-              <tr><th>Wazuh agent</th><td>{alert.wazuh_agent_id ?? "—"}</td></tr>
+              <tr><th>Endpoint agent</th><td>{alert.wazuh_agent_id ?? "—"}</td></tr>
               <tr><th>IP address</th><td className="cell-mono">{alert.display_ip_address ?? "—"}</td></tr>
               <tr><th>Operating system</th><td>{alert.display_operating_system ?? "—"}</td></tr>
               <tr><th>MAC address</th><td className="cell-mono">{macDisplay}</td></tr>
@@ -189,7 +190,7 @@ export default function AlertDetailPage() {
             SOC analysis fields are AI-assisted when the alert worker is enabled (high/critical).
             Risk / enrich / correlate drafts (KB-096) consume Threat Intel IOC rows and related
             alerts — they complement Threat Intel, they do not replace it. Analyst edits always win.
-            High-severity detection alerts are also forwarded to Shuffle for case creation.
+            High-severity detection alerts are also forwarded to {NIKTIAR.apexOrchestrator} for case creation.
           </p>
 
           {canUpdate && (alert.ai_triage_status === "draft" || alert.ai_risk_score != null) ? (

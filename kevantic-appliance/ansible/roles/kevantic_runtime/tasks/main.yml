@@ -77,6 +77,20 @@
     dest: /opt/kevantic/requirements-engine.txt
     mode: "0644"
 
+- name: Ensure open-source attributions directory
+  ansible.builtin.file:
+    path: /usr/share/doc/kevantic
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install open-source attributions notice (compliance bake)
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/ATTRIBUTIONS.txt"
+    dest: /usr/share/doc/kevantic/ATTRIBUTIONS.txt
+    mode: "0644"
+
 - name: Ensure pip available for engine deps
   ansible.builtin.apt:
     name:

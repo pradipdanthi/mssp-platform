@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import SeverityPill from "./SeverityPill";
+import { NIKTIAR } from "../config/niktiairBrands";
 
 export type DrawerIncident = {
   id?: string;
@@ -136,29 +137,29 @@ export default function IncidentDrawer({ incident, onClose, mode = "admin" }: Pr
               <button
                 type="button"
                 className="btn btn-primary"
-                title="Queues a Shuffle playbook run"
+                title={`Queues a ${NIKTIAR.apexOrchestrator} playbook run`}
                 onClick={() => {
                   window.alert(
-                    "Shuffle playbook trigger queued for security automation. Confirm execution in Shuffle and TheHive when the workflow completes."
+                    `${NIKTIAR.apexOrchestrator} playbook trigger queued for security automation. Confirm execution in the orchestration workspace when the workflow completes.`
                   );
                 }}
               >
-                Trigger Shuffle Playbook
+                Trigger orchestration playbook
               </button>
               {theHiveHref ? (
                 <a className="btn btn-ghost" href={theHiveHref} target="_blank" rel="noreferrer">
-                  Open in TheHive
+                  Open case workspace
                 </a>
               ) : (
                 <button
                   type="button"
                   className="btn btn-ghost"
-                  title="No TheHive case id on this record yet"
+                  title="No external case id on this record yet"
                   onClick={() => {
                     window.open("https://192.168.0.212", "_blank", "noopener,noreferrer");
                   }}
                 >
-                  Open in TheHive
+                  Open case workspace
                 </button>
               )}
               <button

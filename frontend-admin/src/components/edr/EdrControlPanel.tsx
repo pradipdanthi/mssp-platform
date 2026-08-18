@@ -5,6 +5,7 @@ import {
   statusBadgeLabel,
   type EdrActionType,
 } from "../../api/edr";
+import { NIKTIAR } from "../../config/niktiairBrands";
 
 type Props = {
   tenantShortCode: string;
@@ -133,7 +134,7 @@ export default function EdrControlPanel({
           onClick={() => {
             if (window.confirm(
               "Quarantine this host?\n\n" +
-                "All network traffic will be blocked except Wazuh Manager ports 1514/1515 " +
+                "All network traffic will be blocked except " + NIKTIAR.coreTelemetry + " management ports 1514/1515 " +
                 "(plus DHCP/loopback so the agent can stay reachable for Un-isolate). " +
                 "The host stays isolated until you click Un-isolate."
             )) {

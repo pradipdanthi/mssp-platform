@@ -143,7 +143,7 @@ export default function AlertTaxonomyNav({
       <ul className="alert-taxonomy-list">
         {(
           [
-            ["vuln_web_app", "Web / API (Nuclei)"],
+            ["vuln_web_app", "Web / API (Aegis)"],
             ["vuln_infrastructure", "Infrastructure CVE"],
           ] as const
         ).map(([slug, label]) => (
