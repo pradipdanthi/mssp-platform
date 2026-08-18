@@ -25,3 +25,5 @@ python3 scripts/verify_platform_state.py --release
 Day-to-day lab work may run without `--release` (FAILED still exits 1; GAP is reported but does not fail the process). Live engine installs still require explicit per-playbook approval flags; this checklist does not install Zeek/MISP/Velociraptor on lab VMs.
 
 Whenever architecture, API schemas, engine rules, or agent installers change: **update `scripts/verify_platform_state.py` with new assertions and re-run it**.
+
+Lab-vs-cloud snapshot (engines, portals, leftover lab defaults): [`docs/PLATFORM_CLOUD_CUTOVER_AUDIT.md`](PLATFORM_CLOUD_CUTOVER_AUDIT.md). The verifier can be CLOUD-READY while that audit still lists operator cutover steps.

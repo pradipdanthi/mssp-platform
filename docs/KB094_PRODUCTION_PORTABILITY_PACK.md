@@ -132,7 +132,7 @@ python3 scripts/verify_platform_state.py --release
 
 `verify_platform_state.py` is the **master** architecture verifier (EDR pipeline, engine playbooks/adapters, API↔schema, Sysmon cache). `--release` must return **CLOUD-READY: YES** (0 FAILED, 0 GAP). Zeek, MISP, and Velociraptor have inventory-driven playbooks; roles use `deployment_role` + `ansible_host` (no lab `vm_id` spoofing).
 
-Whenever architecture, API schemas, engine rules, or agent installers change, **extend that script and re-run it** before declaring the work complete. See `docs/RELEASE_CHECKLIST.md`.
+Whenever architecture, API schemas, engine rules, or agent installers change, **extend that script and re-run it** before declaring the work complete. See `docs/RELEASE_CHECKLIST.md`. Lab-vs-cloud engine/portal snapshot: `docs/PLATFORM_CLOUD_CUTOVER_AUDIT.md` (verifier CLOUD-READY does not skip the operator checklist in that doc).
 
 ---
 
