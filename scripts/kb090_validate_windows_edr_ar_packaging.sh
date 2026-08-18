@@ -52,10 +52,22 @@ grep -q 'Repair-MsspLateralAccess' deploy/wazuh-active-response/windows/mssp-iso
   || fail "Windows un-isolate must repair Remote Desktop / lateral firewall groups"
 grep -q 'Get-MsspRemoteAccessState' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
   || fail "Windows isolate must snapshot remote access (RDP) state for restore"
-grep -q 'Start-MsspDeferredUnisolateRepair' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
-  || fail "Windows un-isolate must defer slow firewall restore (Wazuh API timeout)"
-grep -q 'Repair-MsspRdpAccessExplicit' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
-  || fail "Windows un-isolate must explicitly restore RDP (3389 / TermService)"
+grep -q 'Invoke-MsspUnisolate' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows un-isolate must use single Invoke-MsspUnisolate end-to-end restore"
+grep -q 'Get-MsspDefaultRoutesSnapshot' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows isolate must snapshot default routes before quarantine"
+grep -q 'watchdog-disabled-outbound.json' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows un-isolate must restore watchdog-disabled outbound allows"
+grep -q 'watchdog-disabled-outbound.json' deploy/wazuh-active-response/windows/Watch-MsspQuarantine.ps1 \
+  || fail "watchdog must record disabled outbound allows for un-isolate restore"
+grep -q 'Restore-AllNonMsspOutboundAllows' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows un-isolate must bulk-restore disabled outbound allow rules"
+grep -q 'ForceFullRestore' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows manual un-isolate must run full restore path"
+grep -q 'Test-MsspUnisolateRequested' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "isolate must abort if unisolate wins the race"
+grep -q 'mssp-edr-isolate-cancel.flag' deploy/wazuh-active-response/windows/Watch-MsspQuarantine.ps1 \
+  || fail "watchdog must honor unisolate cancel flag"
 grep -q 'run_active_response_resilient' backend-api/app/services/wazuh_client.py \
   || fail "Wazuh client must support resilient AR dispatch with retries"
 grep -q 'tolerate_api_timeout' backend-api/app/services/edr_actions.py \
@@ -99,3 +111,5 @@ PY
 section "4. Final verdict"
 echo "VALIDATION PASSED: Windows kill/isolate/block-hash packaged for day-one downloads."
 exit 0
+grep -q 'Repair-MsspDnsConnectivity' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows un-isolate must restore DNS (port 53 + DNS servers)"

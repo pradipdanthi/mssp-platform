@@ -3,7 +3,10 @@
 # driver is the next product tier. This stops accidental lift, old auto-release
 # scripts, and unsophisticated malware flipping the firewall back to Allow.
 $ErrorActionPreference = "Continue"
+$CancelFile = Join-Path $env:ProgramData "mssp-edr-isolate-cancel.flag"
 $MarkerFile = Join-Path $env:ProgramData "mssp-edr-quarantine.active"
+$SidecarFile = Join-Path $env:ProgramData "mssp-edr-ar\watchdog-disabled-outbound.json"
+if (Test-Path -LiteralPath $CancelFile) { exit 0 }
 if (-not (Test-Path -LiteralPath $MarkerFile)) { exit 0 }
 
 $Manager = "192.168.0.226"
@@ -46,6 +49,23 @@ function Ensure-MsspFirewallRule([string]$Name, [string[]]$AddArgs) {
   Invoke-Netsh $AddArgs | Out-Null
 }
 
+function Save-WatchdogDisabledOutbound([string[]]$NewNames) {
+  $names = @($NewNames | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+  if ($names.Count -eq 0) { return }
+  $dir = Split-Path $SidecarFile -Parent
+  if (-not (Test-Path -LiteralPath $dir)) {
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  }
+  $existing = @()
+  if (Test-Path -LiteralPath $SidecarFile) {
+    try { $existing = @((Get-Content -LiteralPath $SidecarFile -Raw | ConvertFrom-Json)) } catch {}
+  }
+  $merged = @($existing + $names | Select-Object -Unique)
+  try {
+    ($merged | ConvertTo-Json -Compress) | Set-Content -LiteralPath $SidecarFile -Encoding ASCII
+  } catch {}
+}
+
 try {
   Set-NetFirewallProfile -Profile Domain, Private, Public `
     -DefaultInboundAction Block -DefaultOutboundAction Block -Enabled True -ErrorAction Stop | Out-Null
@@ -55,6 +75,7 @@ try {
   }
 }
 
+$disabledNow = @()
 try {
   $sw = [Diagnostics.Stopwatch]::StartNew()
   foreach ($rule in @(Get-NetFirewallRule -Direction Outbound -Action Allow -Enabled True -ErrorAction SilentlyContinue)) {
@@ -62,9 +83,13 @@ try {
     $n = [string]$rule.Name
     $d = [string]$rule.DisplayName
     if ($n -like "MSSP_*" -or $d -like "MSSP_*") { continue }
-    try { Disable-NetFirewallRule -Name $n -ErrorAction SilentlyContinue } catch {}
+    try {
+      Disable-NetFirewallRule -Name $n -ErrorAction SilentlyContinue
+      $disabledNow += $n
+    } catch {}
   }
 } catch {}
+Save-WatchdogDisabledOutbound -NewNames $disabledNow
 
 $rules = @(
   @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1514"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1514") },
@@ -81,6 +106,8 @@ foreach ($spec in $rules) {
   Ensure-MsspFirewallRule $spec.Name $args
 }
 
+if ((Test-Path -LiteralPath $CancelFile) -or -not (Test-Path -LiteralPath $MarkerFile)) { exit 0 }
+
 foreach ($b in @(
   @{ Name = "MSSP_HOLD_BLOCK_RDP_IN"; Extra = @("dir=in", "protocol=tcp", "localport=3389") },
   @{ Name = "MSSP_HOLD_BLOCK_SMB_IN"; Extra = @("dir=in", "protocol=tcp", "localport=445") },
@@ -89,10 +116,8 @@ foreach ($b in @(
   Ensure-MsspFirewallRule $b.Name (@("advfirewall", "firewall", "add", "rule", "name=$($b.Name)", "action=block", "enable=yes", "profile=any") + $b.Extra)
 }
 
-try {
-  Get-NetRoute -AddressFamily IPv4 -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
-    Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
-} catch {}
+# Do NOT drop default routes here -- firewall default-deny is enough for quarantine,
+# and removing 0.0.0.0/0 breaks internet restore if un-isolate misses route snapshot.
 
 Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
   Where-Object { $_.CommandLine -match 'Start-Sleep' -and $_.CommandLine -match 'mssp-isolate-host' } |
