@@ -129,6 +129,28 @@ export default function AlertDetailPage() {
             </tbody>
           </table>
 
+          <h2 className="section-title">Technical evidence</h2>
+          <table className="data-table">
+            <tbody>
+              <tr><th>File path</th><td className="cell-mono">{alert.file_path ?? "—"}</td></tr>
+              <tr><th>File name</th><td>{alert.file_name ?? "—"}</td></tr>
+              <tr><th>Process</th><td className="cell-mono">{alert.process_name ?? "—"}</td></tr>
+              <tr><th>Parent process</th><td className="cell-mono">{alert.parent_process_name ?? "—"}</td></tr>
+              <tr><th>Command line</th><td className="cell-mono">{alert.command_line ?? "—"}</td></tr>
+              <tr><th>Parent command line</th><td className="cell-mono">{alert.parent_command_line ?? "—"}</td></tr>
+              <tr><th>SHA256</th><td className="cell-mono">{alert.hash_sha256 ?? "—"}</td></tr>
+              <tr><th>MD5</th><td className="cell-mono">{alert.hash_md5 ?? "—"}</td></tr>
+              <tr>
+                <th>MITRE tactics</th>
+                <td>{alert.mitre_tactics?.length ? alert.mitre_tactics.join(", ") : "—"}</td>
+              </tr>
+              <tr>
+                <th>MITRE techniques</th>
+                <td>{alert.mitre_techniques?.length ? alert.mitre_techniques.join(", ") : "—"}</td>
+              </tr>
+            </tbody>
+          </table>
+
           <h2 className="section-title">SOC analysis</h2>
           <table className="data-table">
             <tbody>

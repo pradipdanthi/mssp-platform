@@ -117,17 +117,25 @@ def ingest_appliance_alert(
                 )
                 dest_host = payload.destination_host or (linked or {}).get("hostname")
                 raw_stub = agent_stub_raw_event(linked)
+                incoming_raw = payload.raw_event or {}
+                if not isinstance(incoming_raw, dict):
+                    incoming_raw = {}
+                merged_raw = dict(incoming_raw)
+                if raw_stub:
+                    merged_raw.setdefault("asset_stub", raw_stub)
                 cur.execute(
                     """
                     INSERT INTO security_alerts (
                         tenant_id, appliance_id, source_tool, external_alert_id,
                         severity, alert_title, alert_description, event_time,
-                        destination_host, asset_id, raw_event, customer_visible, status
+                        destination_host, source_ip, destination_ip, source_user,
+                        asset_id, raw_event, mitre_mapping, customer_visible, status
                     )
                     VALUES (
                         %s, %s, %s, %s,
                         %s, %s, %s, COALESCE(%s, now()),
-                        %s, %s::uuid, %s::jsonb, true, 'new'
+                        %s, %s::inet, %s::inet, %s,
+                        %s::uuid, %s::jsonb, %s::jsonb, true, 'new'
                     )
                     RETURNING id::text, customer_visible, status;
                     """,
@@ -143,8 +151,12 @@ def ingest_appliance_alert(
                         payload.alert_description,
                         payload.event_time,
                         dest_host,
+                        payload.source_ip,
+                        payload.destination_ip,
+                        payload.source_user,
                         (linked or {}).get("id"),
-                        json.dumps(raw_stub),
+                        json.dumps(merged_raw),
+                        json.dumps(payload.mitre_mapping or {}),
                     ),
                 )
                 alert_row = cur.fetchone()

@@ -123,6 +123,18 @@ export interface CustomerAlert {
   recommended_action?: string | null;
   likely_attack_type?: string | null;
   criticality?: string | null;
+  wazuh_rule_id?: string | null;
+  wazuh_rule_level?: string | null;
+  file_path?: string | null;
+  file_name?: string | null;
+  process_name?: string | null;
+  parent_process_name?: string | null;
+  command_line?: string | null;
+  parent_command_line?: string | null;
+  hash_md5?: string | null;
+  hash_sha256?: string | null;
+  mitre_tactics?: string[];
+  mitre_techniques?: string[];
 }
 
 export interface CustomerAlertsResponse {

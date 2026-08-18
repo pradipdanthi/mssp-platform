@@ -1,7 +1,7 @@
 """KB-057 request/response models for customer-safe appliance alert ingest."""
 
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,10 +21,15 @@ class ApplianceAlertIngestRequest(BaseModel):
     alert_description: Optional[str] = Field(default=None, max_length=4000)
     event_time: Optional[datetime] = None
     destination_host: Optional[str] = Field(default=None, max_length=255)
+    source_ip: Optional[str] = Field(default=None, max_length=64)
+    destination_ip: Optional[str] = Field(default=None, max_length=64)
+    source_user: Optional[str] = Field(default=None, max_length=255)
+    raw_event: Optional[Dict[str, Any]] = None
+    mitre_mapping: Optional[Dict[str, Any]] = None
 
     # Deliberately absent: tenant_id, appliance_id, customer_visible,
-    # raw_event/raw_json/details, source_ip/destination_ip/local_ip,
-    # internal/admin notes, AI internals, credentials, tokens, and hashes.
+    # local_ip, internal/admin notes, AI internals, credentials, tokens, and
+    # packet/full-log payloads. raw_event must already be scrubbed on appliance.
 
 
 class ApplianceAlertIngestResponse(BaseModel):

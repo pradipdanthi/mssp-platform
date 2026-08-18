@@ -207,7 +207,7 @@ _EDR_AR_COMMAND_BLOCK = """
   <command>
     <name>mssp-isolate-host</name>
     <executable>mssp-isolate-host</executable>
-    <timeout_allowed>yes</timeout_allowed>
+    <timeout_allowed>no</timeout_allowed>
   </command>
   <command>
     <name>mssp-kill-process</name>
@@ -290,7 +290,13 @@ def _publish_windows_edr_ar_shared() -> None:
                 if not p.is_file():
                     continue
                 dest = group_dir / name
-                dest.write_bytes(p.read_bytes())
+                try:
+                    dest.write_bytes(p.read_bytes())
+                except OSError as exc:
+                    # channeld ProtectSystem=strict makes /var/ossec EROFS.
+                    # Isolate must still dispatch; skip this group file.
+                    logger.warning("skip shared publish %s: %s", dest, exc)
+                    continue
                 try:
                     dest.chmod(0o640)
                 except OSError:
@@ -302,7 +308,11 @@ def _publish_windows_edr_ar_shared() -> None:
         except OSError:
             continue
         if "mssp-edr-ar-sync" not in current:
-            conf_path.write_text(agent_conf, encoding="utf-8")
+            try:
+                conf_path.write_text(agent_conf, encoding="utf-8")
+            except OSError as exc:
+                logger.warning("skip shared agent.conf %s: %s", conf_path, exc)
+                continue
             try:
                 conf_path.chmod(0o660)
             except OSError:
@@ -312,12 +322,38 @@ def _publish_windows_edr_ar_shared() -> None:
 
 def _ensure_local_edr_ar_commands() -> None:
     """Register isolate/kill/block-hash command names on the local Manager."""
-    _publish_windows_edr_ar_shared()
+    try:
+        _publish_windows_edr_ar_shared()
+    except OSError as exc:
+        logger.warning("shared AR publish skipped: %s", exc)
     conf = Path("/var/ossec/etc/ossec.conf")
     if not conf.is_file():
         return
     text = conf.read_text(encoding="utf-8")
+    original = text
+    # Timed delete after isolate must never be allowed. Patch older golden images.
+    text = text.replace(
+        "<name>mssp-isolate-host</name>\n    <executable>mssp-isolate-host</executable>\n    <timeout_allowed>yes</timeout_allowed>",
+        "<name>mssp-isolate-host</name>\n    <executable>mssp-isolate-host</executable>\n    <timeout_allowed>no</timeout_allowed>",
+    )
     if "<name>mssp-isolate-host.cmd</name>" in text and "<name>mssp-isolate-host</name>" in text:
+        if text != original:
+            try:
+                bak = conf.with_suffix(conf.suffix + ".bak.mssp-edr")
+                if not bak.is_file():
+                    bak.write_text(original, encoding="utf-8")
+                conf.write_text(text, encoding="utf-8")
+            except OSError as exc:
+                logger.warning("cannot patch ossec.conf (%s); isolate still dispatched", exc)
+                return
+            subprocess.run(
+                ["/var/ossec/bin/wazuh-control", "restart"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            logger.info("disabled Wazuh timed-delete on isolate commands")
         return
     marker = "</ossec_config>"
     idx = text.rfind(marker)
@@ -325,9 +361,13 @@ def _ensure_local_edr_ar_commands() -> None:
         logger.warning("ossec.conf missing </ossec_config>; cannot register EDR AR")
         return
     bak = conf.with_suffix(conf.suffix + ".bak.mssp-edr")
-    if not bak.is_file():
-        bak.write_text(text, encoding="utf-8")
-    conf.write_text(text[:idx] + _EDR_AR_COMMAND_BLOCK + "\n" + text[idx:], encoding="utf-8")
+    try:
+        if not bak.is_file():
+            bak.write_text(text, encoding="utf-8")
+        conf.write_text(text[:idx] + _EDR_AR_COMMAND_BLOCK + "\n" + text[idx:], encoding="utf-8")
+    except OSError as exc:
+        logger.warning("cannot register EDR AR in ossec.conf (%s); isolate still dispatched", exc)
+        return
     subprocess.run(
         ["/var/ossec/bin/wazuh-control", "restart"],
         check=False,
@@ -794,7 +834,10 @@ def _run_local_ar(job: dict[str, Any]) -> tuple[bool, str]:
     if not agent_id or not command:
         return False, "missing agent_id or ar_command"
     try:
-        _ensure_local_edr_ar_commands()
+        try:
+            _ensure_local_edr_ar_commands()
+        except OSError as exc:
+            logger.warning("ensure AR commands skipped: %s", exc)
         token = _authenticate_local_wazuh()
         cmd = command if command.startswith("!") else f"!{command}"
         result = _wazuh_local_json(

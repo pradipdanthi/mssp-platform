@@ -106,6 +106,64 @@ export default function AlertDetailPage() {
                 <th>Detected</th>
                 <td>{data.alert.detected_at ?? "—"}</td>
               </tr>
+              <tr>
+                <th>Wazuh rule</th>
+                <td>
+                  {data.alert.wazuh_rule_id
+                    ? `${data.alert.wazuh_rule_id}${data.alert.wazuh_rule_level ? ` (level ${data.alert.wazuh_rule_level})` : ""}`
+                    : "—"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h2 className="page-subtitle" style={{ marginTop: "2rem" }}>
+            Technical evidence
+          </h2>
+          <table className="data-table">
+            <tbody>
+              <tr>
+                <th>File path</th>
+                <td>{data.alert.file_path ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>File name</th>
+                <td>{data.alert.file_name ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Process</th>
+                <td>{data.alert.process_name ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Parent process</th>
+                <td>{data.alert.parent_process_name ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Command line</th>
+                <td>{data.alert.command_line ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>Parent command line</th>
+                <td>{data.alert.parent_command_line ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>SHA256</th>
+                <td>{data.alert.hash_sha256 ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>MD5</th>
+                <td>{data.alert.hash_md5 ?? "—"}</td>
+              </tr>
+              <tr>
+                <th>MITRE tactics</th>
+                <td>{data.alert.mitre_tactics?.length ? data.alert.mitre_tactics.join(", ") : "—"}</td>
+              </tr>
+              <tr>
+                <th>MITRE techniques</th>
+                <td>
+                  {data.alert.mitre_techniques?.length ? data.alert.mitre_techniques.join(", ") : "—"}
+                </td>
+              </tr>
             </tbody>
           </table>
 

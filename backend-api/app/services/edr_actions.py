@@ -125,8 +125,10 @@ def _tenant_deployment_mode(tenant_id: str) -> Optional[str]:
     return (row or {}).get("deployment_mode")
 
 
-# 0 = hold until Un-isolate (MDR default). Timed auto-release only if env set.
+# 0 = hold until Un-isolate (MDR default). Never pass a number as AR extra_args[0]:
+# Wazuh treats a numeric first argument as a timeout and then sends command=delete.
 ISOLATE_SECONDS = (os.getenv("EDR_ISOLATE_SECONDS") or "0").strip()
+ISOLATE_HOLD_ARG = "hold"
 
 
 def _get_callback_base() -> str:
@@ -495,25 +497,28 @@ def apply_action_callback(
         if "released" in payload:
             released = bool(payload.get("released"))
 
-    # Auto-release / explicit release callback: restore isolation row, keep prior verified.
+    # Explicit Un-isolate only. Ignore Wazuh timed command=delete callbacks on
+    # an ISOLATE_HOST execution -- those auto-lift the host while the dashboard
+    # still shows Isolated (or flap isolate/unisolate with the watchdog).
     if mapped == "success" and released is True and aid:
-        with db_transaction() as cur:
-            cur.execute(
-                """
-                UPDATE edr_endpoint_isolation
-                SET isolation_status = 'restored', released_at = now()
-                WHERE tenant_id = %s::uuid AND agent_id = %s;
-                """,
-                (row["tenant_id"], aid),
-            )
-        # Never downgrade a previously verified isolate execution on auto-release.
-        if row["action_type"] == "ISOLATE_HOST" and str(row.get("current_status") or "") == "verified":
+        if row["action_type"] != "UNISOLATE_HOST":
+            detail = (
+                (detail or "")
+                + " (ignored auto-release callback; host stays isolated until Un-isolate)"
+            ).strip()
+        else:
+            with db_transaction() as cur:
+                cur.execute(
+                    """
+                    UPDATE edr_endpoint_isolation
+                    SET isolation_status = 'restored', released_at = now()
+                    WHERE tenant_id = %s::uuid AND agent_id = %s;
+                    """,
+                    (row["tenant_id"], aid),
+                )
             final_status = "verified"
             verified = True
-        elif row["action_type"] == "UNISOLATE_HOST":
-            final_status = "verified"
-            verified = True
-        detail = (detail or "Endpoint reported quarantine released; pre-isolate firewall restored").strip()
+            detail = (detail or "Endpoint reported quarantine released; pre-isolate firewall restored").strip()
     # Endpoint-reported applied=true is the only path to isolate Verified (KB-091 Wave 1).
     elif mapped == "success" and row["action_type"] == "ISOLATE_HOST" and applied is True:
         final_status = "verified"
@@ -707,22 +712,6 @@ def execute_edr_action(
             ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
             # Appliance tenants: queue job for local Manager (do not hit cloud Wazuh).
             if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
-                with db_transaction() as cur:
-                    cur.execute(
-                        """
-                        INSERT INTO edr_endpoint_isolation (
-                            tenant_id, agent_id, isolated_by_user_id, isolation_status
-                        )
-                        VALUES (%s::uuid, %s, %s::uuid, 'isolated')
-                        ON CONFLICT (tenant_id, agent_id)
-                        DO UPDATE SET
-                            isolated_at = now(),
-                            isolated_by_user_id = EXCLUDED.isolated_by_user_id,
-                            isolation_status = 'isolated',
-                            released_at = NULL;
-                        """,
-                        (tenant_id, agent_id, user.get("id")),
-                    )
                 return _queue_appliance_ar_job(
                     tenant_id=tenant_id,
                     user=user,
@@ -730,30 +719,14 @@ def execute_edr_action(
                     action_type=body.action_type,
                     agent_id=agent_id,
                     ar_command=ar_cmd,
-                    arguments=[ISOLATE_SECONDS, execution_id],
+                    arguments=[ISOLATE_HOLD_ARG, execution_id],
                 )
-            # extra_args: [seconds, execution_id] - endpoint callbacks use execution_id (KB-091).
+            # extra_args: ["hold", execution_id] -- never a number (Wazuh timeout).
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ar_cmd,
-                arguments=[ISOLATE_SECONDS, execution_id],
+                arguments=[ISOLATE_HOLD_ARG, execution_id],
             )
-            with db_transaction() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO edr_endpoint_isolation (
-                        tenant_id, agent_id, isolated_by_user_id, isolation_status
-                    )
-                    VALUES (%s::uuid, %s, %s::uuid, 'isolated')
-                    ON CONFLICT (tenant_id, agent_id)
-                    DO UPDATE SET
-                        isolated_at = now(),
-                        isolated_by_user_id = EXCLUDED.isolated_by_user_id,
-                        isolation_status = 'isolated',
-                        released_at = NULL;
-                    """,
-                    (tenant_id, agent_id, user.get("id")),
-                )
             shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "ISOLATE_HOST",

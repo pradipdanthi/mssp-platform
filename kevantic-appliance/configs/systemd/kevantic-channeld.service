@@ -17,7 +17,7 @@ RestartSec=5
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic
+ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic /var/ossec/etc/shared
 PrivateTmp=true
 
 [Install]

@@ -42,6 +42,17 @@ try {
   }
 }
 
+try {
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  foreach ($rule in @(Get-NetFirewallRule -Direction Outbound -Action Allow -Enabled True -ErrorAction SilentlyContinue)) {
+    if ($sw.Elapsed.TotalSeconds -gt 12) { break }
+    $n = [string]$rule.Name
+    $d = [string]$rule.DisplayName
+    if ($n -like "MSSP_*" -or $d -like "MSSP_*") { continue }
+    try { Disable-NetFirewallRule -Name $n -ErrorAction SilentlyContinue } catch {}
+  }
+} catch {}
+
 $rules = @(
   @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1514"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1514") },
   @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1515"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1515") },

@@ -202,6 +202,33 @@ function Clear-MsspAllowRules {
   }
 }
 
+function Disable-NonMsspOutboundAllows {
+  # DefaultOutboundAction=Block does NOT override existing Allow rules.
+  # Chrome/Edge/TrueConf Allow rules are why internet stayed up while Isolated.
+  # Timebox so 32-bit execd cannot hang; watchdog continues the rest.
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $disabled = 0
+  try {
+    $rules = @(Get-NetFirewallRule -Direction Outbound -Action Allow -Enabled True -ErrorAction Stop)
+    foreach ($rule in $rules) {
+      if ($sw.Elapsed.TotalSeconds -gt 15) {
+        Write-ArLog "disable outbound allows timebox; watchdog will continue count=$disabled"
+        break
+      }
+      $n = [string]$rule.Name
+      $d = [string]$rule.DisplayName
+      if ($n -like "MSSP_*" -or $d -like "MSSP_*") { continue }
+      try {
+        Disable-NetFirewallRule -Name $n -ErrorAction Stop
+        $disabled += 1
+      } catch {}
+    }
+  } catch {
+    Write-ArLog "disable outbound allows: $($_.Exception.Message)"
+  }
+  Write-ArLog "disabled outbound allow rules count=$disabled elapsed=$([int]$sw.Elapsed.TotalSeconds)s"
+}
+
 function Disable-MsspLateralAllowRules {
   # Do NOT call Get-NetFirewallRule (enumerating every rule hangs 32-bit execd).
   $groups = @(
@@ -647,6 +674,7 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
   Add-LateralBlockRules
   $ok = Set-FirewallDefaultActions -Inbound "Block" -Outbound "Block"
   $state["disabled_allow_rules"] = @(Disable-MsspLateralAllowRules)
+  Disable-NonMsspOutboundAllows
   $state["default_routes"] = @(Save-And-DropDefaultRoutes)
   try {
     $dir = Split-Path $StateFile -Parent
@@ -752,7 +780,10 @@ if ($extra.Count -gt 0 -and @("delete", "remove", "unisolate") -contains ([strin
 }
 $seconds = 0
 if ($extra.Count -gt 0 -and $cmd -ne "delete") {
-  try { $seconds = [int]$extra[0] } catch { $seconds = 0 }
+  $first = [string]$extra[0]
+  if ($first.ToLowerInvariant() -notin @("hold", "delete", "remove", "unisolate")) {
+    try { $seconds = [int]$first } catch { $seconds = 0 }
+  }
   if ($extra.Count -gt 1) { $executionId = [string]$extra[1] }
 }
 if ($seconds -lt 0) { $seconds = 0 }
@@ -768,10 +799,18 @@ if (-not $allowTimed) {
 }
 Write-ArLog "execution_id=$executionId cmd=$cmd seconds=$seconds timed=$allowTimed"
 
-if (@("delete", "remove") -contains $cmd.ToLowerInvariant()) {
+$explicitUnisolate = $false
+if ($extra.Count -gt 0 -and @("delete", "remove", "unisolate") -contains ([string]$extra[0]).ToLowerInvariant()) {
+  $explicitUnisolate = $true
+}
+
+if ($explicitUnisolate) {
   $fromState = Remove-IsolationRules
   if (-not $executionId -and $fromState) { $executionId = $fromState }
   Send-MsspEdrCallback -ExecutionId $executionId -Status "success" -Message "QUARANTINE RELEASED applied=true" -Applied $true -Released $true
+} elseif (@("delete", "remove") -contains $cmd.ToLowerInvariant()) {
+  Write-ArLog "ignored wazuh timed delete cmd=$cmd -- hold until Un-isolate"
+  exit 0
 } else {
   $applied = [bool](Add-IsolationRules -Seconds $seconds -ExecutionId $executionId)
   if ($applied) {

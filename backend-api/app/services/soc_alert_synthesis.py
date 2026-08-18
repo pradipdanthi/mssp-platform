@@ -33,6 +33,43 @@ def _eventdata_from_raw(raw: Dict[str, Any]) -> Dict[str, Any]:
     return eventdata if isinstance(eventdata, dict) else {}
 
 
+def _syscheck_from_raw(raw: Dict[str, Any]) -> Dict[str, Any]:
+    syscheck = raw.get("syscheck")
+    return syscheck if isinstance(syscheck, dict) else {}
+
+
+def _str_or_none(value: Any, limit: int = 4000) -> Optional[str]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text[:limit] if text else None
+
+
+def _parse_hashes(value: Any) -> tuple[Optional[str], Optional[str]]:
+    md5 = None
+    sha256 = None
+    if not value:
+        return md5, sha256
+    text = str(value).strip()
+    for part in text.split(","):
+        piece = part.strip()
+        if "=" in piece:
+            key, raw_val = piece.split("=", 1)
+            key = key.strip().lower()
+            raw_val = raw_val.strip().lower()
+            if key == "md5" and len(raw_val) == 32:
+                md5 = raw_val
+            if key == "sha256" and len(raw_val) == 64:
+                sha256 = raw_val
+        else:
+            low = piece.lower()
+            if len(low) == 32:
+                md5 = low
+            if len(low) == 64:
+                sha256 = low
+    return md5, sha256
+
+
 def extract_mac_from_raw(raw: Dict[str, Any]) -> Optional[str]:
     agent = _agent_from_raw(raw)
     for key in ("mac", "mac_address", "Mac"):
@@ -124,6 +161,107 @@ def build_asset_context(row: Dict[str, Any]) -> Dict[str, Any]:
         "wazuh_agent_id": (
             str(details.get("wazuh_agent_id") or agent.get("id") or "").strip() or None
         ),
+    }
+
+
+def build_alert_evidence(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract customer-safe forensic detail from stored alert payloads."""
+    raw = _raw_dict(row)
+    rule = _rule_from_raw(raw)
+    syscheck = _syscheck_from_raw(raw)
+    eventdata = _eventdata_from_raw(raw)
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+
+    file_path = _str_or_none(
+        syscheck.get("path")
+        or eventdata.get("TargetFilename") or eventdata.get("targetFilename")
+        or eventdata.get("FilePath") or eventdata.get("filePath")
+        or data.get("path")
+        or raw.get("path"),
+        1000,
+    )
+    process_name = _str_or_none(
+        eventdata.get("Image") or eventdata.get("image")
+        or eventdata.get("process_name") or data.get("process_name"),
+        500,
+    )
+    parent_process_name = _str_or_none(
+        eventdata.get("ParentImage") or eventdata.get("parentImage")
+        or eventdata.get("parent_process_name")
+        or data.get("parent_process_name"),
+        500,
+    )
+    command_line = _str_or_none(
+        eventdata.get("CommandLine") or eventdata.get("commandLine")
+        or eventdata.get("command_line") or data.get("command_line"),
+        4000,
+    )
+    parent_command_line = _str_or_none(
+        eventdata.get("ParentCommandLine") or eventdata.get("parentCommandLine")
+        or eventdata.get("parent_command_line")
+        or data.get("parent_command_line"),
+        4000,
+    )
+    hash_md5, hash_sha256 = _parse_hashes(
+        eventdata.get("Hashes") or eventdata.get("hashes")
+        or syscheck.get("sha256") or syscheck.get("md5")
+    )
+    if not hash_md5:
+        hash_md5 = _str_or_none(syscheck.get("md5") or data.get("md5"), 32)
+    if not hash_sha256:
+        hash_sha256 = _str_or_none(
+            syscheck.get("sha256")
+            or data.get("sha256")
+            or eventdata.get("sha256")
+            or eventdata.get("Sha256"),
+            64,
+        )
+    file_name = _str_or_none(
+        syscheck.get("filename")
+        or eventdata.get("FileName")
+        or eventdata.get("fileName")
+        or eventdata.get("TargetFilename")
+        or eventdata.get("targetFilename"),
+        255,
+    )
+    if file_name and ("/" in file_name or "\\" in file_name):
+        file_name = file_name.replace("\\", "/").rsplit("/", 1)[-1][:255]
+    if not file_name and file_path:
+        file_name = file_path.replace("\\", "/").rsplit("/", 1)[-1][:255]
+
+    mitre = row.get("mitre_mapping")
+    if isinstance(mitre, str):
+        try:
+            mitre = json.loads(mitre)
+        except (TypeError, ValueError):
+            mitre = {}
+    if not isinstance(mitre, dict):
+        mitre = {}
+    tactics = mitre.get("tactics") if isinstance(mitre.get("tactics"), list) else []
+    techniques = mitre.get("techniques") if isinstance(mitre.get("techniques"), list) else []
+
+    technique_values: list[str] = []
+    for item in techniques[:10]:
+        if isinstance(item, dict):
+            value = str(item.get("id") or item.get("name") or "").strip()
+        else:
+            value = str(item).strip()
+        if value:
+            technique_values.append(value[:160])
+
+    return {
+        "wazuh_rule_id": extract_wazuh_rule_id(raw),
+        "wazuh_rule_level": _str_or_none(rule.get("level"), 16),
+        "file_path": file_path,
+        "file_name": file_name,
+        "process_name": process_name,
+        "parent_process_name": parent_process_name,
+        "command_line": command_line,
+        "parent_command_line": parent_command_line,
+        "hash_md5": hash_md5,
+        "hash_sha256": hash_sha256,
+        "mitre_tactics": [str(x)[:120] for x in tactics[:10] if str(x).strip()],
+        "mitre_techniques": technique_values,
     }
 
 
@@ -230,6 +368,7 @@ def apply_soc_enrichment(row: Dict[str, Any]) -> Dict[str, Any]:
     out = dict(row)
     ctx = build_asset_context(out)
     out.update(ctx)
+    out.update(build_alert_evidence(out))
 
     synth = synthesize_soc_guidance(out)
     if not (out.get("ai_likely_attack_type") or "").strip():

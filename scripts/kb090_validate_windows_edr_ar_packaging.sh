@@ -36,6 +36,14 @@ grep -q 'mssp-kill-process.cmd' backend-api/app/services/edr_actions.py \
   || fail "edr_actions WIN kill default must be mssp-kill-process.cmd"
 grep -q 'EDR_ISOLATE_SECONDS") or "0"' backend-api/app/services/edr_actions.py \
   || fail "isolate default must be hold-until-unisolate (0)"
+grep -q 'ISOLATE_HOLD_ARG' backend-api/app/services/edr_actions.py \
+  || fail "isolate must pass hold token, not a numeric Wazuh timeout"
+grep -q 'ignored wazuh timed delete' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows isolate must ignore Wazuh timed delete"
+grep -q 'Disable-NonMsspOutboundAllows' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows isolate must disable existing outbound Allow rules"
+grep -q 'sysnative' deploy/wazuh-active-response/windows/mssp-isolate-host.cmd \
+  || fail "Windows isolate cmd must launch 64-bit PowerShell"
 grep -q '_publish_windows_edr_ar_shared' kevantic-appliance/cli/kevantic-cli/kevantic_cli/register_ops.py \
   || fail "appliance CLI must publish Windows isolate scripts to Manager shared"
 grep -q 'hold-until-unisolate' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \

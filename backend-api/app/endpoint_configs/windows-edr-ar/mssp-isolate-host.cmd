@@ -10,5 +10,9 @@ REM copy silently never runs, leaving the stale auto-lift script in bin.
 set "MSSP_AR_PS1=%~dp0mssp-isolate-host.ps1"
 set "MSSP_SHARED_PS1=%~dp0..\..\shared\mssp-isolate-host.ps1"
 if exist "%MSSP_SHARED_PS1%" copy /Y "%MSSP_SHARED_PS1%" "%MSSP_AR_PS1%" >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$ps1=$env:MSSP_AR_PS1; $raw=[Console]::In.ReadLine(); if ($null -eq $raw) { $raw = '' }; & $ps1 $raw; exit $LASTEXITCODE"
+REM 32-bit Wazuh execd must launch 64-bit PowerShell (sysnative). 32-bit
+REM Get-NetFirewallRule hangs and leaves Chrome/Edge Allow rules enabled.
+set "PS64=%SystemRoot%\sysnative\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%PS64%" set "PS64=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+"%PS64%" -NoProfile -ExecutionPolicy Bypass -Command "$ps1=$env:MSSP_AR_PS1; $raw=[Console]::In.ReadLine(); if ($null -eq $raw) { $raw = '' }; & $ps1 $raw; exit $LASTEXITCODE"
 exit /b %ERRORLEVEL%

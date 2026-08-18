@@ -37,9 +37,13 @@ grep -q '_ensure_local_edr_ar_commands' "$APP/cli/kevantic-cli/kevantic_cli/regi
   && pass "CLI registers isolate AR commands on local Manager" \
   || fail "register_ops.py missing EDR AR command ensure"
 
-grep -q '_publish_windows_edr_ar_shared' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
-  && pass "CLI publishes Windows isolate scripts to Manager shared groups" \
-  || fail "register_ops.py missing Windows EDR shared publish"
+grep -q 'skip shared publish' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI does not fail isolate when Wazuh shared is read-only" \
+  || fail "register_ops.py must skip EROFS on /var/ossec/etc/shared"
+
+grep -q '<timeout_allowed>no</timeout_allowed>' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI disables Wazuh timed-delete on isolate commands" \
+  || fail "register_ops.py isolate commands must set timeout_allowed=no"
 
 grep -q 'Watch-MsspQuarantine.ps1' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
   && pass "golden bake ships Windows isolate watchdog" \

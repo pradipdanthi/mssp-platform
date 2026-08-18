@@ -77,7 +77,7 @@ def to_cloud_alert(event: dict[str, Any]) -> dict[str, Any]:
     Map a local engine event to the safe cloud telemetry contract
     (aligned with KB-057 field set — no raw payloads / IPs by default).
     """
-    clean = scrub(event, keep_ips=False)
+    clean = scrub(event, keep_ips=True)
     severity = str(
         clean.get("severity")
         or clean.get("rule", {}).get("level")
@@ -126,6 +126,49 @@ def to_cloud_alert(event: dict[str, Any]) -> dict[str, Any]:
             parts.append(f"agent={agent.get('name')}")
         description = "; ".join(parts) if parts else None
 
+    rule = clean.get("rule") if isinstance(clean.get("rule"), dict) else {}
+    mitre = rule.get("mitre") if isinstance(rule.get("mitre"), dict) else {}
+    data = clean.get("data") if isinstance(clean.get("data"), dict) else {}
+    syscheck = clean.get("syscheck") if isinstance(clean.get("syscheck"), dict) else {}
+    win = data.get("win") if isinstance(data.get("win"), dict) else {}
+    eventdata = win.get("eventdata") if isinstance(win.get("eventdata"), dict) else {}
+
+    source_ip = (
+        clean.get("source_ip")
+        or data.get("srcip")
+        or data.get("src_ip")
+        or eventdata.get("SourceIp")
+        or eventdata.get("IpAddress")
+    )
+    destination_ip = (
+        clean.get("destination_ip")
+        or data.get("dstip")
+        or data.get("dst_ip")
+        or eventdata.get("DestinationIp")
+    )
+    source_user = (
+        clean.get("source_user")
+        or data.get("srcuser")
+        or eventdata.get("User")
+        or eventdata.get("TargetUserName")
+        or eventdata.get("SubjectUserName")
+    )
+
+    mitre_mapping = {
+        "tactics": mitre.get("tactic") or mitre.get("tactics") or [],
+        "techniques": mitre.get("id") or mitre.get("technique") or mitre.get("techniques") or [],
+    }
+
+    rich_event = {
+        "agent": agent,
+        "rule": rule,
+        "decoder": decoder,
+        "data": data,
+        "syscheck": syscheck,
+        "timestamp": clean.get("timestamp"),
+        "location": clean.get("location"),
+    }
+
     return {
         "source_tool": source_tool,
         "external_alert_id": external_id,
@@ -134,4 +177,9 @@ def to_cloud_alert(event: dict[str, Any]) -> dict[str, Any]:
         "alert_description": (str(description)[:4000] if description else None),
         "event_time": clean.get("event_time") or clean.get("timestamp"),
         "destination_host": str(host)[:255] if host else None,
+        "source_ip": str(source_ip)[:64] if source_ip else None,
+        "destination_ip": str(destination_ip)[:64] if destination_ip else None,
+        "source_user": str(source_user)[:255] if source_user else None,
+        "raw_event": rich_event,
+        "mitre_mapping": mitre_mapping,
     }

@@ -186,6 +186,48 @@ export default function IncidentDetailPage() {
                   <tr><th>Business impact</th><td>{incidentQuery.data.primary_alert.ai_business_impact ?? incidentQuery.data.incident.business_impact ?? "—"}</td></tr>
                   <tr><th>Recommended action</th><td>{incidentQuery.data.primary_alert.ai_recommended_action ?? "—"}</td></tr>
                   <tr><th>Likely attack type</th><td>{incidentQuery.data.primary_alert.ai_likely_attack_type ?? "—"}</td></tr>
+                  <tr>
+                    <th>Wazuh rule</th>
+                    <td>
+                      {incidentQuery.data.primary_alert.wazuh_rule_id
+                        ? `${incidentQuery.data.primary_alert.wazuh_rule_id}${
+                            incidentQuery.data.primary_alert.wazuh_rule_level
+                              ? ` (level ${incidentQuery.data.primary_alert.wazuh_rule_level})`
+                              : ""
+                          }`
+                        : "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <h2 className="section-title">Primary alert evidence</h2>
+              <table className="data-table">
+                <tbody>
+                  <tr><th>File path</th><td className="cell-mono">{incidentQuery.data.primary_alert.file_path ?? "—"}</td></tr>
+                  <tr><th>File name</th><td>{incidentQuery.data.primary_alert.file_name ?? "—"}</td></tr>
+                  <tr><th>Process</th><td className="cell-mono">{incidentQuery.data.primary_alert.process_name ?? "—"}</td></tr>
+                  <tr><th>Parent process</th><td className="cell-mono">{incidentQuery.data.primary_alert.parent_process_name ?? "—"}</td></tr>
+                  <tr><th>Command line</th><td className="cell-mono">{incidentQuery.data.primary_alert.command_line ?? "—"}</td></tr>
+                  <tr><th>Parent command line</th><td className="cell-mono">{incidentQuery.data.primary_alert.parent_command_line ?? "—"}</td></tr>
+                  <tr><th>SHA256</th><td className="cell-mono">{incidentQuery.data.primary_alert.hash_sha256 ?? "—"}</td></tr>
+                  <tr><th>MD5</th><td className="cell-mono">{incidentQuery.data.primary_alert.hash_md5 ?? "—"}</td></tr>
+                  <tr>
+                    <th>MITRE tactics</th>
+                    <td>
+                      {incidentQuery.data.primary_alert.mitre_tactics?.length
+                        ? incidentQuery.data.primary_alert.mitre_tactics.join(", ")
+                        : "—"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>MITRE techniques</th>
+                    <td>
+                      {incidentQuery.data.primary_alert.mitre_techniques?.length
+                        ? incidentQuery.data.primary_alert.mitre_techniques.join(", ")
+                        : "—"}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </>

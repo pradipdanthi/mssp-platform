@@ -68,19 +68,22 @@ def main() -> int:
     cmd = str(data.get("command") or "add").lower()
     args = (data.get("parameters") or {}).get("extra_args") or data.get("arguments") or []
     # Control-plane UNISOLATE_HOST sends arguments=["delete"].
-    if args and str(args[0]).lower() in ("delete", "remove", "unisolate"):
-        cmd = "delete"
+    explicit = bool(args and str(args[0]).lower() in ("delete", "remove", "unisolate"))
     seconds = 0
-    if args and cmd not in ("delete", "remove"):
-        try:
-            seconds = int(args[0])
-        except ValueError:
-            seconds = 0
+    if args and not explicit:
+        first = str(args[0]).lower()
+        if first not in ("hold",):
+            try:
+                seconds = int(args[0])
+            except ValueError:
+                seconds = 0
     seconds = max(0, min(seconds, 86400))
     if os.environ.get("MSSP_ALLOW_TIMED_ISOLATE") != "1":
         seconds = 0
-    if cmd in ("delete", "remove"):
+    if explicit:
         isolate_delete()
+    elif cmd in ("delete", "remove"):
+        log("ignored wazuh timed delete; hold until Un-isolate")
     else:
         isolate_add(seconds)
     return 0

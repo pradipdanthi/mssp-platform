@@ -55,6 +55,18 @@ def _customer_safe_alert_detail_row(row: Optional[Dict[str, Any]]) -> Optional[D
         "recommended_action": enriched.get("ai_recommended_action"),
         "likely_attack_type": enriched.get("ai_likely_attack_type"),
         "criticality": enriched.get("asset_criticality"),
+        "wazuh_rule_id": enriched.get("wazuh_rule_id"),
+        "wazuh_rule_level": enriched.get("wazuh_rule_level"),
+        "file_path": enriched.get("file_path"),
+        "file_name": enriched.get("file_name"),
+        "process_name": enriched.get("process_name"),
+        "parent_process_name": enriched.get("parent_process_name"),
+        "command_line": enriched.get("command_line"),
+        "parent_command_line": enriched.get("parent_command_line"),
+        "hash_md5": enriched.get("hash_md5"),
+        "hash_sha256": enriched.get("hash_sha256"),
+        "mitre_tactics": enriched.get("mitre_tactics") or [],
+        "mitre_techniques": enriched.get("mitre_techniques") or [],
     }
 
 
@@ -452,6 +464,7 @@ def customer_incident_detail(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
             sa.ai_likely_attack_type
@@ -488,6 +501,7 @@ def customer_incident_detail(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
             sa.ai_likely_attack_type
@@ -595,6 +609,7 @@ def customer_alerts(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
             sa.ai_likely_attack_type
@@ -655,6 +670,7 @@ def customer_alert_detail(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
             sa.ai_likely_attack_type

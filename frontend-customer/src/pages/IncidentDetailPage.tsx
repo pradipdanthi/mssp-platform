@@ -174,6 +174,64 @@ export default function IncidentDetailPage() {
                     <th>Recommended action</th>
                     <td>{data.primary_alert.recommended_action ?? "—"}</td>
                   </tr>
+                  <tr>
+                    <th>Wazuh rule</th>
+                    <td>
+                      {data.primary_alert.wazuh_rule_id
+                        ? `${data.primary_alert.wazuh_rule_id}${data.primary_alert.wazuh_rule_level ? ` (level ${data.primary_alert.wazuh_rule_level})` : ""}`
+                        : "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <h2 className="page-subtitle" style={{ marginTop: "1.5rem" }}>
+                Primary alert evidence
+              </h2>
+              <table className="data-table">
+                <tbody>
+                  <tr>
+                    <th>File path</th>
+                    <td>{data.primary_alert.file_path ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>File name</th>
+                    <td>{data.primary_alert.file_name ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Process</th>
+                    <td>{data.primary_alert.process_name ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Parent process</th>
+                    <td>{data.primary_alert.parent_process_name ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>Command line</th>
+                    <td>{data.primary_alert.command_line ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>SHA256</th>
+                    <td>{data.primary_alert.hash_sha256 ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>MD5</th>
+                    <td>{data.primary_alert.hash_md5 ?? "—"}</td>
+                  </tr>
+                  <tr>
+                    <th>MITRE</th>
+                    <td>
+                      {[
+                        ...(data.primary_alert.mitre_tactics ?? []),
+                        ...(data.primary_alert.mitre_techniques ?? []),
+                      ].length
+                        ? [
+                            ...(data.primary_alert.mitre_tactics ?? []),
+                            ...(data.primary_alert.mitre_techniques ?? []),
+                          ].join(", ")
+                        : "—"}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </>

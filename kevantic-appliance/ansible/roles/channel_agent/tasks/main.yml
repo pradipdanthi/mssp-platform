@@ -54,7 +54,7 @@
     ansible.builtin.lineinfile:
       path: /etc/systemd/system/kevantic-channeld.service
       regexp: '^ReadWritePaths='
-      line: 'ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic'
+      line: 'ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic /var/ossec/etc/shared'
     failed_when: false
 
   - name: Enable kevantic-channeld (starts after register when creds exist)
