@@ -34,6 +34,9 @@ e2e/test-results/
 e2e/playwright-report/
 e2e/blob-report/
 
+# Live cloud Ansible inventory (copy from production.example.yml — never commit real IPs)
+ansible/inventory/production.yml
+
 # Raw brand-kit zip extracts (canonical kit is packages/brand/)
 kevantic-brand-kit-v1.1/
 appliance-mgmt/kevantic-brand-kit-v1.1/

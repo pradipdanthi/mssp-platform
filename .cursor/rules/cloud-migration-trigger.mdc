@@ -1,0 +1,156 @@
+---
+description: Trigger phrase "its time to migrate the lab to cloud" — laptop-to-cloud migration copilot (never target lab inventory).
+alwaysApply: true
+---
+
+# Cloud migration trigger (laptop → fresh cloud)
+
+**Match:** any user prompt containing `its time to migrate the lab to cloud` (case-insensitive).
+
+When that phrase appears, become the **remote deployment copilot**. Guide **one phase at a time**. Do not skip ahead. Do not print `.env` or `.secrets` values.
+
+## Hard safety (never violate)
+
+- Operator is on a **local laptop** with this Git workspace. Cloud nodes are reached **over SSH**.
+- **Never** run deploy/Ansible against `ansible/inventory/hosts.yml` (lab). That file is the on-prem lab only.
+- **Never** run `./scripts/production_deploy_control_plane.sh` on lab VM 100 unless the operator explicitly says to redeploy the lab.
+- `production_deploy_engines.sh` **defaults** to lab controller `192.168.0.222` and lab inventory. Cloud runs **must** set `MSSP_ANSIBLE_INVENTORY`, `MSSP_ANSIBLE_CONTROLLER` / `KEVANTIC_ANSIBLE_HOST`, and SSH keys first.
+- Live engine flags are **Ansible extra-vars** (`-e`), not environment prefixes on the wrapper script. Prefixing `zeek_live_install_approved=true ./scripts/production_deploy_engines.sh` does **nothing** and must not be used.
+- Do not start live engine installs until Phase A is **CLOUD-READY: YES** and Phase B inventory/env exist. Confirm each live playbook target is a **cloud** `ansible_host`.
+
+---
+
+## PHASE A — Local pre-flight
+
+Run (do not guess):
+
+```bash
+python3 scripts/verify_platform_state.py --release
+```
+
+**Stop** unless output contains `CLOUD-READY: YES`, `GAP 0`, `FAILED 0`. Fix failures before Phase B.
+
+Also point at [`docs/PLATFORM_CLOUD_CUTOVER_AUDIT.md`](docs/PLATFORM_CLOUD_CUTOVER_AUDIT.md) — verifier CLOUD-READY does not skip leftover lab URL defaults.
+
+---
+
+## PHASE B — Cloud inventory and production env
+
+1. Create a **gitignored** live inventory (never commit real IPs):
+
+```bash
+cp ansible/inventory/production.example.yml ansible/inventory/production.yml
+```
+
+2. Edit `ansible/inventory/production.yml`: fill every `<PLACEHOLDER>` (`ansible_host`, SSH user/key, `mssp_home_net`). `wazuh_manager_ip` is resolved in `ansible/group_vars/all.yml` from `[wazuh_stack][0].ansible_host` — do not hardcode a lab IP.
+
+3. On the **cloud control-plane VM** (not the laptop, not lab `.env`):
+
+```bash
+cp deploy/environments/control-plane.production.example.env .env
+# merge deploy/environments/engines.production.example.env into .env
+```
+
+Required (presence only — never echo values):
+
+- `APP_ENV=production`
+- `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, `JWT_SECRET` (not `<REQUIRED>`)
+- `ADMIN_PORTAL_BASE_URL`, `CUSTOMER_PORTAL_BASE_URL`, `CORS_ALLOWED_ORIGINS` (HTTPS cloud domains)
+- Engine URLs (`WAZUH_API_URL`, `THEHIVE_URL`, `MISP_URL`, `VELOCIRAPTOR_SERVER_URL`) as **cloud** private DNS/IPs
+- Populate `.secrets/` on the cloud host (Wazuh, TheHive, MISP, Velociraptor, Shuffle webhook)
+
+4. Admin UI appliance gateway is baked at **image build**. Before rebuilding `frontend-admin` on the cloud host, set `VITE_APPLIANCE_GATEWAY_URL` to the cloud appliance-management HTTPS URL (do not leave `http://192.168.0.224:8000`).
+
+Wait for the operator to confirm inventory + `.env` are on **cloud** hosts before Phase C.
+
+---
+
+## PHASE C — Deploy over SSH (cloud inventory only)
+
+Set cloud-only env in the laptop session (example names — use the operator’s values):
+
+```bash
+export MSSP_ANSIBLE_INVENTORY="$PWD/ansible/inventory/production.yml"
+export MSSP_ANSIBLE_CONTROLLER="<CLOUD_BASTION_IP>"
+export KEVANTIC_ANSIBLE_HOST="<CLOUD_BASTION_IP>"
+export MSSP_ANSIBLE_CONTROLLER_USER="<SSH_USER>"
+export KEVANTIC_ANSIBLE_USER="<SSH_USER>"
+export MSSP_ANSIBLE_CONTROLLER_KEY="$HOME/.ssh/<cloud_bastion_key>"
+export KEVANTIC_ANSIBLE_SSH_KEY="$HOME/.ssh/<cloud_bastion_key>"
+```
+
+Refuse to continue if `MSSP_ANSIBLE_INVENTORY` is missing or still points at `hosts.yml`.
+
+### C1 — Control plane
+
+`production_deploy_control_plane.sh` runs **Docker Compose on the machine where it is executed**. SSH to the **cloud control-plane** VM, sync this Git tree there, then:
+
+```bash
+./scripts/production_deploy_control_plane.sh
+```
+
+Do **not** run that script on the laptop unless the laptop *is* the cloud control-plane.
+
+### C2 — Engines
+
+The wrapper only syncs Ansible and runs `bootstrap.yml` when approved. It does **not** live-install Zeek/MISP/Velociraptor.
+
+```bash
+MSSP_ENGINE_DEPLOY_APPROVED=1 ./scripts/production_deploy_engines.sh
+```
+
+Then, **on the cloud bastion**, using **production inventory** (copy `production.yml` to the controller; do not overwrite lab `hosts.yml`):
+
+```bash
+cd /home/secadmin/mssp-automation/ansible   # or MSSP_REMOTE_ANSIBLE
+INV=inventory/production.yml
+
+ansible-playbook -i "$INV" playbooks/wazuh-stack-install.yml \
+  -e wazuh_execution_mode=install -e wazuh_live_install_approved=true
+ansible-playbook -i "$INV" playbooks/mssp-linux-midlayer-manager.yml
+ansible-playbook -i "$INV" playbooks/case-soar.yml \
+  -e case_soar_execution_mode=install -e case_soar_live_install_approved=true
+ansible-playbook -i "$INV" playbooks/suricata-sensor.yml \
+  -e suricata_execution_mode=install -e suricata_live_install_approved=true
+ansible-playbook -i "$INV" playbooks/suricata-wazuh.yml
+ansible-playbook -i "$INV" playbooks/zeek.yml \
+  -e zeek_execution_mode=install -e zeek_live_install_approved=true
+ansible-playbook -i "$INV" playbooks/misp.yml \
+  -e misp_execution_mode=install -e misp_live_install_approved=true
+ansible-playbook -i "$INV" playbooks/greenbone.yml \
+  -e greenbone_execution_mode=install -e greenbone_live_install_approved=true
+ansible-playbook -i "$INV" playbooks/vuln-free-stack.yml \
+  -e vuln_free_execution_mode=install -e vuln_free_live_install_approved=true
+ansible-playbook -i "$INV" playbooks/velociraptor.yml \
+  -e velociraptor_execution_mode=install -e velociraptor_live_install_approved=true
+```
+
+Take snapshots / confirm rollback before each live install. One playbook at a time unless the operator asks to continue.
+
+---
+
+## PHASE D — Smoke the live cloud URLs
+
+Replace `<cloud-api>` / `<admin>` / `<portal>` with the operator’s TLS names.
+
+```bash
+curl -fsS https://<cloud-api>/health
+curl -sS -o /dev/null -w '%{http_code}\n' https://<admin>/
+curl -sS -o /dev/null -w '%{http_code}\n' https://<portal>/
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://<admin>/api/auth/login \
+  -H 'Content-Type: application/json' -d '{"email":"bad@example.com","password":"wrong","portal":"admin"}'
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://<portal>/api/auth/login \
+  -H 'Content-Type: application/json' -d '{"email":"bad@example.com","password":"wrong","portal":"customer"}'
+```
+
+Expect health JSON with `database`/`redis` ok; portal homes **200**; bad logins **401** (not 502/405).
+
+On the cloud control-plane checkout (same Git tree), re-run:
+
+```bash
+python3 scripts/verify_platform_state.py --release
+```
+
+That command verifies **code/pack portability** (0 GAP / 0 FAILED). It does not probe live engines. Live engine proof is health/login plus engine adapter URLs in cloud `.env`.
+
+Then stop and wait for the operator before any further live installs.

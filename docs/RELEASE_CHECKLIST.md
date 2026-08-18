@@ -27,3 +27,7 @@ Day-to-day lab work may run without `--release` (FAILED still exits 1; GAP is re
 Whenever architecture, API schemas, engine rules, or agent installers change: **update `scripts/verify_platform_state.py` with new assertions and re-run it**.
 
 Lab-vs-cloud snapshot (engines, portals, leftover lab defaults): [`docs/PLATFORM_CLOUD_CUTOVER_AUDIT.md`](PLATFORM_CLOUD_CUTOVER_AUDIT.md). The verifier can be CLOUD-READY while that audit still lists operator cutover steps.
+
+## Laptop trigger (cloud migration copilot)
+
+From Cursor on a laptop, the exact phrase **`its time to migrate the lab to cloud`** (any casing) loads [`.cursor/rules/cloud-migration-trigger.mdc`](../.cursor/rules/cloud-migration-trigger.mdc). The agent then walks **Phase A → D** (verifier → `production.yml` + production `.env` → SSH deploy to **cloud** inventory → live smoke). It must not target lab `ansible/inventory/hosts.yml` or run Compose on lab VM 100.
