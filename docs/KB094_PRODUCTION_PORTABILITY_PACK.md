@@ -38,9 +38,11 @@ cd /opt/mssp-control
 2. `git clone` + checkout **release tag**
 3. `cp deploy/environments/control-plane.production.example.env .env` → fill secrets
 4. Populate `.secrets/` from vault
-5. `./scripts/production_deploy_control_plane.sh`
+5. `./scripts/production_deploy_control_plane.sh`  
+   (downloads `Sysmon64.exe` when missing so Windows agent ZIPs work offline; air-gapped: copy the binary into `backend-api/app/endpoint_configs/` first)
 6. `./scripts/bootstrap_platform_admin.sh` (KB-020)
 7. Engines: fill `ansible/inventory/production.example.yml` → sync → playbooks (see `ansible/README.md`)
+8. After Wazuh Manager exists: `playbooks/mssp-linux-midlayer-manager.yml` (KB-105; listed in `production_deploy_engines.sh`)
 
 ### Engines (dry-run default)
 
@@ -137,4 +139,22 @@ cd /opt/mssp-control
 | KB-060 | Backup / upgrade runbook |
 | KB-073 | Tenant deployment modes |
 | KB-093P | Appliance forwarder + golden 199 |
+| KB-105 | Linux auditd execve mid-layer + offline Windows Sysmon embed |
 | KB-036 | Enterprise roadmap |
+
+---
+
+## 10. Mid-layer EDR on cloud cutover (KB-105)
+
+These steps are now part of the portable recipe — do not re-invent them in cloud:
+
+| Step | Why |
+|------|-----|
+| `scripts/cache_sysmon_offline.sh` (run by `production_deploy_control_plane.sh`) | `Sysmon64.exe` is **gitignored**. A fresh `git clone` would ship Windows ZIPs without it unless this runs (or you copy the binary). |
+| `playbooks/mssp-linux-midlayer-manager.yml` | Copies Manager rules 110001–110005 + Linux helper + appends `mssp-linux-exec-localfile` on any `[wazuh_stack]` host. **Does not** require lab VM ID 101. |
+| Lab shortcut | `scripts/kb105_apply_linux_midlayer_manager.sh` with `WAZUH_MANAGER_HOST` / `WAZUH_SSH_KEY` |
+| Proof | `python3 scripts/verify_e2e_midlayer_edr.py` |
+
+**Lab identity lock (do not ignore on cloud):** `wazuh-stack-install.yml` still asserts `vm_id == 101` (KB-041). On cloud inventory set `vm_id: 101` on the Wazuh host (and the matching IDs on other engine roles) until a later KB lifts those asserts. The mid-layer playbook does **not** use that lock.
+
+---

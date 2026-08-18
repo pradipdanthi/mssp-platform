@@ -68,10 +68,14 @@ if echo "$CHANGED" | grep -qE '^deploy/|^docs/KB094|^scripts/production_deploy|^
   run ./scripts/kb094_validate_production_portability_pack.sh
 fi
 
-if echo "$CHANGED" | grep -qE '^backend-api/.*agent_package_builder|^backend-api/.*agent_install_repo|^backend-api/app/endpoint_configs/|^scripts/Enable-MsspWindowsTelemetry|^scripts/bootstrap_windows_telemetry|^scripts/kb088_validate_windows|^scripts/kb105_'; then
+if echo "$CHANGED" | grep -qE '^backend-api/.*agent_package_builder|^backend-api/.*agent_install_repo|^backend-api/app/endpoint_configs/|^scripts/Enable-MsspWindowsTelemetry|^scripts/bootstrap_windows_telemetry|^scripts/kb088_validate_windows|^scripts/kb105_|^scripts/verify_e2e_midlayer|^scripts/cache_sysmon'; then
   matched=1
   run ./scripts/kb088_validate_windows_telemetry_onboarding.sh
   run ./scripts/kb105_validate_linux_midlayer_edr.sh
+  if [[ -x ./scripts/verify_e2e_midlayer_edr.py ]]; then
+    log "RUN ./scripts/verify_e2e_midlayer_edr.py"
+    python3 ./scripts/verify_e2e_midlayer_edr.py
+  fi
 fi
 
 if echo "$CHANGED" | grep -qE '^frontend-admin/'; then

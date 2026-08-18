@@ -65,5 +65,25 @@ grep -q 'KB-094' DOCS/CURSOR_REDEPLOYMENT_PLAYBOOK.md \
   || fail "redeployment playbook must reference KB-094"
 pass "DR playbook cross-link"
 
+need scripts/cache_sysmon_offline.sh
+need scripts/verify_e2e_midlayer_edr.py
+need deploy/wazuh-manager/mssp_linux_exec_rules.xml
+need ansible/playbooks/mssp-linux-midlayer-manager.yml
+[[ -x scripts/cache_sysmon_offline.sh ]] || fail "cache_sysmon_offline.sh not executable"
+[[ -x scripts/verify_e2e_midlayer_edr.py ]] || fail "verify_e2e_midlayer_edr.py not executable"
+pass "mid-layer EDR cloud portability files present"
+
+grep -q 'cache_sysmon_offline' scripts/production_deploy_control_plane.sh \
+  || fail "control plane deploy must cache Sysmon64.exe before image build"
+grep -q 'mssp-linux-midlayer-manager' scripts/production_deploy_engines.sh \
+  || fail "engine deploy order must include Linux mid-layer Manager rules"
+grep -q 'verify_e2e_midlayer_edr' deploy/RELEASE_CHECKLIST.md \
+  || fail "release checklist must run mid-layer EDR verifier"
+pass "mid-layer EDR wired into cloud deploy path"
+
+grep -q 'vm_id: 101' ansible/inventory/production.example.yml \
+  || fail "production inventory example must set wazuh vm_id 101 (KB-041 lock)"
+pass "production inventory documents engine vm_id locks"
+
 echo "RESULT: PASSED"
 echo "KB-094 PRODUCTION PORTABILITY PACK VALIDATION PASSED"

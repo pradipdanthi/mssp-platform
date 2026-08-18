@@ -19,6 +19,33 @@ need_file deploy/wazuh-manager/mssp_linux_exec_rules.xml
 need_file backend-api/app/endpoint_configs/Enable-MsspWindowsTelemetry.ps1
 need_file scripts/Enable-MsspWindowsTelemetry.ps1
 need_file scripts/bootstrap_windows_telemetry.ps1
+need_file scripts/cache_sysmon_offline.sh
+need_file scripts/verify_e2e_midlayer_edr.py
+need_file ansible/playbooks/mssp-linux-midlayer-manager.yml
+need_file ansible/roles/mssp_linux_midlayer/tasks/main.yml
+need_file ansible/roles/mssp_linux_midlayer/files/mssp_linux_exec_rules.xml
+need_file ansible/roles/mssp_linux_midlayer/files/install-mssp-linux-telemetry.sh
+
+cmp -s deploy/wazuh-manager/mssp_linux_exec_rules.xml \
+  ansible/roles/mssp_linux_midlayer/files/mssp_linux_exec_rules.xml \
+  && ok "Ansible Manager XML matches deploy canonical" \
+  || bad "Ansible mssp_linux_exec_rules.xml drifted from deploy/"
+cmp -s backend-api/app/endpoint_configs/linux-edr-telemetry/install-mssp-linux-telemetry.sh \
+  ansible/roles/mssp_linux_midlayer/files/install-mssp-linux-telemetry.sh \
+  && ok "Ansible Linux helper matches endpoint_configs canonical" \
+  || bad "Ansible install-mssp-linux-telemetry.sh drifted from backend-api/"
+grep -q 'sudo test -d /var/ossec/etc/shared/default' scripts/kb105_apply_linux_midlayer_manager.sh \
+  && ok "lab apply uses sudo test for shared/default" \
+  || bad "apply script must sudo test shared/default (secadmin cannot stat it)"
+grep -q 'mssp-linux-exec-localfile' scripts/kb105_apply_linux_midlayer_manager.sh \
+  && ok "lab apply script appends Linux agent.conf localfile" \
+  || bad "apply script missing Linux agent.conf"
+grep -q 'cache_sysmon_offline' scripts/production_deploy_control_plane.sh \
+  && ok "control-plane deploy caches Sysmon before image build" \
+  || bad "production_deploy_control_plane.sh missing Sysmon cache"
+grep -q 'mssp-linux-midlayer-manager' scripts/production_deploy_engines.sh \
+  && ok "engine deploy order includes Linux mid-layer playbook" \
+  || bad "production_deploy_engines.sh missing mid-layer playbook"
 
 grep -q 'key=mssp_exec' backend-api/app/endpoint_configs/linux-edr-telemetry/mssp-exec.rules \
   && ok "auditd execve key=mssp_exec" || bad "auditd key"

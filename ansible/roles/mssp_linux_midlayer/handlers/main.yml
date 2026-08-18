@@ -1,0 +1,9 @@
+---
+- name: Restart wazuh-manager
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - "60"
+      - /var/ossec/bin/wazuh-control
+      - restart
+  listen: Restart wazuh-manager

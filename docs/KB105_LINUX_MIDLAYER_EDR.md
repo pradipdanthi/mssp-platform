@@ -62,3 +62,15 @@ python3 ./scripts/verify_e2e_midlayer_edr.py
 ```
 
 Re-download tenant agent ZIPs after the control-plane rebuild. Existing Linux endpoints pick up the helper from Manager shared config (hourly wodle) or by re-running the installer.
+
+## Cloud / production (no rework)
+
+A `git clone` of this repo on a new cloud host is enough for mid-layer EDR **if** you use the existing deploy scripts:
+
+1. `./scripts/production_deploy_control_plane.sh` caches `Sysmon64.exe` before the Docker build (skip with `MSSP_SKIP_SYSMON_CACHE=1` only when already cached). Air-gapped: copy `Sysmon64.exe` into `/opt/mssp-control/backend-api/app/endpoint_configs/` (never commit it).
+2. After Wazuh Manager is installed, run `ansible/playbooks/mssp-linux-midlayer-manager.yml` (listed in `scripts/production_deploy_engines.sh`). It does **not** require lab VM ID 101.
+3. Lab shortcut: `WAZUH_MANAGER_HOST=... WAZUH_SSH_KEY=... ./scripts/kb105_apply_linux_midlayer_manager.sh` — copies rules **and** appends Linux `agent.conf` localfile without replacing Windows `mssp-edr-ar-sync`.
+4. Proof: `python3 scripts/verify_e2e_midlayer_edr.py` and `./scripts/kb105_validate_linux_midlayer_edr.sh`.
+
+`wazuh-stack-install.yml` still asserts `vm_id == 101` (KB-041). Cloud inventory must set `vm_id: 101` on the Wazuh host until a later KB lifts that lock. That is **not** a KB-105 gap; the mid-layer playbook is already portable.
+

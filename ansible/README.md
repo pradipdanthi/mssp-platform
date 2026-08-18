@@ -38,7 +38,8 @@ upgrade any SOC component.
 
 | Area | Playbook | Notes |
 |------|----------|--------|
-| Wazuh | `playbooks/wazuh-stack-install.yml` | Defaults to preflight; live install needs explicit flags + snapshot |
+| Wazuh | `playbooks/wazuh-stack-install.yml` | Defaults to preflight; live install needs explicit flags + snapshot. Asserts `vm_id==101`. |
+| Linux mid-layer EDR | `playbooks/mssp-linux-midlayer-manager.yml` | After Manager exists. Rules 110001–110005 + Linux shared helper. Cloud-portable (no VM 101 identity assert). |
 | TheHive/Shuffle | `playbooks/case-soar.yml` | Co-located VM 102 |
 | Suricata | `playbooks/suricata-sensor.yml` (+ wazuh forward) | VM 106 |
 | Greenbone | `playbooks/greenbone.yml` | VM 109 |

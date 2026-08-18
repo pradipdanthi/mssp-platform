@@ -45,6 +45,8 @@ bash scripts/dr_cold_copy_control_plane.sh /path/to/MSSP_Full_Backup
 - [ ] `/health` → database + redis ok
 - [ ] Admin `:3000` and Customer `:3001` → 200
 - [ ] Bad login → **401** (not 502)
+- [ ] `python3 scripts/verify_e2e_midlayer_edr.py` → PASSED (Windows ZIP embeds `Sysmon64.exe` when cached; Linux ZIP includes auditd helper)
+- [ ] Air-gapped Windows sites: `Sysmon64.exe` present under `backend-api/app/endpoint_configs/` before rebuild (`./scripts/cache_sysmon_offline.sh` or copy the binary; never commit it). Skip with `MSSP_SKIP_SYSMON_CACHE=1` only when you already cached it.
 
 ## 6. Bootstrap (fresh production only)
 
@@ -60,7 +62,13 @@ bash scripts/dr_cold_copy_control_plane.sh /path/to/MSSP_Full_Backup
 # Copy ansible/inventory/production.example.yml → hosts.yml on controller; fill placeholders
 MSSP_ENGINE_DEPLOY_APPROVED=1 ./scripts/production_deploy_engines.sh
 # Then run approved playbooks per ansible/README.md
+# After Wazuh Manager is up:
+#   ansible-playbook playbooks/mssp-linux-midlayer-manager.yml
+# (listed in production_deploy_engines.sh PLAYBOOK_ORDER; does not install Wazuh)
 ```
+
+- [ ] Manager has `mssp_linux_exec_rules.xml` (rules 110001–110005)
+- [ ] Default shared `agent.conf` includes Linux `mssp-linux-exec-localfile` (Windows `mssp-edr-ar-sync` still present)
 
 ## 8. Appliances
 
@@ -75,6 +83,8 @@ MSSP_ENGINE_DEPLOY_APPROVED=1 ./scripts/production_deploy_engines.sh
 ./scripts/kb011_validate_protected_apis.sh
 ./scripts/kb036_validate_mssp_platform_architecture_roadmap.sh
 ./scripts/kb094_validate_production_portability_pack.sh
+./scripts/kb105_validate_linux_midlayer_edr.sh
+python3 scripts/verify_e2e_midlayer_edr.py
 ```
 
 Add module-specific scripts for anything changed since last tag.

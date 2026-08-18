@@ -1,0 +1,60 @@
+---
+# Cloud-portable: any host in [wazuh_stack], not locked to lab VM 101 identity.
+- name: Install MSSP Linux execve Manager rules directory
+  ansible.builtin.file:
+    path: /var/ossec/etc/rules
+    state: directory
+    owner: wazuh
+    group: wazuh
+    mode: "0750"
+
+- name: Install MSSP Linux execve high-signal rules (110001-110019)
+  ansible.builtin.copy:
+    src: mssp_linux_exec_rules.xml
+    dest: /var/ossec/etc/rules/mssp_linux_exec_rules.xml
+    owner: wazuh
+    group: wazuh
+    mode: "0640"
+  notify: Restart wazuh-manager
+
+- name: Ensure default shared group exists
+  ansible.builtin.file:
+    path: /var/ossec/etc/shared/default
+    state: directory
+    owner: wazuh
+    group: wazuh
+    mode: "0770"
+
+- name: Publish Linux telemetry helper to default shared group
+  ansible.builtin.copy:
+    src: install-mssp-linux-telemetry.sh
+    dest: /var/ossec/etc/shared/default/install-mssp-linux-telemetry.sh
+    owner: wazuh
+    group: wazuh
+    mode: "0640"
+
+- name: Append Linux execve localfile to default agent.conf (do not replace Windows blocks)
+  ansible.builtin.blockinfile:
+    path: /var/ossec/etc/shared/default/agent.conf
+    create: true
+    owner: wazuh
+    group: wazuh
+    mode: "0660"
+    marker: "<!-- {mark} MSSP Linux execve localfile -->"
+    block: |
+      <agent_config os="linux">
+        <!-- mssp-linux-exec-localfile -->
+        <localfile>
+          <log_format>audit</log_format>
+          <location>/var/log/audit/audit.log</location>
+        </localfile>
+        <wodle name="command">
+          <disabled>no</disabled>
+          <tag>mssp-linux-exec-sync</tag>
+          <interval>60m</interval>
+          <run_on_start>yes</run_on_start>
+          <timeout>120</timeout>
+          <ignore_output>yes</ignore_output>
+          <command>bash /var/ossec/etc/shared/install-mssp-linux-telemetry.sh</command>
+        </wodle>
+      </agent_config>

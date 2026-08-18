@@ -21,6 +21,7 @@ REMOTE_ANSIBLE="${MSSP_REMOTE_ANSIBLE:-/home/secadmin/mssp-automation/ansible}"
 # Recommended dependency order for full SOC stack
 PLAYBOOK_ORDER=(
   "playbooks/wazuh-stack-install.yml"
+  "playbooks/mssp-linux-midlayer-manager.yml"
   "playbooks/case-soar.yml"
   "playbooks/suricata-sensor.yml"
   "playbooks/suricata-wazuh.yml"

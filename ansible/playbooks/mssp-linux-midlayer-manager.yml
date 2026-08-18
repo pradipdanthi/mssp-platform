@@ -1,0 +1,11 @@
+---
+# KB-105: Linux mid-layer execve rules + shared helper on any Wazuh Manager.
+# Cloud-portable (uses [wazuh_stack] host group). Does not install Wazuh.
+# Does not change integratord, source_tool, or listen ports.
+- name: MSSP Linux mid-layer Manager rules
+  hosts: wazuh_stack
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  roles:
+    - role: mssp_linux_midlayer

@@ -28,6 +28,8 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: wazuh_cluster
+          # wazuh-stack-install.yml asserts vm_id==101 (KB-041 lab lock). Keep 101 on cloud until that assert is lifted.
+          vm_id: 101
 
     case_management:
       hosts:
@@ -37,6 +39,7 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: case_soar
+          vm_id: 102
 
     network_sensors:
       hosts:
@@ -46,6 +49,7 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: suricata_sensor
+          vm_id: 106
 
     vulnerability:
       hosts:
@@ -55,6 +59,7 @@ all:
           ansible_ssh_private_key_file: <PATH_TO_SSH_KEY>
           ansible_become: true
           deployment_role: greenbone
+          vm_id: 109
 
     vuln_free_stack:
       hosts:
@@ -65,6 +70,7 @@ all:
           ansible_become: true
           deployment_role: vuln_free_stack
           colocated_with: greenbone
+          vm_id: 109
 
     appliance_management:
       hosts:

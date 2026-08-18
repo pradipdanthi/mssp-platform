@@ -39,6 +39,20 @@ for f in "${SECRET_STUBS[@]}"; do
   fi
 done
 
+# Offline Windows agent ZIPs: embed Sysmon64.exe when we can reach Sysinternals
+# (or when the binary is already cached). Air-gapped: copy Sysmon64.exe into
+# backend-api/app/endpoint_configs/ then rebuild. Never commit the binary.
+if [[ "${MSSP_SKIP_SYSMON_CACHE:-}" != "1" ]]; then
+  if [[ -f "$ROOT/backend-api/app/endpoint_configs/Sysmon64.exe" ]]; then
+    log "Sysmon64.exe already cached — Windows ZIPs will embed it"
+  elif [[ -x "$ROOT/scripts/cache_sysmon_offline.sh" ]]; then
+    log "Caching Sysmon64.exe for offline Windows agent packages (best-effort)"
+    if ! "$ROOT/scripts/cache_sysmon_offline.sh"; then
+      log "WARN: Sysmon cache skipped (no network). Air-gapped hosts: copy Sysmon64.exe into backend-api/app/endpoint_configs/ before rebuild"
+    fi
+  fi
+fi
+
 BUILD_OPTS=(--build)
 if [[ "${MSSP_FORCE_REBUILD:-}" == "1" ]]; then
   log "MSSP_FORCE_REBUILD=1 — no-cache rebuild of backend + frontends"
