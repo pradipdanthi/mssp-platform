@@ -6,6 +6,7 @@ Customer paths never expose third-party engine brand names.
 
 from __future__ import annotations
 
+import logging
 from html import escape
 from typing import Any, Dict, Optional
 
@@ -253,7 +254,10 @@ def admin_compliance_sync(
     try:
         result = sca.sync_tenant_sca(tenant["id"])
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=f"Compliance sync failed: {exc}") from exc
+        logging.getLogger(__name__).exception(
+            "compliance sync failed tenant=%s", tenant.get("short_code")
+        )
+        raise HTTPException(status_code=502, detail="Compliance sync failed") from exc
     return {"tenant": {"short_code": tenant["short_code"], "name": tenant["name"]}, **result}
 
 

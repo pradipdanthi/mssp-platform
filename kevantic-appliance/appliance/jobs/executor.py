@@ -16,6 +16,21 @@ from appliance.hunting.retrospective_sweeper import RetrospectiveSweeper
 logger = logging.getLogger(__name__)
 
 
+logger = logging.getLogger(__name__)
+
+_NUCLEI_TEMPLATE_RE = __import__("re").compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,240}$")
+
+
+def _validate_nuclei_template(value: str) -> str:
+    """Reject CLI flag injection via template paths (OWASP command injection)."""
+    text = str(value or "").strip()
+    if not text or text.startswith("-"):
+        raise ValueError("invalid nuclei template path")
+    if not _NUCLEI_TEMPLATE_RE.fullmatch(text):
+        raise ValueError("invalid nuclei template path")
+    return text
+
+
 def _engine_bin(name: str) -> Path:
     return Path(os.environ.get("KEVANTIC_ENGINE_BIN", "/opt/kevantic/engines/bin")) / name
 
@@ -155,7 +170,11 @@ def _exec_easm(job_type: str, payload: Dict[str, Any]) -> Tuple[bool, Dict[str, 
         "-silent",
     ]
     for t in templates:
-        cmd.extend(["-t", str(t)])
+        try:
+            safe_t = _validate_nuclei_template(str(t))
+        except ValueError:
+            return False, {"error": "invalid nuclei template path"}
+        cmd.extend(["-t", safe_t])
     # Cap runtime for appliance safety
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=int(payload.get("timeout_sec") or 120))

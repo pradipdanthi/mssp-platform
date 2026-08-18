@@ -7,6 +7,7 @@ only the file/router they live in changed.
 - GET /health - public, reports API/database/Redis status
 """
 
+import logging
 import os
 from typing import Any, Dict
 
@@ -15,6 +16,7 @@ from fastapi import APIRouter
 from app.db.session import fetch_one, redis_client
 
 router = APIRouter(tags=["system"])
+logger = logging.getLogger(__name__)
 
 APP_ENV = os.getenv("APP_ENV", "development")
 
@@ -39,13 +41,15 @@ def health() -> Dict[str, Any]:
         row = fetch_one("SELECT 1 AS ok;")
         db_status = "ok" if row.get("ok") == 1 else "error"
     except Exception as exc:
-        db_status = f"error: {exc}"
+        logger.exception("health database check failed")
+        db_status = "error"
 
     try:
         pong = redis_client().ping()
         redis_status = "ok" if pong else "error"
     except Exception as exc:
-        redis_status = f"error: {exc}"
+        logger.exception("health redis check failed")
+        redis_status = "error"
 
     api_status = "ok" if db_status == "ok" and redis_status == "ok" else "degraded"
 

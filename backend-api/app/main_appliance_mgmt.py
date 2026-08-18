@@ -6,6 +6,7 @@ register, heartbeat, channel, alert ingest, telemetry.
 Admin/Customer portals stay on VM 100.
 """
 
+import logging
 import os
 
 from fastapi import FastAPI
@@ -33,6 +34,7 @@ app.include_router(appliance_alert_ingest_router)
 app.include_router(telemetry_ingest_router)
 
 APP_ENV = os.getenv("APP_ENV", "production")
+logger = logging.getLogger(__name__)
 
 
 @app.get("/")
@@ -54,13 +56,15 @@ def health() -> Dict[str, Any]:
     try:
         row = fetch_one("SELECT 1 AS ok;")
         db_status = "ok" if row.get("ok") == 1 else "error"
-    except Exception as exc:
-        db_status = f"error: {exc}"
+    except Exception:
+        logger.exception("appliance mgmt health database check failed")
+        db_status = "error"
     try:
         pong = redis_client().ping()
         redis_status = "ok" if pong else "error"
-    except Exception as exc:
-        redis_status = f"error: {exc}"
+    except Exception:
+        logger.exception("appliance mgmt health redis check failed")
+        redis_status = "error"
     api_status = "ok" if db_status == "ok" and redis_status == "ok" else "degraded"
     return {
         "api": api_status,
