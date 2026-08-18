@@ -118,7 +118,11 @@ export function getEdrMetrics(tenantShortCode?: string): Promise<EdrMetricsSumma
 
 export function statusBadgeLabel(status: string, actionType?: string): string {
   const s = status.toLowerCase();
-  if (s === "executing" || s === "pending") return "Executing…";
+  if (s === "executing" || s === "pending") {
+    if (actionType === "UNISOLATE_HOST") return "Un-isolating…";
+    if (actionType === "ISOLATE_HOST") return "Isolating…";
+    return "Processing…";
+  }
   if (s === "failed") return "Failed";
   // Isolate only becomes "Isolated" after a real verified signal (not agent-online alone).
   if (s === "verified" && actionType === "ISOLATE_HOST") return "Isolated";

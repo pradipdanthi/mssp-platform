@@ -48,6 +48,18 @@ grep -q '_publish_windows_edr_ar_shared' kevantic-appliance/cli/kevantic-cli/kev
   || fail "appliance CLI must publish Windows isolate scripts to Manager shared"
 grep -q 'hold-until-unisolate' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
   || fail "Windows isolate must hold until Un-isolate"
+grep -q 'Repair-MsspLateralAccess' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows un-isolate must repair Remote Desktop / lateral firewall groups"
+grep -q 'Get-MsspRemoteAccessState' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows isolate must snapshot remote access (RDP) state for restore"
+grep -q 'Start-MsspDeferredUnisolateRepair' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows un-isolate must defer slow firewall restore (Wazuh API timeout)"
+grep -q 'Repair-MsspRdpAccessExplicit' deploy/wazuh-active-response/windows/mssp-isolate-host.ps1 \
+  || fail "Windows un-isolate must explicitly restore RDP (3389 / TermService)"
+grep -q 'run_active_response_resilient' backend-api/app/services/wazuh_client.py \
+  || fail "Wazuh client must support resilient AR dispatch with retries"
+grep -q 'tolerate_api_timeout' backend-api/app/services/edr_actions.py \
+  || fail "EDR isolate/unisolate must tolerate Wazuh API 3021 timeout"
 echo "OK: package + API command defaults"
 
 section "3. Build a sample Windows ZIP and assert AR members"

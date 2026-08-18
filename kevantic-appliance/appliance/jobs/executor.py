@@ -84,7 +84,7 @@ def _exec_containment(job_type: str, payload: Dict[str, Any]) -> Tuple[bool, Dic
         f"/active-response?agents_list={agent_id}",
         body={"command": cmd, "arguments": [str(a) for a in arguments]},
         headers={"Authorization": f"Bearer {token}"},
-        timeout=30,
+        timeout=120,
     )
     data = result.get("data") or {}
     if int(data.get("total_failed_items") or 0) > 0 or int(result.get("error") or 0) != 0:

@@ -134,7 +134,7 @@ function Send-MsspEdrCallback {
       $headers["X-SOC-Sync-Key"] = $CallbackKey
       $headers["X-EDR-Callback-Key"] = $CallbackKey
     }
-    Invoke-RestMethod -Method Post -Uri $CallbackUrl -Body $json -ContentType "application/json" -Headers $headers -TimeoutSec 15 | Out-Null
+    Invoke-RestMethod -Method Post -Uri $CallbackUrl -Body $json -ContentType "application/json" -Headers $headers -TimeoutSec 3 | Out-Null
     Write-ArLog "CALLBACK ok status=$Status applied=$Applied released=$Released exec=$ExecutionId"
   } catch {
     Write-ArLog "CALLBACK failed: $($_.Exception.Message)"
@@ -202,17 +202,160 @@ function Clear-MsspAllowRules {
   }
 }
 
+$Script:MsspLateralFirewallGroups = @(
+  "Remote Desktop",
+  "Remote Assistance",
+  "File and Printer Sharing",
+  "Windows Remote Management",
+  "World Wide Web Services (HTTP)",
+  "Secure World Wide Web Services (HTTPS)"
+)
+
+function Get-MsspRemoteAccessState {
+  $ra = [ordered]@{
+    fDenyTSConnections   = $null
+    term_service_start   = $null
+    term_service_running = $null
+  }
+  try {
+    $v = (Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+      -Name fDenyTSConnections -ErrorAction Stop).fDenyTSConnections
+    $ra.fDenyTSConnections = [int]$v
+  } catch {}
+  try {
+    $svc = Get-Service -Name TermService -ErrorAction Stop
+    $ra.term_service_start = [string]$svc.StartType
+    $ra.term_service_running = ($svc.Status -eq "Running")
+  } catch {}
+  return $ra
+}
+
+function Restore-MsspRemoteAccessState([object]$Saved) {
+  if (-not $Saved) { return }
+  $deny = $null
+  try { $deny = [int]$Saved.fDenyTSConnections } catch { $deny = $null }
+  if ($null -ne $deny) {
+    try {
+      Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+        -Name fDenyTSConnections -Value $deny -Type DWord -Force -ErrorAction Stop
+      Write-ArLog "restore fDenyTSConnections=$deny"
+    } catch {
+      Write-ArLog "WARN restore fDenyTSConnections: $($_.Exception.Message)"
+    }
+  }
+  $start = $null
+  try { $start = [string]$Saved.term_service_start } catch { $start = $null }
+  if ($start) {
+    try {
+      Set-Service -Name TermService -StartupType $start -ErrorAction Stop
+      Write-ArLog "restore TermService StartupType=$start"
+    } catch {
+      Write-ArLog "WARN restore TermService start: $($_.Exception.Message)"
+    }
+  }
+  $wasRunning = $false
+  try { $wasRunning = [bool]$Saved.term_service_running } catch { $wasRunning = $false }
+  if ($wasRunning) {
+    try {
+      Start-Service -Name TermService -ErrorAction Stop
+      Write-ArLog "restore TermService started"
+    } catch {
+      Write-ArLog "WARN start TermService: $($_.Exception.Message)"
+    }
+  }
+}
+
+function Restore-MsspOutboundAllows([object]$SavedNames, [int]$MaxSeconds = 8) {
+  if (-not $SavedNames) { return 0 }
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  $count = 0
+  foreach ($name in @($SavedNames)) {
+    if ($sw.Elapsed.TotalSeconds -gt $MaxSeconds) { break }
+    $n = [string]$name
+    if (-not $n) { continue }
+    try {
+      Enable-NetFirewallRule -Name $n -ErrorAction Stop
+      $count += 1
+    } catch {
+      Write-ArLog "WARN enable outbound allow $n : $($_.Exception.Message)"
+    }
+  }
+  $remaining = @($SavedNames | Select-Object -Skip $count)
+  Write-ArLog "restored outbound allow rules count=$count remaining=$($remaining.Count) elapsed=$([int]$sw.Elapsed.TotalSeconds)s"
+  return $remaining.Count
+}
+
+function Repair-MsspRdpAccessExplicit([object]$SavedRemoteAccess) {
+  # Explicit RDP restore: firewall group + 3389 rules + TermService + fDenyTSConnections.
+  [void](Invoke-Netsh @("advfirewall", "firewall", "set", "rule", "group=remote desktop", "new", "enable=yes"))
+  try {
+    foreach ($rule in @(Get-NetFirewallRule -DisplayName "Remote Desktop*" -ErrorAction SilentlyContinue)) {
+      Enable-NetFirewallRule -Name $rule.Name -ErrorAction SilentlyContinue
+      Write-ArLog "RDP repair enabled rule=$($rule.Name)"
+    }
+  } catch {
+    Write-ArLog "WARN RDP firewall rules: $($_.Exception.Message)"
+  }
+  $deny = 0
+  if ($SavedRemoteAccess) {
+    try {
+      $v = [int]$SavedRemoteAccess.fDenyTSConnections
+      if ($null -ne $v) { $deny = $v }
+    } catch {}
+  }
+  try {
+    Set-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server" `
+      -Name fDenyTSConnections -Value $deny -Type DWord -Force -ErrorAction Stop
+    Write-ArLog "RDP repair fDenyTSConnections=$deny"
+  } catch {
+    Write-ArLog "WARN RDP registry: $($_.Exception.Message)"
+  }
+  try {
+    $svc = Get-Service -Name TermService -ErrorAction SilentlyContinue
+    if ($svc -and $svc.StartType -eq "Disabled") {
+      Write-ArLog "RDP repair TermService startup=Disabled (unchanged)"
+    } elseif ($svc -and $svc.Status -ne "Running") {
+      Start-Service -Name TermService -WarningAction SilentlyContinue -ErrorAction Stop
+      Write-ArLog "RDP repair TermService started"
+    }
+  } catch {
+    Write-ArLog "WARN RDP TermService: $($_.Exception.Message)"
+  }
+}
+
+function Repair-MsspLateralAccess {
+  foreach ($g in $Script:MsspLateralFirewallGroups) {
+    $r = Invoke-Netsh @("advfirewall", "firewall", "set", "rule", "group=$g", "new", "enable=yes")
+    Write-ArLog "repair lateral group '$g' rc=$($r.ExitCode)"
+  }
+  try {
+    $svc = Get-Service -Name TermService -ErrorAction SilentlyContinue
+    if ($svc -and $svc.StartType -ne "Disabled" -and $svc.Status -ne "Running") {
+      Start-Service -Name TermService -ErrorAction Stop
+      Write-ArLog "repair TermService started"
+    }
+  } catch {
+    Write-ArLog "WARN repair TermService: $($_.Exception.Message)"
+  }
+}
+
 function Disable-NonMsspOutboundAllows {
   # DefaultOutboundAction=Block does NOT override existing Allow rules.
   # Chrome/Edge/TrueConf Allow rules are why internet stayed up while Isolated.
-  # Timebox so 32-bit execd cannot hang; watchdog continues the rest.
+  # Timebox so 32-bit execd cannot hang; cap saved names so unisolate stays fast.
   $sw = [Diagnostics.Stopwatch]::StartNew()
   $disabled = 0
+  $disabledNames = @()
+  $maxSaved = 40
   try {
     $rules = @(Get-NetFirewallRule -Direction Outbound -Action Allow -Enabled True -ErrorAction Stop)
     foreach ($rule in $rules) {
-      if ($sw.Elapsed.TotalSeconds -gt 15) {
+      if ($sw.Elapsed.TotalSeconds -gt 12) {
         Write-ArLog "disable outbound allows timebox; watchdog will continue count=$disabled"
+        break
+      }
+      if ($disabledNames.Count -ge $maxSaved) {
+        Write-ArLog "disable outbound allows cap=$maxSaved (watchdog continues)"
         break
       }
       $n = [string]$rule.Name
@@ -221,26 +364,20 @@ function Disable-NonMsspOutboundAllows {
       try {
         Disable-NetFirewallRule -Name $n -ErrorAction Stop
         $disabled += 1
+        $disabledNames += $n
       } catch {}
     }
   } catch {
     Write-ArLog "disable outbound allows: $($_.Exception.Message)"
   }
   Write-ArLog "disabled outbound allow rules count=$disabled elapsed=$([int]$sw.Elapsed.TotalSeconds)s"
+  return @($disabledNames)
 }
 
 function Disable-MsspLateralAllowRules {
   # Do NOT call Get-NetFirewallRule (enumerating every rule hangs 32-bit execd).
-  $groups = @(
-    "Remote Desktop",
-    "Remote Assistance",
-    "File and Printer Sharing",
-    "Windows Remote Management",
-    "World Wide Web Services (HTTP)",
-    "Secure World Wide Web Services (HTTPS)"
-  )
   $saved = @()
-  foreach ($g in $groups) {
+  foreach ($g in $Script:MsspLateralFirewallGroups) {
     $r = Invoke-Netsh @("advfirewall", "firewall", "set", "rule", "group=$g", "new", "enable=no")
     Write-ArLog "disable group '$g' rc=$($r.ExitCode)"
     $saved += [ordered]@{ group = $g; was_enabled = $true }
@@ -522,28 +659,145 @@ function Restore-DefaultRoutes([object]$Saved) {
 }
 
 function Repair-MsspEchoRequestRules {
-  # Ping (ICMPv4 echo) is not restored by "inbound Block / outbound Allow" defaults.
-  # Isolate disables File and Printer Sharing Echo Request allows; Un-isolate must
-  # turn them back on even if the snapshot was already consumed (double-lift).
-  try {
-    $rules = Get-NetFirewallRule -ErrorAction SilentlyContinue |
-      Where-Object { [string]$_.DisplayName -like "*Echo Request*" }
-    foreach ($rule in $rules) {
-      try {
-        Enable-NetFirewallRule -Name $rule.Name -ErrorAction Stop
-        Write-ArLog "Repair enabled echo rule name=$($rule.Name) display=$($rule.DisplayName)"
-      } catch {
-        Write-ArLog "WARN enable echo $($rule.Name): $($_.Exception.Message)"
-      }
-    }
-  } catch {
-    Write-ArLog "WARN echo repair: $($_.Exception.Message)"
-  }
-  foreach ($name in @("MSSP_QUAR_BLOCK_ICMP_IN", "MSSP_QUAR_BLOCK_ICMP_OUT", "MSSP_ISOLATE_BLOCK_ICMP_OUT")) {
+  # Never enumerate all firewall rules here (hangs / exceeds Wazuh API timeout).
+  # File and Printer Sharing group repair covers Echo Request allows.
+  foreach ($name in @("MSSP_QUAR_BLOCK_ICMP_IN", "MSSP_QUAR_BLOCK_ICMP_OUT", "MSSP_ISOLATE_BLOCK_ICMP_OUT", "MSSP_HOLD_BLOCK_ICMP_IN", "MSSP_HOLD_BLOCK_ICMP_OUT")) {
     [void](Invoke-Netsh @("advfirewall", "firewall", "delete", "rule", "name=$name"))
   }
 }
 
+function Start-MsspDeferredUnisolateRepair([object]$Deferred) {
+  if (-not $Deferred) { return }
+  $dir = Join-Path $env:ProgramData "mssp-edr-ar"
+  New-Item -ItemType Directory -Path $dir -Force | Out-Null
+  $payload = Join-Path $dir "unisolate-deferred.json"
+  try {
+    ($Deferred | ConvertTo-Json -Compress -Depth 8) | Set-Content -LiteralPath $payload -Encoding ASCII
+  } catch {
+    Write-ArLog "WARN deferred repair payload: $($_.Exception.Message)"
+    return
+  }
+  $ps64 = Join-Path $env:SystemRoot "sysnative\WindowsPowerShell\v1.0\powershell.exe"
+  if (-not (Test-Path -LiteralPath $ps64)) {
+    $ps64 = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+  }
+  $script = $PSCommandPath
+  if (-not $script) { $script = Join-Path $PSScriptRoot "mssp-isolate-host.ps1" }
+  try {
+    Start-Process -FilePath $ps64 -ArgumentList @(
+      "-NoProfile", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass",
+      "-File", $script, "deferred-repair", $payload
+    ) -WindowStyle Hidden | Out-Null
+    Write-ArLog "deferred unisolate repair scheduled payload=$payload"
+  } catch {
+    Write-ArLog "WARN deferred repair start: $($_.Exception.Message)"
+  }
+}
+
+function Invoke-MsspDeferredUnisolateRepair([string]$PayloadPath) {
+  if (-not (Test-Path -LiteralPath $PayloadPath)) { return }
+  try {
+    $deferred = Get-Content -LiteralPath $PayloadPath -Raw | ConvertFrom-Json
+  } catch {
+    Write-ArLog "deferred repair parse failed: $($_.Exception.Message)"
+    return
+  }
+  Write-ArLog "deferred repair begin"
+  $execId = ""
+  try { $execId = [string]$deferred.execution_id } catch { $execId = "" }
+  if ($execId) {
+    Send-MsspEdrCallback -ExecutionId $execId -Status "success" -Message "QUARANTINE RELEASED applied=true" -Applied $true -Released $true
+  }
+  try { Restore-MsspRemoteAccessState -Saved $deferred.remote_access } catch {}
+  Repair-MsspRdpAccessExplicit -SavedRemoteAccess $deferred.remote_access
+  foreach ($pair in @(
+    @{ Prof = "domainprofile"; In = $deferred.domain_in; Out = $deferred.domain_out },
+    @{ Prof = "privateprofile"; In = $deferred.private_in; Out = $deferred.private_out },
+    @{ Prof = "publicprofile"; In = $deferred.public_in; Out = $deferred.public_out }
+  )) {
+    $inA = [string]$pair.In; if (-not $inA) { $inA = "Block" }
+    $outA = [string]$pair.Out; if (-not $outA) { $outA = "Allow" }
+    $inPart = if ($inA -eq "Block") { "blockinbound" } else { "allowinbound" }
+    $outPart = if ($outA -eq "Block") { "blockoutbound" } else { "allowoutbound" }
+    [void](Invoke-Netsh @("advfirewall", "set", $pair.Prof, "firewallpolicy", "$inPart,$outPart"))
+  }
+  try { Restore-MsspOutboundAllows -SavedNames $deferred.disabled_outbound_allows -MaxSeconds 120 } catch {}
+  try { Restore-DefaultRoutes -Saved $deferred.default_routes } catch {}
+  try { Restore-MsspLateralAllowRules -SavedRules $deferred.disabled_allow_rules } catch {}
+  Clear-MsspAllowRules
+  Repair-MsspEchoRequestRules
+  Remove-Item -LiteralPath $PayloadPath -Force -ErrorAction SilentlyContinue
+  Write-ArLog "deferred repair complete"
+}
+
+
+function Set-FirewallOutboundAllowFast {
+  foreach ($profile in @("domainprofile", "privateprofile", "publicprofile")) {
+    $r = Invoke-Netsh @("advfirewall", "set", $profile, "firewallpolicy", "blockinbound,allowoutbound")
+    Write-ArLog "fast outbound allow $profile rc=$($r.ExitCode)"
+  }
+}
+
+function Clear-MsspQuarantineRulesFast {
+  foreach ($name in @(
+    "MSSP_HOLD_BLOCK_RDP_IN", "MSSP_HOLD_BLOCK_RDP_OUT",
+    "MSSP_HOLD_BLOCK_SMB_IN", "MSSP_HOLD_BLOCK_WINRM_IN",
+    "MSSP_HOLD_BLOCK_ICMP_IN", "MSSP_HOLD_BLOCK_ICMP_OUT",
+    "MSSP_QUAR_BLOCK_RDP_IN", "MSSP_QUAR_BLOCK_RDP_OUT",
+    "MSSP_QUAR_BLOCK_SMB_IN", "MSSP_QUAR_BLOCK_SMB_OUT",
+    "MSSP_QUAR_BLOCK_WINRM_IN", "MSSP_QUAR_BLOCK_ICMP_IN", "MSSP_QUAR_BLOCK_ICMP_OUT"
+  )) {
+    [void](Invoke-Netsh @("advfirewall", "firewall", "delete", "rule", "name=$name"))
+  }
+}
+
+function Remove-IsolationRulesFast([string]$ExecutionId = "") {
+  # Wazuh API waits max ~10s for AR exit. While quarantined, slow cmdlets hang.
+  # Sync: netsh-only release (<5s). Callback + deep restore run deferred.
+  Write-ArLog "QUARANTINE fast-release begin exec=$ExecutionId"
+  $env:MSSP_SKIP_SCRIPT_SYNC = "1"
+  $CancelFile = Join-Path $env:ProgramData "mssp-edr-isolate-cancel.flag"
+  try { "cancelled" | Set-Content -LiteralPath $CancelFile -Encoding ASCII } catch {}
+  Stop-MsspQuarantineWatchdog
+
+  $executionIdFromState = $ExecutionId
+  $deferred = [ordered]@{ execution_id = $ExecutionId }
+  $savedRemoteAccess = $null
+  if (Test-Path -LiteralPath $StateFile) {
+    try {
+      $state = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
+      if (-not $executionIdFromState) {
+        try { $executionIdFromState = [string]$state.execution_id } catch { $executionIdFromState = "" }
+      }
+      try { $savedRemoteAccess = $state.remote_access } catch { $savedRemoteAccess = $null }
+      $deferred = [ordered]@{
+        execution_id             = $(if ($executionIdFromState) { $executionIdFromState } else { $ExecutionId })
+        disabled_outbound_allows = @($state.disabled_outbound_allows)
+        default_routes           = @($state.default_routes)
+        disabled_allow_rules     = @($state.disabled_allow_rules)
+        remote_access            = $state.remote_access
+        domain_in                = $state.domain_in
+        domain_out               = $state.domain_out
+        private_in               = $state.private_in
+        private_out              = $state.private_out
+        public_in                = $state.public_in
+        public_out               = $state.public_out
+      }
+      Remove-Item -LiteralPath $StateFile -Force -ErrorAction SilentlyContinue
+    } catch {
+      Write-ArLog "fast-release state read failed: $($_.Exception.Message)"
+    }
+  }
+
+  Set-FirewallOutboundAllowFast
+  Repair-MsspLateralAccess
+  Repair-MsspRdpAccessExplicit -SavedRemoteAccess $savedRemoteAccess
+  Clear-MsspQuarantineRulesFast
+  Remove-Item -LiteralPath $MarkerFile -Force -ErrorAction SilentlyContinue
+  Start-MsspDeferredUnisolateRepair -Deferred $deferred
+  Write-ArLog "QUARANTINE fast-release done exec=$executionIdFromState"
+  return $executionIdFromState
+}
 
 function Remove-IsolationRules {
   # IMPORTANT order:
@@ -564,6 +818,7 @@ function Remove-IsolationRules {
   $savedRules = @()
   $executionIdFromState = ""
   $restoredProfiles = $false
+  $deferredRepair = $null
   if ($hadSnapshot) {
     try {
       $state = Get-Content -LiteralPath $StateFile -Raw | ConvertFrom-Json
@@ -598,7 +853,16 @@ function Remove-IsolationRules {
       if ($state.disabled_allow_rules) {
         $savedRules = @($state.disabled_allow_rules)
       }
-      try { Restore-DefaultRoutes -Saved $state.default_routes } catch {}
+      try { Restore-MsspRemoteAccessState -Saved $state.remote_access } catch {}
+      $allOutbound = @()
+      try { $allOutbound = @($state.disabled_outbound_allows) } catch { $allOutbound = @() }
+      if ($allOutbound.Count -gt 0 -or $state.default_routes -or $state.disabled_allow_rules) {
+        $deferredRepair = [ordered]@{
+          disabled_outbound_allows = @($allOutbound)
+          default_routes           = @($state.default_routes)
+          disabled_allow_rules     = @($state.disabled_allow_rules)
+        }
+      }
       Remove-Item -LiteralPath $StateFile -Force -ErrorAction SilentlyContinue
       Write-ArLog "QUARANTINE lift - snapshot applied (profiles first)"
     } catch {
@@ -629,9 +893,12 @@ function Remove-IsolationRules {
     }
   }
 
-  Restore-MsspLateralAllowRules -SavedRules $savedRules
+  Repair-MsspLateralAccess
   Clear-MsspAllowRules
   Repair-MsspEchoRequestRules
+  if ($deferredRepair) {
+    Start-MsspDeferredUnisolateRepair -Deferred $deferredRepair
+  }
   Remove-Item -LiteralPath $MarkerFile -Force -ErrorAction SilentlyContinue
   return $executionIdFromState
 }
@@ -643,10 +910,11 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
   $state = Get-FirewallStateObject
   $state["seconds"] = 0
   $state["execution_id"] = $ExecutionId
+  $state["remote_access"] = Get-MsspRemoteAccessState
 
   # Contain FIRST. Clearing leftover MSSP rules is fine; never enumerate every
   # Windows firewall rule (that hung 32-bit execd and skipped default-deny).
-  Clear-MsspAllowRules
+  Clear-MsspQuarantineRulesFast
 
   $allowSpecs = @(
     @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1514"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1514") },
@@ -674,8 +942,10 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
   Add-LateralBlockRules
   $ok = Set-FirewallDefaultActions -Inbound "Block" -Outbound "Block"
   $state["disabled_allow_rules"] = @(Disable-MsspLateralAllowRules)
-  Disable-NonMsspOutboundAllows
-  $state["default_routes"] = @(Save-And-DropDefaultRoutes)
+  # Outbound allow disabling + default-route drop are slow on-agent; watchdog handles
+  # outbound allows every 15s. Defer route drop to avoid Wazuh API 10s timeout.
+  $state["disabled_outbound_allows"] = @()
+  $state["default_routes"] = @()
   try {
     $dir = Split-Path $StateFile -Parent
     if (-not (Test-Path -LiteralPath $dir)) {
@@ -724,7 +994,12 @@ function Convert-ArArgToRaw([object]$Value) {
 
 $raw = ""
 $executionId = ""
-if (-not $env:MSSP_ISOLATE_REEXEC) {
+if ($args.Count -ge 1 -and [string]$args[0] -eq "deferred-repair") {
+  $payloadPath = if ($args.Count -gt 1) { [string]$args[1] } else { "" }
+  Invoke-MsspDeferredUnisolateRepair -PayloadPath $payloadPath
+  exit 0
+}
+if (-not $env:MSSP_ISOLATE_REEXEC -and -not $env:MSSP_SKIP_SCRIPT_SYNC) {
   $sharedPs1 = @(
     (Join-Path $PSScriptRoot "..\..\shared\mssp-isolate-host.ps1"),
     "${env:ProgramFiles(x86)}\ossec-agent\shared\mssp-isolate-host.ps1",
@@ -751,9 +1026,7 @@ if ($args.Count -gt 0) {
   $a0 = Convert-ArArgToRaw $args[0]
   if (@("delete", "remove", "unisolate") -contains $a0.ToLowerInvariant()) {
     $executionId = if ($args.Count -gt 1) { [string](Convert-ArArgToRaw $args[1]) } else { "" }
-    $fromState = Remove-IsolationRules
-    if (-not $executionId -and $fromState) { $executionId = $fromState }
-    Send-MsspEdrCallback -ExecutionId $executionId -Status "success" -Message "QUARANTINE RELEASED applied=true" -Applied $true -Released $true
+    [void](Remove-IsolationRulesFast -ExecutionId $executionId)
     exit 0
   }
   if ($a0 -match '[\{\[]') {
@@ -805,9 +1078,8 @@ if ($extra.Count -gt 0 -and @("delete", "remove", "unisolate") -contains ([strin
 }
 
 if ($explicitUnisolate) {
-  $fromState = Remove-IsolationRules
+  $fromState = Remove-IsolationRulesFast -ExecutionId $executionId
   if (-not $executionId -and $fromState) { $executionId = $fromState }
-  Send-MsspEdrCallback -ExecutionId $executionId -Status "success" -Message "QUARANTINE RELEASED applied=true" -Applied $true -Released $true
 } elseif (@("delete", "remove") -contains $cmd.ToLowerInvariant()) {
   Write-ArLog "ignored wazuh timed delete cmd=$cmd -- hold until Un-isolate"
   exit 0

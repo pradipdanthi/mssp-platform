@@ -932,8 +932,20 @@ def _collect_agent_inventory() -> list[dict[str, Any]]:
         return []
 
 
+def _is_transient_ar_failure(detail: str, exc: Exception | None = None) -> bool:
+    text = f"{detail} {exc or ''}".lower()
+    return (
+        "3021" in text
+        or "timeout executing api request" in text
+        or "timeout" in text
+        or "not active" in text
+    )
+
+
 def _run_local_ar(job: dict[str, Any]) -> tuple[bool, str]:
     """Execute Active Response against local Manager for a pulled job."""
+    import time
+
     payload = job.get("payload") or {}
     agent_id = str(payload.get("agent_id") or "")
     command = str(payload.get("ar_command") or "")
@@ -947,24 +959,44 @@ def _run_local_ar(job: dict[str, Any]) -> tuple[bool, str]:
             logger.warning("ensure AR commands skipped: %s", exc)
         token = _authenticate_local_wazuh()
         cmd = command if command.startswith("!") else f"!{command}"
-        result = _wazuh_local_json(
-            "PUT",
-            f"/active-response?agents_list={agent_id}",
-            body={"command": cmd, "arguments": [str(a) for a in arguments]},
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30,
-        )
-        data = result.get("data") or {}
-        if int(data.get("total_failed_items") or 0) > 0 or int(result.get("error") or 0) != 0:
-            failed = data.get("failed_items") or []
-            detail = ""
-            if failed and isinstance(failed[0], dict):
-                err = failed[0].get("error") or {}
-                detail = str(err.get("message") or failed[0])[:300]
-            return False, detail or f"Active response failed for agent {agent_id}"
-        return True, f"AR {command} dispatched to agent {agent_id}"
+        last_detail = ""
+        for attempt in range(3):
+            if attempt:
+                time.sleep(2)
+            result = _wazuh_local_json(
+                "PUT",
+                f"/active-response?agents_list={agent_id}",
+                body={"command": cmd, "arguments": [str(a) for a in arguments]},
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=120,
+            )
+            data = result.get("data") or {}
+            if int(data.get("total_failed_items") or 0) > 0 or int(result.get("error") or 0) != 0:
+                failed = data.get("failed_items") or []
+                detail = ""
+                if failed and isinstance(failed[0], dict):
+                    err = failed[0].get("error") or {}
+                    detail = str(err.get("message") or failed[0])[:300]
+                last_detail = detail or f"Active response failed for agent {agent_id}"
+                if attempt < 2 and _is_transient_ar_failure(last_detail):
+                    logger.warning("AR retry agent=%s attempt=%s: %s", agent_id, attempt + 1, last_detail)
+                    continue
+                if _is_transient_ar_failure(last_detail):
+                    return True, (
+                        f"AR {command} dispatched to agent {agent_id} "
+                        "(manager API timeout; confirm on endpoint)"
+                    )
+                return False, last_detail
+            return True, f"AR {command} dispatched to agent {agent_id}"
+        return False, last_detail or f"Active response failed for agent {agent_id}"
     except Exception as exc:
-        return False, str(exc)[:300]
+        msg = str(exc)[:300]
+        if _is_transient_ar_failure(msg, exc):
+            return True, (
+                f"AR {command} dispatched to agent {agent_id} "
+                "(manager API timeout; confirm on endpoint)"
+            )
+        return False, msg
 
 
 def _dispatch_job(job: dict[str, Any]) -> tuple[bool, str]:

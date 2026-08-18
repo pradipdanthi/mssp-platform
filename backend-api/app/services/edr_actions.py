@@ -101,9 +101,15 @@ def _queue_appliance_ar_job(
         edr_execution_id=execution_id,
         requested_by_user_id=user.get("id"),
     )
+    if action_type == "UNISOLATE_HOST":
+        phase = "Un-isolating"
+    elif action_type == "ISOLATE_HOST":
+        phase = "Isolating"
+    else:
+        phase = "Processing"
     msg = (
-        f"Containment job queued for appliance {appliance.get('appliance_name')} "
-        f"(job {job['id']}). Appliance will execute Active Response on next heartbeat."
+        f"{phase}… command queued for appliance {appliance.get('appliance_name')} "
+        f"(job {job['id']}). The endpoint will update when the agent confirms release."
     )
     _update_execution(execution_id, "executing", msg)
     _audit_success(
@@ -118,6 +124,39 @@ def _queue_appliance_ar_job(
         tenant_short_code=None,
     )
     return execution_id, "executing", msg, None, None
+
+
+def _dispatch_cloud_active_response(
+    *,
+    agent_id: str,
+    ar_cmd: str,
+    arguments: list[str],
+    action_type: str,
+    execution_id: str,
+    tolerate_api_timeout: bool = False,
+) -> Tuple[str, str]:
+    """Run Wazuh AR on cloud manager; return (execution_status, message)."""
+    _, note = wazuh_client.run_active_response_resilient(
+        agent_id=agent_id,
+        command=ar_cmd,
+        arguments=arguments,
+        tolerate_api_timeout=tolerate_api_timeout,
+    )
+    if action_type == "UNISOLATE_HOST":
+        phase = "Un-isolating"
+    elif action_type == "ISOLATE_HOST":
+        phase = "Isolating"
+    else:
+        phase = "Processing"
+    if note == "dispatched_pending_confirmation":
+        msg = (
+            f"{phase}… command sent to agent {agent_id}. "
+            "Wazuh API timed out waiting for script completion; "
+            "confirm on endpoint or wait for callback."
+        )
+        return "executing", msg
+    msg = f"{phase}… Active Response dispatched to agent {agent_id}."
+    return "executing", msg
 
 
 def _tenant_deployment_mode(tenant_id: str) -> Optional[str]:
@@ -722,10 +761,13 @@ def execute_edr_action(
                     arguments=[ISOLATE_HOLD_ARG, execution_id],
                 )
             # extra_args: ["hold", execution_id] -- never a number (Wazuh timeout).
-            wazuh_client.run_active_response(
+            st, msg = _dispatch_cloud_active_response(
                 agent_id=agent_id,
-                command=ar_cmd,
+                ar_cmd=ar_cmd,
                 arguments=[ISOLATE_HOLD_ARG, execution_id],
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tolerate_api_timeout=True,
             )
             shuffle_edr_client.post_edr_workflow(
                 {
@@ -743,14 +785,13 @@ def execute_edr_action(
             _, verify_msg = verify_isolation_state(agent_id, expect_isolated=True)
             hold = "until Un-isolate" if str(ISOLATE_SECONDS) in ("0", "") else f"auto-release ~{ISOLATE_SECONDS}s"
             msg = (
-                f"Network quarantine command dispatched to agent {agent_id} "
-                f"({hold}). "
-                "This is default-deny except Wazuh Manager TCP/UDP 1514 and TCP 1515 (plus DHCP/loopback). "
+                f"{msg} "
+                f"Network quarantine ({hold}). "
                 "Confirm on host log: QUARANTINE ACTIVE applied=true (or FAILED applied=false)."
             )
             _update_execution(
                 execution_id,
-                "success",
+                st,
                 f"{msg} ({verify_msg})",
             )
             _audit_success(
@@ -758,13 +799,13 @@ def execute_edr_action(
                 action_type=body.action_type,
                 execution_id=execution_id,
                 tenant_id=tenant_id,
-                status="success",
+                status=st,
                 message=msg,
                 agent_id=agent_id,
                 incident_number=body.incident_number or (incident or {}).get("incident_number"),
                 tenant_short_code=body.tenant_short_code,
             )
-            return execution_id, "success", msg, None, None
+            return execution_id, st, msg, None, None
 
         if body.action_type == "UNISOLATE_HOST":
             if not agent_id:
@@ -772,15 +813,6 @@ def execute_edr_action(
             # Pass "delete" so the AR script restores connectivity.
             ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
             if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
-                with db_transaction() as cur:
-                    cur.execute(
-                        """
-                        UPDATE edr_endpoint_isolation
-                        SET isolation_status = 'restored', released_at = now()
-                        WHERE tenant_id = %s::uuid AND agent_id = %s;
-                        """,
-                        (tenant_id, agent_id),
-                    )
                 return _queue_appliance_ar_job(
                     tenant_id=tenant_id,
                     user=user,
@@ -790,20 +822,14 @@ def execute_edr_action(
                     ar_command=ar_cmd,
                     arguments=["delete", execution_id],
                 )
-            wazuh_client.run_active_response(
+            st, msg = _dispatch_cloud_active_response(
                 agent_id=agent_id,
-                command=ar_cmd,
+                ar_cmd=ar_cmd,
                 arguments=["delete", execution_id],
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tolerate_api_timeout=True,
             )
-            with db_transaction() as cur:
-                cur.execute(
-                    """
-                    UPDATE edr_endpoint_isolation
-                    SET isolation_status = 'restored', released_at = now()
-                    WHERE tenant_id = %s::uuid AND agent_id = %s;
-                    """,
-                    (tenant_id, agent_id),
-                )
             shuffle_edr_client.post_edr_workflow(
                 {
                     "action": "UNISOLATE_HOST",
@@ -814,15 +840,7 @@ def execute_edr_action(
                     "status": "executing",
                 }
             )
-            ok, verify_msg = verify_isolation_state(agent_id, expect_isolated=False)
-            st = "verified" if ok else "success"
-            msg = f"Network connectivity restore dispatched to endpoint {agent_id}"
-            _update_execution(
-                execution_id,
-                st,
-                f"{msg}; {verify_msg}",
-                verified=ok,
-            )
+            _update_execution(execution_id, st, msg)
             _audit_success(
                 user,
                 action_type=body.action_type,
@@ -1058,6 +1076,29 @@ def execute_edr_action(
         raise ValueError("Unknown action")
     except Exception as exc:
         logger.exception("EDR action failed execution_id=%s", execution_id)
+        if (
+            body.action_type in ("ISOLATE_HOST", "UNISOLATE_HOST")
+            and wazuh_client.is_transient_ar_error(exc)
+        ):
+            phase = "Un-isolating" if body.action_type == "UNISOLATE_HOST" else "Isolating"
+            msg = (
+                f"{phase}… Wazuh manager timed out or agent flickered offline. "
+                "Command may still be running on the endpoint; check status in a moment."
+            )
+            _update_execution(execution_id, "executing", msg)
+            _audit_success(
+                user,
+                action_type=body.action_type,
+                execution_id=execution_id,
+                tenant_id=tenant_id,
+                status="executing",
+                message=msg,
+                agent_id=agent_id,
+                incident_number=body.incident_number
+                or (incident or {}).get("incident_number"),
+                tenant_short_code=body.tenant_short_code,
+            )
+            return execution_id, "executing", msg, None, None
         _update_execution(execution_id, "failed", str(exc)[:500])
         try:
             audit_from_user(

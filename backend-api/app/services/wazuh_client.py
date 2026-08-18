@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import ssl
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -13,6 +15,9 @@ from typing import Any, Dict, Optional, Tuple
 from app.core.secrets import read_secret
 
 logger = logging.getLogger(__name__)
+
+WAZUH_AR_HTTP_TIMEOUT = int(os.getenv("WAZUH_AR_HTTP_TIMEOUT", "120"))
+WAZUH_AR_MAX_RETRIES = max(1, int(os.getenv("WAZUH_AR_MAX_RETRIES", "3")))
 
 
 class WazuhClientError(Exception):
@@ -333,11 +338,44 @@ def list_sca_checks(
         return [], 0
 
 
+def is_transient_ar_error(exc: BaseException) -> bool:
+    """True for Wazuh API timeout (3021), agent offline, or similar retryable AR failures."""
+    text = str(exc).lower()
+    return (
+        "3021" in str(exc)
+        or "timeout executing api request" in text
+        or "timeout" in text
+        or "not active" in text
+        or "agent is not active" in text
+    )
+
+
+def wait_for_agent_active(
+    agent_id: str,
+    *,
+    max_attempts: int = 5,
+    delay_s: float = 2.0,
+) -> Dict[str, Any]:
+    """Poll manager until agent status is active (required before AR dispatch)."""
+    aid = (agent_id or "").strip()
+    last: Optional[Dict[str, Any]] = None
+    for attempt in range(max(1, max_attempts)):
+        info = get_agent_status(aid)
+        last = info
+        if str(info.get("status") or "").lower() == "active":
+            return info
+        if attempt + 1 < max_attempts:
+            time.sleep(delay_s)
+    status = (last or {}).get("status") or "unknown"
+    raise WazuhClientError(f"Agent {aid} is not active (status={status})", status=409)
+
+
 def run_active_response(
     *,
     agent_id: str,
     command: str,
     arguments: Optional[list[str]] = None,
+    timeout: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Dispatch Wazuh active response to one agent (Wazuh 4.14 API).
@@ -359,7 +397,13 @@ def run_active_response(
         "arguments": [str(a) for a in (arguments or [])],
     }
     path = f"/active-response?agents_list={urllib.parse.quote(aid)}"
-    result = _request("PUT", path, token=token, body=body)
+    result = _request(
+        "PUT",
+        path,
+        token=token,
+        body=body,
+        timeout=timeout if timeout is not None else WAZUH_AR_HTTP_TIMEOUT,
+    )
     data = result.get("data") or {}
     if int(data.get("total_failed_items") or 0) > 0 or int(result.get("error") or 0) != 0:
         failed = data.get("failed_items") or []
@@ -372,6 +416,67 @@ def run_active_response(
             status=400,
         )
     return result
+
+
+def run_active_response_resilient(
+    *,
+    agent_id: str,
+    command: str,
+    arguments: Optional[list[str]] = None,
+    tolerate_api_timeout: bool = False,
+) -> Tuple[Dict[str, Any], str]:
+    """
+    Dispatch AR with agent-active checks, retries, and optional timeout tolerance.
+
+    Returns (api_result, dispatch_note). When tolerate_api_timeout is True and Wazuh
+    returns 3021/timeout, returns ({}, 'dispatched_pending_confirmation') instead of raising.
+    """
+    last_exc: Optional[WazuhClientError] = None
+    for attempt in range(WAZUH_AR_MAX_RETRIES):
+        if attempt:
+            time.sleep(min(2 ** attempt, 8))
+        try:
+            try:
+                wait_for_agent_active(agent_id, max_attempts=3, delay_s=2.0)
+            except WazuhClientError as pre:
+                logger.warning(
+                    "Wazuh AR agent %s not active before attempt %s: %s",
+                    agent_id,
+                    attempt + 1,
+                    pre,
+                )
+                if attempt + 1 >= WAZUH_AR_MAX_RETRIES and not tolerate_api_timeout:
+                    raise
+            result = run_active_response(
+                agent_id=agent_id,
+                command=command,
+                arguments=arguments,
+            )
+            return result, "dispatched"
+        except WazuhClientError as exc:
+            last_exc = exc
+            if is_transient_ar_error(exc) and attempt + 1 < WAZUH_AR_MAX_RETRIES:
+                logger.warning(
+                    "Wazuh AR retry %s/%s agent=%s cmd=%s: %s",
+                    attempt + 1,
+                    WAZUH_AR_MAX_RETRIES,
+                    agent_id,
+                    command,
+                    exc,
+                )
+                continue
+            if tolerate_api_timeout and is_transient_ar_error(exc):
+                logger.warning(
+                    "Wazuh AR timeout tolerated agent=%s cmd=%s: %s",
+                    agent_id,
+                    command,
+                    exc,
+                )
+                return {}, "dispatched_pending_confirmation"
+            raise
+    if last_exc:
+        raise last_exc
+    raise WazuhClientError(f"Active response failed for agent {agent_id}")
 
 
 def run_custom_active_response(
