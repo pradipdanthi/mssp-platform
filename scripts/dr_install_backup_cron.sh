@@ -21,6 +21,7 @@ if [[ ! -f "$CONFIG" ]]; then
 MSSP_CONTROL_ROOT=/opt/mssp-control
 MSSP_DR_LOCAL_ROOT=/home/secadmin/MSSP_Backups
 MSSP_DR_KEEP_LOCAL=7
+MSSP_DR_KEEP_GDRIVE=7
 MSSP_DR_BACKUP_PASSPHRASE_FILE=/opt/mssp-control/.secrets/dr_backup_passphrase
 
 # Google Drive via rclone (set to 1 after rclone remote is ready)

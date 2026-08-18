@@ -18,6 +18,7 @@ fi
 
 LOCAL_ROOT="${MSSP_DR_LOCAL_ROOT:-$HOME/MSSP_Backups}"
 KEEP_LOCAL="${MSSP_DR_KEEP_LOCAL:-7}"
+KEEP_GDRIVE="${MSSP_DR_KEEP_GDRIVE:-$KEEP_LOCAL}"
 RCLONE_REMOTE="${MSSP_DR_RCLONE_REMOTE:-gdrive}"
 # One place on Google Drive (under the MSSP folder).
 RCLONE_PATH="${MSSP_DR_RCLONE_PATH:-MSSP/MSSP_Backups}"
@@ -91,6 +92,26 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 log() { echo "[dr-scheduled $(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"; }
 
 die() { log "FAILED: $*"; exit 1; }
+
+apply_gdrive_retention() {
+  [[ "$ENABLE_GDRIVE" == "1" ]] || return 0
+  [[ -n "${RCLONE_BIN:-}" ]] || return 0
+  local remote_base="${RCLONE_REMOTE}:${RCLONE_PATH%/}"
+  log "Applying Google Drive retention KEEP_GDRIVE=$KEEP_GDRIVE"
+  mapfile -t REMOTE_OLD < <(
+    "$RCLONE_BIN" lsf "$remote_base" --dirs-only --max-depth 1 2>/dev/null \
+      | sed 's:/$::' \
+      | grep -E '^20[0-9]{2}-[0-9]{2}-[0-9]{2}_[0-9]{6}Z$' \
+      | sort -r \
+      | tail -n +$((KEEP_GDRIVE + 1)) || true
+  )
+  for name in "${REMOTE_OLD[@]:-}"; do
+    [[ -n "$name" ]] || continue
+    log "Prune old Google Drive backup: $remote_base/$name"
+    "$RCLONE_BIN" purge "$remote_base/$name" --retries 3 --low-level-retries 5 \
+      || log "WARNING: failed to purge $remote_base/$name"
+  done
+}
 
 [[ -d "$REPO_ROOT" ]] || die "Repo missing: $REPO_ROOT"
 [[ -f "$PASSFILE" ]] || die "Passphrase file missing: $PASSFILE"
@@ -231,6 +252,8 @@ find "$LOCAL_ROOT" -mindepth 1 -maxdepth 1 -type f -name '20*.tar.gz' | while re
   base="${tarf%.tar.gz}"
   [[ -d "$base" ]] || { log "Prune orphan Drive tar: $tarf"; rm -f "$tarf"; }
 done
+
+apply_gdrive_retention
 
 log "SUCCESS"
 echo "LOCAL_PATH=$DEST"
