@@ -106,6 +106,9 @@ services:
       AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
       KEVANTIC_LICENSE_PRIVATE_KEY_PEM: ${KEVANTIC_LICENSE_PRIVATE_KEY_PEM:-}
       JUNEXIS_LICENSE_PRIVATE_KEY_PEM: ${JUNEXIS_LICENSE_PRIVATE_KEY_PEM:-}
+      # Host .env sets the path; bind-mount below makes the same path valid in-container.
+      KEVANTIC_LICENSE_PRIVATE_KEY_FILE: ${KEVANTIC_LICENSE_PRIVATE_KEY_FILE:-}
+      JUNEXIS_LICENSE_PRIVATE_KEY_FILE: ${JUNEXIS_LICENSE_PRIVATE_KEY_FILE:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -124,6 +127,7 @@ services:
       - ./.secrets/thehive_password:/run/secrets/thehive_password:ro
       - ./.secrets/wazuh_api_user:/run/secrets/wazuh_api_user:ro
       - ./.secrets/wazuh_api_password:/run/secrets/wazuh_api_password:ro
+      - ./.secrets/licensing-ed25519-v1.key:/opt/mssp-control/.secrets/licensing-ed25519-v1.key:ro
     networks:
       - mssp-backend
 

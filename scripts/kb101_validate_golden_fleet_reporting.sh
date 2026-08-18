@@ -38,6 +38,14 @@ grep -q 'licensing-ed25519-v1.pub' "$APP/scripts/bake_golden_vm199_fleet_reporti
   && pass "golden bake installs license public key" \
   || fail "bake script missing license public key install"
 
+grep -q 'OnUnitActiveSec=1h' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake verifies hourly license enforce timer" \
+  || fail "bake script must verify OnUnitActiveSec=1h"
+
+grep -q 'MSSP_GOLDEN_SNAPSHOT_NAME' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake can take a Proxmox snapshot" \
+  || fail "bake script missing snapshot hook"
+
 grep -q '_authenticate_local_wazuh' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
   && pass "CLI authenticates to local Manager without operator env" \
   || fail "register_ops.py missing local Wazuh API auth helper"

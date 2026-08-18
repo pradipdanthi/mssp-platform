@@ -13,6 +13,7 @@ HOST="${MSSP_GOLDEN_VM_IP:-192.168.0.225}"
 USER_NAME="${MSSP_GOLDEN_SSH_USER:-packer}"
 SSH_KEY="${MSSP_BUILD_SSH_KEY:-$ROOT/.tools/build-ssh/kevantic_packer}"
 KEEP_RUNNING="${MSSP_GOLDEN_KEEP_RUNNING:-0}"
+SNAP_NAME="${MSSP_GOLDEN_SNAPSHOT_NAME:-}"
 
 PVE_SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -i "$PVE_KEY" "root@${PVE_HOST}")
 SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new "${USER_NAME}@${HOST}")
@@ -184,6 +185,9 @@ sudo systemctl restart kevantic-license-enforce.timer || true
 echo "== verify =="
 grep -F 'python3 -m kevantic_cli heartbeat' /etc/systemd/system/kevantic-heartbeat.service
 grep -F 'python3 -m kevantic_cli license enforce' /etc/systemd/system/kevantic-license-enforce.service
+grep -F 'OnUnitActiveSec=1h' /etc/systemd/system/kevantic-license-enforce.timer
+grep -F 'OnBootSec=3min' /etc/systemd/system/kevantic-license-enforce.timer
+sudo systemctl is-enabled kevantic-license-enforce.timer | grep -qx enabled
 grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|license_jws|_authenticate_local_wazuh|_ensure_local_edr_ar_commands|_publish_linux_midlayer_shared' "\$CLI/register_ops.py" >/dev/null
 sudo test -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
 sudo test -f /var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml
@@ -212,6 +216,12 @@ else
   "${PVE_SSH[@]}" "qm shutdown ${VMID} --timeout 90 || qm stop ${VMID} --timeout 30"
   sleep 3
   "${PVE_SSH[@]}" "qm status ${VMID}"
+fi
+
+if [[ -n "$SNAP_NAME" ]]; then
+  log "Taking Proxmox snapshot ${VMID} → ${SNAP_NAME}"
+  "${PVE_SSH[@]}" "qm snapshot ${VMID} ${SNAP_NAME} --description 'Golden bake git=${GIT_COMMIT} license pubkey + enforce timer'"
+  "${PVE_SSH[@]}" "qm listsnapshot ${VMID}"
 fi
 
 log "OK — golden VM ${VMID} now includes fleet reporting (git_commit=${GIT_COMMIT})"
