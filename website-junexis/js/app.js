@@ -161,38 +161,71 @@
     activate("gold");
   })();
 
-  /* Architecture stack tabs */
+  /* Architecture stack tabs — bind to the shell, not the first data-stack tab button */
   (function () {
-    const root = document.querySelector("[data-stack]");
-    if (!root) return;
-    const tabs = Array.prototype.slice.call(document.querySelectorAll(".stack-tab"));
+    const root = document.querySelector("[data-stack-root]") || document.querySelector(".stack-shell");
+    const tablist = document.querySelector(".stack-tabs[role='tablist'], .stack-tabs");
+    if (!root || !tablist) return;
+
+    const tabs = Array.prototype.slice.call(tablist.querySelectorAll(".stack-tab"));
     const nodes = Array.prototype.slice.call(root.querySelectorAll(".stack-node"));
     const panels = Array.prototype.slice.call(root.querySelectorAll(".stack-panel"));
+    if (!tabs.length || !panels.length) return;
 
-    function activate(id) {
+    function activate(id, opts) {
+      if (!id) return;
+      opts = opts || {};
       tabs.forEach(function (tab) {
         const on = tab.getAttribute("data-stack") === id;
         tab.classList.toggle("is-active", on);
         tab.setAttribute("aria-selected", on ? "true" : "false");
+        tab.tabIndex = on ? 0 : -1;
       });
       nodes.forEach(function (node) {
         node.classList.toggle("is-active", node.getAttribute("data-stack") === id);
       });
       panels.forEach(function (panel) {
-        panel.classList.toggle("is-active", panel.getAttribute("data-stack") === id);
+        const on = panel.getAttribute("data-stack") === id;
+        panel.classList.toggle("is-active", on);
+        panel.setAttribute("aria-hidden", on ? "false" : "true");
       });
+      if (opts.focus) {
+        const current = tabs.filter(function (tab) {
+          return tab.getAttribute("data-stack") === id;
+        })[0];
+        if (current) current.focus();
+      }
     }
 
-    tabs.forEach(function (tab) {
-      tab.addEventListener("click", function () {
-        activate(tab.getAttribute("data-stack"));
-      });
+    tablist.addEventListener("click", function (event) {
+      const tab = event.target.closest(".stack-tab");
+      if (!tab || !tablist.contains(tab)) return;
+      activate(tab.getAttribute("data-stack"));
     });
+
+    tablist.addEventListener("keydown", function (event) {
+      const delta = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
+      const current = tabs.indexOf(document.activeElement);
+      if (current < 0) return;
+      let next = current;
+      if (event.key === "Home") next = 0;
+      else if (event.key === "End") next = tabs.length - 1;
+      else if (event.key in delta) next = (current + delta[event.key] + tabs.length) % tabs.length;
+      else return;
+      event.preventDefault();
+      activate(tabs[next].getAttribute("data-stack"), { focus: true });
+    });
+
     nodes.forEach(function (node) {
       node.addEventListener("click", function () {
         activate(node.getAttribute("data-stack"));
       });
     });
+
+    const initialTab = tabs.filter(function (tab) {
+      return tab.classList.contains("is-active");
+    })[0] || tabs[0];
+    activate(initialTab.getAttribute("data-stack"));
   })();
 
   /* Deep-link demo interest from CTAs */
