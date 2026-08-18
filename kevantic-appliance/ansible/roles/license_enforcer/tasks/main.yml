@@ -112,26 +112,36 @@
       state: present
       update_cache: true
 
-  - name: Check for shipped public key
-    ansible.builtin.stat:
-      path: "{{ license_enforcer_pubkey_src }}"
-    register: kevantic_lic_pub
-
-  - name: Install Kevantic license public key when present
+  - name: Install baked license public key (required)
     ansible.builtin.copy:
-      src: "{{ license_enforcer_pubkey_src }}"
+      src: licensing-ed25519-v1.pub
       dest: "{{ license_enforcer_pubkeys_dir }}/licensing-ed25519-v1.pub"
       mode: "0644"
-      remote_src: true
-    when: kevantic_lic_pub.stat.exists | default(false)
 
-  - name: Seed empty entitlements (idle — no services until license)
+  - name: Install license enforce service + timer
+    ansible.builtin.copy:
+      src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/configs/systemd/{{ item }}"
+      dest: "/etc/systemd/system/{{ item }}"
+      mode: "0644"
+    loop:
+      - kevantic-license-enforce.service
+      - kevantic-license-enforce.timer
+
+  - name: Enable license enforce timer
+    ansible.builtin.systemd:
+      name: kevantic-license-enforce.timer
+      enabled: true
+      daemon_reload: true
+      state: started
+
+  - name: Seed empty entitlements (idle — no services until signed license)
     ansible.builtin.copy:
       dest: "{{ license_enforcer_entitlements_path }}"
       content: |
         {
           "service_ids": [],
           "core": false,
+          "signed": false,
           "note": "No license applied — engines remain idle"
         }
       mode: "0640"
@@ -139,10 +149,11 @@
       group: kevantic
       force: false
 
-  - name: Install license reconcile helper unit path marker
+  - name: Install license trust README
     ansible.builtin.copy:
       dest: /etc/kevantic/trust/README
       mode: "0644"
       content: |
-        Place Kevantic licensing-ed25519-v1.pub here.
+        Baked public key: /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
         Apply licenses with: kevantic-cli license apply --file <token.jws>
+        Hourly enforce: kevantic-license-enforce.timer

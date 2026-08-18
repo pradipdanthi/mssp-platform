@@ -86,6 +86,10 @@ if [[ -f "$ROOT/licensing/keys/licensing-ed25519-v1.pub" ]]; then
   mkdir -p "$WORK/seed/kevantic-payload/licensing/keys"
   cp -f "$ROOT/licensing/keys/licensing-ed25519-v1.pub" \
     "$WORK/seed/kevantic-payload/licensing/keys/"
+else
+  echo "ERROR: missing $ROOT/licensing/keys/licensing-ed25519-v1.pub" >&2
+  echo "Run: $ROOT/licensing/generate_dev_keypair.sh" >&2
+  exit 2
 fi
 
 if ! docker image inspect "$BUILDER_IMAGE" >/dev/null 2>&1; then

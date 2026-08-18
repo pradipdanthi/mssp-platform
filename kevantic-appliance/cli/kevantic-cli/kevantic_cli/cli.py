@@ -249,6 +249,14 @@ def cmd_license(args: argparse.Namespace) -> int:
     if args.license_cmd == "show":
         _out(license_ops.show_license(), args.json)
         return 0
+    if args.license_cmd == "enforce":
+        try:
+            result = license_ops.enforce_license(fingerprint=args.fingerprint or "")
+        except Exception as exc:  # noqa: BLE001
+            print(f"error: {exc}", file=sys.stderr)
+            return 4
+        _out(result, args.json)
+        return 0 if result.get("ok") else 4
     if args.license_cmd == "apply":
         if not args.file:
             print("error: --file is required", file=sys.stderr)
@@ -264,7 +272,7 @@ def cmd_license(args: argparse.Namespace) -> int:
             return 4
         _out(result, args.json)
         return 0
-    print("usage: kevantic-cli license {show|apply}", file=sys.stderr)
+    print("usage: kevantic-cli license {show|apply|enforce}", file=sys.stderr)
     return 1
 
 
@@ -361,12 +369,18 @@ def build_parser() -> argparse.ArgumentParser:
     net_unlock.add_argument("--confirm", default="")
     net_unlock.add_argument("--dry-run", action="store_true")
 
-    lic = sub.add_parser("license", help="Apply / show Kevantic-signed license", parents=[common])
+    lic = sub.add_parser("license", help="Apply / show / enforce Kevantic-signed license", parents=[common])
     lic_sub = lic.add_subparsers(dest="license_cmd", required=True)
     lic_sub.add_parser("show", parents=[common])
     lic_apply = lic_sub.add_parser("apply", parents=[common])
     lic_apply.add_argument("--file", required=True, help="Path to .jws license file")
     lic_apply.add_argument("--fingerprint", default="", help="Expected appliance fingerprint")
+    lic_enforce = lic_sub.add_parser(
+        "enforce",
+        help="Re-verify license.jws expiry and reconcile catalogue units",
+        parents=[common],
+    )
+    lic_enforce.add_argument("--fingerprint", default="", help="Expected appliance fingerprint")
 
     return p
 

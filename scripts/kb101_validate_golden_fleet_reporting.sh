@@ -25,9 +25,18 @@ grep -q '_collect_resource_metrics' "$APP/cli/kevantic-cli/kevantic_cli/register
   && pass "CLI collects CPU/mem/disk" \
   || fail "register_ops.py missing _collect_resource_metrics"
 
-grep -q 'apply_entitlements' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
-  && pass "CLI applies entitlement jobs" \
-  || fail "register_ops.py missing apply_entitlements job handler"
+grep -q 'license_jws required' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI rejects unsigned apply_entitlements" \
+  || fail "register_ops.py must require license_jws for apply_entitlements"
+
+need "$APP/configs/systemd/kevantic-license-enforce.service"
+need "$APP/configs/systemd/kevantic-license-enforce.timer"
+need "$APP/cli/kevantic-cli/kevantic_cli/license_ops.py"
+need "$APP/licensing/keys/licensing-ed25519-v1.pub"
+
+grep -q 'licensing-ed25519-v1.pub' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake installs license public key" \
+  || fail "bake script missing license public key install"
 
 grep -q '_authenticate_local_wazuh' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
   && pass "CLI authenticates to local Manager without operator env" \

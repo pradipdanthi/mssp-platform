@@ -925,6 +925,151 @@ def check_portability() -> CheckResult:
     return cr
 
 
+# ---------------------------------------------------------------------------
+# CHECK 5 — Appliance license mint / verify / bake
+# ---------------------------------------------------------------------------
+def check_appliance_licensing() -> CheckResult:
+    cr = CheckResult("CHECK 5: Appliance cryptographic licensing")
+    f = cr.findings
+    mint = BACKEND / "app" / "services" / "junexis_license.py"
+    sync = BACKEND / "app" / "services" / "appliance_entitlement_sync.py"
+    ops = ROOT / "kevantic-appliance" / "cli" / "kevantic-cli" / "kevantic_cli" / "license_ops.py"
+    register = ROOT / "kevantic-appliance" / "cli" / "kevantic-cli" / "kevantic_cli" / "register_ops.py"
+    pub = ROOT / "kevantic-appliance" / "licensing" / "keys" / "licensing-ed25519-v1.pub"
+    role_pub = (
+        ROOT
+        / "kevantic-appliance"
+        / "ansible"
+        / "roles"
+        / "license_enforcer"
+        / "files"
+        / "licensing-ed25519-v1.pub"
+    )
+    timer = ROOT / "kevantic-appliance" / "configs" / "systemd" / "kevantic-license-enforce.timer"
+    unit = ROOT / "kevantic-appliance" / "configs" / "systemd" / "kevantic-license-enforce.service"
+    kb093g = ROOT / "scripts" / "kb093g_validate_appliance_install_iso.sh"
+    bake = ROOT / "kevantic-appliance" / "scripts" / "bake_golden_vm199_fleet_reporting.sh"
+
+    require_file(f, mint, "junexis_license.py")
+    require_file(f, sync, "appliance_entitlement_sync.py")
+    require_file(f, ops, "license_ops.py")
+    require_file(f, register, "register_ops.py")
+    require_file(f, pub, "licensing-ed25519-v1.pub")
+    require_file(f, role_pub, "license_enforcer files/licensing-ed25519-v1.pub")
+    require_file(f, timer, "kevantic-license-enforce.timer")
+    require_file(f, unit, "kevantic-license-enforce.service")
+
+    mint_txt = read(mint)
+    ops_txt = read(ops)
+    sync_txt = read(sync)
+    reg_txt = read(register)
+    expect(
+        f,
+        'ISSUER = "kevantic-license"' in mint_txt,
+        "mint ISSUER is kevantic-license",
+        path=mint,
+        pattern=r'ISSUER = "kevantic-license"',
+    )
+    expect(
+        f,
+        'LICENSE_ISSUER = "kevantic-license"' in ops_txt,
+        "appliance verify issuer is kevantic-license",
+        path=ops,
+        pattern=r'LICENSE_ISSUER = "kevantic-license"',
+    )
+    expect(
+        f,
+        "KEVANTIC_LICENSE_PRIVATE_KEY_PEM" in mint_txt
+        and "JUNEXIS_LICENSE_PRIVATE_KEY_PEM" in mint_txt,
+        "signing env accepts KEVANTIC_ and JUNEXIS_ private-key aliases",
+        path=mint,
+        pattern=r"KEVANTIC_LICENSE_PRIVATE_KEY_PEM",
+    )
+    expect(
+        f,
+        "from app.services.junexis_license import" in read(kb093g),
+        "kb093g imports junexis_license",
+        path=kb093g,
+        pattern=r"from app.services.junexis_license import",
+    )
+    expect(
+        f,
+        "mint_license(" in sync_txt and '"license_jws"' in sync_txt,
+        "entitlement sync mints a signed license_jws per appliance",
+        path=sync,
+        pattern=r"mint_license",
+    )
+    expect(
+        f,
+        "license_jws required" in reg_txt,
+        "heartbeat apply_entitlements rejects unsigned JSON and requires license_jws",
+        path=register,
+        pattern=r"license_jws required",
+    )
+    expect(
+        f,
+        "def enforce_license" in ops_txt
+        and "/etc/kevantic/trust/keys/licensing-ed25519-v1.pub" in ops_txt,
+        "license_ops.enforce_license re-verifies using the baked public key",
+        path=ops,
+        pattern=r"def enforce_license",
+    )
+    expect(
+        f,
+        "python3 -m kevantic_cli license enforce" in read(unit),
+        "license enforce unit runs kevantic-cli license enforce",
+        path=unit,
+        pattern=r"license enforce",
+    )
+    expect(
+        f,
+        "licensing-ed25519-v1.pub" in read(bake)
+        and "kevantic-license-enforce.timer" in read(bake),
+        "golden bake installs pubkey and license enforce timer",
+        path=bake,
+        pattern=r"licensing-ed25519-v1.pub",
+    )
+    expect(
+        f,
+        pub.is_file() and b"BEGIN PUBLIC KEY" in pub.read_bytes(),
+        "baked Ed25519 public key is PEM",
+        path=pub,
+    )
+
+    try:
+        from app.services.junexis_license import (  # noqa: WPS433
+            ISSUER,
+            generate_keypair,
+            mint_license,
+            verify_license,
+        )
+        from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+        assert ISSUER == "kevantic-license"
+        priv_pem, pub_pem = generate_keypair()
+        key = load_pem_private_key(priv_pem, password=None)
+        minted = mint_license(
+            tenant_id="11111111-1111-1111-1111-111111111111",
+            service_ids=["svc-01", "svc-06"],
+            appliance_id="22222222-2222-2222-2222-222222222222",
+            core=True,
+            private_key=key,
+        )
+        claims = verify_license(minted["license_jws"], public_key_pem=pub_pem)
+        ok = claims.get("iss") == "kevantic-license" and "svc-01" in claims.get("svc", [])
+        expect(f, ok, "ephemeral mint/verify round-trip uses kevantic-license")
+    except Exception as exc:  # noqa: BLE001
+        f.append(
+            Finding(
+                "FAILED",
+                "ephemeral mint/verify round-trip uses kevantic-license",
+                detail=str(exc)[:240],
+                path=mint,
+            )
+        )
+    return cr
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="MSSP platform master verifier")
     parser.add_argument(
@@ -945,6 +1090,7 @@ def main() -> int:
         check_engines(),
         check_backend_schemas(),
         check_portability(),
+        check_appliance_licensing(),
     ]
 
     passed = failed = warnings = gaps = 0

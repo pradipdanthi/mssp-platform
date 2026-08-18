@@ -20,7 +20,8 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_public_key,
 )
 
-ISSUER = "junexis-license"
+# Canonical issuer — must match appliance license_ops.py / license_verify.py.
+ISSUER = "kevantic-license"
 ALLOWED_SERVICES = {
     "svc-01",
     "svc-02",
@@ -52,29 +53,37 @@ def _b64url_decode(data: str) -> bytes:
     return base64.urlsafe_b64decode(data + pad)
 
 
+_PRIVATE_KEY_ENV_PAIRS = (
+    ("KEVANTIC_LICENSE_PRIVATE_KEY_PEM", "KEVANTIC_LICENSE_PRIVATE_KEY_FILE"),
+    ("JUNEXIS_LICENSE_PRIVATE_KEY_PEM", "JUNEXIS_LICENSE_PRIVATE_KEY_FILE"),
+)
+
+
 def load_private_key_from_env() -> Ed25519PrivateKey:
     """
-    Load Ed25519 private key from:
-      JUNEXIS_LICENSE_PRIVATE_KEY_PEM (PEM text, newlines may be \\n)
-      or JUNEXIS_LICENSE_PRIVATE_KEY_FILE (path)
-    Never log key material.
+    Load Ed25519 private key from (first match wins):
+      KEVANTIC_LICENSE_PRIVATE_KEY_PEM / KEVANTIC_LICENSE_PRIVATE_KEY_FILE
+      JUNEXIS_LICENSE_PRIVATE_KEY_PEM / JUNEXIS_LICENSE_PRIVATE_KEY_FILE
+    PEM text may use literal \\n. Never log key material.
     """
-    pem = os.environ.get("JUNEXIS_LICENSE_PRIVATE_KEY_PEM", "").strip()
-    if pem:
-        pem_bytes = pem.replace("\\n", "\n").encode("utf-8")
-        key = load_pem_private_key(pem_bytes, password=None)
-        if not isinstance(key, Ed25519PrivateKey):
-            raise LicenseSigningError("JUNEXIS_LICENSE_PRIVATE_KEY_PEM is not Ed25519")
-        return key
-    path = os.environ.get("JUNEXIS_LICENSE_PRIVATE_KEY_FILE", "").strip()
-    if path:
-        key = load_pem_private_key(Path(path).read_bytes(), password=None)
-        if not isinstance(key, Ed25519PrivateKey):
-            raise LicenseSigningError("JUNEXIS_LICENSE_PRIVATE_KEY_FILE is not Ed25519")
-        return key
+    for pem_var, file_var in _PRIVATE_KEY_ENV_PAIRS:
+        pem = os.environ.get(pem_var, "").strip()
+        if pem:
+            pem_bytes = pem.replace("\\n", "\n").encode("utf-8")
+            key = load_pem_private_key(pem_bytes, password=None)
+            if not isinstance(key, Ed25519PrivateKey):
+                raise LicenseSigningError(f"{pem_var} is not Ed25519")
+            return key
+        path = os.environ.get(file_var, "").strip()
+        if path:
+            key = load_pem_private_key(Path(path).read_bytes(), password=None)
+            if not isinstance(key, Ed25519PrivateKey):
+                raise LicenseSigningError(f"{file_var} is not Ed25519")
+            return key
     raise LicenseSigningError(
         "License signing key not configured "
-        "(set JUNEXIS_LICENSE_PRIVATE_KEY_PEM or JUNEXIS_LICENSE_PRIVATE_KEY_FILE)"
+        "(set KEVANTIC_LICENSE_PRIVATE_KEY_PEM or KEVANTIC_LICENSE_PRIVATE_KEY_FILE; "
+        "JUNEXIS_LICENSE_PRIVATE_KEY_* aliases are also accepted)"
     )
 
 

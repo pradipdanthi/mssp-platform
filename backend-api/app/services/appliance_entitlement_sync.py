@@ -1,4 +1,4 @@
-"""Push entitled catalogue services to tenant appliances via heartbeat jobs."""
+"""Push entitled catalogue services to tenant appliances via signed license JWS."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from app.db.session import fetch_all
 from app.services import appliance_jobs as appliance_jobs_service
+from app.services.junexis_license import LicenseSigningError, mint_license
 from app.services.tenant_entitlement_defaults import current_tenant_service_ids
 
 logger = logging.getLogger(__name__)
@@ -39,14 +40,27 @@ def enqueue_tenant_entitlement_jobs(
     )
     queued: List[str] = []
     errors: List[str] = []
-    payload = {
-        "catalog_key": catalog_key,
-        "action": action,
-        "service_ids": service_ids,
-        "asset_ids": [str(a) for a in (asset_ids or [])],
-        "order_number": order_number,
-    }
     for row in rows:
+        try:
+            minted = mint_license(
+                tenant_id=str(tenant_id),
+                service_ids=service_ids,
+                appliance_id=row["id"],
+                core="svc-01" in {str(s).strip().lower() for s in service_ids},
+            )
+        except LicenseSigningError as exc:
+            logger.warning("license mint failed for appliance %s: %s", row["id"], exc)
+            errors.append(f"{row['id']}: {str(exc)[:180]}")
+            continue
+        payload = {
+            "catalog_key": catalog_key,
+            "action": action,
+            "license_jws": minted["license_jws"],
+            "jti": minted["claims"].get("jti"),
+            "exp": minted["claims"].get("exp"),
+            "asset_ids": [str(a) for a in (asset_ids or [])],
+            "order_number": order_number,
+        }
         try:
             job = appliance_jobs_service.enqueue_job(
                 appliance_id=row["id"],

@@ -25,6 +25,10 @@ die() { log "ERROR: $*"; exit 1; }
 [[ -f "$SSH_KEY" ]] || die "missing appliance SSH key: $SSH_KEY"
 [[ -f "$ROOT/cli/kevantic-cli/kevantic_cli/register_ops.py" ]] || die "CLI source missing"
 [[ -f "$ROOT/configs/systemd/kevantic-heartbeat.service" ]] || die "heartbeat unit missing"
+[[ -f "$ROOT/configs/systemd/kevantic-license-enforce.service" ]] || die "license enforce unit missing"
+[[ -f "$ROOT/cli/kevantic-cli/kevantic_cli/license_ops.py" ]] || die "license_ops.py missing"
+PUBKEY="$ROOT/licensing/keys/licensing-ed25519-v1.pub"
+[[ -f "$PUBKEY" ]] || die "missing $PUBKEY — run kevantic-appliance/licensing/generate_dev_keypair.sh"
 
 GIT_COMMIT="$(git -C "$CTRL" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
@@ -49,10 +53,14 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cp "$ROOT/cli/kevantic-cli/kevantic_cli/register_ops.py" "$TMP/register_ops.py"
 cp "$ROOT/cli/kevantic-cli/kevantic_cli/state.py" "$TMP/state.py"
+cp "$ROOT/cli/kevantic-cli/kevantic_cli/license_ops.py" "$TMP/license_ops.py"
 cp "$ROOT/configs/systemd/kevantic-heartbeat.service" "$TMP/kevantic-heartbeat.service"
 cp "$ROOT/configs/systemd/kevantic-heartbeat.timer" "$TMP/kevantic-heartbeat.timer"
 cp "$ROOT/configs/systemd/junexis-heartbeat.service" "$TMP/junexis-heartbeat.service"
 cp "$ROOT/configs/systemd/junexis-heartbeat.timer" "$TMP/junexis-heartbeat.timer"
+cp "$ROOT/configs/systemd/kevantic-license-enforce.service" "$TMP/kevantic-license-enforce.service"
+cp "$ROOT/configs/systemd/kevantic-license-enforce.timer" "$TMP/kevantic-license-enforce.timer"
+cp "$PUBKEY" "$TMP/licensing-ed25519-v1.pub"
 cp "$ROOT/configs/image-release.json" "$TMP/image-release.json"
 AR_SRC="$CTRL/deploy/wazuh-active-response"
 [[ -x "$AR_SRC/mssp-isolate-host" ]] || die "missing Linux AR scripts in deploy/wazuh-active-response"
@@ -91,10 +99,14 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
 "${SCP[@]}" \
   "$TMP/register_ops.py" \
   "$TMP/state.py" \
+  "$TMP/license_ops.py" \
   "$TMP/kevantic-heartbeat.service" \
   "$TMP/kevantic-heartbeat.timer" \
   "$TMP/junexis-heartbeat.service" \
   "$TMP/junexis-heartbeat.timer" \
+  "$TMP/kevantic-license-enforce.service" \
+  "$TMP/kevantic-license-enforce.timer" \
+  "$TMP/licensing-ed25519-v1.pub" \
   "$TMP/image-release.json" \
   "$TMP/mssp-isolate-host" \
   "$TMP/mssp-kill-process" \
@@ -122,13 +134,18 @@ fi
 
 sudo install -m 0644 /tmp/register_ops.py "\$CLI/register_ops.py"
 sudo install -m 0644 /tmp/state.py "\$CLI/state.py"
-sudo install -d -m 0755 /etc/kevantic /etc/junexis
+sudo install -m 0644 /tmp/license_ops.py "\$CLI/license_ops.py"
+sudo install -d -m 0755 /etc/kevantic /etc/junexis /etc/kevantic/trust/keys /etc/junexis/trust/keys
+sudo install -m 0644 /tmp/licensing-ed25519-v1.pub /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
+sudo install -m 0644 /tmp/licensing-ed25519-v1.pub /etc/junexis/trust/keys/licensing-ed25519-v1.pub
 sudo install -m 0644 /tmp/image-release.json /etc/kevantic/image-release.json
 sudo install -m 0644 /tmp/image-release.json /etc/junexis/image-release.json
 sudo install -m 0644 /tmp/kevantic-heartbeat.service /etc/systemd/system/kevantic-heartbeat.service
 sudo install -m 0644 /tmp/kevantic-heartbeat.timer /etc/systemd/system/kevantic-heartbeat.timer
 sudo install -m 0644 /tmp/junexis-heartbeat.service /etc/systemd/system/junexis-heartbeat.service
 sudo install -m 0644 /tmp/junexis-heartbeat.timer /etc/systemd/system/junexis-heartbeat.timer
+sudo install -m 0644 /tmp/kevantic-license-enforce.service /etc/systemd/system/kevantic-license-enforce.service
+sudo install -m 0644 /tmp/kevantic-license-enforce.timer /etc/systemd/system/kevantic-license-enforce.timer
 for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
   sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
 done
@@ -161,10 +178,14 @@ fi
 sudo systemctl daemon-reload
 sudo systemctl enable kevantic-heartbeat.timer >/dev/null
 sudo systemctl restart kevantic-heartbeat.timer || true
+sudo systemctl enable kevantic-license-enforce.timer >/dev/null
+sudo systemctl restart kevantic-license-enforce.timer || true
 
 echo "== verify =="
 grep -F 'python3 -m kevantic_cli heartbeat' /etc/systemd/system/kevantic-heartbeat.service
-grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|_authenticate_local_wazuh|_ensure_local_edr_ar_commands|_publish_linux_midlayer_shared' "\$CLI/register_ops.py" >/dev/null
+grep -F 'python3 -m kevantic_cli license enforce' /etc/systemd/system/kevantic-license-enforce.service
+grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|license_jws|_authenticate_local_wazuh|_ensure_local_edr_ar_commands|_publish_linux_midlayer_shared' "\$CLI/register_ops.py" >/dev/null
+sudo test -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
 sudo test -f /var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml
 python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version")'
 # Do not seed entitlements — golden clones stay idle until a real license is applied.

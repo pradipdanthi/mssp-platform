@@ -20,6 +20,9 @@ deploy/velociraptor-client/client.config.yaml
 # Appliance golden-image builder secrets / artifacts
 mssp-appliance-builder/.cache/
 mssp-appliance-builder/output-mssp-appliance/
+kevantic-appliance/.cache/
+kevantic-appliance/licensing/keys/*.pem
+kevantic-appliance/.cache/licensing/
 
 # Sysmon redistributable cache (not in git). Package build embeds it when present.
 .cache/sysmon/

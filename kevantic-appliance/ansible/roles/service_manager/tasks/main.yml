@@ -78,6 +78,9 @@
             enabled = set(data.get("service_ids") or [])
             if data.get("core"):
                 enabled.add("svc-01")
+            lic = Path("/var/lib/kevantic/license.jws")
+            if not lic.is_file() or data.get("expired") or data.get("signed") is False:
+                enabled = set()
             report = {"enabled": sorted(enabled), "actions": []}
             for sid, units in CATALOG.items():
                 want = sid in enabled

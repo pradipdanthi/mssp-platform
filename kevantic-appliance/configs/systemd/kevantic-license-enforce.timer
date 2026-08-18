@@ -1,0 +1,13 @@
+[Unit]
+Description=Kevantic license enforce timer (hourly JWS expiry check)
+Requires=kevantic-license-enforce.service
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1h
+AccuracySec=1min
+Persistent=true
+Unit=kevantic-license-enforce.service
+
+[Install]
+WantedBy=timers.target

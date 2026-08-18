@@ -104,6 +104,8 @@ services:
       # KB-096: enrich/correlate/risk draft (default off — enable after validation)
       AI_SOC_TRIAGE_ENABLED: ${AI_SOC_TRIAGE_ENABLED:-false}
       AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}
+      KEVANTIC_LICENSE_PRIVATE_KEY_PEM: ${KEVANTIC_LICENSE_PRIVATE_KEY_PEM:-}
+      JUNEXIS_LICENSE_PRIVATE_KEY_PEM: ${JUNEXIS_LICENSE_PRIVATE_KEY_PEM:-}
     depends_on:
       postgres:
         condition: service_healthy

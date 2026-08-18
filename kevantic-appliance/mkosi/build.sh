@@ -44,6 +44,15 @@ fi
 
 chmod +x "$MKOSI_DIR/mkosi.postinst" 2>/dev/null || true
 
+PUBKEY="$ROOT/licensing/keys/licensing-ed25519-v1.pub"
+if [[ ! -f "$PUBKEY" ]]; then
+  echo "ERROR: missing $PUBKEY — run $ROOT/licensing/generate_dev_keypair.sh" >&2
+  exit 2
+fi
+mkdir -p "$MKOSI_DIR/mkosi.extra/etc/kevantic/trust/keys"
+cp -f "$PUBKEY" "$MKOSI_DIR/mkosi.extra/etc/kevantic/trust/keys/licensing-ed25519-v1.pub"
+echo "Staged license public key into mkosi.extra"
+
 sudo_run() {
   if [[ "$(id -u)" -eq 0 ]]; then
     "$@"

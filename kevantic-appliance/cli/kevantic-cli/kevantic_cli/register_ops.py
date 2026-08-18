@@ -804,22 +804,8 @@ def _local_manager_active() -> bool:
 
 
 def _maybe_seed_core_entitlements() -> None:
-    ents = state.load_entitlements()
-    if ents.get("service_ids"):
-        return
-    if not _local_manager_active():
-        return
-    try:
-        state.save_entitlements(
-            {
-                **ents,
-                "service_ids": ["svc-01"],
-                "core": True,
-                "note": "Auto-seeded core entitlement (local Manager active)",
-            }
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("could not seed core entitlements: %s", exc)
+    """Unsigned auto-seed is forbidden. Catalogue units require a signed JWS."""
+    return
 
 
 def _collect_resource_metrics() -> dict[str, Optional[float]]:
@@ -1001,54 +987,30 @@ def _dispatch_job(job: dict[str, Any]) -> tuple[bool, str]:
         ok = post.get("wazuh_manager") == "active"
         return ok, json.dumps(post)[:500]
     if job_type == "apply_entitlements":
-        raw_ids = payload.get("service_ids") or []
-        service_ids: list[str] = []
-        seen: set[str] = set()
-        for raw in raw_ids:
-            sid = str(raw).strip().lower()
-            if sid and sid not in seen:
-                seen.add(sid)
-                service_ids.append(sid)
-        if "svc-01" not in seen:
-            service_ids.insert(0, "svc-01")
-        ents = state.load_entitlements()
-        state.save_entitlements(
+        token = str(
+            payload.get("license_jws")
+            or payload.get("jws")
+            or payload.get("license")
+            or ""
+        ).strip()
+        if not token:
+            return False, "unsigned entitlements rejected; license_jws required"
+        try:
+            license_ops = _cli_submodule("license_ops")
+            result = license_ops.apply_license_token(
+                token,
+                fingerprint=str(payload.get("fingerprint") or ""),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return False, str(exc)[:300]
+        ents = (result or {}).get("entitlements") or {}
+        return True, json.dumps(
             {
-                **ents,
-                "service_ids": service_ids,
-                "core": "svc-01" in service_ids,
-                "order_number": payload.get("order_number"),
-                "catalog_key": payload.get("catalog_key"),
+                "service_ids": ents.get("service_ids") or [],
+                "jti": ents.get("jti"),
+                "reconcile": (result or {}).get("reconcile"),
             }
-        )
-        reconcile: dict[str, Any] | None = None
-        for helper in (
-            "/usr/bin/junexis-reconcile-services",
-            "/usr/bin/kevantic-reconcile-services",
-        ):
-            if not Path(helper).is_file():
-                continue
-            try:
-                proc = subprocess.run(
-                    [helper],
-                    capture_output=True,
-                    text=True,
-                    check=False,
-                    timeout=120,
-                )
-            except Exception as exc:  # noqa: BLE001
-                reconcile = {"error": str(exc)[:200]}
-                break
-            try:
-                reconcile = json.loads(proc.stdout or "{}")
-            except json.JSONDecodeError:
-                reconcile = {
-                    "stdout": (proc.stdout or "")[:300],
-                    "stderr": (proc.stderr or "")[:300],
-                    "rc": proc.returncode,
-                }
-            break
-        return True, json.dumps({"service_ids": service_ids, "reconcile": reconcile})[:500]
+        )[:500]
     # Default: Active Response / isolate-style jobs
     if payload.get("ar_command") or payload.get("agent_id"):
         return _run_local_ar(job)

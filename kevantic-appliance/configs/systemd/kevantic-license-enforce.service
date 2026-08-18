@@ -1,0 +1,15 @@
+[Unit]
+Description=Kevantic license enforce (re-verify JWS expiry and reconcile catalogue units)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/kevantic/appliance.env
+EnvironmentFile=-/etc/junexis/appliance.env
+Environment=PYTHONPATH=/opt/kevantic/cli:/opt/kevantic:/opt/junexis/cli:/opt/junexis
+ExecStart=/usr/bin/python3 -m kevantic_cli license enforce --json
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

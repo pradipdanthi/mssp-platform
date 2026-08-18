@@ -178,7 +178,7 @@ Issued by Junexis license CA (Ed25519 or ECDSA P-256):
 
 ```json
 {
-  "iss": "junexis-license",
+  "iss": "kevantic-license",
   "sub": "<tenant_id>",
   "aid": "<appliance_id>",
   "fp": "<hardware/cloud instance fingerprint>",

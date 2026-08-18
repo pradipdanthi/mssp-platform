@@ -125,6 +125,8 @@
     - kevantic-heartbeat.timer
     - junexis-heartbeat.service
     - junexis-heartbeat.timer
+    - kevantic-license-enforce.service
+    - kevantic-license-enforce.timer
     - kevantic-critical-alert-forwarder.service
     - junexis-critical-alert-forwarder.service
 
@@ -186,6 +188,13 @@
 - name: Enable heartbeat timer (every 60s when registered)
   ansible.builtin.systemd:
     name: kevantic-heartbeat.timer
+    enabled: true
+    daemon_reload: true
+    state: started
+
+- name: Enable license enforce timer (hourly JWS expiry check)
+  ansible.builtin.systemd:
+    name: kevantic-license-enforce.timer
     enabled: true
     daemon_reload: true
     state: started

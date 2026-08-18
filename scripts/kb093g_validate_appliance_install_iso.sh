@@ -94,10 +94,27 @@ grep -q 'license' "$APP/cli/kevantic-cli/kevantic_cli/cli.py" || fail "CLI licen
 ok "kevantic-cli license commands present"
 
 # Backend license service + admin route
-[[ -f "$ROOT/backend-api/app/services/kevantic_license.py" ]] || fail "missing kevantic_license.py"
+[[ -f "$ROOT/backend-api/app/services/junexis_license.py" ]] || fail "missing junexis_license.py"
+grep -q 'ISSUER = "kevantic-license"' "$ROOT/backend-api/app/services/junexis_license.py" \
+  || fail "junexis_license.py issuer must be kevantic-license"
+grep -q 'LICENSE_ISSUER = "kevantic-license"' "$APP/cli/kevantic-cli/kevantic_cli/license_ops.py" \
+  || fail "license_ops.py issuer must be kevantic-license"
+grep -q 'KEVANTIC_LICENSE_PRIVATE_KEY_PEM' "$ROOT/backend-api/app/services/junexis_license.py" \
+  || fail "signing env aliases missing KEVANTIC_LICENSE_PRIVATE_KEY_PEM"
+grep -q 'JUNEXIS_LICENSE_PRIVATE_KEY_PEM' "$ROOT/backend-api/app/services/junexis_license.py" \
+  || fail "signing env aliases missing JUNEXIS_LICENSE_PRIVATE_KEY_PEM"
 grep -q 'appliance-licenses' "$ROOT/backend-api/app/api/routes/entitlements.py" || fail "mint route missing"
 grep -q 'cryptography==' "$ROOT/backend-api/requirements.txt" || fail "cryptography not pinned"
 ok "control-plane license mint path present"
+[[ -f "$APP/licensing/keys/licensing-ed25519-v1.pub" ]] || fail "missing licensing-ed25519-v1.pub"
+[[ -f "$APP/ansible/roles/license_enforcer/files/licensing-ed25519-v1.pub" ]] \
+  || fail "license_enforcer role files missing licensing-ed25519-v1.pub"
+[[ -f "$APP/configs/systemd/kevantic-license-enforce.timer" ]] || fail "missing license enforce timer"
+grep -q 'license_jws required' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  || fail "heartbeat must reject unsigned entitlements"
+grep -q 'mint_license' "$ROOT/backend-api/app/services/appliance_entitlement_sync.py" \
+  || fail "entitlement sync must mint JWS"
+ok "baked pubkey + signed entitlement job path + expiry timer"
 
 # Ansible syntax (if ansible-playbook available)
 if command -v ansible-playbook >/dev/null 2>&1; then
@@ -114,7 +131,8 @@ python3 - <<'PY' "$TMP" "$ROOT"
 import json, os, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[2]) / "backend-api"))
-from app.services.kevantic_license import generate_keypair, mint_license, verify_license
+from app.services.junexis_license import ISSUER, generate_keypair, mint_license, verify_license
+assert ISSUER == "kevantic-license"
 
 tmp = Path(sys.argv[1])
 priv_pem, pub_pem = generate_keypair()
@@ -132,6 +150,7 @@ minted = mint_license(
     private_key=key,
 )
 claims = verify_license(minted["license_jws"], public_key_pem=pub_pem, fingerprint="lab-fp-1")
+assert claims["iss"] == "kevantic-license"
 assert "svc-01" in claims["svc"] and "svc-06" in claims["svc"]
 (tmp / "license.jws").write_text(minted["license_jws"] + "\n", encoding="utf-8")
 print("LICENSE_ROUNDTRIP_OK", claims["jti"])
@@ -148,7 +167,9 @@ PYTHONPATH="$APP/cli/kevantic-cli${PYTHONPATH:+:$PYTHONPATH}" \
   | grep -q '"ok": true' || fail "CLI license apply failed"
 PYTHONPATH="$APP/cli/kevantic-cli${PYTHONPATH:+:$PYTHONPATH}" \
   python3 -m kevantic_cli license show --json | grep -q 'svc-01' || fail "CLI license show missing svc-01"
-ok "CLI license apply/show"
+PYTHONPATH="$APP/cli/kevantic-cli${PYTHONPATH:+:$PYTHONPATH}" \
+  python3 -m kevantic_cli license enforce --json | grep -q '"ok": true' || fail "CLI license enforce failed"
+ok "CLI license apply/show/enforce"
 
 # ISO cache presence (build is separate / long)
 if [[ -f "$APP/.cache/ubuntu-24.04.4-live-server-amd64.iso" ]]; then
