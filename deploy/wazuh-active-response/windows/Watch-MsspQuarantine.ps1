@@ -28,9 +28,22 @@ function Invoke-Netsh([string[]]$NetshArgs) {
   $info.UseShellExecute = $false
   $info.CreateNoWindow = $true
   $p = [System.Diagnostics.Process]::Start($info)
-  $p.StandardOutput.ReadToEnd() | Out-Null
+  $stdout = $p.StandardOutput.ReadToEnd()
   $p.StandardError.ReadToEnd() | Out-Null
   $p.WaitForExit()
+  return $stdout
+}
+
+function Test-MsspFirewallRule([string]$Name) {
+  $out = Invoke-Netsh @("advfirewall", "firewall", "show", "rule", "name=$Name")
+  if ([string]::IsNullOrWhiteSpace($out)) { return $false }
+  if ($out -match "No rules match") { return $false }
+  return ($out -match [regex]::Escape($Name))
+}
+
+function Ensure-MsspFirewallRule([string]$Name, [string[]]$AddArgs) {
+  if (Test-MsspFirewallRule $Name) { return }
+  Invoke-Netsh $AddArgs | Out-Null
 }
 
 try {
@@ -64,9 +77,8 @@ $rules = @(
   @{ Name = "MSSP_QUAR_ALLOW_LOOPBACK_IN"; Dir = "in"; Extra = @("remoteip=127.0.0.1") }
 )
 foreach ($spec in $rules) {
-  Invoke-Netsh @("advfirewall", "firewall", "delete", "rule", "name=$($spec.Name)")
   $args = @("advfirewall", "firewall", "add", "rule", "name=$($spec.Name)", "dir=$($spec.Dir)", "action=allow", "enable=yes", "profile=any") + $spec.Extra
-  Invoke-Netsh $args
+  Ensure-MsspFirewallRule $spec.Name $args
 }
 
 foreach ($b in @(
@@ -74,8 +86,7 @@ foreach ($b in @(
   @{ Name = "MSSP_HOLD_BLOCK_SMB_IN"; Extra = @("dir=in", "protocol=tcp", "localport=445") },
   @{ Name = "MSSP_HOLD_BLOCK_WINRM_IN"; Extra = @("dir=in", "protocol=tcp", "localport=5985,5986") }
 )) {
-  Invoke-Netsh @("advfirewall", "firewall", "delete", "rule", "name=$($b.Name)")
-  Invoke-Netsh (@("advfirewall", "firewall", "add", "rule", "name=$($b.Name)", "action=block", "enable=yes", "profile=any") + $b.Extra)
+  Ensure-MsspFirewallRule $b.Name (@("advfirewall", "firewall", "add", "rule", "name=$($b.Name)", "action=block", "enable=yes", "profile=any") + $b.Extra)
 }
 
 try {
