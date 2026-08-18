@@ -85,6 +85,7 @@ from pathlib import Path
 for path in (Path("/etc/junexis/image-release.json"), Path("/etc/kevantic/image-release.json")):
     data = json.loads(path.read_text())
     data["git_commit"] = "${GIT_COMMIT}"
+    data["edr_ar_version"] = data.get("edr_ar_version") or "1.0.1"
     path.write_text(json.dumps(data, indent=2) + "\n")
 PY
 

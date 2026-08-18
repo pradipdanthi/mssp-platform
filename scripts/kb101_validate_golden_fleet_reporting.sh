@@ -66,6 +66,18 @@ grep -q 'Watch-MsspQuarantine.ps1' "$APP/scripts/bake_golden_vm199_fleet_reporti
   && pass "golden bake ships Windows isolate watchdog" \
   || fail "bake script missing Watch-MsspQuarantine.ps1"
 
+grep -q 'edr_ar_version' "$APP/configs/image-release.json" \
+  && pass "image-release.json tracks edr_ar_version" \
+  || fail "image-release.json missing edr_ar_version"
+
+[[ -x "$APP/scripts/sync_appliance_edr_ar_scripts.sh" ]] \
+  && pass "appliance EDR AR sync script exists" \
+  || fail "missing sync_appliance_edr_ar_scripts.sh"
+
+grep -q 'Invoke-MsspUnisolate' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake verifies end-to-end unisolate in shared script" \
+  || fail "bake script must verify Invoke-MsspUnisolate after publish"
+
 grep -q 'mssp-kill-process.cmd' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
   && pass "golden bake ships full Windows EDR AR pack" \
   || fail "bake script missing Windows kill/block-hash AR files"

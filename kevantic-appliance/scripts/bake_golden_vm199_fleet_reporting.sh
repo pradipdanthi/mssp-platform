@@ -93,6 +93,7 @@ import json, sys
 path, commit = sys.argv[1], sys.argv[2]
 data = json.loads(open(path, encoding="utf-8").read())
 data["git_commit"] = commit
+data["edr_ar_version"] = data.get("edr_ar_version") or "1.0.1"
 open(path, "w", encoding="utf-8").write(json.dumps(data, indent=2) + "\n")
 PY
 
@@ -191,7 +192,11 @@ sudo systemctl is-enabled kevantic-license-enforce.timer | grep -qx enabled
 grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|license_jws|_authenticate_local_wazuh|_ensure_local_edr_ar_commands|_publish_linux_midlayer_shared' "\$CLI/register_ops.py" >/dev/null
 sudo test -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
 sudo test -f /var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml
-python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version")'
+python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version") and d.get("edr_ar_version")'
+grep -q 'Invoke-MsspUnisolate' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
+  grep -q 'Invoke-MsspUnisolate' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
+SHARED=\$(ls -d /var/ossec/etc/shared/*/mssp-isolate-host.ps1 2>/dev/null | head -1)
+[[ -n "\$SHARED" ]] && grep -q 'Repair-MsspDnsConnectivity' "\$SHARED"
 # Do not seed entitlements — golden clones stay idle until a real license is applied.
 if [[ -f /var/lib/kevantic/entitlements.json ]]; then
   python3 - <<'PY'
