@@ -2,11 +2,12 @@
    Keep these values synchronized across Public, Admin, and Customer applications. */
 
 :root {
-  --kevantic-midnight-obsidian: #0B132B;
-  --kevantic-cosmic-platinum: #D6E2E9;
-  --kevantic-steel-cyber-blue: #3A506B;
-  --kevantic-network-blue: #79A9D1;
-  --kevantic-display-cyber-blue: #5F86AE;
+  --kevantic-midnight-obsidian: #0B1120;
+  --kevantic-cosmic-platinum: #E2E8F0;
+  --kevantic-steel-cyber-blue: #1E293B;
+  --kevantic-network-blue: #06B6D4;
+  --kevantic-display-cyber-blue: #22D3EE;
+  --kevantic-status-emerald: #10B981;
 }
 
 .kevantic-brand-logo {

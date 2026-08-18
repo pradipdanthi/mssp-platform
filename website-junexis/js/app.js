@@ -1,6 +1,6 @@
 (function () {
   const site = window.KEVANTIC_SITE || window.JUNEXIS_SITE || {};
-  const portalUrl = site.customerPortalUrl || "https://portal.kevantic.com";
+  const portalUrl = site.customerPortalUrl || "/portal.html";
   const header = document.querySelector(".site-header");
   const nav = document.querySelector(".nav");
   const toggle = document.querySelector(".nav-toggle");
@@ -123,6 +123,91 @@
 
   document.querySelectorAll("[data-year]").forEach(function (el) {
     el.textContent = String(new Date().getFullYear());
+  });
+
+  /* Service tier matrix highlight (cards + mobile column switcher) */
+  (function () {
+    const cards = Array.prototype.slice.call(document.querySelectorAll("[data-tier-cards] .tier-card"));
+    const switches = Array.prototype.slice.call(document.querySelectorAll(".tier-switch"));
+    const cells = Array.prototype.slice.call(document.querySelectorAll("[data-tier-matrix] [data-col]"));
+    if (!cards.length && !switches.length) return;
+
+    function activate(tier) {
+      cards.forEach(function (card) {
+        card.classList.toggle("is-active", card.getAttribute("data-tier") === tier);
+      });
+      switches.forEach(function (btn) {
+        const on = btn.getAttribute("data-tier") === tier;
+        btn.classList.toggle("is-active", on);
+        btn.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      cells.forEach(function (cell) {
+        const on = cell.getAttribute("data-col") === tier;
+        cell.classList.toggle("is-active", on);
+        cell.classList.toggle("is-show", on);
+      });
+    }
+
+    cards.forEach(function (card) {
+      card.addEventListener("click", function () {
+        activate(card.getAttribute("data-tier"));
+      });
+    });
+    switches.forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        activate(btn.getAttribute("data-tier"));
+      });
+    });
+    activate("gold");
+  })();
+
+  /* Architecture stack tabs */
+  (function () {
+    const root = document.querySelector("[data-stack]");
+    if (!root) return;
+    const tabs = Array.prototype.slice.call(document.querySelectorAll(".stack-tab"));
+    const nodes = Array.prototype.slice.call(root.querySelectorAll(".stack-node"));
+    const panels = Array.prototype.slice.call(root.querySelectorAll(".stack-panel"));
+
+    function activate(id) {
+      tabs.forEach(function (tab) {
+        const on = tab.getAttribute("data-stack") === id;
+        tab.classList.toggle("is-active", on);
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      nodes.forEach(function (node) {
+        node.classList.toggle("is-active", node.getAttribute("data-stack") === id);
+      });
+      panels.forEach(function (panel) {
+        panel.classList.toggle("is-active", panel.getAttribute("data-stack") === id);
+      });
+    }
+
+    tabs.forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        activate(tab.getAttribute("data-stack"));
+      });
+    });
+    nodes.forEach(function (node) {
+      node.addEventListener("click", function () {
+        activate(node.getAttribute("data-stack"));
+      });
+    });
+  })();
+
+  /* Deep-link demo interest from CTAs */
+  document.querySelectorAll("[data-demo-interest]").forEach(function (el) {
+    el.addEventListener("click", function () {
+      const value = el.getAttribute("data-demo-interest");
+      const select = document.getElementById("interest");
+      if (!select || !value) return;
+      for (let i = 0; i < select.options.length; i += 1) {
+        if (select.options[i].value === value || select.options[i].text === value) {
+          select.value = select.options[i].value;
+          break;
+        }
+      }
+    });
   });
 
   /* Mega-menu: click/tap + keyboard only (no hover-open) */

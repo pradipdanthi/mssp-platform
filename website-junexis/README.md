@@ -46,4 +46,4 @@ Set customer portal URL in `js/site-config.js` (`portal.kevantic.com`).
 
 - **Core (2):** Log & Event Monitoring · Incident Response & Casework
 - **Add-ons (8):** Automation · VMaaS · CaaS · NDR · Threat Intel · Forensics · EASM · ITDR
-- Public pages use capability labels only (no Suricata/Wazuh/Velociraptor brand names)
+- Public pages use the **Kevantic NikTiar™** engine suite only (Core Telemetry, DeepSight NDR, Aegis Scanning, Apex Orchestrator, Spectre Forensics, Edge Node). No Wazuh / Suricata / Zeek / MISP / TheHive / Velociraptor names.
