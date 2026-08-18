@@ -8,7 +8,7 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { useAdminQuery } from "../hooks/useAdminQuery";
-import { NIKTIAR } from "../config/niktiairBrands";
+import { NIKTIAR, niktiairSourceLabel } from "../config/niktiairBrands";
 
 type AlertStatus = NonNullable<AlertTriageUpdate["status"]>;
 
@@ -103,7 +103,7 @@ export default function AlertDetailPage() {
               <tr><th>Title</th><td>{alert.alert_title}</td></tr>
               <tr><th>Severity</th><td><span className={`badge badge-${alert.severity}`}>{alert.severity}</span></td></tr>
               <tr><th>Status</th><td>{alert.status}</td></tr>
-              <tr><th>Source</th><td>{alert.source_tool} / {alert.external_alert_id ?? "—"}</td></tr>
+              <tr><th>Source</th><td>{niktiairSourceLabel(alert.source_tool)} / {alert.external_alert_id ?? "—"}</td></tr>
               <tr><th>Detection rule</th><td>{alert.wazuh_rule_id ?? "—"}</td></tr>
               <tr><th>Event time</th><td>{alert.event_time ?? "—"}</td></tr>
               <tr><th>Description</th><td>{alert.alert_description ?? "—"}</td></tr>

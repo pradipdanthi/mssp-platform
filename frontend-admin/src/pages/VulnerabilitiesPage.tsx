@@ -17,7 +17,7 @@ import { useAuth } from "../auth/AuthContext";
 import ListToolbar from "../components/ListToolbar";
 import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import { useAdminQuery } from "../hooks/useAdminQuery";
-import { NIKTIAR } from "../config/niktiairBrands";
+import { NIKTIAR, niktiairSourceLabel } from "../config/niktiairBrands";
 import { useCustomerScope } from "../hooks/useCustomerScope";
 
 const STATUS_OPTIONS = [
@@ -569,7 +569,7 @@ export default function VulnerabilitiesPage() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.source_platform}</td>
+                  <td>{niktiairSourceLabel(row.source_platform)}</td>
                   <td>
                     <span className={`badge severity-${row.severity}`}>{row.severity}</span>
                   </td>
@@ -599,7 +599,7 @@ export default function VulnerabilitiesPage() {
           <p className="muted">
             {selected.severity.toUpperCase()}
             {selected.cve_id ? ` · ${selected.cve_id}` : ""} · {selected.short_code} ·{" "}
-            {selected.source_platform}
+            {niktiairSourceLabel(selected.source_platform)}
           </p>
           <pre className="code-block" style={{ whiteSpace: "pre-wrap" }}>
             {detailNotes || "Loading…"}

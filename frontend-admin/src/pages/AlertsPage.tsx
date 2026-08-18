@@ -5,6 +5,7 @@ import CustomerScopeBanner from "../components/CustomerScopeBanner";
 import ListToolbar from "../components/ListToolbar";
 import SeverityPill from "../components/SeverityPill";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { niktiairSourceLabel } from "../config/niktiairBrands";
 import { useCustomerScope } from "../hooks/useCustomerScope";
 import { useEffect, useState } from "react";
 
@@ -319,7 +320,7 @@ export default function AlertsPage() {
                             <Link to={`/alerts/${alert.id}`}>{alert.alert_title}</Link>
                           </td>
                           <td>{alert.asset_category_label ?? alert.asset_category ?? "—"}</td>
-                          <td className="cell-mono">{alert.source_tool ?? "—"}</td>
+                          <td>{niktiairSourceLabel(alert.source_tool)}</td>
                         </>
                       )}
                       <td>

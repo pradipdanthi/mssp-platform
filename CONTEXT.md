@@ -28,6 +28,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 | **Appliance image factory (optional mkosi/ISO workshop)** | **VM 113** when needed (KB-093F); may be stopped/destroyed between builds — not the same as golden 199 |
 | **KB-093P critical-alert forward** | Baked in golden recipe (`ada21fe`+); Beta field-upgraded; telemetry → VM 100, heartbeat → VM 114 |
 | **Host isolate (KB-104)** | **Hold until Un-isolate** (no 2-minute auto-lift). Windows: default-deny except Manager TCP/UDP **1514** and TCP **1515**, plus DHCP/loopback, plus quarantine watchdog. Day-one agent ZIP installs the scripts; appliance heartbeat publishes them to Manager shared groups. Bake into VM **199** with `kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh`. Isolate buttons travel **VM 100 → VM 114 channel → appliance Manager → agent**. Do not use unsigned WPK as the update path. |
+| **Open-source compliance** | Legal notices live in repo `ATTRIBUTIONS.md` and baked appliance file `/usr/share/doc/kevantic/ATTRIBUTIONS.txt` (mkosi + Ansible `kevantic_runtime`). Customer/admin UI uses **Kevantic NikTiar™** capability names only (no upstream engine brands). Master verifier CHECK 6. Tag: `kb106-oss-compliance-attributions-validated`. |
 | **KB-094 production portability** | Env templates (`deploy/environments/`), `production_deploy_control_plane.sh`, release checklist — cloud-agnostic deploy path. **KB-105** is wired in: Sysmon cache before image build; Linux Manager rules playbook after Wazuh. Master verifier: `python3 scripts/verify_platform_state.py` (`--release` before cloud). |
 
 **Do not** treat this platform as a lab prototype in planning, user-facing copy, dashboards, or runtime defaults. Lab shortcuts need explicit user acceptance + upgrade plan.
@@ -48,7 +49,7 @@ Host: **VM 100 — `mssp-control`** (`192.168.0.201`) — **production control p
 
 | Item | Value |
 |---|---|
-| Latest feature tag | **KB-105 Linux mid-layer EDR** — commits `ffe9f07` + `4e8841d` (tag `kb105-linux-midlayer-edr-validated` is on `ffe9f07`; retag after this portability rework if requested). Isolate standard remains **KB-104** `kb104-isolate-standard-golden-validated` (hold until Un-isolate). Historical UI baseline: **KB-035** Customer Appliance Detail (`1ac1df3`) |
+| Latest feature tag | **KB-106 OSS compliance** `kb106-oss-compliance-attributions-validated`. Prior: **KB-105 Linux mid-layer EDR** (`kb105-linux-midlayer-edr-validated`); isolate standard **KB-104** `kb104-isolate-standard-golden-validated`. Historical UI baseline: **KB-035** Customer Appliance Detail (`1ac1df3`) |
 | Post-KB-035 stack (git) | **KB-083/084 EDR** committed through `73376d6`; **KB-088 snapshot** (user mgmt, portal auth, `/assets` SPA, Windows telemetry) — see `docs/KB088_USER_MGMT_PORTAL_AUTH_WINDOWS_TELEMETRY.md` |
 | Roadmap docs | **KB-036–KB-060** (+ later ops/integration KBs) |
 | Active branch (typical) | `main` (control plane VM 100) |

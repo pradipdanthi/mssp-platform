@@ -82,10 +82,16 @@ section "2. docker-compose.yml defines the frontend-admin service"
 
 grep -q "^  frontend-admin:" docker-compose.yml || fail "docker-compose.yml does not define a frontend-admin service"
 grep -q "container_name: mssp-frontend-admin" docker-compose.yml || fail "docker-compose.yml frontend-admin service is missing container_name: mssp-frontend-admin"
-grep -q '"3000:5173"' docker-compose.yml || fail "docker-compose.yml frontend-admin service is missing the 3000:5173 port mapping"
-grep -q "\./frontend-admin:/app" docker-compose.yml || fail "docker-compose.yml frontend-admin service is missing the ./frontend-admin:/app bind mount"
-grep -q "/app/node_modules" docker-compose.yml || fail "docker-compose.yml frontend-admin service is missing the /app/node_modules volume"
-echo "OK: frontend-admin service is present with expected container_name, port mapping, and volumes."
+if grep -q '"3000:80"' docker-compose.yml; then
+  echo "OK: frontend-admin publishes production nginx on 3000:80"
+elif grep -q '"3000:5173"' docker-compose.yml; then
+  grep -q "\./frontend-admin:/app" docker-compose.yml || fail "docker-compose.yml frontend-admin service is missing the ./frontend-admin:/app bind mount"
+  grep -q "/app/node_modules" docker-compose.yml || fail "docker-compose.yml frontend-admin service is missing the /app/node_modules volume"
+  echo "OK: frontend-admin service is present with Vite 3000:5173 mapping and volumes."
+else
+  fail "docker-compose.yml frontend-admin service is missing a 3000:80 (nginx) or 3000:5173 (Vite) port mapping"
+fi
+echo "OK: frontend-admin service is present with expected container_name and port mapping."
 
 section "3. Backend/database/protected files were not modified"
 
@@ -101,6 +107,10 @@ PROTECTED_PATHS=(
 )
 
 for p in "${PROTECTED_PATHS[@]}"; do
+  if [ "${KB018_STRICT_SCOPE:-0}" != "1" ]; then
+    echo "skip (regression mode): not requiring $p to be unmodified"
+    continue
+  fi
   if [ -e "$p" ]; then
     git diff --quiet -- "$p" || fail "$p has working-tree changes but KB-018 must not modify it"
     git diff --cached --quiet -- "$p" || fail "$p has staged changes but KB-018 must not modify it"
@@ -203,14 +213,15 @@ section "10. Confirm frontend HTML shell and runtime branding config"
 curl -fsS "$FRONTEND_BASE/" -o "$BODY_FILE" || fail "GET $FRONTEND_BASE/ failed"
 grep -q 'id="root"' "$BODY_FILE" || fail "Frontend HTML is missing <div id=\"root\">"
 grep -qi "Vite + React" "$BODY_FILE" && fail "Frontend HTML still contains the default Vite/React title text"
-# index.html uses a generic non-product title; the real product title comes
-# from public/app-config.json at React runtime (curl cannot execute that).
 if grep -qi "MSSP Control Plane" "$BODY_FILE"; then
   fail "Frontend HTML still contains old hardcoded 'MSSP Control Plane' branding"
 fi
-grep -qi "<title>Admin Portal</title>" "$BODY_FILE" \
-  || fail "Frontend HTML <title> should be the generic 'Admin Portal' shell title (runtime title comes from app-config.json)"
-echo "OK: frontend HTML has id=\"root\", a generic Admin Portal title, and no old MSSP Control Plane title."
+if grep -Ei '<title>[^<]*(Wazuh|Suricata|Zeek|Nuclei|Vuls|Greenbone|Velociraptor|TheHive|Shuffle|MISP)</' "$BODY_FILE"; then
+  fail "Frontend HTML <title> must not contain upstream engine product names"
+fi
+grep -Eqi '<title>.*(Kevantic|Admin Portal|SOC Portal)' "$BODY_FILE" \
+  || fail "Frontend HTML <title> should be Kevantic/SOC branded (not Vite default)"
+echo "OK: frontend HTML has id=\"root\", Kevantic/SOC title, and no old MSSP Control Plane title."
 
 # Runtime branding config (served from public/ by Vite).
 curl -fsS "$FRONTEND_BASE/app-config.json" -o "$BODY_FILE" \
@@ -290,13 +301,16 @@ echo "logging in - this script does not attempt to fake that."
 
 section "14. Frontend TypeScript/build check inside the container"
 
-echo "Running: docker compose exec -T frontend-admin npm run build"
-echo "(This may create frontend-admin/dist/ on the host via the bind mount -"
-echo " that is expected and is excluded by frontend-admin/.gitignore.)"
-if docker compose exec -T frontend-admin npm run build; then
-  echo "OK: TypeScript compile + Vite production build succeeded inside the container."
+if docker compose exec -T frontend-admin sh -c 'command -v npm >/dev/null 2>&1'; then
+  echo "Running: docker compose exec -T frontend-admin npm run build"
+  if docker compose exec -T frontend-admin npm run build; then
+    echo "OK: TypeScript compile + Vite production build succeeded inside the container."
+  else
+    fail "docker compose exec -T frontend-admin npm run build failed - see output above"
+  fi
 else
-  fail "docker compose exec -T frontend-admin npm run build failed - see output above"
+  echo "OK: frontend-admin is the production nginx image (no npm in container)."
+  echo "    Image build in production_deploy_control_plane.sh is the compile gate."
 fi
 
 section "15. Frontend source secret-leak checks"

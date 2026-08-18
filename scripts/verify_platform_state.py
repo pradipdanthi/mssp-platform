@@ -744,7 +744,7 @@ def check_backend_schemas() -> CheckResult:
                 Finding(
                     "FAILED",
                     f"source_tool={tool!r} is not an explicit key in customer_safe_labels mapping",
-                    detail="unknown tools fall through to generic 'Managed detection' — add an explicit capability label",
+                    detail="unknown tools fall through to generic 'NikTiar™ Managed Detection' — add an explicit capability label",
                     path=labels,
                 )
             )

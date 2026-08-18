@@ -9,29 +9,32 @@ def customer_safe_alert_source(source_tool: Optional[str]) -> str:
     """Map internal source_tool values to customer-facing detection labels."""
     key = (source_tool or "").strip().lower()
     mapping = {
-        "wazuh": "Endpoint monitoring",
-        "suricata": "Network monitoring",
-        "zeek": "Network traffic analysis",
-        "nuclei": "Vulnerability assessment",
-        "vuls": "Vulnerability assessment",
-        "greenbone": "Vulnerability assessment",
-        "openvas": "Vulnerability assessment",
-        "shuffle": "Security automation",
-        "thehive": "Incident response",
-        "misp": "Threat intelligence",
-        "velociraptor": "Endpoint forensics",
-        "endpoint_kernel": "Endpoint process telemetry",
-        "endpoint_audit_exec": "Endpoint process telemetry",
-        "endpoint_process_create": "Endpoint process telemetry",
+        "wazuh": "NikTiar™ Core Telemetry",
+        "fluentbit": "NikTiar™ Core Telemetry",
+        "fluent-bit": "NikTiar™ Core Telemetry",
+        "fluent_bit": "NikTiar™ Core Telemetry",
+        "suricata": "NikTiar™ DeepSight NDR",
+        "zeek": "NikTiar™ DeepSight NDR",
+        "nuclei": "NikTiar™ Aegis Scanning",
+        "vuls": "NikTiar™ Aegis Scanning",
+        "greenbone": "NikTiar™ Aegis Scanning",
+        "openvas": "NikTiar™ Aegis Scanning",
+        "shuffle": "NikTiar™ Apex Orchestrator",
+        "thehive": "NikTiar™ Apex Orchestrator",
+        "misp": "NikTiar™ Threat Intelligence",
+        "velociraptor": "NikTiar™ Spectre Forensics",
+        "endpoint_kernel": "NikTiar™ Core Telemetry",
+        "endpoint_audit_exec": "NikTiar™ Core Telemetry",
+        "endpoint_process_create": "NikTiar™ Core Telemetry",
     }
     if key in mapping:
         return mapping[key]
     if not key:
-        return "Managed detection"
+        return "NikTiar™ Managed Detection"
     if key in ("manual", "platform", "mssp_control"):
-        return "Managed detection"
-    # Unknown adapter: generic label (never echo raw tool id to customers).
-    return "Managed detection"
+        return "NikTiar™ Managed Detection"
+    # Unknown adapter: generic branded label (never echo raw tool id to customers).
+    return "NikTiar™ Managed Detection"
 
 
 def customer_safe_incident_response_mode(mode: Optional[str]) -> str:
