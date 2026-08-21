@@ -2,27 +2,29 @@
 
 **Document type:** Slide deck source for Google NotebookLM  
 **Product:** Kevantic NikTiar™ Sovereign Cyber Defense Platform  
+**Release alignment:** v1.2.0-hipaa-hardened  
 **Operator:** Kevantic Cyber Security Private Limited  
 **Audience:** Enterprise buyers, CISOs, IT leaders, regulated industries  
 **Slide count:** 10  
-**Generation intent:** Each `## SLIDE` block maps to one presentation slide. Use headings as slide titles; bullets as on-slide copy; *Speaker notes* and *Visual cues* guide layout and narration.
+**Generation intent:** Each `## SLIDE` block maps to one presentation slide. Use headings as slide titles; bullets as on-slide copy; *Speaker notes* and *Visual cues* guide layout and narration.  
+**Accuracy:** HIPAA language is **Real-Time HIPAA §164.312 Technical Safeguards & Hardening Indicators** — not a certification or legal opinion.
 
 ---
 
 ## SLIDE 1: Title & Vision — Kevantic NikTiar™ Sovereign Cyber Defense
 
 ### Headline
-**Enterprise-Grade Cybersecurity. Autonomous Threat Detection. Guaranteed Hybrid Sovereignty.**
+**100% Data Sovereignty. Local Raw Log Retention. Zero Cloud Tax.**
 
 ### Subheadline
-The Kevantic NikTiar™ platform is a hybrid MSSP stack that keeps **raw telemetry on your premises** while a **24/7 Cloud SOC** investigates, contains, and proves compliance—without shipping your entire log estate to a vendor cloud.
+The Kevantic NikTiar™ platform deploys an on-premises **NikTiar™ Edge Node** so **100% of raw logs stay on your network**. A **24/7 Cloud SOC** investigates, contains with hold-until-unisolate EDR, and publishes live scorecards—without a vendor cloud log tax and without shipping raw ePHI off-site.
 
 ### Key bullets
 - **Managed service, not a DIY license** — Kevantic analysts own detection, response, and customer-facing outcomes
-- **Hybrid sovereignty by design** — you retain raw logs locally; we hunt on encrypted high-priority alerts
+- **100% data sovereignty by design** — local raw log retention on the NikTiar™ Edge Node; we hunt on encrypted high-priority alerts
 - **One platform, four tiers** — Bronze through Platinum on a single control plane with dynamic licensing
 - **NikTiar™ engine family** — unified capability branding across endpoint, network, vulnerability, SOAR, and DFIR
-- **Built for regulated and multi-site estates** — PCI-DSS, ISO 27001, and HIPAA scorecards in the customer portal
+- **Five continuous compliance frameworks** — CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST technical-safeguard indicators in the Customer Portal
 
 ### Tagline
 *You keep the logs. We hunt, contain, and prove it.*
@@ -82,7 +84,7 @@ Kevantic inverts the cloud-first MSSP model: **ingest and retain at the edge**, 
 
 ### Key bullets — Sovereign Edge Ingestion
 - **Kevantic NikTiar™ Edge Node** processes telemetry locally—endpoint, network, and scan data stay in your datacenter or VPC
-- **365+ day retention** without a vendor data-lake tax; raw history available for on-site retrospective hunts
+- **100% Data Sovereignty** — local raw log retention with **zero cloud log tax**; raw history available for on-site retrospective hunts
 - **Outbound-only secure channel** (TLS/mTLS)—no inbound firewall holes required for day-to-day operations
 - **Single ISO, multiple deployment modes** — on-prem, cloud VPC, or hybrid under one appliance image
 
@@ -128,7 +130,7 @@ This is the strategic wedge. Sovereignty is not a feature flag—it is the defau
                    ▼
 ┌──────────── Control Plane Tier ──────────┐
 │  Admin + Customer portals                │
-│  Compliance scorecards · entitlements    │
+│  CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST scorecards │
 └──────────────────────────────────────────┘
 ```
 
@@ -140,14 +142,14 @@ This is the strategic wedge. Sovereignty is not a feature flag—it is the defau
 
 ### Tier 2 — Cloud SOC (Kevantic NikTiar™ Cloud SOC)
 - Receives **encrypted high-priority alerts** without raw log lock-in
-- **NikTiar™ Apex SOAR** triggers playbooks and containment under analyst approval
+- **NikTiar™ Apex SOAR** triggers playbooks and **hold-until-unisolate** host containment under analyst approval; isolated only after **verified endpoint callback acknowledgment**
 - **NikTiar™ Spectre DFIR** for live memory forensics and process-tree investigation
 - Centralized casework—**no on-prem ticketing UI** on the appliance
 
 ### Tier 3 — Control Plane (Kevantic NikTiar™ Control Plane)
-- Unified **Client Portal** and **Administrative Console**
+- Unified **Kevantic Customer Portal** and **Administrative Console**
 - **Dynamic JWS license keys** enforce Bronze–Platinum capabilities per tenant
-- Real-time **PCI-DSS, ISO 27001, HIPAA** compliance scorecards
+- Live **CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST** technical-safeguard indicators — without forcing raw ePHI logs off the client network
 - Multi-tenant isolation with entitlement-driven engine provisioning
 
 ### Deployment modes (same stack)
@@ -179,7 +181,7 @@ Emphasize separation of concerns: edge retains, SOC responds, control plane gove
 | **NikTiar™ Core** | Endpoint & log telemetry pipeline | 24/7 SIEM-grade monitoring; agents on servers and endpoints; local normalization at the edge |
 | **NikTiar™ DeepSight NDR** | Network detection & traffic analysis | Lateral movement, beaconing, and IDS/NTA visibility; packet-level inspection at Gold/Platinum |
 | **NikTiar™ Aegis** | Vulnerability assessment | Prioritized CVE exposure; scan cadence scales by tier (monthly → continuous) |
-| **NikTiar™ Apex SOAR** | Security automation & case orchestration | Playbooks, enrichment, and containment (`ISOLATE_HOST`, process kill, hash block) with SOC approval |
+| **NikTiar™ Apex SOAR** | Security automation & case orchestration | Playbooks, enrichment, and **hold-until-unisolate** host containment with verified endpoint callback acknowledgment (SOC approval) |
 | **NikTiar™ Spectre DFIR** | Endpoint forensics & live response | Process trees, memory forensics, deception/canary support; deep investigation without customer raw-data exposure |
 
 ### Additional platform modules (tier/add-on)
@@ -209,10 +211,10 @@ This slide is the "what you get" catalog. Stress that buyers subscribe to **outc
 
 | Tier | Package name | Target buyer | One-line promise |
 |------|--------------|--------------|------------------|
-| **Bronze** | Core SIEM | SMB compliance | Foundational telemetry + monthly Aegis scans + email IR notifications |
-| **Silver** | Advanced Sec | Mid-market hybrid | Weekly Aegis scans, daily IOC sync, standard triage, **Edge Node included** |
-| **Gold** | Enterprise NDR | Enterprise networks | Daily scans, DeepSight NDR, live Apex SOAR, guided remediation, **HA appliance pair** |
-| **Platinum** | Full Autonomous SOC | Mission-critical / financial | Continuous Aegis, 15-min SLA + automated containment, Spectre live memory DFIR, **dedicated cluster** |
+| **Bronze** | Core SIEM | SMB compliance | Foundational telemetry + monthly Aegis scans + email IR + five-framework indicators (CIS / ISO 27001 / PCI-DSS / HIPAA §164.312 / NIST) |
+| **Silver** | Advanced Sec | Mid-market hybrid | Weekly Aegis scans, daily IOC sync, standard triage, **Edge Node included**, hold-until-unisolate |
+| **Gold** | Enterprise NDR | Enterprise networks | Daily scans, DeepSight NDR, live Apex SOAR, guided remediation, **HA appliance pair**, verified-callback isolation |
+| **Platinum** | Full Autonomous SOC | Mission-critical / financial | Continuous Aegis, 15-min SLA + automated hold-until-unisolate containment, Spectre live memory DFIR, **dedicated cluster** |
 
 ### Feature comparison matrix
 
@@ -226,6 +228,8 @@ This slide is the "what you get" catalog. Stress that buyers subscribe to **outc
 | **Incident response** | Email notifications | Standard triage | Guided remediation | **15-min SLA + Apex SOAR containment** |
 | **DFIR forensics (Spectre)** | Standard logs | Endpoint telemetry | Spectre triage | **Live memory & process tree** |
 | **NikTiar™ Edge Node** | Optional | **Included** | **Included (HA pair)** | **Dedicated high-throughput cluster** |
+| **Continuous compliance** | CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST | Same five frameworks | Same five frameworks | Same five frameworks |
+| **Host containment** | SOC-approved isolation | Hold-until-unisolate | Hold-until-unisolate + verified callback | Hold-until-unisolate EDR with verified endpoint callback |
 
 ### Commercial flexibility
 - **Dynamic licensing** — provision DeepSight NDR, HA Edge Nodes, or Platinum SLAs from the control plane
@@ -254,7 +258,7 @@ Walk one row of the matrix aloud (e.g., NDR and Edge Node progression). Ask the 
 | **2. Correlate** | AI links related signals into attack chains; analysts cut through single-event noise | Kevantic SOC (AI-assisted) |
 | **3. Triage** | 24/7 analysts validate severity, tenant scope, and business impact | Kevantic SOC |
 | **4. Investigate** | Case opened in Cloud SOC; Spectre DFIR process trees and forensics where licensed | Kevantic SOC |
-| **5. Contain** | Apex SOAR playbooks execute approved actions: `ISOLATE_HOST`, kill process, block hash | Analyst-approved automation |
+| **5. Contain** | Apex SOAR playbooks execute approved **hold-until-unisolate** actions; isolated only after verified endpoint callback | Analyst-approved automation |
 | **6. Communicate** | Plain-English summary, timeline, and recommendations published to **Customer Portal** | Kevantic SOC → customer leadership |
 | **7. Close & learn** | Audit-ready timeline, monthly reporting, compliance scorecard updates | Control Plane |
 
@@ -265,11 +269,13 @@ High-priority alert (edge or cloud)
         → Apex SOAR playbook armed
         → Analyst approval gate (policy-based; auto at Platinum SLA)
         → Active response on endpoint/network
-        → Verification + customer portal update
+        → Verified endpoint callback acknowledgment
+        → Isolation status confirmed (timeout ≠ isolated)
+        → Customer portal update
 ```
 
 ### Containment actions (approved playbooks)
-- **Host isolation** — `ISOLATE_HOST` via OS-native controls
+- **Hold-until-unisolate host isolation** — OS-native network isolation; host stays isolated until unisolate; **verified endpoint callback acknowledgment** required before status = isolated
 - **Process termination** — stop malicious process by identity
 - **Hash blocking** — propagate block across connected endpoints
 - **Target MTTC** — **~800 milliseconds** under approved Gold/Platinum playbooks (vs. hours in ticket-queue models)
@@ -288,41 +294,46 @@ Stress the hybrid value: edge retains forensic depth locally; SOC executes fast 
 
 ---
 
-## SLIDE 8: Control Plane Intelligence & Compliance Scorecards (PCI-DSS, ISO 27001, HIPAA)
+## SLIDE 8: Control Plane Intelligence & Continuous Compliance (CIS, ISO 27001, PCI-DSS, HIPAA §164.312, NIST)
 
 ### Headline
-**One portal for executives, auditors, and IT—real-time posture, not quarterly slide decks.**
+**One portal for executives, auditors, and IT—real-time technical-safeguard indicators, not quarterly slide decks.**
 
 ### Control plane capabilities
-- **Client Portal** — alerts, incidents, appliance health, vulnerabilities, reports, service upgrade requests
+- **Kevantic Customer Portal** — alerts, incidents, NikTiar™ Edge Node health, vulnerabilities, reports, service upgrade requests
 - **Administrative Console** — tenant onboarding, entitlements, activation tokens, cross-tenant SOC operations
 - **AI-assisted summaries** — business impact and recommended actions in plain English (analyst-reviewed)
 - **Dynamic service provisioning** — request NDR, HA appliances, or tier upgrades in one click
+- **Zero ePHI egress** — live scorecards without forcing raw ePHI or raw logs to leave the client's network
 
-### Compliance scorecards
+### Compliance scorecards (five frameworks)
 
 | Framework | What the portal tracks | Buyer outcome |
 |-----------|------------------------|---------------|
-| **PCI-DSS** | Logging, monitoring, access, and incident-response control alignment | Auditor-ready evidence for cardholder environments |
+| **CIS** | Benchmark hardening of Windows/Linux endpoints | Continuous configuration readiness %, not annual spreadsheet panic |
 | **ISO 27001** | ISMS-aligned monitoring, incident handling, and continuous improvement metrics | Structured proof for certification and surveillance audits |
-| **HIPAA** | Security incident procedures, access monitoring, and risk-management visibility | Healthcare and BAAs get defensible, ongoing reporting |
+| **PCI-DSS** | Logging, monitoring, access, and incident-response control alignment | Auditor-ready evidence for cardholder environments |
+| **HIPAA §164.312** | **Real-Time HIPAA §164.312 Technical Safeguards & Hardening Indicators** — endpoint encryption, tamper-proof audit logging, file integrity monitoring, autonomous hold-until-unisolate EDR host containment | Healthcare and BAAs get defensible, ongoing *technical* reporting without shipping raw ePHI |
+| **NIST** | Technical-control alignment to NIST-style safeguard families | Board-ready posture language mapped to the same endpoint telemetry |
 
 ### Continuous compliance add-on (CaaS)
-- **CIS benchmark readiness scoring** for Windows and Linux estates
-- Percentage-style **compliance readiness ring** in the customer portal
+- Live **five-framework** scorecards in the Kevantic Customer Portal
+- Percentage-style **compliance readiness ring**
+- HIPAA language is an **indicator**, not a certification or legal opinion
 - Bridges technical telemetry to **board and auditor language**
 
 ### Reporting & accountability
 - Monthly **published reports** with executive summaries
 - Incident timelines exportable for leadership and audit conversations
 - **Tenant-isolated** views—Customer A never sees Customer B data (404 on cross-tenant access)
+- Host isolation status is **hold-until-unisolate** and confirmed only after **verified endpoint callback acknowledgment**
 
 ### Visual cues
 - Split screen: compliance scorecard (78% readiness ring) + incident timeline + upgrade request button
-- Framework badges: PCI-DSS · ISO 27001 · HIPAA
+- Framework badges: CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST
 
 ### Speaker notes
-This slide speaks to CISO + CFO + compliance officer. The control plane is how Kevantic **proves** the service between audits—not just during them.
+This slide speaks to CISO + CFO + compliance officer. Never claim HIPAA certification. Position §164.312 as mapped technical-safeguard indicators on the Edge Node. The control plane is how Kevantic **proves** the service between audits—not just during them.
 
 ---
 
@@ -335,13 +346,13 @@ This slide speaks to CISO + CFO + compliance officer. The control plane is how K
 
 | Advantage | Kevantic NikTiar™ | Typical cloud-first MSSP / SIEM |
 |-----------|-------------------|----------------------------------|
-| **Data sovereignty** | Raw logs stay local at the edge; ~0% raw egress in flagship mode | Full ingest to vendor cloud required |
+| **Data sovereignty** | **100% local raw logs** on the NikTiar™ Edge Node; zero cloud log tax in flagship mode | Full ingest to vendor cloud required |
 | **Commercial model** | Managed MSSP subscription with tiered outcomes | DIY platform + SIEM tax + separate MDR upsell |
 | **Architecture** | 3-tier edge + SOC + control plane on one license plane | Disconnected agents, lakes, and SOAR tools |
 | **Upgrade path** | Bronze → Platinum without rip-and-replace | New SKUs, migrations, professional services |
 | **Customer experience** | Branded NikTiar™ portal; plain-English, leadership-ready | Analyst portals or raw SIEM consoles exposed |
-| **Containment** | Sub-second MTTC path with analyst-approved Apex SOAR | Manual ticket queues and delayed response |
-| **Compliance** | Live PCI / ISO / HIPAA scorecards | Periodic manual compliance projects |
+| **Containment** | Hold-until-unisolate EDR with verified endpoint callback | Manual ticket queues and delayed / unverified isolation |
+| **Compliance** | Live CIS / ISO 27001 / PCI-DSS / HIPAA §164.312 / NIST indicators | Periodic manual compliance projects |
 | **Hybrid estates** | Four deployment modes under one SOC | Separate products for cloud vs on-prem |
 
 ### TCO levers (where savings compound)
@@ -418,7 +429,9 @@ End with urgency and low friction. The pilot de-risks the residency conversation
 
 **Recommended deck style:** Enterprise cybersecurity pitch; dark background; cyan/teal accents; minimal text per slide (max 5 bullets); one diagram per architecture/workflow slide.
 
-**Brand terms to preserve exactly:** Kevantic, NikTiar™, NikTiar™ Core, NikTiar™ DeepSight NDR, NikTiar™ Aegis, NikTiar™ Apex SOAR, NikTiar™ Spectre DFIR, Edge Node, Cloud SOC, Control Plane.
+**Brand terms to preserve exactly:** Kevantic, Kevantic NikTiar™, NikTiar™, NikTiar™ Edge Node, NikTiar™ Core, NikTiar™ DeepSight NDR, NikTiar™ Aegis, NikTiar™ Apex SOAR, NikTiar™ Spectre DFIR, Cloud SOC, Control Plane, Kevantic Customer Portal, hold-until-unisolate, HIPAA §164.312 Technical Safeguards & Hardening Indicators.
+
+**Do not claim on slides:** HIPAA certification, legal opinions, or that a timeout equals isolated. Isolation is confirmed only after verified endpoint callback acknowledgment.
 
 **Do not use on customer-facing slides:** upstream open-source engine product names (Wazuh, Suricata, Zeek, etc.)—legal attributions belong in documentation only.
 
