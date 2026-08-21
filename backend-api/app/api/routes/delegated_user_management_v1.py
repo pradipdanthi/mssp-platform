@@ -18,6 +18,7 @@ from app.api.dependencies import get_current_user, require_roles
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_one
 from app.services import tenant_customer_users as tcu
+from app.services.audit_service import audit_from_user
 
 MSSP_CUSTOMER_USER_ROLES = ("platform_admin", "soc_manager")
 
@@ -80,6 +81,30 @@ def _assert_tenant_exists(tenant_id: str) -> None:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
 
+def _audit_v1_user(
+    current_user: Dict[str, Any],
+    request: Request,
+    *,
+    action: str,
+    tenant_id: str,
+    entity_id: Optional[str] = None,
+    details: Optional[Dict[str, Any]] = None,
+    action_status: str = "SUCCESS",
+) -> None:
+    payload = dict(details or {})
+    payload.setdefault("outcome", action_status)
+    audit_from_user(
+        current_user,
+        action=action,
+        entity_type="platform_user",
+        entity_id=entity_id,
+        tenant_id=tenant_id,
+        source_ip=_client_ip(request),
+        details=payload,
+        action_status=action_status,
+    )
+
+
 def _updates_from_payload(payload: V1UserUpdate) -> Dict[str, Any]:
     updates: Dict[str, Any] = {}
     if payload.full_name is not None:
@@ -114,15 +139,34 @@ def v1_create_customer_user(
 ) -> Dict[str, Any]:
     _require_customer_admin(current_user)
     tenant_id = _tenant_id_from_user(current_user)
-    row = tcu.create_portal_user(
+    try:
+        row = tcu.create_portal_user(
+            tenant_id=tenant_id,
+            email=payload.email,
+            full_name=payload.full_name,
+            password=payload.password,
+            role=payload.role,
+            phone=payload.phone,
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_CUSTOMER_USER_CREATED",
+            tenant_id=tenant_id,
+            details={"email": payload.email, "role": payload.role, "http_status": exc.status_code},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_CUSTOMER_USER_CREATED",
         tenant_id=tenant_id,
-        email=payload.email,
-        full_name=payload.full_name,
-        password=payload.password,
-        role=payload.role,
-        phone=payload.phone,
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=row["id"],
+        details={"email": row["email"], "role": row["role"]},
     )
     return row
 
@@ -149,13 +193,34 @@ def v1_update_customer_user(
     updates = _updates_from_payload(payload)
     if not updates:
         raise HTTPException(status_code=422, detail="At least one field must be provided")
-    return tcu.update_portal_user(
+    try:
+        row = tcu.update_portal_user(
+            tenant_id=tenant_id,
+            user_id=str(user_id),
+            updates=updates,
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_CUSTOMER_USER_UPDATED",
+            tenant_id=tenant_id,
+            entity_id=str(user_id),
+            details={"http_status": exc.status_code, "fields": sorted(updates.keys())},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_CUSTOMER_USER_UPDATED",
         tenant_id=tenant_id,
-        user_id=str(user_id),
-        updates=updates,
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=str(user_id),
+        details={"fields": sorted(updates.keys())},
     )
+    return row
 
 
 @customer_router.delete("/users/{user_id}")
@@ -166,11 +231,30 @@ def v1_delete_customer_user(
 ) -> Dict[str, str]:
     _require_customer_admin(current_user)
     tenant_id = _tenant_id_from_user(current_user)
-    tcu.soft_delete_portal_user(
+    try:
+        tcu.soft_delete_portal_user(
+            tenant_id=tenant_id,
+            user_id=str(user_id),
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_CUSTOMER_USER_DELETED",
+            tenant_id=tenant_id,
+            entity_id=str(user_id),
+            details={"http_status": exc.status_code},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_CUSTOMER_USER_DELETED",
         tenant_id=tenant_id,
-        user_id=str(user_id),
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=str(user_id),
     )
     return {"status": "deleted"}
 
@@ -184,12 +268,31 @@ def v1_customer_reset_password(
 ) -> Dict[str, str]:
     _require_customer_admin(current_user)
     tenant_id = _tenant_id_from_user(current_user)
-    tcu.reset_portal_user_password(
+    try:
+        tcu.reset_portal_user_password(
+            tenant_id=tenant_id,
+            user_id=str(user_id),
+            new_password=payload.new_password,
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_CUSTOMER_PASSWORD_RESET",
+            tenant_id=tenant_id,
+            entity_id=str(user_id),
+            details={"http_status": exc.status_code},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_CUSTOMER_PASSWORD_RESET",
         tenant_id=tenant_id,
-        user_id=str(user_id),
-        new_password=payload.new_password,
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=str(user_id),
     )
     return {"status": "updated"}
 
@@ -217,16 +320,36 @@ def v1_admin_create_customer_user(
 ) -> Dict[str, Any]:
     tid = str(tenant_id)
     _assert_tenant_exists(tid)
-    return tcu.create_portal_user(
+    try:
+        row = tcu.create_portal_user(
+            tenant_id=tid,
+            email=payload.email,
+            full_name=payload.full_name,
+            password=payload.password,
+            role=payload.role,
+            phone=payload.phone,
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_ADMIN_CUSTOMER_USER_CREATED",
+            tenant_id=tid,
+            details={"email": payload.email, "role": payload.role, "http_status": exc.status_code},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_ADMIN_CUSTOMER_USER_CREATED",
         tenant_id=tid,
-        email=payload.email,
-        full_name=payload.full_name,
-        password=payload.password,
-        role=payload.role,
-        phone=payload.phone,
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=row["id"],
+        details={"email": row["email"], "role": row["role"]},
     )
+    return row
 
 
 @admin_router.put("/{tenant_id}/users/{user_id}")
@@ -253,13 +376,34 @@ def v1_admin_update_customer_user(
     updates = _updates_from_payload(payload)
     if not updates:
         raise HTTPException(status_code=422, detail="At least one field must be provided")
-    return tcu.update_portal_user(
+    try:
+        row = tcu.update_portal_user(
+            tenant_id=tid,
+            user_id=str(user_id),
+            updates=updates,
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_ADMIN_CUSTOMER_USER_UPDATED",
+            tenant_id=tid,
+            entity_id=str(user_id),
+            details={"http_status": exc.status_code, "fields": sorted(updates.keys())},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_ADMIN_CUSTOMER_USER_UPDATED",
         tenant_id=tid,
-        user_id=str(user_id),
-        updates=updates,
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=str(user_id),
+        details={"fields": sorted(updates.keys())},
     )
+    return row
 
 
 @admin_router.delete("/{tenant_id}/users/{user_id}")
@@ -271,11 +415,30 @@ def v1_admin_delete_customer_user(
 ) -> Dict[str, str]:
     tid = str(tenant_id)
     _assert_tenant_exists(tid)
-    tcu.soft_delete_portal_user(
+    try:
+        tcu.soft_delete_portal_user(
+            tenant_id=tid,
+            user_id=str(user_id),
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_ADMIN_CUSTOMER_USER_DELETED",
+            tenant_id=tid,
+            entity_id=str(user_id),
+            details={"http_status": exc.status_code},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_ADMIN_CUSTOMER_USER_DELETED",
         tenant_id=tid,
-        user_id=str(user_id),
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=str(user_id),
     )
     return {"status": "deleted"}
 
@@ -290,12 +453,31 @@ def v1_admin_reset_customer_password(
 ) -> Dict[str, str]:
     tid = str(tenant_id)
     _assert_tenant_exists(tid)
-    tcu.reset_portal_user_password(
+    try:
+        tcu.reset_portal_user_password(
+            tenant_id=tid,
+            user_id=str(user_id),
+            new_password=payload.new_password,
+            actor=current_user,
+            source_ip=_client_ip(request),
+        )
+    except HTTPException as exc:
+        _audit_v1_user(
+            current_user,
+            request,
+            action="V1_ADMIN_CUSTOMER_PASSWORD_RESET",
+            tenant_id=tid,
+            entity_id=str(user_id),
+            details={"http_status": exc.status_code},
+            action_status="FAILED",
+        )
+        raise
+    _audit_v1_user(
+        current_user,
+        request,
+        action="V1_ADMIN_CUSTOMER_PASSWORD_RESET",
         tenant_id=tid,
-        user_id=str(user_id),
-        new_password=payload.new_password,
-        actor=current_user,
-        source_ip=_client_ip(request),
+        entity_id=str(user_id),
     )
     return {"status": "updated"}
 

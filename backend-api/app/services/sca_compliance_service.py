@@ -34,9 +34,25 @@ FRAMEWORK_ALIASES = {
     "nist_800-53": "NIST",
     "nist_csf": "NIST",
     "csc": "CIS",
+    "hipaa": "HIPAA",
+    "hipaa_security": "HIPAA",
+    "hipaa_164.312": "HIPAA",
+    "164.312": "HIPAA",
+    "164.308": "HIPAA",
+    "164.310": "HIPAA",
+    "164.314": "HIPAA",
 }
 
-CUSTOMER_FRAMEWORKS = ("CIS", "ISO_27001", "PCI_DSS", "NIST")
+CUSTOMER_FRAMEWORKS = ("CIS", "ISO_27001", "PCI_DSS", "NIST", "HIPAA")
+
+_HIPAA_SECTION_MARKERS = ("164.312", "164.308", "164.310", "164.314")
+
+
+def _blob_maps_to_hipaa(blob: str) -> bool:
+    text = (blob or "").lower()
+    if "hipaa" in text:
+        return True
+    return any(marker in text for marker in _HIPAA_SECTION_MARKERS)
 
 
 def _parse_ts(value: Any) -> Optional[str]:
@@ -46,28 +62,33 @@ def _parse_ts(value: Any) -> Optional[str]:
     return text or None
 
 
-def _normalize_frameworks(compliance_items: Any) -> List[str]:
+def _normalize_frameworks(compliance_items: Any, extra_text: str = "") -> List[str]:
     found: Set[str] = set()
-    if not isinstance(compliance_items, list):
-        return []
-    for item in compliance_items:
-        if not isinstance(item, dict):
-            continue
-        key = str(item.get("key") or "").strip().lower()
-        if not key:
-            continue
-        mapped = FRAMEWORK_ALIASES.get(key)
-        if mapped:
-            found.add(mapped)
-            continue
-        if key.startswith("cis"):
-            found.add("CIS")
-        elif key.startswith("iso"):
-            found.add("ISO_27001")
-        elif key.startswith("pci"):
-            found.add("PCI_DSS")
-        elif key.startswith("nist"):
-            found.add("NIST")
+    if isinstance(compliance_items, list):
+        for item in compliance_items:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip().lower()
+            value = str(item.get("value") or "").strip().lower()
+            blob = f"{key} {value}".strip()
+            if not blob:
+                continue
+            mapped = FRAMEWORK_ALIASES.get(key) or FRAMEWORK_ALIASES.get(value)
+            if mapped:
+                found.add(mapped)
+                continue
+            if key.startswith("cis") or value.startswith("cis"):
+                found.add("CIS")
+            elif key.startswith("iso") or "iso_27001" in blob or "iso27001" in blob:
+                found.add("ISO_27001")
+            elif key.startswith("pci") or "pci_dss" in blob or "pci-dss" in blob:
+                found.add("PCI_DSS")
+            elif key.startswith("nist") or "nist" in blob:
+                found.add("NIST")
+            if _blob_maps_to_hipaa(blob):
+                found.add("HIPAA")
+    if _blob_maps_to_hipaa(extra_text):
+        found.add("HIPAA")
     return sorted(found)
 
 
@@ -75,7 +96,8 @@ def _policy_frameworks(policy: Dict[str, Any], check_frameworks: Set[str]) -> Li
     out = set(check_frameworks)
     pid = str(policy.get("policy_id") or "").lower()
     name = str(policy.get("name") or "").lower()
-    blob = f"{pid} {name}"
+    description = str(policy.get("description") or "").lower()
+    blob = f"{pid} {name} {description}"
     if "cis" in blob:
         out.add("CIS")
     if "iso" in blob:
@@ -84,6 +106,8 @@ def _policy_frameworks(policy: Dict[str, Any], check_frameworks: Set[str]) -> Li
         out.add("PCI_DSS")
     if "nist" in blob:
         out.add("NIST")
+    if _blob_maps_to_hipaa(blob):
+        out.add("HIPAA")
     if not out:
         out.add("CIS")
     return sorted(out)
@@ -329,12 +353,15 @@ def sync_tenant_sca(tenant_id: str) -> Dict[str, Any]:
                     break
                 for item in items:
                     status = _result_to_status(item.get("result"))
-                    frameworks = _normalize_frameworks(item.get("compliance"))
+                    title = str(item.get("title") or item.get("description") or "Configuration check")
+                    frameworks = _normalize_frameworks(
+                        item.get("compliance"),
+                        extra_text=f"{title} {item.get('rationale') or ''} {item.get('remediation') or ''}",
+                    )
                     check_fw.update(frameworks)
                     for fw in frameworks:
                         if fw in fw_fail:
                             fw_fail[fw] += 1
-                    title = str(item.get("title") or item.get("description") or "Configuration check")
                     failed_rows.append(
                         {
                             "check_id": str(item.get("id") or ""),

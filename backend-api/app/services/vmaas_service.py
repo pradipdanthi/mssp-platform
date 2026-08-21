@@ -3,8 +3,8 @@ Vulnerability Management (VMaaS).
 
 Normalizes internal scan results into tenant_vulnerability_* tables for the
 customer portal. Prefers live rows from the existing ``vulnerabilities`` ingest
-(Nuclei/Vuls/Greenbone on VM 109). When none exist, a controlled analysis
-adapter seeds prioritized sample findings so the dashboard is testable.
+(Nuclei/Vuls/Greenbone on VM 109). Sample seeders run only in lab
+(APP_ENV=lab or VMAAS_ALLOW_SAMPLE_ADAPTER); production fail-closes empty.
 
 Customer APIs never expose vendor engine names, raw_finding, or internal notes.
 Public label: ``MSSP Internal Vulnerability Scanner``.
@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -24,6 +25,17 @@ from app.db.session import execute, fetch_all, fetch_one, fetch_one_write
 logger = logging.getLogger(__name__)
 
 ENGINE_LABEL = "MSSP Internal Vulnerability Scanner"
+
+
+def _allow_lab_sample_seed() -> bool:
+    """Synthetic VMaaS rows are lab-only. Production fail-closes on empty scans."""
+    app_env = (os.getenv("APP_ENV") or "").strip().lower()
+    if app_env == "production":
+        return False
+    flag = (os.getenv("VMAAS_ALLOW_SAMPLE_ADAPTER") or "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        return True
+    return app_env == "lab"
 
 SEVERITY_CVSS = {
     "CRITICAL": Decimal("9.8"),
@@ -469,6 +481,8 @@ def _import_from_legacy(tenant_id: str, scan_id: str) -> int:
 
 
 def _seed_sample_findings(tenant_id: str, scan_id: str, target_range: str) -> int:
+    if not _allow_lab_sample_seed():
+        return 0
     digest = hashlib.sha256(f"{tenant_id}:{target_range}".encode()).hexdigest()
     samples = [
         {
@@ -564,7 +578,8 @@ def run_tenant_vmaas_sync(
     scan_engine: str = "NUCLEI_INTERNAL",
 ) -> Dict[str, Any]:
     """
-    Create a scan run, import live findings when present, otherwise seed samples.
+    Create a scan run and import live findings. Sample rows are lab-only.
+    Production returns sync_status=empty when the live adapter yields nothing.
     """
     tid = str(tenant_id)
     engine = (scan_engine or "NUCLEI_INTERNAL").strip().upper()
@@ -587,8 +602,22 @@ def run_tenant_vmaas_sync(
         imported = _import_from_legacy(tid, scan_id)
         source = "live_ingest"
         if imported == 0:
-            imported = _seed_sample_findings(tid, scan_id, targets)
-            source = "analysis_adapter"
+            if _allow_lab_sample_seed():
+                imported = _seed_sample_findings(tid, scan_id, targets)
+                source = "analysis_adapter"
+            else:
+                stats = _finalize_scan(scan_id, tid)
+                return {
+                    "tenant_id": tid,
+                    "scan_status": "empty",
+                    "sync_status": "empty",
+                    "scan_id": scan_id,
+                    "source": source,
+                    "message": "Scanner returned no findings",
+                    "scanner_label": ENGINE_LABEL,
+                    **stats,
+                    "summary": get_summary(tid),
+                }
         stats = _finalize_scan(scan_id, tid)
         return {
             "tenant_id": tid,

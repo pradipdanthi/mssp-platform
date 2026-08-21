@@ -185,11 +185,13 @@ import asyncio
 from app.services.edr_sweeper import edr_sweeper_loop
 from app.services.shuffle_retry_queue import start_shuffle_retry_worker
 from app.services.ai_alert_queue import start_ai_alert_worker
+from app.services.wazuh_client import validate_production_tls
 
 _sweeper_task = None
 
 @app.on_event("startup")
 async def _start_background_tasks():
+    validate_production_tls()
     global _sweeper_task
     _sweeper_task = asyncio.create_task(edr_sweeper_loop())
     start_shuffle_retry_worker()

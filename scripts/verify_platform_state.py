@@ -851,6 +851,87 @@ def check_backend_schemas() -> CheckResult:
         )
     else:
         f.append(Finding("PASSED", "no orphaned SQL table names in API route modules"))
+
+    sca_src = (BACKEND / "app" / "services" / "sca_compliance_service.py").read_text(encoding="utf-8")
+    expect(
+        f,
+        'CUSTOMER_FRAMEWORKS = ("CIS", "ISO_27001", "PCI_DSS", "NIST", "HIPAA")' in sca_src
+        or '"HIPAA"' in sca_src and "CUSTOMER_FRAMEWORKS" in sca_src,
+        "SCA compliance engine includes HIPAA in CUSTOMER_FRAMEWORKS",
+        path=BACKEND / "app" / "services" / "sca_compliance_service.py",
+    )
+    expect(
+        f,
+        "164.312" in sca_src and "_blob_maps_to_hipaa" in sca_src,
+        "SCA maps HIPAA section references (164.312 / hipaa keywords)",
+        path=BACKEND / "app" / "services" / "sca_compliance_service.py",
+    )
+
+    wazuh_src = (BACKEND / "app" / "services" / "wazuh_client.py").read_text(encoding="utf-8")
+    expect(
+        f,
+        "def validate_production_tls" in wazuh_src
+        and 'app_env == "production"' in wazuh_src
+        and "WAZUH_API_VERIFY_TLS" in wazuh_src
+        and "WazuhTlsConfigurationError" in wazuh_src,
+        "production Wazuh API TLS verification is fail-closed in wazuh_client.py",
+        path=BACKEND / "app" / "services" / "wazuh_client.py",
+    )
+    main_src = (BACKEND / "app" / "main.py").read_text(encoding="utf-8")
+    expect(
+        f,
+        "validate_production_tls()" in main_src,
+        "API startup invokes validate_production_tls()",
+        path=BACKEND / "app" / "main.py",
+    )
+
+    edr_src = (BACKEND / "app" / "services" / "edr_actions.py").read_text(encoding="utf-8")
+    expect(
+        f,
+        "applied is True" in edr_src
+        and "isolation_status = 'isolated'" in edr_src
+        and "applied is not False" not in edr_src,
+        "host isolation_status=isolated requires callback applied=true",
+        path=BACKEND / "app" / "services" / "edr_actions.py",
+    )
+    ar_src = (
+        ROOT / "kevantic-appliance" / "cli" / "kevantic-cli" / "kevantic_cli" / "register_ops.py"
+    ).read_text(encoding="utf-8")
+    expect(
+        f,
+        "not confirmed for agent" in ar_src
+        and "(manager API timeout; confirm on endpoint)" not in ar_src,
+        "Active Response timeout/3021 does not report ok=True",
+        path=ROOT / "kevantic-appliance" / "cli" / "kevantic-cli" / "kevantic_cli" / "register_ops.py",
+    )
+
+    itdr_src = (BACKEND / "app" / "services" / "itdr_service.py").read_text(encoding="utf-8")
+    vmaas_src = (BACKEND / "app" / "services" / "vmaas_service.py").read_text(encoding="utf-8")
+    expect(
+        f,
+        "def _allow_lab_sample_seed" in itdr_src and 'sync_status": "empty"' in itdr_src,
+        "ITDR sample seeder is lab-gated and fail-closes empty in production",
+        path=BACKEND / "app" / "services" / "itdr_service.py",
+    )
+    expect(
+        f,
+        "def _allow_lab_sample_seed" in vmaas_src and 'sync_status": "empty"' in vmaas_src,
+        "VMaaS sample seeder is lab-gated and fail-closes empty in production",
+        path=BACKEND / "app" / "services" / "vmaas_service.py",
+    )
+
+    for route_name, needle in (
+        ("appliance_management.py", "audit_from_user"),
+        ("delegated_user_management_v1.py", "audit_from_user"),
+        ("edr.py", "write_audit_event"),
+    ):
+        route_src = (BACKEND / "app" / "api" / "routes" / route_name).read_text(encoding="utf-8")
+        expect(
+            f,
+            needle in route_src and "source_ip" in route_src,
+            f"{route_name} records mutating audit events with source IP",
+            path=BACKEND / "app" / "api" / "routes" / route_name,
+        )
     return cr
 
 
@@ -1151,6 +1232,21 @@ def check_open_source_compliance() -> CheckResult:
         "mkosi.postinst asserts baked ATTRIBUTIONS.txt exists",
         path=postinst,
         pattern=r"/usr/share/doc/kevantic/ATTRIBUTIONS\.txt",
+    )
+    bake = ROOT / "kevantic-appliance" / "scripts" / "bake_golden_vm199_fleet_reporting.sh"
+    expect(
+        f,
+        "ATTRIBUTIONS.txt" in read(bake) and "/usr/share/doc/kevantic/ATTRIBUTIONS.txt" in read(bake),
+        "golden VM 199 bake installs /usr/share/doc/kevantic/ATTRIBUTIONS.txt",
+        path=bake,
+        pattern=r"/usr/share/doc/kevantic/ATTRIBUTIONS\.txt",
+    )
+    expect(
+        f,
+        "executor.py" in read(bake) and "patch_wazuh_api_request_timeout.sh" in read(bake),
+        "golden VM 199 bake ships executor.py and Wazuh API request_timeout patch",
+        path=bake,
+        pattern=r"patch_wazuh_api_request_timeout\.sh",
     )
 
     ui_roots = (ROOT / "frontend-admin" / "src", ROOT / "frontend-customer" / "src")

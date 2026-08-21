@@ -24,6 +24,7 @@ import ServiceRequestsPage from "./pages/ServiceRequestsPage";
 import RetrospectiveHuntsPage from "./pages/RetrospectiveHuntsPage";
 import ThreatIntelAdminPage from "./pages/ThreatIntelAdminPage";
 import AiAssistantPage from "./pages/AiAssistantPage";
+import CompliancePage from "./pages/CompliancePage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -116,6 +117,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <VulnerabilitiesPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/compliance"
+        element={
+          <ProtectedRoute>
+            <CompliancePage />
           </ProtectedRoute>
         }
       />

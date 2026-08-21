@@ -170,13 +170,14 @@ def customer_compliance_report(
 
     fw_rows = ""
     scores = summary.get("framework_scores") or {}
-    for key in ("CIS", "ISO_27001", "PCI_DSS", "NIST"):
+    for key in ("CIS", "ISO_27001", "PCI_DSS", "NIST", "HIPAA"):
         block = scores.get(key) or {}
         label = {
             "CIS": "CIS Benchmarks",
             "ISO_27001": "ISO 27001",
             "PCI_DSS": "PCI-DSS",
             "NIST": "NIST CSF",
+            "HIPAA": "HIPAA §164.312 Technical Safeguards Indicator",
         }[key]
         fw_rows += (
             f"<tr><td>{escape(label)}</td>"
@@ -276,6 +277,7 @@ def admin_compliance_summary(
             COALESCE(s.total_checks, 0) AS total_checks,
             COALESCE(s.agent_count, 0) AS agent_count,
             COALESCE(s.policy_count, 0) AS policy_count,
+            COALESCE(s.framework_scores, '{}'::jsonb) AS framework_scores,
             s.last_evaluated_at::text,
             s.last_synced_at::text,
             COALESCE(s.sync_status, 'never') AS sync_status

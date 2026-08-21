@@ -31,6 +31,7 @@ from app.services.edr_actions import (
     lookup_endpoint_from_incident,
     normalize_status,
 )
+from app.services.audit_service import audit_from_user, write_audit_event
 from app.services.edr_metrics import (
     endpoint_context_from_events,
     get_edr_metrics,
@@ -91,6 +92,15 @@ def _require_callback_auth(
     provided = (x_edr_callback_key or x_soc_sync_key or "").strip()
     if not provided or not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+
+
+def _request_ip(request: Request) -> Optional[str]:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if forwarded:
+        return forwarded[:64]
+    if request.client and request.client.host:
+        return str(request.client.host)[:64]
+    return None
 
 
 def _resolve_tenant_for_user(user: Dict[str, Any], short_code: Optional[str]) -> Dict[str, Any]:
@@ -220,21 +230,58 @@ async def edr_execute_action(
     import asyncio
 
     def _client_ip() -> Optional[str]:
-        forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-        if forwarded:
-            return forwarded[:64]
-        if request.client and request.client.host:
-            return str(request.client.host)[:64]
-        return None
+        return _request_ip(request)
 
     try:
         execution_id, st, message, upload_url, artifact_id = await asyncio.to_thread(
             execute_edr_action, current_user, body, source_ip=_client_ip()
         )
     except PermissionError as exc:
+        audit_from_user(
+            current_user,
+            action=f"EDR_{body.action_type}",
+            entity_type="edr_action",
+            tenant_id=None,
+            source_ip=_client_ip(),
+            action_status="FAILED",
+            details={
+                "outcome": "FAILED",
+                "reason": "forbidden",
+                "action_type": body.action_type,
+                "tenant_short_code": body.tenant_short_code,
+            },
+        )
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except ValueError as exc:
+        audit_from_user(
+            current_user,
+            action=f"EDR_{body.action_type}",
+            entity_type="edr_action",
+            tenant_id=None,
+            source_ip=_client_ip(),
+            action_status="FAILED",
+            details={
+                "outcome": "FAILED",
+                "reason": "bad_request",
+                "action_type": body.action_type,
+                "tenant_short_code": body.tenant_short_code,
+            },
+        )
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    audit_from_user(
+        current_user,
+        action=f"EDR_{body.action_type}",
+        entity_type="edr_action",
+        entity_id=execution_id,
+        source_ip=_client_ip(),
+        details={
+            "outcome": "SUCCESS" if st != "failed" else "FAILED",
+            "status": st,
+            "action_type": body.action_type,
+            "tenant_short_code": body.tenant_short_code,
+        },
+        action_status="SUCCESS" if st != "failed" else "FAILED",
+    )
     return EdrActionExecuteResponse(
         execution_id=execution_id,
         status=st,  # type: ignore[arg-type]
@@ -246,13 +293,14 @@ async def edr_execute_action(
 
 @router.post("/actions/callback")
 def edr_action_callback(
+    request: Request,
     body: EdrActionCallbackRequest,
     x_edr_callback_key: Optional[str] = Header(default=None, alias="X-EDR-Callback-Key"),
     x_soc_sync_key: Optional[str] = Header(default=None, alias="X-SOC-Sync-Key"),
 ) -> Dict[str, Any]:
     _require_callback_auth(x_edr_callback_key, x_soc_sync_key)
     try:
-        return apply_action_callback(
+        result = apply_action_callback(
             execution_id=body.execution_id,
             status=body.status,
             message=body.message,
@@ -262,7 +310,35 @@ def edr_action_callback(
             payload=body.model_dump(),
         )
     except ValueError as exc:
+        write_audit_event(
+            action="EDR_ACTION_CALLBACK",
+            entity_type="edr_action",
+            entity_id=body.execution_id,
+            actor_email="edr-endpoint-callback",
+            source_ip=_request_ip(request),
+            action_status="FAILED",
+            details={"outcome": "FAILED", "reason": str(exc)[:200]},
+        )
         raise HTTPException(status_code=404, detail=str(exc))
+    exec_row = fetch_one(
+        "SELECT tenant_id::text FROM edr_action_executions WHERE id = %s::uuid;",
+        (body.execution_id,),
+    )
+    write_audit_event(
+        action="EDR_ACTION_CALLBACK",
+        entity_type="edr_action",
+        entity_id=body.execution_id,
+        actor_email="edr-endpoint-callback",
+        tenant_id=(exec_row or {}).get("tenant_id"),
+        source_ip=_request_ip(request),
+        action_status="SUCCESS",
+        details={
+            "outcome": "SUCCESS",
+            "status": result.get("status"),
+            "applied": (body.model_dump() or {}).get("applied"),
+        },
+    )
+    return result
 
 
 @router.get("/actions/{execution_id}", response_model=EdrActionStatusResponse)
@@ -389,6 +465,7 @@ def edr_forensics_download(
 
 @router.post("/forensics/complete")
 def edr_forensics_complete(
+    request: Request,
     body: EdrForensicsCompleteRequest,
     x_edr_callback_key: Optional[str] = Header(default=None, alias="X-EDR-Callback-Key"),
     x_soc_sync_key: Optional[str] = Header(default=None, alias="X-SOC-Sync-Key"),
@@ -469,6 +546,16 @@ def edr_forensics_complete(
         download = edr_forensics_storage.build_download_url(
             artifact_id=row["id"], tenant_id=row["tenant_id"]
         )["download_url"]
+    write_audit_event(
+        action="EDR_FORENSICS_COMPLETE",
+        entity_type="edr_forensic_artifact",
+        entity_id=row["id"],
+        tenant_id=str(row.get("tenant_id") or ""),
+        actor_email="edr-endpoint-callback",
+        source_ip=_request_ip(request),
+        action_status="SUCCESS" if new_status == "uploaded" else "FAILED",
+        details={"outcome": new_status, "execution_id": row.get("execution_id")},
+    )
     return {
         "artifact_id": row["id"],
         "status": new_status,

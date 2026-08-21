@@ -21,6 +21,7 @@ const NAV_ITEMS = [
   { to: "/alerts", label: "Alerts" },
   { to: "/incidents", label: "Incidents" },
   { to: "/vulnerabilities", label: "Vulnerabilities" },
+  { to: "/compliance", label: "Compliance" },
   { to: "/recommendations", label: "Recommendations" },
   { to: "/reports", label: "Reports" },
   { to: "/notifications", label: "Notifications" },

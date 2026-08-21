@@ -982,9 +982,9 @@ def _run_local_ar(job: dict[str, Any]) -> tuple[bool, str]:
                     logger.warning("AR retry agent=%s attempt=%s: %s", agent_id, attempt + 1, last_detail)
                     continue
                 if _is_transient_ar_failure(last_detail):
-                    return True, (
-                        f"AR {command} dispatched to agent {agent_id} "
-                        "(manager API timeout; confirm on endpoint)"
+                    return False, (
+                        f"AR {command} not confirmed for agent {agent_id}: "
+                        f"manager API timeout or error 3021 ({last_detail})"
                     )
                 return False, last_detail
             return True, f"AR {command} dispatched to agent {agent_id}"
@@ -992,9 +992,9 @@ def _run_local_ar(job: dict[str, Any]) -> tuple[bool, str]:
     except Exception as exc:
         msg = str(exc)[:300]
         if _is_transient_ar_failure(msg, exc):
-            return True, (
-                f"AR {command} dispatched to agent {agent_id} "
-                "(manager API timeout; confirm on endpoint)"
+            return False, (
+                f"AR {command} not confirmed for agent {agent_id}: "
+                f"manager API timeout or error 3021 ({msg})"
             )
         return False, msg
 

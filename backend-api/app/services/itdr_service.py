@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -31,6 +32,17 @@ ENGINE_LABEL = "MSSP Cloud Identity Protection Engine"
 DOMAIN_RE = re.compile(
     r"^(?=.{1,253}$)(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-]{1,63}(?<!-))+$"
 )
+
+
+def _allow_lab_sample_seed() -> bool:
+    """Synthetic ITDR rows are lab-only. Production fail-closes on empty Graph."""
+    app_env = (os.getenv("APP_ENV") or "").strip().lower()
+    if app_env == "production":
+        return False
+    flag = (os.getenv("ITDR_ALLOW_SAMPLE_ADAPTER") or "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        return True
+    return app_env == "lab"
 
 EVENT_COPY = {
     "IMPOSSIBLE_TRAVEL": {
@@ -334,10 +346,10 @@ def _seed_events_for_config(tenant_id: str, cfg: Dict[str, Any]) -> int:
     """
     Controlled identity-rule analysis adapter.
 
-    Generates a deterministic set of high-risk identity findings for the
-    connected domain so dashboards are testable before live Graph credentials
-    are configured. Replaces prior open events for this config.
+    Lab-only. Production must fail closed when Microsoft Graph returns no events.
     """
+    if not _allow_lab_sample_seed():
+        return 0
     config_id = cfg["id"]
     domain = cfg["tenant_domain"]
     execute(
@@ -496,9 +508,11 @@ def sync_tenant_itdr(tenant_id: str) -> Dict[str, Any]:
             if live > 0:
                 total_events += live
                 sources.append("microsoft_graph")
-            else:
+            elif _allow_lab_sample_seed():
                 total_events += _seed_events_for_config(tid, cfg)
                 sources.append("analysis_adapter")
+            else:
+                sources.append("live_empty")
             execute(
                 """
                 UPDATE tenant_cloud_identity_configs
@@ -519,6 +533,17 @@ def sync_tenant_itdr(tenant_id: str) -> Dict[str, Any]:
 
     _enable_entitlement(tid)
     source = "+".join(sorted(set(sources))) if sources else "none"
+    if total_events == 0:
+        return {
+            "tenant_id": tid,
+            "sync_status": "empty",
+            "message": "Identity provider returned no events",
+            "events_created": 0,
+            "configs_synced": len(configs),
+            "source": source,
+            "summary": get_summary(tid),
+            "engine_label": ENGINE_LABEL,
+        }
     return {
         "tenant_id": tid,
         "sync_status": "ok",

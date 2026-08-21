@@ -1832,3 +1832,36 @@ export function pullTaxiiFeed(
   });
 }
 
+export interface AdminComplianceFrameworkScore {
+  score_percentage?: number;
+  passed_checks?: number;
+  failed_checks?: number;
+  total_checks?: number;
+}
+
+export interface AdminComplianceTenantRow {
+  short_code: string;
+  tenant_name: string;
+  overall_score_percentage: number;
+  passed_checks: number;
+  failed_checks: number;
+  total_checks: number;
+  agent_count: number;
+  policy_count: number;
+  framework_scores?: Record<string, AdminComplianceFrameworkScore>;
+  last_evaluated_at?: string | null;
+  last_synced_at?: string | null;
+  sync_status?: string;
+}
+
+export function getAdminComplianceSummary(): Promise<{ tenants: AdminComplianceTenantRow[] }> {
+  return request<{ tenants: AdminComplianceTenantRow[] }>("/admin/compliance/summary");
+}
+
+export function syncAdminCompliance(shortCode: string): Promise<Record<string, unknown>> {
+  return request(`/admin/compliance/${encodeURIComponent(shortCode)}/sync`, {
+    method: "POST",
+    body: {},
+  });
+}
+

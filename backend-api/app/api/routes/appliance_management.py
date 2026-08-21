@@ -71,7 +71,7 @@ import secrets
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from psycopg.errors import UniqueViolation
 from pydantic import BaseModel, Field, field_validator
 import ipaddress
@@ -79,6 +79,7 @@ import ipaddress
 from app.api.dependencies import require_roles
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one, fetch_one_write
+from app.services.audit_service import audit_from_user
 from app.schemas.appliances import (
     ActivationTokenCreateRequest,
     ActivationTokenCreateResponse,
@@ -258,6 +259,38 @@ def _generate_activation_token() -> "tuple[str, str, str]":
     return raw_token, token_hash, token_hint
 
 
+def _client_ip(request: Request) -> Optional[str]:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()[:64]
+    if request.client and request.client.host:
+        return str(request.client.host)[:64]
+    return None
+
+
+def _audit_appliance_mutation(
+    current_user: Dict[str, Any],
+    request: Request,
+    *,
+    action: str,
+    entity_type: str,
+    entity_id: Optional[str],
+    tenant_id: Optional[str],
+    details: Optional[Dict[str, Any]] = None,
+    action_status: str = "SUCCESS",
+) -> None:
+    audit_from_user(
+        current_user,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        tenant_id=tenant_id,
+        source_ip=_client_ip(request),
+        details=details or {},
+        action_status=action_status,
+    )
+
+
 @router.get("/admin/appliances/{appliance_id}", response_model=ApplianceDetail)
 def get_appliance_detail(
     appliance_id: UUID,
@@ -276,6 +309,7 @@ def get_appliance_detail(
 def put_appliance_agent_source_cidrs(
     appliance_id: UUID,
     payload: ApplianceAgentCidrsRequest,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_WRITE_ROLES)),
 ) -> Dict[str, Any]:
     """
@@ -313,6 +347,15 @@ def put_appliance_agent_source_cidrs(
         payload={"cidrs": list(payload.cidrs)},
         requested_by_user_id=str(current_user.get("id") or "") or None,
     )
+    _audit_appliance_mutation(
+        current_user,
+        request,
+        action="APPLIANCE_AGENT_CIDRS_UPDATE",
+        entity_type="appliance",
+        entity_id=str(appliance_id),
+        tenant_id=str(appliance["tenant_id"]),
+        details={"job_id": job.get("id"), "cidr_count": len(payload.cidrs), "outcome": "SUCCESS"},
+    )
     return {
         "appliance_id": updated["id"],
         "agent_source_cidrs": list(updated.get("agent_source_cidrs") or []),
@@ -328,6 +371,7 @@ def put_appliance_agent_source_cidrs(
 def admin_enqueue_channel_frame(
     appliance_id: UUID,
     payload: Dict[str, Any],
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_WRITE_ROLES)),
 ) -> Dict[str, Any]:
     """Push ota.offer / license.push / control / job frame to appliance channel inbox."""
@@ -348,12 +392,22 @@ def admin_enqueue_channel_frame(
         frame_type=frame_type,
         payload=payload.get("payload") or {},
     )
+    _audit_appliance_mutation(
+        current_user,
+        request,
+        action="APPLIANCE_CHANNEL_ENQUEUE",
+        entity_type="appliance",
+        entity_id=str(appliance_id),
+        tenant_id=str(appliance["tenant_id"]),
+        details={"frame_type": frame_type, "outcome": "SUCCESS"},
+    )
     return {"ok": True, "frame": row}
 
 @router.patch("/admin/appliances/{appliance_id}", response_model=ApplianceDetail)
 def update_appliance(
     appliance_id: UUID,
     payload: ApplianceUpdateRequest,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_WRITE_ROLES)),
 ) -> Dict[str, Any]:
     fields = []
@@ -381,6 +435,16 @@ def update_appliance(
         # appliances has UNIQUE (tenant_id, appliance_name) - renaming an
         # appliance to a name already used by another appliance in the
         # same tenant hits this constraint.
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_UPDATED",
+            entity_type="appliance",
+            entity_id=str(appliance_id),
+            tenant_id=None,
+            details={"outcome": "FAILED", "reason": "duplicate_name"},
+            action_status="FAILED",
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An appliance with this appliance_name already exists for this tenant",
@@ -391,7 +455,26 @@ def update_appliance(
 
     appliance = _fetch_appliance_detail(UUID(updated["id"]))
     if not appliance:
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_UPDATED",
+            entity_type="appliance",
+            entity_id=str(appliance_id),
+            tenant_id=None,
+            details={"outcome": "FAILED", "reason": "reload_failed"},
+            action_status="FAILED",
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Appliance update failed")
+    _audit_appliance_mutation(
+        current_user,
+        request,
+        action="APPLIANCE_UPDATED",
+        entity_type="appliance",
+        entity_id=str(appliance_id),
+        tenant_id=str(appliance.get("tenant_id") or ""),
+        details={"fields": [f.split(" = ")[0] for f in fields], "outcome": "SUCCESS"},
+    )
     return appliance
 
 
@@ -403,6 +486,7 @@ def update_appliance(
 def create_activation_token(
     tenant_id: UUID,
     payload: ActivationTokenCreateRequest,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_WRITE_ROLES)),
 ) -> Dict[str, Any]:
     tenant_exists = fetch_one("SELECT id FROM tenants WHERE id = %s;", (str(tenant_id),))
@@ -439,8 +523,27 @@ def create_activation_token(
 
     token = _fetch_token_metadata(UUID(created["id"]))
     if not token:
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_ACTIVATION_TOKEN_CREATED",
+            entity_type="appliance_activation_token",
+            entity_id=created["id"] if created else None,
+            tenant_id=str(tenant_id),
+            details={"outcome": "FAILED", "reason": "reload_failed"},
+            action_status="FAILED",
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Activation token creation failed")
 
+    _audit_appliance_mutation(
+        current_user,
+        request,
+        action="APPLIANCE_ACTIVATION_TOKEN_CREATED",
+        entity_type="appliance_activation_token",
+        entity_id=token.get("id"),
+        tenant_id=str(tenant_id),
+        details={"site_name": payload.site_name, "token_hint": token_hint, "outcome": "SUCCESS"},
+    )
     return {"token": raw_token, "metadata": token}
 
 
@@ -474,16 +577,37 @@ def list_activation_tokens(
 )
 def revoke_activation_token(
     token_id: UUID,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_WRITE_ROLES)),
 ) -> Dict[str, Any]:
     existing = fetch_one(
-        "SELECT id::text, status FROM appliance_activation_tokens WHERE id = %s;",
+        "SELECT id::text, tenant_id::text, status FROM appliance_activation_tokens WHERE id = %s;",
         (str(token_id),),
     )
     if not existing:
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_ACTIVATION_TOKEN_REVOKED",
+            entity_type="appliance_activation_token",
+            entity_id=str(token_id),
+            tenant_id=None,
+            details={"outcome": "FAILED", "reason": "not_found"},
+            action_status="FAILED",
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Activation token not found")
 
     if existing["status"] != "pending":
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_ACTIVATION_TOKEN_REVOKED",
+            entity_type="appliance_activation_token",
+            entity_id=str(token_id),
+            tenant_id=str(existing.get("tenant_id") or ""),
+            details={"outcome": "FAILED", "reason": "not_pending", "status": existing["status"]},
+            action_status="FAILED",
+        )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Activation token cannot be revoked because its status is '{existing['status']}'",
@@ -508,7 +632,26 @@ def revoke_activation_token(
 
     token = _fetch_token_metadata(UUID(updated["id"]))
     if not token:
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_ACTIVATION_TOKEN_REVOKED",
+            entity_type="appliance_activation_token",
+            entity_id=str(token_id),
+            tenant_id=str(existing.get("tenant_id") or ""),
+            details={"outcome": "FAILED", "reason": "reload_failed"},
+            action_status="FAILED",
+        )
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Activation token revoke failed")
+    _audit_appliance_mutation(
+        current_user,
+        request,
+        action="APPLIANCE_ACTIVATION_TOKEN_REVOKED",
+        entity_type="appliance_activation_token",
+        entity_id=str(token_id),
+        tenant_id=str(token.get("tenant_id") or existing.get("tenant_id") or ""),
+        details={"outcome": "SUCCESS"},
+    )
     return token
 
 
@@ -532,6 +675,7 @@ def get_appliance_credential(
 )
 def rotate_appliance_credential(
     appliance_id: UUID,
+    request: Request,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_APPLIANCE_CREDENTIAL_WRITE_ROLES)),
 ) -> Dict[str, Any]:
     # KB-016's generate_appliance_api_key() reused unchanged: (raw_key,
@@ -548,7 +692,7 @@ def rotate_appliance_credential(
                 appliance_key_created_at = now(),
                 appliance_key_last_used_at = NULL
             WHERE id = %s
-            RETURNING id::text, appliance_key_created_at::text;
+            RETURNING id::text, tenant_id::text, appliance_key_created_at::text;
             """,
             (key_hash, key_hint, str(appliance_id)),
         )
@@ -559,6 +703,16 @@ def rotate_appliance_credential(
         # never a normal-path outcome (same pattern already used for
         # activation token_hash collisions in create_activation_token
         # above).
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_CREDENTIAL_ROTATED",
+            entity_type="appliance",
+            entity_id=str(appliance_id),
+            tenant_id=None,
+            details={"outcome": "FAILED", "reason": "hash_collision"},
+            action_status="FAILED",
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Credential rotation failed, please retry",
@@ -569,8 +723,27 @@ def rotate_appliance_credential(
         # (including retired) and regardless of whether a credential was
         # ever previously issued - the only reason this UPDATE returns no
         # row is that appliance_id does not exist.
+        _audit_appliance_mutation(
+            current_user,
+            request,
+            action="APPLIANCE_CREDENTIAL_ROTATED",
+            entity_type="appliance",
+            entity_id=str(appliance_id),
+            tenant_id=None,
+            details={"outcome": "FAILED", "reason": "not_found"},
+            action_status="FAILED",
+        )
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appliance not found")
 
+    _audit_appliance_mutation(
+        current_user,
+        request,
+        action="APPLIANCE_CREDENTIAL_ROTATED",
+        entity_type="appliance",
+        entity_id=rotated["id"],
+        tenant_id=str(rotated.get("tenant_id") or ""),
+        details={"api_key_hint": key_hint, "outcome": "SUCCESS"},
+    )
     return {
         "appliance_id": rotated["id"],
         "appliance_api_key": raw_key,

@@ -20,6 +20,7 @@ const FRAMEWORK_TABS: { id: string | null; label: string }[] = [
   { id: "ISO_27001", label: "ISO 27001" },
   { id: "PCI_DSS", label: "PCI-DSS" },
   { id: "NIST", label: "NIST CSF" },
+  { id: "HIPAA", label: "HIPAA" },
 ];
 
 const SEVERITY_ORDER: Record<string, number> = {
@@ -214,6 +215,17 @@ export default function CompliancePage() {
           })}
         </div>
       </section>
+
+      {framework === "HIPAA" && (
+        <section className="panel">
+          <h2 className="panel-title">HIPAA §164.312 Technical Safeguards Indicator</h2>
+          <p className="muted">
+            Configuration-control readiness mapped to HIPAA Security Rule technical safeguards
+            (§164.312), with related administrative/physical section tags when present. This is an
+            indicator, not a certification or legal opinion.
+          </p>
+        </section>
+      )}
 
       <section className="panel">
         <div className="panel-header-row">

@@ -49,11 +49,34 @@ def _credentials() -> Tuple[str, str]:
     return user, password
 
 
+def _tls_verify_requested() -> bool:
+    raw = (os.getenv("WAZUH_API_VERIFY_TLS") or "false").strip().lower()
+    return raw in ("1", "true", "yes", "on")
+
+
+class WazuhTlsConfigurationError(RuntimeError):
+    """Fatal: production must not disable Wazuh API TLS verification."""
+
+
+def validate_production_tls() -> None:
+    """Fail closed at startup when production would skip TLS verification."""
+    app_env = (os.getenv("APP_ENV") or "").strip().lower()
+    if app_env == "production" and not _tls_verify_requested():
+        raise WazuhTlsConfigurationError(
+            "Fatal configuration error: APP_ENV=production requires "
+            "WAZUH_API_VERIFY_TLS=true (fail-closed TLS)."
+        )
+
+
 def _ssl_context() -> ssl.SSLContext:
-    # Lab managers often use self-signed certs.
-    verify = (__import__("os").getenv("WAZUH_API_VERIFY_TLS", "false") or "false").lower()
-    if verify in ("1", "true", "yes"):
-        return ssl.create_default_context()
+    validate_production_tls()
+    if _tls_verify_requested():
+        ctx = ssl.create_default_context()
+        ca_file = (os.getenv("WAZUH_API_CA_FILE") or "").strip()
+        if ca_file:
+            ctx.load_verify_locations(cafile=ca_file)
+        return ctx
+    # Lab / non-production managers may use self-signed certificates.
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE

@@ -9,6 +9,7 @@ const ROUTES: { label: string; path: string; keywords: string }[] = [
   { label: "Customers", path: "/tenants", keywords: "tenants orgs clients" },
   { label: "Appliances", path: "/appliances", keywords: "sensors collectors" },
   { label: "Vulnerabilities", path: "/vulnerabilities", keywords: "cve scanning" },
+  { label: "Compliance", path: "/compliance", keywords: "cis iso pci nist hipaa hardening scorecard" },
   { label: "Reports", path: "/reports", keywords: "monthly" },
   { label: "Notifications", path: "/notifications", keywords: "whatsapp email" },
   { label: "Audit", path: "/audit", keywords: "logs compliance" },

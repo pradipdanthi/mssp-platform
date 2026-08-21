@@ -622,7 +622,7 @@ def apply_action_callback(
         and row["action_type"] == "ISOLATE_HOST"
         and aid
         and released is not True
-        and applied is not False
+        and applied is True
     ):
         with db_transaction() as cur:
             cur.execute(
