@@ -57,43 +57,46 @@
   if (deployRoot) {
     const tabs = Array.prototype.slice.call(deployRoot.querySelectorAll(".deploy-tab"));
     const panels = Array.prototype.slice.call(deployRoot.querySelectorAll(".deploy-panel"));
-    let idx = 0;
-    let timer = null;
+    const envPills = Array.prototype.slice.call(document.querySelectorAll(".env-pill"));
+    let env = deployRoot.getAttribute("data-env") || "cloud";
 
-    function activate(i) {
-      idx = i;
-      tabs.forEach(function (t, n) {
-        t.classList.toggle("is-active", n === i);
-        t.setAttribute("aria-selected", n === i ? "true" : "false");
+    function applyEnv(next) {
+      env = next;
+      deployRoot.setAttribute("data-env", env);
+      envPills.forEach(function (pill) {
+        const on = pill.getAttribute("data-env") === env;
+        pill.classList.toggle("is-active", on);
+        pill.setAttribute("aria-selected", on ? "true" : "false");
       });
-      panels.forEach(function (p, n) {
-        p.classList.toggle("is-active", n === i);
+      deployRoot.querySelectorAll("[data-cloud]").forEach(function (el) {
+        const text = el.getAttribute("data-" + env);
+        if (text) el.textContent = text;
       });
     }
 
-    function start() {
-      stop();
-      timer = window.setInterval(function () {
-        activate((idx + 1) % tabs.length);
-      }, 5600);
+    function activateArch(arch) {
+      tabs.forEach(function (tab) {
+        const on = tab.getAttribute("data-arch") === arch;
+        tab.classList.toggle("is-active", on);
+        tab.setAttribute("aria-selected", on ? "true" : "false");
+      });
+      panels.forEach(function (panel) {
+        panel.classList.toggle("is-active", panel.getAttribute("data-arch") === arch);
+      });
     }
 
-    function stop() {
-      if (timer) window.clearInterval(timer);
-      timer = null;
-    }
-
-    tabs.forEach(function (tab, i) {
+    tabs.forEach(function (tab) {
       tab.addEventListener("click", function () {
-        activate(i);
-        start();
+        activateArch(tab.getAttribute("data-arch"));
       });
     });
-
-    deployRoot.addEventListener("mouseenter", stop);
-    deployRoot.addEventListener("mouseleave", start);
-    activate(0);
-    start();
+    envPills.forEach(function (pill) {
+      pill.addEventListener("click", function () {
+        applyEnv(pill.getAttribute("data-env"));
+      });
+    });
+    applyEnv(env);
+    activateArch("direct");
   }
 
   const form = document.getElementById("demo-form");

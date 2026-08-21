@@ -1176,6 +1176,54 @@ a.card-link .card-cta {
 }
 
 /* ——— Deployment simulator ——— */
+.env-selector {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 0 0 1rem;
+}
+
+.env-selector-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.env-pills {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0;
+  padding: 0.2rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: rgba(8, 12, 20, 0.7);
+}
+
+.env-pill {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.env-pill:hover {
+  color: var(--text);
+}
+
+.env-pill.is-active {
+  color: #0B1120;
+  background: var(--cyan);
+}
+
 .deploy-shell {
   border: 1px solid var(--border);
   border-radius: 20px;
@@ -1184,9 +1232,9 @@ a.card-link .card-cta {
 }
 
 .deploy-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
   padding: 1rem;
   border-bottom: 1px solid var(--border);
   background: rgba(0, 0, 0, 0.28);
@@ -1198,8 +1246,8 @@ a.card-link .card-cta {
   background: transparent;
   color: var(--muted);
   border-radius: 999px;
-  padding: 0.55rem 0.95rem;
-  font-size: 0.8rem;
+  padding: 0.65rem 1rem;
+  font-size: 0.85rem;
   font-weight: 700;
   cursor: pointer;
   transition: 0.2s ease;
@@ -1211,8 +1259,19 @@ a.card-link .card-cta {
 
 .deploy-tab.is-active {
   color: #0B1120;
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.deploy-tab-flagship.is-active {
+  color: #0B1120;
   background: var(--amber);
   border-color: var(--amber);
+}
+
+.deploy-copy .flag-direct {
+  background: var(--cyan-dim);
+  color: var(--cyan);
 }
 
 .deploy-body {
@@ -1877,6 +1936,10 @@ a.card-link .card-cta {
     border-bottom: 1px solid var(--border);
   }
 
+  .deploy-tabs {
+    grid-template-columns: 1fr;
+  }
+
   .nav-links {
     display: none;
   }
@@ -1931,6 +1994,16 @@ a.card-link .card-cta {
 }
 
 @media (max-width: 600px) {
+  .env-pills {
+    width: 100%;
+    border-radius: 16px;
+  }
+
+  .env-pill {
+    flex: 1 1 100%;
+    text-align: center;
+  }
+
   .container {
     width: min(100% - 1.4rem, var(--max));
   }

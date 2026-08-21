@@ -86,7 +86,7 @@ Kevantic inverts the cloud-first MSSP model: **ingest and retain at the edge**, 
 - **Kevantic NikTiar™ Edge Node** processes telemetry locally—endpoint, network, and scan data stay in your datacenter or VPC
 - **100% Data Sovereignty** — local raw log retention with **zero cloud log tax**; raw history available for on-site retrospective hunts
 - **Outbound-only secure channel** (TLS/mTLS)—no inbound firewall holes required for day-to-day operations
-- **Single ISO, multiple deployment modes** — on-prem, cloud VPC, or hybrid under one appliance image
+- **Single ISO, two architectures** — Direct SOC Stream or Sovereign Edge Node, on Cloud / On-Premises / Hybrid
 
 ### Key bullets — Zero-Tax SOC
 - **Cloud SOC analyzes signal, not noise** — high-fidelity alerts and metadata, not full log firehoses
@@ -152,17 +152,18 @@ This is the strategic wedge. Sovereignty is not a feature flag—it is the defau
 - Live **CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST** technical-safeguard indicators — without forcing raw ePHI logs off the client network
 - Multi-tenant isolation with entitlement-driven engine provisioning
 
-### Deployment modes (same stack)
-| Mode | Summary |
-|------|---------|
-| Cloud | Direct cloud agent streaming to managed SOC |
-| Cloud + Edge | Cloud workloads + edge metadata filter |
-| On-prem | Agents to Cloud SOC without edge box |
-| **On-prem + Edge (flagship)** | **100% raw logs local; metadata/alerts to SOC** |
+### Deployment architecture (same stack)
+Two connection models. Environment is Cloud (AWS/Azure/GCP), On-Premises, or Hybrid.
+
+| Architecture | Summary |
+|--------------|---------|
+| **Direct SOC Stream** | Zero-friction agent connection. Telemetry streams to the Kevantic SOC. Best for cloud-native or lightweight estates. No Edge Node to host. |
+| **Sovereign Edge Node (flagship)** | NikTiar™ Edge Node on-prem or in a local VPC. **100% raw logs stay local (zero cloud tax).** Encrypted alert metadata only to the SOC. Ideal for HIPAA §164.312, PCI-DSS, and strict regulatory environments. |
 
 ### Visual cues
-- Vertical stack diagram with three labeled layers and animated data-flow arrows
-- Color code: **amber = raw stays local · cyan = metadata to SOC**
+- Environment pill toggle: **Cloud | On-Premises | Hybrid**
+- Two architecture cards: Direct SOC Stream vs Sovereign Edge Node
+- Color code: **green = raw stays local on Edge Node · cyan = metadata/alerts to SOC**
 
 ### Speaker notes
 Emphasize separation of concerns: edge retains, SOC responds, control plane governs and reports. This maps cleanly to buyer org charts (IT owns edge, Kevantic owns SOC, executives use portal).
@@ -353,7 +354,7 @@ This slide speaks to CISO + CFO + compliance officer. Never claim HIPAA certific
 | **Customer experience** | Branded NikTiar™ portal; plain-English, leadership-ready | Analyst portals or raw SIEM consoles exposed |
 | **Containment** | Hold-until-unisolate EDR with verified endpoint callback | Manual ticket queues and delayed / unverified isolation |
 | **Compliance** | Live CIS / ISO 27001 / PCI-DSS / HIPAA §164.312 / NIST indicators | Periodic manual compliance projects |
-| **Hybrid estates** | Four deployment modes under one SOC | Separate products for cloud vs on-prem |
+| **Hybrid estates** | Direct SOC Stream or Sovereign Edge Node on Cloud / On-Prem / Hybrid | Separate products for cloud vs on-prem |
 
 ### TCO levers (where savings compound)
 - **Eliminate cloud ingest tax** on terabytes that never need to leave the datacenter

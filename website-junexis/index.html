@@ -25,7 +25,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/brand/kevantic-brand.css" />
-  <link rel="stylesheet" href="css/styles.css?v=6" />
+  <link rel="stylesheet" href="css/styles.css?v=7" />
   <meta name="theme-color" content="#0B1120" />
 </head>
 <body>
@@ -456,110 +456,79 @@
       <div class="container">
         <div class="section-head reveal">
           <span class="section-label">Deployment architecture</span>
-          <h2>Four ways we protect your estate.</h2>
-          <p>Same managed SOC. Choose where raw logs are stored versus where encrypted metadata flows to Kevantic.</p>
+          <h2>Two ways we connect your estate.</h2>
+          <p>Same managed SOC. Pick Direct SOC Stream for zero-friction agent telemetry, or the flagship NikTiar&trade; Edge Node for 100% local raw logs. Then choose where your systems live.</p>
+        </div>
+
+        <div class="env-selector reveal" role="tablist" aria-label="Environment">
+          <span class="env-selector-label">Environment</span>
+          <div class="env-pills">
+            <button type="button" class="env-pill is-active" role="tab" aria-selected="true" data-env="cloud">Cloud (AWS/Azure/GCP)</button>
+            <button type="button" class="env-pill" role="tab" aria-selected="false" data-env="onprem">On-Premises</button>
+            <button type="button" class="env-pill" role="tab" aria-selected="false" data-env="hybrid">Hybrid</button>
+          </div>
         </div>
 
         <div class="flow-legend reveal" aria-hidden="true">
-          <span class="lg-raw"><i></i> Raw logs stored (local or cloud path)</span>
-          <span class="lg-meta"><i></i> Metadata / alerts → Kevantic SOC (TLS)</span>
+          <span class="lg-raw"><i></i> Raw logs stored locally (Edge Node only)</span>
+          <span class="lg-meta"><i></i> Encrypted metadata / alerts → Kevantic SOC (TLS)</span>
         </div>
 
-        <div class="deploy-shell reveal" data-deploy>
-          <div class="deploy-tabs" role="tablist" aria-label="Deployment modes">
-            <button type="button" class="deploy-tab is-active" role="tab" aria-selected="true">Mode 1 · Cloud</button>
-            <button type="button" class="deploy-tab" role="tab" aria-selected="false">Mode 2 · Cloud + Edge</button>
-            <button type="button" class="deploy-tab" role="tab" aria-selected="false">Mode 3 · On-prem</button>
-            <button type="button" class="deploy-tab" role="tab" aria-selected="false">Mode 4 · Flagship</button>
+        <div class="deploy-shell reveal" data-deploy data-env="cloud">
+          <div class="deploy-tabs" role="tablist" aria-label="Architecture">
+            <button type="button" class="deploy-tab is-active" role="tab" aria-selected="true" data-arch="direct">Direct SOC Stream</button>
+            <button type="button" class="deploy-tab deploy-tab-flagship" role="tab" aria-selected="false" data-arch="edge">Sovereign Edge Node</button>
           </div>
           <div class="deploy-body">
-            <div class="deploy-panel is-active">
+            <div class="deploy-panel is-active" data-arch="direct">
               <div class="deploy-stage" aria-hidden="true">
-                <div class="flow">
-                  <div class="flow-node cloud-estate"><strong>Your cloud</strong><span>AWS / Azure / GCP</span><span class="store-pill">Raw path</span></div>
-                  <div class="flow-node customer"><strong>Agents</strong><span>Workloads</span></div>
-                  <div class="flow-node appliance dimmed"><strong>Appliance</strong><span>Not used</span></div>
-                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Cloud control plane</span></div>
-                  <div class="flow-path down meta"></div>
+                <div class="flow flow-direct">
+                  <div class="flow-node customer">
+                    <strong data-cloud="Your cloud" data-onprem="Your datacenter" data-hybrid="Hybrid estate">Your cloud</strong>
+                    <span data-cloud="AWS / Azure / GCP" data-onprem="On-prem servers" data-hybrid="Cloud + on-prem">AWS / Azure / GCP</span>
+                  </div>
+                  <div class="flow-node appliance dimmed"><strong>Edge Node</strong><span>Not used</span></div>
+                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Direct agent stream</span></div>
                   <div class="flow-path direct meta"></div>
-                  <div class="flow-caption">Direct cloud telemetry → SOC</div>
+                  <div class="flow-caption" data-cloud="Agents → Cloud SOC" data-onprem="On-prem agents → Cloud SOC" data-hybrid="Hybrid agents → Cloud SOC">Agents → Cloud SOC</div>
                 </div>
               </div>
               <div class="deploy-copy">
-                <h3>Mode 1: Cloud without Appliance</h3>
-                <p><strong>Direct cloud agent streaming.</strong> Agents in your cloud stream security signals to the Kevantic managed SOC. No edge box on site — long-term retention follows the cloud Data Lake path under your retention policy.</p>
+                <span class="flag flag-direct">Direct agent connection</span>
+                <h3>Direct SOC Stream</h3>
+                <p><strong>Zero-friction deployment.</strong> <span data-cloud="Agents in AWS, Azure, or GCP stream telemetry straight to the Kevantic managed SOC." data-onprem="Agents on your datacenter servers stream telemetry straight to the Kevantic managed SOC." data-hybrid="Agents on cloud and on-prem systems stream telemetry straight to the Kevantic managed SOC.">Agents in AWS, Azure, or GCP stream telemetry straight to the Kevantic managed SOC.</span> No Edge Node to host — fastest path to fully managed monitoring for cloud-native or lightweight environments.</p>
                 <ul>
-                  <li>Best for cloud-native estates comfortable with SOC-bound telemetry</li>
-                  <li>Fastest path to fully managed monitoring</li>
-                  <li>Same customer portal and service menu</li>
+                  <li>Agent-based direct telemetry — no onsite appliance maintenance</li>
+                  <li>Best for cloud-native or lightweight estates comfortable with SOC-bound telemetry</li>
+                  <li>Same customer portal, SLAs, and analyst accountability</li>
                 </ul>
               </div>
             </div>
 
-            <div class="deploy-panel">
+            <div class="deploy-panel" data-arch="edge">
               <div class="deploy-stage" aria-hidden="true">
-                <div class="flow">
-                  <div class="flow-node cloud-estate"><strong>Your cloud</strong><span>Workloads</span><span class="store-pill">Filtered</span></div>
-                  <div class="flow-node customer"><strong>Edge site</strong><span>Optional onsite</span></div>
-                  <div class="flow-node appliance"><strong>Edge appliance</strong><span>Metadata filter</span></div>
-                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Secure channel</span></div>
-                  <div class="flow-path to-app amber"></div>
-                  <div class="flow-path from-app meta"></div>
-                  <div class="flow-caption">Cloud estate + edge metadata filter</div>
-                </div>
-              </div>
-              <div class="deploy-copy">
-                <h3>Mode 2: Cloud with Appliance</h3>
-                <p><strong>Cloud estate + edge metadata filter.</strong> Cloud workloads plus a Kevantic NikTiar&trade; Edge Node that forwards only allowed metadata and alerts to the SOC over encrypted TLS.</p>
-                <ul>
-                  <li>Policy control before data leaves the boundary</li>
-                  <li>Less raw exposure than direct ingest</li>
-                  <li>Ideal when cloud apps meet stricter data rules</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="deploy-panel">
-              <div class="deploy-stage" aria-hidden="true">
-                <div class="flow">
-                  <div class="flow-node customer"><strong>Your datacenter</strong><span>On-prem estate</span></div>
-                  <div class="flow-node appliance dimmed"><strong>Appliance</strong><span>Not used</span></div>
-                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Cloud control plane</span></div>
-                  <div class="flow-path direct meta"></div>
-                  <div class="flow-caption">Agents → Cloud SOC (no edge box)</div>
-                </div>
-              </div>
-              <div class="deploy-copy">
-                <h3>Mode 3: On-Prem without Appliance</h3>
-                <p><strong>On-prem agents streaming to Cloud SOC.</strong> Traditional networks that accept cloud-bound telemetry without hosting a NikTiar&trade; Edge Node.</p>
-                <ul>
-                  <li>No onsite appliance maintenance</li>
-                  <li>Same Kevantic analyst accountability</li>
-                  <li>One customer portal experience</li>
-                </ul>
-              </div>
-            </div>
-
-            <div class="deploy-panel">
-              <div class="deploy-stage" aria-hidden="true">
-                <div class="flow">
-                  <div class="flow-node customer"><strong>Your datacenter</strong><span>100% raw logs stay</span><span class="store-pill">Local store</span></div>
-                  <div class="flow-node appliance"><strong>Edge appliance</strong><span>Local processing</span></div>
-                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Metadata / alerts</span></div>
+                <div class="flow flow-edge">
+                  <div class="flow-node customer">
+                    <strong data-cloud="Your VPC" data-onprem="Your datacenter" data-hybrid="Hybrid estate">Your VPC</strong>
+                    <span data-cloud="100% raw logs stay" data-onprem="100% raw logs stay" data-hybrid="100% raw logs stay">100% raw logs stay</span>
+                    <span class="store-pill">Local store</span>
+                  </div>
+                  <div class="flow-node appliance"><strong>NikTiar&trade; Edge</strong><span>Local processing</span></div>
+                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Metadata / alerts only</span></div>
                   <div class="flow-path to-app amber"></div>
                   <div class="flow-path from-app meta"></div>
                   <div class="flow-path raw-loop"></div>
-                  <div class="flow-caption">Raw stays local · metadata over TLS</div>
+                  <div class="flow-caption">Raw stays local · alerts over TLS</div>
                 </div>
               </div>
               <div class="deploy-copy">
-                <span class="flag">Flagship differentiator</span>
-                <h3>Mode 4: On-Prem with Appliance</h3>
-                <p><strong>Flagship NikTiar&trade; Edge Node.</strong> A Kevantic NikTiar&trade; Edge Node in your datacenter. <strong style="color:#fff;">100% raw logs remain local.</strong> Only required metadata and alerts stream to the Kevantic SOC over encrypted TLS. Retrospective hunts can run on your site.</p>
+                <span class="flag">Flagship architecture</span>
+                <h3>Sovereign Edge Node</h3>
+                <p><strong>100% local raw log retention — zero cloud tax.</strong> A Kevantic NikTiar&trade; Edge Node in your <span data-cloud="cloud VPC" data-onprem="datacenter" data-hybrid="hybrid boundary">cloud VPC</span> keeps raw logs on-site. Only encrypted alert metadata reaches the Kevantic SOC. Built for HIPAA §164.312, PCI-DSS, and strict regulatory environments.</p>
                 <ul>
-                  <li>Built for “we will not ship complete logs to a vendor cloud”</li>
-                  <li>Data residency without giving up a managed SOC</li>
-                  <li>We provision and operate the appliance as part of the service</li>
+                  <li>On-prem or local VPC data sovereignty — raw ePHI and logs never leave the client network</li>
+                  <li>Encrypted alerts and metadata only over TLS</li>
+                  <li>We provision and operate the Edge Node as part of the managed service</li>
                 </ul>
               </div>
             </div>
@@ -710,9 +679,9 @@
               <div class="form-row">
                 <label for="interest">Primary interest</label>
                 <select id="interest" name="interest">
-                  <option>NikTiar&trade; Edge Node Demo</option>
+                  <option>Sovereign Edge Node (NikTiar&trade; flagship)</option>
+                  <option>Direct SOC Stream (agent connection)</option>
                   <option>Explore Service Tiers</option>
-                  <option>On-prem with NikTiar&trade; Edge Node</option>
                   <option>Gold / Platinum DeepSight NDR + Apex Orchestrator</option>
                   <option>Client portal walkthrough</option>
                   <option>Not sure — recommend for me</option>
@@ -760,6 +729,6 @@
     </div>
   </footer>
   <script src="js/site-config.js"></script>
-  <script src="js/app.js?v=6"></script>
+  <script src="js/app.js?v=7"></script>
 </body>
 </html>
