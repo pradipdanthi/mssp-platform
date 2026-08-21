@@ -30,6 +30,15 @@ die() { log "ERROR: $*"; exit 1; }
 [[ -f "$ROOT/cli/kevantic-cli/kevantic_cli/license_ops.py" ]] || die "license_ops.py missing"
 PUBKEY="$ROOT/licensing/keys/licensing-ed25519-v1.pub"
 [[ -f "$PUBKEY" ]] || die "missing $PUBKEY — run kevantic-appliance/licensing/generate_dev_keypair.sh"
+ATTRIB="$ROOT/ATTRIBUTIONS.txt"
+[[ -f "$ATTRIB" ]] || die "missing $ATTRIB"
+ATTRIB_MD="$CTRL/ATTRIBUTIONS.md"
+[[ -f "$ATTRIB_MD" ]] || die "missing $ATTRIB_MD"
+EXECUTOR="$ROOT/appliance/jobs/executor.py"
+[[ -f "$EXECUTOR" ]] || die "missing $EXECUTOR"
+API_PATCH="$ROOT/scripts/patch_wazuh_api_request_timeout.sh"
+[[ -f "$API_PATCH" ]] || die "missing $API_PATCH"
+grep -q '_validate_nuclei_template' "$EXECUTOR" || die "executor.py missing nuclei path validation"
 
 GIT_COMMIT="$(git -C "$CTRL" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
@@ -88,13 +97,22 @@ LINUX_EDR_AUDIT="$CTRL/backend-api/app/endpoint_configs/linux-edr-telemetry/mssp
 cp "$LINUX_EDR_RULES" "$TMP/mssp_linux_exec_rules.xml"
 cp "$LINUX_EDR_SH" "$TMP/install-mssp-linux-telemetry.sh"
 cp "$LINUX_EDR_AUDIT" "$TMP/mssp-exec.rules"
-python3 - "$TMP/image-release.json" "$GIT_COMMIT" <<'PY'
-import json, sys
-path, commit = sys.argv[1], sys.argv[2]
-data = json.loads(open(path, encoding="utf-8").read())
+cp "$ATTRIB" "$TMP/ATTRIBUTIONS.txt"
+cp "$EXECUTOR" "$TMP/executor.py"
+cp "$API_PATCH" "$TMP/patch_wazuh_api_request_timeout.sh"
+python3 - "$TMP/image-release.json" "$GIT_COMMIT" "$ATTRIB" "$ATTRIB_MD" <<'PY'
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+path, commit, attrib_txt, attrib_md = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+data = json.loads(Path(path).read_text(encoding="utf-8"))
 data["git_commit"] = commit
 data["edr_ar_version"] = data.get("edr_ar_version") or "1.0.1"
-open(path, "w", encoding="utf-8").write(json.dumps(data, indent=2) + "\n")
+data["attributions_sha256"] = hashlib.sha256(Path(attrib_txt).read_bytes()).hexdigest()
+data["attributions_md_sha256"] = hashlib.sha256(Path(attrib_md).read_bytes()).hexdigest()
+Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 PY
 
 log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=${GIT_COMMIT})"
@@ -124,6 +142,9 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/mssp_linux_exec_rules.xml" \
   "$TMP/install-mssp-linux-telemetry.sh" \
   "$TMP/mssp-exec.rules" \
+  "$TMP/ATTRIBUTIONS.txt" \
+  "$TMP/executor.py" \
+  "$TMP/patch_wazuh_api_request_timeout.sh" \
   "${USER_NAME}@${HOST}:/tmp/"
 
 "${SSH[@]}" "bash -s" <<REMOTE
@@ -165,6 +186,14 @@ for f in mssp_linux_exec_rules.xml install-mssp-linux-telemetry.sh mssp-exec.rul
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/linux/\$f"
   fi
 done
+sudo install -d -m 0755 /usr/share/doc/kevantic /usr/share/doc/junexis
+sudo install -m 0644 /tmp/ATTRIBUTIONS.txt /usr/share/doc/kevantic/ATTRIBUTIONS.txt
+sudo install -m 0644 /tmp/ATTRIBUTIONS.txt /usr/share/doc/junexis/ATTRIBUTIONS.txt
+sudo install -d -m 0755 /opt/kevantic/appliance-src/appliance/jobs
+sudo install -m 0644 /tmp/executor.py /opt/kevantic/appliance-src/appliance/jobs/executor.py
+if [[ -d /opt/junexis/appliance-src/appliance/jobs ]]; then
+  sudo install -m 0644 /tmp/executor.py /opt/junexis/appliance-src/appliance/jobs/executor.py
+fi
 # Register isolate/kill/block command names on the local Manager (Windows + Linux).
 if [[ -d /opt/junexis/cli/junexis_cli ]]; then
   sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
@@ -172,6 +201,10 @@ else
   sudo env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
 fi
 sudo grep -q '<name>mssp-isolate-host.cmd</name>' /var/ossec/etc/ossec.conf
+
+# After AR/linux publish (may restart Manager), wait then raise API request_timeout.
+sleep 8
+sudo bash /tmp/patch_wazuh_api_request_timeout.sh 120
 
 if [[ -x /usr/bin/kevantic-list-local-agents ]] && [[ ! -e /usr/bin/junexis-list-local-agents ]]; then
   sudo ln -sf /usr/bin/kevantic-list-local-agents /usr/bin/junexis-list-local-agents
@@ -190,9 +223,16 @@ grep -F 'OnUnitActiveSec=1h' /etc/systemd/system/kevantic-license-enforce.timer
 grep -F 'OnBootSec=3min' /etc/systemd/system/kevantic-license-enforce.timer
 sudo systemctl is-enabled kevantic-license-enforce.timer | grep -qx enabled
 grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|license_jws|_authenticate_local_wazuh|_ensure_local_edr_ar_commands|_publish_linux_midlayer_shared' "\$CLI/register_ops.py" >/dev/null
+grep -q 'not confirmed for agent' "\$CLI/register_ops.py"
 sudo test -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
 sudo test -f /var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml
-python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version") and d.get("edr_ar_version")'
+sudo test -f /var/lib/kevantic/edr-ar/linux/install-mssp-linux-telemetry.sh
+sudo test -f /usr/share/doc/kevantic/ATTRIBUTIONS.txt
+sudo grep -q 'Open Source Software Attributions' /usr/share/doc/kevantic/ATTRIBUTIONS.txt
+sudo grep -q '_validate_nuclei_template' /opt/kevantic/appliance-src/appliance/jobs/executor.py
+sudo grep -q 'timeout=120' /opt/kevantic/appliance-src/appliance/jobs/executor.py
+sudo grep -E '^[[:space:]]*request_timeout:[[:space:]]*120[[:space:]]*$' /var/ossec/api/configuration/api.yaml
+python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version") and d.get("edr_ar_version") and d.get("attributions_sha256") and d.get("attributions_md_sha256")'
 sudo grep -q 'Invoke-MsspUnisolate' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
   sudo grep -q 'Invoke-MsspUnisolate' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
 SHARED=\$(sudo find /var/ossec/etc/shared -name mssp-isolate-host.ps1 2>/dev/null | head -1)
@@ -225,7 +265,7 @@ fi
 
 if [[ -n "$SNAP_NAME" ]]; then
   log "Taking Proxmox snapshot ${VMID} → ${SNAP_NAME}"
-  "${PVE_SSH[@]}" "qm snapshot ${VMID} ${SNAP_NAME} --description 'Golden bake git=${GIT_COMMIT} license pubkey + enforce timer'"
+  "${PVE_SSH[@]}" "qm snapshot ${VMID} ${SNAP_NAME} --description 'Golden bake git=${GIT_COMMIT} HIPAA+containment+attributions'"
   "${PVE_SSH[@]}" "qm listsnapshot ${VMID}"
 fi
 

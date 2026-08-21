@@ -150,6 +150,37 @@ grep -q 'mssp_linux_exec_rules.xml' "$APP/scripts/bake_golden_vm199_fleet_report
   && pass "golden bake ships Linux execve Manager rules" \
   || fail "bake script missing mssp_linux_exec_rules.xml"
 
+grep -q 'ATTRIBUTIONS.txt' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake installs OSS attributions file" \
+  || fail "bake script missing ATTRIBUTIONS.txt"
+
+grep -q 'executor.py' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake ships appliance job executor" \
+  || fail "bake script missing executor.py"
+
+grep -q 'patch_wazuh_api_request_timeout.sh' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake raises Wazuh API request_timeout" \
+  || fail "bake script missing Wazuh API timeout patch"
+
+grep -q 'attributions_sha256' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake stamps attributions checksums into image-release.json" \
+  || fail "bake script missing attributions_sha256 stamp"
+
+grep -q 'not confirmed for agent' "$APP/scripts/bake_golden_vm199_fleet_reporting.sh" \
+  && pass "golden bake verifies containment honesty (AR timeout is not success)" \
+  || fail "bake script must verify register_ops AR timeout honesty"
+
+grep -q 'not confirmed for agent' "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py" \
+  && pass "CLI does not treat AR timeout/3021 as success" \
+  || fail "register_ops.py must fail closed on AR timeout"
+
+grep -q '_validate_nuclei_template' "$APP/appliance/jobs/executor.py" \
+  && pass "appliance executor validates Nuclei template paths" \
+  || fail "executor.py missing _validate_nuclei_template"
+
+need "$APP/ATTRIBUTIONS.txt"
+need "$APP/scripts/patch_wazuh_api_request_timeout.sh"
+
 grep -q 'install-mssp-linux-telemetry.sh' "$APP/scripts/upgrade_appliance_fleet_reporting.sh" \
   && pass "field upgrade ships Linux telemetry helper" \
   || fail "upgrade script missing Linux telemetry helper"
