@@ -61,7 +61,7 @@ grep -q 'production.example' docs/KB094_PRODUCTION_PORTABILITY_PACK.md \
   || fail "KB-094 doc must reference production inventory example"
 pass "KB-094 documentation coverage"
 
-grep -q 'KB-094' DOCS/CURSOR_REDEPLOYMENT_PLAYBOOK.md \
+grep -q 'KB-094' docs/CURSOR_REDEPLOYMENT_PLAYBOOK.md \
   || fail "redeployment playbook must reference KB-094"
 pass "DR playbook cross-link"
 

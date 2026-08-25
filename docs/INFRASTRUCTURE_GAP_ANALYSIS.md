@@ -3,7 +3,7 @@
 **Status:** Living audit + remediation log  
 **Created:** 2026-08-01 · **Remediation applied:** 2026-08-01 (VM 110 + VM 109 EASM)
 
-**Sources of truth inspected:** live code under `backend-api/`, `ansible/inventory/hosts.yml`, `DOCS/MSSP_IP_PROXMOX_INVENTORY.md`, `DOCS/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md`, KB-036 / KB-054 / KB-078 / KB-079 / KB-083 / KB-091  
+**Sources of truth inspected:** live code under `backend-api/`, `ansible/inventory/hosts.yml`, `docs/MSSP_IP_PROXMOX_INVENTORY.md`, `docs/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md`, KB-036 / KB-054 / KB-078 / KB-079 / KB-083 / KB-091  
 **Rule:** Git tags, validation scripts, and inspected source beat stale prose in older KBs.
 
 ---
@@ -196,7 +196,7 @@ Ordered by impact on closing “adapter → live engine” gaps for the catalog:
 
 ### Phase A — Documentation & honesty (no new VMs)
 
-1. Keep this file as the living gap list; update `DOCS/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md` “Later” section when a VM goes live.  
+1. Keep this file as the living gap list; update `docs/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md` “Later” section when a VM goes live.  
 2. Treat Alpha-Win full-catalog demos as **analysis-adapter + live engines mixed** — do not market seeded ITDR/TI/Forensics as live IdP/MISP/Velociraptor.  
 3. Decide EASM architecture explicitly: **(a)** approve stdlib probes on VM 100 as permanent MVP, or **(b)** require Amass-class discovery on VM 109.
 
@@ -257,8 +257,8 @@ Ordered by impact on closing “adapter → live engine” gaps for the catalog:
 
 | Doc | Role |
 |---|---|
-| `DOCS/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md` | Phase tracker for catalog engines |
-| `DOCS/MSSP_IP_PROXMOX_INVENTORY.md` | Live vs planned VM IPs |
+| `docs/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md` | Phase tracker for catalog engines |
+| `docs/MSSP_IP_PROXMOX_INVENTORY.md` | Live vs planned VM IPs |
 | `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` | Full platform roadmap (some VM “Future” rows are stale vs inventory) |
 | `docs/KB054_VELOCIRAPTOR_DFIR_DEPLOYMENT_PLAN.md` | VM 110 plan |
 | `docs/KB055_DFIR_EVIDENCE_SAFETY_CASE_WORKFLOW.md` | Evidence safety |

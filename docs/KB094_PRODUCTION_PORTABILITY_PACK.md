@@ -2,7 +2,7 @@
 
 Status: Implemented (docs + scripts + env templates).  
 Module type: **Deployment automation foundation** — no schema, compose, or `.env` changes.  
-Builds on: KB-020 (production bootstrap), KB-039 (Ansible foundation), KB-060 (ops runbook), `DOCS/CURSOR_REDEPLOYMENT_PLAYBOOK.md`, KB-093P (appliance golden).
+Builds on: KB-020 (production bootstrap), KB-039 (Ansible foundation), KB-060 (ops runbook), `docs/CURSOR_REDEPLOYMENT_PLAYBOOK.md`, KB-093P (appliance golden).
 
 ---
 
@@ -89,7 +89,7 @@ Documented in `docs/KB093P_APPLIANCE_CRITICAL_ALERT_FORWARD.md`.
 
 KB-094 scripts are the **normal** deploy path; DR playbook is the **disaster** path. Both use the same Compose stack.
 
-See `DOCS/CURSOR_REDEPLOYMENT_PLAYBOOK.md`.
+See `docs/CURSOR_REDEPLOYMENT_PLAYBOOK.md`.
 
 ---
 

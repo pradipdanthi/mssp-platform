@@ -50,7 +50,7 @@ Also accept: “rebuild from backup”, “disaster recovery”, “bare metal r
 4. Nightly jobs create a **new** dated folder each time; they do not overwrite the previous complete package.  
 5. `/home/secadmin/MSSP_Backups/LATEST` always points at the newest complete local package.
 
-Scheduled backup details: `DOCS/DR_GOOGLE_DRIVE_BACKUP_SETUP.md`.
+Scheduled backup details: `docs/DR_GOOGLE_DRIVE_BACKUP_SETUP.md`.
 
 ---
 
@@ -113,7 +113,7 @@ chmod 644 /home/secadmin/.ssh/*.pub /home/secadmin/.ssh/known_hosts 2>/dev/null 
 chown -R secadmin:secadmin /home/secadmin/.ssh
 ```
 
-4. Decrypt main archive; restore `pg_dumpall` into Postgres (see `DOCS/DISASTER_RECOVERY_PLAYBOOK.md` / Path A in `CURSOR_REDEPLOYMENT_PLAYBOOK.md`).  
+4. Decrypt main archive; restore `pg_dumpall` into Postgres (see `docs/DISASTER_RECOVERY_PLAYBOOK.md` / Path A in `CURSOR_REDEPLOYMENT_PLAYBOOK.md`).  
 5. `docker compose up -d --build` then recreate **backend + both frontends**.
 
 ### Phase 4 — Backend engines (full live set today)
@@ -164,7 +164,7 @@ If they say “rebuild from Git”: still need this USB for **DB + secrets + SSH
 
 ## Related files
 
-- `DOCS/CURSOR_REDEPLOYMENT_PLAYBOOK.md` — Path A / Path B procedures  
-- `DOCS/MSSP_BARE_METAL_RECOVERY.md` — Proxmox wipe notes  
-- `DOCS/MSSP_IP_PROXMOX_INVENTORY.md` — IP table  
+- `docs/CURSOR_REDEPLOYMENT_PLAYBOOK.md` — Path A / Path B procedures  
+- `docs/MSSP_BARE_METAL_RECOVERY.md` — Proxmox wipe notes  
+- `docs/MSSP_IP_PROXMOX_INVENTORY.md` — IP table  
 - `scripts/dr_backup_engine.py` / `scripts/dr_cold_copy_control_plane.sh` — refresh backups on a healthy system  

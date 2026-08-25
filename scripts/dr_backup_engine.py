@@ -435,8 +435,8 @@ def copy_local_vault(staging: Path) -> List[Dict[str, Any]]:
         "frontend-customer/Dockerfile",
         "frontend-customer/nginx.conf",
         "ansible/inventory/hosts.yml",
-        "DOCS/DISASTER_RECOVERY_PLAYBOOK.md",
-        "DOCS/CURSOR_REDEPLOYMENT_PLAYBOOK.md",
+        "docs/DISASTER_RECOVERY_PLAYBOOK.md",
+        "docs/CURSOR_REDEPLOYMENT_PLAYBOOK.md",
     ]
     for rel in required_specs:
         src = REPO_ROOT / rel

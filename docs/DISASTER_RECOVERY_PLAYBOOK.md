@@ -401,7 +401,7 @@ POST /admin/threat-intel/{tenant_ref}/sync # Phase 6
 
 - `AGENTS.md` — security, tenant isolation, commit rules
 - `CONTEXT.md` — current validated baseline
-- `DOCS/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md` — catalog Phase 1–6 status
+- `docs/SERVICE_ENGINE_DEVELOPMENT_ROADMAP.md` — catalog Phase 1–6 status
 - `docs/KB036_MSSP_PLATFORM_ARCHITECTURE_ROADMAP.md` — enterprise architecture
 - `README.md` — repository layout
 

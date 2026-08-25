@@ -30,7 +30,7 @@ After that, `./scripts/run_post_change_checks.sh` and `kb011_validate_protected_
 cd /opt/mssp-control
 cp deploy/environments/control-plane.lab.example.env .env
 # Edit .env — set POSTGRES_PASSWORD, REDIS_PASSWORD, JWT_SECRET (never commit)
-mkdir -p .secrets   # engine bridge files — see DOCS/CURSOR_REDEPLOYMENT_PLAYBOOK.md
+mkdir -p .secrets   # engine bridge files — see docs/CURSOR_REDEPLOYMENT_PLAYBOOK.md
 ./scripts/production_deploy_control_plane.sh
 ```
 

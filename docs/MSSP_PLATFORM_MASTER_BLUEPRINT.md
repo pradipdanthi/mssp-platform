@@ -15,8 +15,8 @@
 | What this document is | The complete, self-explanatory operations bible: the full journey story, every server, every open-source engine and how they wire together, every major role, data paths, day-2 commands, and the decisions we finally locked in |
 | What this document is not | Marketing copy, a wish-list of future tools, or a paste of failed terminal logs |
 | Markdown source | `/opt/mssp-control/docs/MSSP_PLATFORM_MASTER_BLUEPRINT.md` |
-| PDF export | `/opt/mssp-control/DOCS/MSSP_PLATFORM_MASTER_BLUEPRINT.pdf` |
-| Word export | `/opt/mssp-control/DOCS/MSSP_PLATFORM_MASTER_BLUEPRINT.docx` |
+| PDF export | `/opt/mssp-control/docs/MSSP_PLATFORM_MASTER_BLUEPRINT.pdf` |
+| Word export | `/opt/mssp-control/docs/MSSP_PLATFORM_MASTER_BLUEPRINT.docx` |
 | Regenerate exports | See Appendix R at the end of this book |
 
 **Truth order when documents disagree:**
@@ -1503,8 +1503,8 @@ docker run --rm -v /opt/mssp-control:/work -w /work python:3.12-slim \
 
 Outputs:
 
-- `/opt/mssp-control/DOCS/MSSP_PLATFORM_MASTER_BLUEPRINT.pdf`
-- `/opt/mssp-control/DOCS/MSSP_PLATFORM_MASTER_BLUEPRINT.docx`
+- `/opt/mssp-control/docs/MSSP_PLATFORM_MASTER_BLUEPRINT.pdf`
+- `/opt/mssp-control/docs/MSSP_PLATFORM_MASTER_BLUEPRINT.docx`
 - Mirrored copies under `docs/`
 
 ---

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install MSSP dated backup as a systemd user timer (preferred) or crontab.
-# Does NOT configure Google Drive — see DOCS/DR_GOOGLE_DRIVE_BACKUP_SETUP.md
+# Does NOT configure Google Drive — see docs/DR_GOOGLE_DRIVE_BACKUP_SETUP.md
 set -euo pipefail
 
 REPO_ROOT="${MSSP_CONTROL_ROOT:-/opt/mssp-control}"
@@ -97,7 +97,7 @@ fi
 echo
 echo "Config: $CONFIG"
 echo "Local backups: $HOME/MSSP_Backups/<timestamp>/"
-echo "Next: complete Google Drive setup in DOCS/DR_GOOGLE_DRIVE_BACKUP_SETUP.md"
+echo "Next: complete Google Drive setup in docs/DR_GOOGLE_DRIVE_BACKUP_SETUP.md"
 echo "Then set MSSP_DR_ENABLE_GDRIVE=1 in $CONFIG"
 echo "Test now: $SCRIPT"
 echo "Manual run via systemd: systemctl --user start mssp-dr-backup.service"

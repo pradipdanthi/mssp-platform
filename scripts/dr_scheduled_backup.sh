@@ -152,10 +152,10 @@ fi
 
 # Copy disaster memory / inventory into DEST root if present in cold tree
 for f in CURSOR_DISASTER_MEMORY.md MSSP_IP_PROXMOX_INVENTORY.md README_RESTORE.txt; do
-  if [[ -f "$DEST/mssp-control/DOCS/$f" ]]; then
-    cp -f "$DEST/mssp-control/DOCS/$f" "$DEST/$f" 2>/dev/null || true
-  elif [[ -f "$REPO_ROOT/DOCS/$f" ]]; then
-    cp -f "$REPO_ROOT/DOCS/$f" "$DEST/$f" 2>/dev/null || true
+  if [[ -f "$DEST/mssp-control/docs/$f" ]]; then
+    cp -f "$DEST/mssp-control/docs/$f" "$DEST/$f" 2>/dev/null || true
+  elif [[ -f "$REPO_ROOT/docs/$f" ]]; then
+    cp -f "$REPO_ROOT/docs/$f" "$DEST/$f" 2>/dev/null || true
   fi
 done
 
@@ -193,11 +193,11 @@ If restoring from Google Drive:
 EOF
 
 # Keep disaster memory current inside every package
-if [[ -f "$REPO_ROOT/DOCS/CURSOR_DISASTER_MEMORY.md" ]]; then
-  cp -f "$REPO_ROOT/DOCS/CURSOR_DISASTER_MEMORY.md" "$DEST/CURSOR_DISASTER_MEMORY.md"
+if [[ -f "$REPO_ROOT/docs/CURSOR_DISASTER_MEMORY.md" ]]; then
+  cp -f "$REPO_ROOT/docs/CURSOR_DISASTER_MEMORY.md" "$DEST/CURSOR_DISASTER_MEMORY.md"
 fi
-if [[ -f "$REPO_ROOT/DOCS/MSSP_IP_PROXMOX_INVENTORY.md" ]]; then
-  cp -f "$REPO_ROOT/DOCS/MSSP_IP_PROXMOX_INVENTORY.md" "$DEST/MSSP_IP_PROXMOX_INVENTORY.md"
+if [[ -f "$REPO_ROOT/docs/MSSP_IP_PROXMOX_INVENTORY.md" ]]; then
+  cp -f "$REPO_ROOT/docs/MSSP_IP_PROXMOX_INVENTORY.md" "$DEST/MSSP_IP_PROXMOX_INVENTORY.md"
 elif [[ -f "$HOME/MSSP_Full_Backup/MSSP_IP_PROXMOX_INVENTORY.md" ]]; then
   cp -f "$HOME/MSSP_Full_Backup/MSSP_IP_PROXMOX_INVENTORY.md" "$DEST/MSSP_IP_PROXMOX_INVENTORY.md"
 fi

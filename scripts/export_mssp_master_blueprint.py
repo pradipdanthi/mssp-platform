@@ -2,9 +2,8 @@
 """Export MSSP Master Blueprint Markdown to PDF and DOCX.
 
 Reads:  docs/MSSP_PLATFORM_MASTER_BLUEPRINT.md
-Writes: DOCS/MSSP_PLATFORM_MASTER_BLUEPRINT.pdf
-        DOCS/MSSP_PLATFORM_MASTER_BLUEPRINT.docx
-        (also mirrors into docs/ for lowercase path convenience)
+Writes: docs/MSSP_PLATFORM_MASTER_BLUEPRINT.pdf
+        docs/MSSP_PLATFORM_MASTER_BLUEPRINT.docx
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MD_PATH = ROOT / "docs" / "MSSP_PLATFORM_MASTER_BLUEPRINT.md"
-OUT_DIRS = [ROOT / "DOCS", ROOT / "docs"]
+OUT_DIRS = [ROOT / "docs"]
 
 
 def parse_blocks(text: str) -> list[tuple[str, str]]:
@@ -304,21 +303,14 @@ def main() -> int:
     blocks = parse_blocks(text)
     print(f"Parsed {len(blocks)} blocks from {MD_PATH}")
 
-    primary = ROOT / "DOCS"
-    primary.mkdir(parents=True, exist_ok=True)
-    pdf = primary / "MSSP_PLATFORM_MASTER_BLUEPRINT.pdf"
-    docx = primary / "MSSP_PLATFORM_MASTER_BLUEPRINT.docx"
+    out_dir = ROOT / "docs"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    pdf = out_dir / "MSSP_PLATFORM_MASTER_BLUEPRINT.pdf"
+    docx = out_dir / "MSSP_PLATFORM_MASTER_BLUEPRINT.docx"
     export_docx(blocks, docx)
     print(f"Wrote {docx} ({docx.stat().st_size} bytes)")
     export_pdf(blocks, pdf)
     print(f"Wrote {pdf} ({pdf.stat().st_size} bytes)")
-
-    # Mirror into docs/ for lowercase path discovery
-    mirror = ROOT / "docs"
-    for src in (pdf, docx):
-        dest = mirror / src.name
-        dest.write_bytes(src.read_bytes())
-        print(f"Mirrored {dest}")
     return 0
 
 

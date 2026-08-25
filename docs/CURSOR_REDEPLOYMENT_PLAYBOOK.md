@@ -2,9 +2,9 @@
 
 Status: Operator + Cursor runbook for total loss (ransomware / all VMs destroyed).  
 Created: 2026-07-31 · Updated for **Path A (cold tree + archive)** and **Path B (Git)**.  
-Companions: `scripts/dr_backup_engine.py`, `scripts/dr_cold_copy_control_plane.sh`, `DOCS/DISASTER_RECOVERY_PLAYBOOK.md`
+Companions: `scripts/dr_backup_engine.py`, `scripts/dr_cold_copy_control_plane.sh`, `docs/DISASTER_RECOVERY_PLAYBOOK.md`
 
-**First file to open on restore:** `DOCS/CURSOR_DISASTER_MEMORY.md` (also copied into `MSSP_Full_Backup/CURSOR_DISASTER_MEMORY.md`). Remind the operator of every checklist item they forget.
+**First file to open on restore:** `docs/CURSOR_DISASTER_MEMORY.md` (also copied into `MSSP_Full_Backup/CURSOR_DISASTER_MEMORY.md`). Remind the operator of every checklist item they forget.
 
 **Hard rules for Cursor**
 
@@ -112,7 +112,7 @@ unset MSSP_DR_OPENSSL_PASS
 sha256sum -c "$ROOT/${ARCHIVE}.sha256"
 ```
 
-5. **Database** — `docker compose up -d postgres redis`, then stream `pg_dumpall` restore from staging (see `DOCS/DISASTER_RECOVERY_PLAYBOOK.md` §4).
+5. **Database** — `docker compose up -d postgres redis`, then stream `pg_dumpall` restore from staging (see `docs/DISASTER_RECOVERY_PLAYBOOK.md` §4).
 6. **Control plane up** — `docker compose up -d --build` then recreate both frontends with backend.
 7. **Engine VMs** — From `/opt/mssp-control/ansible`, run the approved playbooks/roles for Wazuh, TheHive/Shuffle, Suricata, Greenbone/Nuclei (inventory already in tree). Overlay configs/volumes from `$STAGING/remote/` and `$STAGING/remote/vm*_volumes/` where applicable.
 8. **Smoke** — `/health` OK; `:3000` / `:3001` login paths return 401 (not 502); spot-check one tenant entitlements.
