@@ -7,6 +7,6 @@
     <run_on_start>yes</run_on_start>
     <timeout>90</timeout>
     <ignore_output>yes</ignore_output>
-    <command>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p=@($env:ProgramData+'\mssp-edr-ar\Sync-MsspEdrAr.ps1',${env:ProgramFiles(x86)}+'\ossec-agent\shared\Sync-MsspEdrAr.ps1',$env:ProgramFiles+'\ossec-agent\shared\Sync-MsspEdrAr.ps1'); foreach($f in $p){ if(Test-Path -LiteralPath $f){ & $f; break } }"</command>
+    <command>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p=@(${env:ProgramFiles(x86)}+'\ossec-agent\shared\Sync-MsspEdrAr.ps1',$env:ProgramFiles+'\ossec-agent\shared\Sync-MsspEdrAr.ps1',$env:ProgramData+'\mssp-edr-ar\Sync-MsspEdrAr.ps1'); foreach($f in $p){ if(Test-Path -LiteralPath $f){ & $f; break } }"</command>
   </wodle>
 </agent_config>

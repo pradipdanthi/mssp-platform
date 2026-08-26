@@ -252,7 +252,7 @@ for group_dir in sorted(shared.iterdir()):
         continue
     new = current
     if win_conf:
-        if "mssp-edr-ar-sync" in new and "ProgramData" not in new:
+        if "mssp-edr-ar-sync" in new:
             new = re.sub(
                 r"<wodle name=\"command\">\s*<disabled>no</disabled>\s*<tag>mssp-edr-ar-sync</tag>.*?</wodle>",
                 "",
@@ -261,7 +261,7 @@ for group_dir in sorted(shared.iterdir()):
                 flags=re.S,
             )
             new = new.rstrip() + "\n" + win_conf + "\n"
-        elif "mssp-edr-ar-sync" not in new:
+        else:
             new = (new.rstrip() + "\n" + win_conf + "\n") if new.strip() else win_conf + "\n"
     if linux_conf and "mssp-edr-ar-sync-linux" not in new:
         new = (new.rstrip() + "\n" + linux_conf + "\n") if new.strip() else linux_conf + "\n"
