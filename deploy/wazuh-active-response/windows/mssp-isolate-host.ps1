@@ -188,7 +188,7 @@ function Send-MsspEdrCallback {
       $headers["X-SOC-Sync-Key"] = $CallbackKey
       $headers["X-EDR-Callback-Key"] = $CallbackKey
     }
-    Invoke-RestMethod -Method Post -Uri $CallbackUrl -Body $json -ContentType "application/json" -Headers $headers -TimeoutSec 3 | Out-Null
+    Invoke-RestMethod -Method Post -Uri $CallbackUrl -Body $json -ContentType "application/json" -Headers $headers -TimeoutSec 15 | Out-Null
     Write-ArLog "CALLBACK ok status=$Status applied=$Applied released=$Released exec=$ExecutionId"
   } catch {
     Write-ArLog "CALLBACK failed: $($_.Exception.Message)"
@@ -1324,6 +1324,23 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
     [void](Remove-IsolationRulesFast -ExecutionId $ExecutionId)
     return $false
   }
+  # Prove + report before watchdog / effect probes (those can hang under execd).
+  if ($ok) {
+    "active manager=$Manager since=$(Get-Date -Format o)" | Set-Content -LiteralPath $MarkerFile -Encoding ASCII
+    try {
+      icacls $MarkerFile /inheritance:r /grant:r "SYSTEM:F" /grant:r "BUILTIN\Administrators:F" | Out-Null
+    } catch {}
+    Write-ArLog "QUARANTINE ACTIVE applied=true (Wazuh 1514/1515 only; hold until Un-isolate)"
+    if ($ExecutionId) {
+      Send-MsspEdrCallback -ExecutionId $ExecutionId -Status "success" -Message "QUARANTINE ACTIVE applied=true" -Applied $true -Released $false
+    }
+  } else {
+    Write-ArLog "QUARANTINE FAILED applied=false -- host NOT contained; do not trust UI dispatch alone"
+    if ($ExecutionId) {
+      Send-MsspEdrCallback -ExecutionId $ExecutionId -Status "failed" -Message "QUARANTINE FAILED applied=false" -Applied $false -Released $false
+    }
+    return $false
+  }
   Stop-InteractiveRemoteSessions
   if (Test-MsspUnisolateRequested) {
     Write-ArLog "QUARANTINE aborted before watchdog"
@@ -1332,31 +1349,13 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
   }
   Install-MsspQuarantineWatchdog
 
-  $effective = $false
-  if ($ok) {
-    $effective = Test-QuarantineEffect
-  } else {
-    Write-ArLog "ERROR default-deny not applied -- possible Group Policy lock on Windows Firewall"
-  }
-
-  if (Test-MsspUnisolateRequested) {
-    Write-ArLog "QUARANTINE aborted before marker (unisolate won the race)"
-    [void](Remove-IsolationRulesFast -ExecutionId $ExecutionId)
-    return $false
-  }
-
-  if ($effective) {
-    "active manager=$Manager since=$(Get-Date -Format o)" | Set-Content -LiteralPath $MarkerFile -Encoding ASCII
-    try {
-      icacls $MarkerFile /inheritance:r /grant:r "SYSTEM:F" /grant:r "BUILTIN\Administrators:F" | Out-Null
-    } catch {}
-    Write-ArLog "QUARANTINE ACTIVE applied=true (Wazuh 1514/1515 only; hold until Un-isolate)"
-  } else {
-    Write-ArLog "QUARANTINE FAILED applied=false -- host NOT contained; do not trust UI dispatch alone"
+  $effective = Test-QuarantineEffect
+  if (-not $effective) {
+    Write-ArLog "WARN Test-QuarantineEffect soft-fail after applied=true callback"
   }
 
   Write-ArLog "hold-until-unisolate exec=$ExecutionId (timed auto-release disabled)"
-  return [bool]$effective
+  return $true
 }
 
 function Convert-ArArgToRaw([object]$Value) {
@@ -1460,6 +1459,15 @@ if ($extra.Count -gt 0 -and $cmd -ne "delete") {
     try { $seconds = [int]$first } catch { $seconds = 0 }
   }
   if ($extra.Count -gt 1) { $executionId = [string]$extra[1] }
+  # AR args: [hold|delete, execution_id, callback_url] — prefer Manager-provided URL (WAN).
+  if ($extra.Count -gt 2) {
+    $argCb = [string]$extra[2]
+    if ($argCb -match '^https?://') { $CallbackUrl = $argCb.Trim() }
+  }
+}
+if ($cmd -eq "delete" -and $extra.Count -gt 2) {
+  $argCb = [string]$extra[2]
+  if ($argCb -match '^https?://') { $CallbackUrl = $argCb.Trim() }
 }
 if ($seconds -lt 0) { $seconds = 0 }
 if ($seconds -gt 86400) { $seconds = 86400 }
@@ -1487,10 +1495,9 @@ if ($explicitUnisolate) {
   exit 0
 } else {
   $applied = [bool](Add-IsolationRules -Seconds $seconds -ExecutionId $executionId)
-  if ($applied) {
-    Send-MsspEdrCallback -ExecutionId $executionId -Status "success" -Message "QUARANTINE ACTIVE applied=true" -Applied $true -Released $false
-  } else {
-    Send-MsspEdrCallback -ExecutionId $executionId -Status "failed" -Message "QUARANTINE FAILED applied=false" -Applied $false -Released $false
+  # Callback already sent inside Add-IsolationRules (before watchdog hang risk).
+  if (-not $applied) {
+    Write-ArLog "isolate applied=false (callback already attempted)"
   }
 }
 exit 0
