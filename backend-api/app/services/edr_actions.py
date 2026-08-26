@@ -423,7 +423,9 @@ def _insert_execution(
                 user_id,
                 body.action_type,
                 agent_id or body.agent_id,
-                str(body.pid) if body.pid is not None else None,
+                str(body.pid) if body.pid is not None else (
+                    f"name:{(body.process_name or '').strip()}" if (body.process_name or "").strip() else None
+                ),
                 body.file_hash_sha256,
                 status,
                 message[:2000],
@@ -861,11 +863,24 @@ def execute_edr_action(
             return execution_id, st, msg, None, None
 
         if body.action_type == "KILL_PROCESS":
-            if body.pid is None:
-                raise ValueError("pid is required for KILL_PROCESS")
+            if body.pid is None and not (body.process_name or "").strip():
+                raise ValueError("pid or process_name is required for KILL_PROCESS")
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for kill")
             ar_cmd = _resolve_ar_command(KILL_AR_COMMAND, WIN_KILL_AR_COMMAND, agent_id)
+            proc_name = (body.process_name or "").strip()
+            if body.list_only:
+                if not proc_name:
+                    raise ValueError("process_name is required when list_only=true")
+                target_arg = f"enum={proc_name}"
+                action_label = "LIST_PROCESSES"
+            elif proc_name:
+                target_arg = f"name={proc_name}"
+                action_label = "KILL_PROCESS"
+            else:
+                target_arg = str(body.pid)
+                action_label = "KILL_PROCESS"
+            kill_args = [target_arg, str(execution_id), callback_url]
             # Pass execution_id so AR scripts can POST applied proof to callback_url.
             if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
                 return _queue_appliance_ar_job(
@@ -875,28 +890,42 @@ def execute_edr_action(
                     action_type=body.action_type,
                     agent_id=agent_id,
                     ar_command=ar_cmd,
-                    arguments=[str(body.pid), str(execution_id), callback_url],
+                    arguments=kill_args,
                 )
             wazuh_client.run_active_response(
                 agent_id=agent_id,
                 command=ar_cmd,
-                arguments=[str(body.pid), str(execution_id), callback_url],
+                arguments=kill_args,
             )
             shuffle_edr_client.post_edr_workflow(
                 {
-                    "action": "KILL_PROCESS",
+                    "action": action_label,
                     "execution_id": execution_id,
                     "callback_url": callback_url,
                     "agent_id": agent_id,
                     "pid": body.pid,
+                    "process_name": proc_name or None,
+                    "list_only": bool(body.list_only),
                     "tenant_short_code": body.tenant_short_code,
                     "status": "executing",
                 }
             )
-            msg = (
-                f"Kill process command dispatched to agent {agent_id} pid={body.pid}. "
-                "Status remains Dispatched until endpoint callback reports applied=true."
-            )
+            if body.list_only:
+                msg = (
+                    f"Live process enum dispatched to agent {agent_id} name={proc_name}. "
+                    "Awaiting endpoint callback with current PIDs."
+                )
+            elif proc_name:
+                msg = (
+                    f"Kill-by-name dispatched to agent {agent_id} name={proc_name}. "
+                    "Endpoint resolves LIVE PIDs (not syscollector). "
+                    "Status remains Dispatched until endpoint callback reports applied=true."
+                )
+            else:
+                msg = (
+                    f"Kill process command dispatched to agent {agent_id} pid={body.pid}. "
+                    "Status remains Dispatched until endpoint callback reports applied=true."
+                )
             _update_execution(execution_id, "executing", msg)
             _audit_success(
                 user,
@@ -1182,6 +1211,81 @@ def _edr_audit_details(
     if error:
         details["error"] = error
     return details
+
+
+def request_live_processes(
+    user: Dict[str, Any],
+    *,
+    tenant_id: str,
+    tenant_short_code: str,
+    agent_id: str,
+    process_name: str,
+    timeout_seconds: int = 45,
+) -> Dict[str, Any]:
+    """Dispatch enum= AR and wait for endpoint callback with live PIDs."""
+    import time
+
+    name = (process_name or "").strip()
+    if not name:
+        raise ValueError("process_name is required")
+    if not agent_id:
+        raise ValueError("agent_id is required")
+
+    body = EdrActionExecuteRequest(
+        action_type="KILL_PROCESS",
+        tenant_short_code=tenant_short_code,
+        agent_id=agent_id,
+        process_name=name,
+        list_only=True,
+    )
+    execution_id, status, message, _, _ = execute_edr_action(user, body)
+    deadline = time.time() + max(5, int(timeout_seconds))
+    last_row: Optional[Dict[str, Any]] = None
+    while time.time() < deadline:
+        last_row = fetch_one(
+            """
+            SELECT id::text, status, result_message, callback_payload
+            FROM edr_action_executions
+            WHERE id = %s::uuid;
+            """,
+            (execution_id,),
+        )
+        if last_row and last_row.get("status") in ("verified", "failed", "success"):
+            break
+        time.sleep(2)
+
+    processes: list[Dict[str, Any]] = []
+    payload = (last_row or {}).get("callback_payload") or {}
+    if isinstance(payload, dict):
+        raw = payload.get("processes")
+        if raw is None and isinstance(payload.get("payload"), dict):
+            raw = payload["payload"].get("processes")
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    pid = int(item.get("pid"))
+                except (TypeError, ValueError):
+                    continue
+                processes.append(
+                    {
+                        "pid": pid,
+                        "name": item.get("name"),
+                        "path": item.get("path"),
+                    }
+                )
+
+    final_status = normalize_status((last_row or {}).get("status") or status)
+    return {
+        "execution_id": execution_id,
+        "status": final_status,
+        "message": (last_row or {}).get("result_message") or message,
+        "processes": processes,
+        "source": "endpoint_live",
+        "scan_time": None,
+        "stale": False,
+    }
 
 
 def _audit_success(

@@ -1,6 +1,9 @@
-# MSSP Windows Active Response - kill process by PID + control-plane applied callback.
+# MSSP Windows Active Response - kill by live PID or image name + callback.
 # Invoked by Wazuh execd via mssp-kill-process.cmd
-# Args (extra_args): [pid, execution_id, callback_url]
+# Args (extra_args):
+#   [pid, execution_id, callback_url]              — kill one PID (must still be running)
+#   [name=notepad.exe, execution_id, callback_url] — resolve LIVE via Get-Process, then kill
+#   [enum=notepad.exe, execution_id, callback_url] — list live matches only (no kill)
 $ErrorActionPreference = "Continue"
 $LogCandidates = @(
   "${env:ProgramFiles(x86)}\ossec-agent\active-response\active-responses.log",
@@ -16,7 +19,6 @@ $Log = $LogCandidates | Where-Object { Test-Path (Split-Path $_ -Parent) } | Sel
 if (-not $Log) { $Log = $LogCandidates[0] }
 $EnvFile = $EnvCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
-# Prefer Manager-shared scripts when present (auto fleet sync).
 try {
   $syncCand = @(
     "$env:ProgramData\mssp-edr-ar\Sync-MsspEdrAr.ps1",
@@ -84,7 +86,14 @@ function Get-EnvMap {
   return $map
 }
 
-function Send-Callback([string]$Url, [string]$ExecutionId, [bool]$Applied, [string]$Message) {
+function Send-Callback(
+  [string]$Url,
+  [string]$ExecutionId,
+  [bool]$Applied,
+  [string]$Message,
+  [object]$Processes = $null,
+  [string]$Action = "KILL_PROCESS"
+) {
   if (-not $Url -or -not $ExecutionId) {
     Write-ArLog "callback skip: url or execution_id missing"
     return
@@ -97,13 +106,15 @@ function Send-Callback([string]$Url, [string]$ExecutionId, [bool]$Applied, [stri
     Write-ArLog "callback skip: no callback URL"
     return
   }
+  $payload = @{ applied = $Applied; action = $Action }
+  if ($null -ne $Processes) { $payload['processes'] = @($Processes) }
   $body = @{
     execution_id = $ExecutionId
     status = $(if ($Applied) { 'success' } else { 'failed' })
     message = $Message
     applied = $Applied
-    payload = @{ applied = $Applied; action = 'KILL_PROCESS' }
-  } | ConvertTo-Json -Compress
+    payload = $payload
+  } | ConvertTo-Json -Compress -Depth 6
   try {
     $headers = @{ 'Content-Type' = 'application/json' }
     if ($key) {
@@ -117,6 +128,44 @@ function Send-Callback([string]$Url, [string]$ExecutionId, [bool]$Applied, [stri
   }
 }
 
+function Normalize-ImageName([string]$Name) {
+  $n = ($Name -replace '^name=', '' -replace '^enum=', '').Trim()
+  if ($n -match '(?i)\.exe$') { return $n }
+  return "$n.exe"
+}
+
+function Get-LiveProcessesByName([string]$ImageName) {
+  $base = [IO.Path]::GetFileNameWithoutExtension($ImageName)
+  $found = @()
+  try {
+    $procs = Get-Process -Name $base -ErrorAction SilentlyContinue
+  } catch {
+    $procs = @()
+  }
+  foreach ($p in @($procs)) {
+    if ($p.Id -le 4) { continue }
+    $path = ""
+    try { $path = [string]$p.Path } catch { $path = "" }
+    $found += @{
+      pid = [int]$p.Id
+      name = [string]$p.ProcessName
+      path = $path
+    }
+  }
+  return $found
+}
+
+function Stop-LivePid([int]$TargetPid) {
+  if ($TargetPid -le 4) { return $false }
+  $existing = Get-Process -Id $TargetPid -ErrorAction SilentlyContinue
+  if (-not $existing) { return $false }
+  $proc = Start-Process -FilePath "taskkill.exe" -ArgumentList @("/PID", "$TargetPid", "/F") `
+    -Wait -PassThru -WindowStyle Hidden
+  if ($proc.ExitCode -eq 0) { return $true }
+  $still = Get-Process -Id $TargetPid -ErrorAction SilentlyContinue
+  return -not [bool]$still
+}
+
 $raw = ""
 if ($args.Count -gt 0 -and $args[0] -match '[\{\[]') {
   $raw = [string]$args[0]
@@ -127,19 +176,19 @@ if ($args.Count -gt 0 -and $args[0] -match '[\{\[]') {
 $j = $null
 try { if ($raw) { $j = $raw | ConvertFrom-Json } } catch {}
 
-$pidStr = ""
+$target = ""
 $executionId = ""
 $callbackUrl = ""
 if ($j -and $j.parameters -and $j.parameters.extra_args) {
-  $pidStr = [string]$j.parameters.extra_args[0]
+  $target = [string]$j.parameters.extra_args[0]
   if ($j.parameters.extra_args.Count -gt 1) { $executionId = [string]$j.parameters.extra_args[1] }
   if ($j.parameters.extra_args.Count -gt 2) { $callbackUrl = [string]$j.parameters.extra_args[2] }
 } elseif ($j -and $j.arguments) {
-  $pidStr = [string]$j.arguments[0]
+  $target = [string]$j.arguments[0]
   if ($j.arguments.Count -gt 1) { $executionId = [string]$j.arguments[1] }
   if ($j.arguments.Count -gt 2) { $callbackUrl = [string]$j.arguments[2] }
-} elseif ($args.Count -gt 0 -and $args[0] -match '^\d+$') {
-  $pidStr = [string]$args[0]
+} elseif ($args.Count -gt 0) {
+  $target = [string]$args[0]
   if ($args.Count -gt 1) { $executionId = [string]$args[1] }
   if ($args.Count -gt 2) { $callbackUrl = [string]$args[2] }
 }
@@ -149,41 +198,79 @@ if (-not $callbackUrl) {
   $callbackUrl = [string]$envMap['MSSP_CALLBACK_URL']
 }
 
-if ($pidStr -notmatch '^\d+$') {
-  Write-ArLog "invalid pid=$pidStr"
-  Send-Callback $callbackUrl $executionId $false "invalid pid=$pidStr"
+$target = ($target -replace '^\s+|\s+$', '')
+if (-not $target) {
+  Write-ArLog "missing target"
+  Send-Callback $callbackUrl $executionId $false "missing kill target"
   exit 1
 }
-$targetPid = [int]$pidStr
+
+# Live enum (no kill) — used by control-plane process discovery.
+if ($target -match '^(?i)enum=') {
+  $image = Normalize-ImageName $target
+  $matches = @(Get-LiveProcessesByName $image)
+  Write-ArLog "enum image=$image count=$($matches.Count)"
+  if ($matches.Count -gt 0) {
+    Send-Callback $callbackUrl $executionId $true "live processes name=$image count=$($matches.Count)" `
+      -Processes $matches -Action "LIST_PROCESSES"
+    exit 0
+  }
+  Send-Callback $callbackUrl $executionId $false "no live process named $image" `
+    -Processes @() -Action "LIST_PROCESSES"
+  exit 1
+}
+
+# Kill by live image name (preferred — avoids stale syscollector PIDs).
+if ($target -match '^(?i)name=' -or $target -notmatch '^\d+$') {
+  $image = Normalize-ImageName $target
+  $matches = @(Get-LiveProcessesByName $image)
+  if ($matches.Count -lt 1) {
+    Write-ArLog "no live process named $image"
+    Send-Callback $callbackUrl $executionId $false "no live process named $image" -Processes @()
+    exit 1
+  }
+  $killed = @()
+  $failed = @()
+  foreach ($m in $matches) {
+    $pidNum = [int]$m.pid
+    if (Stop-LivePid $pidNum) {
+      $killed += $pidNum
+      Write-ArLog "killed pid=$pidNum name=$image"
+    } else {
+      $failed += $pidNum
+      Write-ArLog "kill failed pid=$pidNum name=$image"
+    }
+  }
+  if ($killed.Count -gt 0) {
+    Send-Callback $callbackUrl $executionId $true `
+      ("killed name=$image pids=" + ($killed -join ",")) -Processes $matches
+    exit 0
+  }
+  Send-Callback $callbackUrl $executionId $false `
+    ("kill failed name=$image pids=" + ($failed -join ",")) -Processes $matches
+  exit 1
+}
+
+# Kill by PID — process must still be running (do not treat missing PID as success;
+# that hid stale syscollector PIDs as "verified").
+$targetPid = [int]$target
 if ($targetPid -le 4) {
   Write-ArLog "refusing system pid=$targetPid"
   Send-Callback $callbackUrl $executionId $false "refusing system pid=$targetPid"
   exit 1
 }
-
-# Already gone = success (idempotent)
 $existing = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
 if (-not $existing) {
-  Write-ArLog "pid=$targetPid already gone"
-  Send-Callback $callbackUrl $executionId $true "pid=$targetPid already gone"
-  exit 0
+  Write-ArLog "pid=$targetPid not running (stale inventory?)"
+  Send-Callback $callbackUrl $executionId $false "pid=$targetPid not running (stale inventory?)"
+  exit 1
 }
-
-$proc = Start-Process -FilePath "taskkill.exe" -ArgumentList @("/PID", "$targetPid", "/F") -Wait -PassThru -WindowStyle Hidden
-if ($proc.ExitCode -eq 0) {
+if (Stop-LivePid $targetPid) {
   Write-ArLog "killed pid=$targetPid"
-  Send-Callback $callbackUrl $executionId $true "killed pid=$targetPid"
+  Send-Callback $callbackUrl $executionId $true "killed pid=$targetPid" `
+    -Processes @(@{ pid = $targetPid; name = [string]$existing.ProcessName })
   exit 0
 }
-
-# Race: process exited between check and taskkill
-$still = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
-if (-not $still) {
-  Write-ArLog "pid=$targetPid gone after taskkill code=$($proc.ExitCode)"
-  Send-Callback $callbackUrl $executionId $true "pid=$targetPid gone"
-  exit 0
-}
-
-Write-ArLog "kill failed pid=$targetPid code=$($proc.ExitCode)"
-Send-Callback $callbackUrl $executionId $false "kill failed pid=$targetPid code=$($proc.ExitCode)"
+Write-ArLog "kill failed pid=$targetPid"
+Send-Callback $callbackUrl $executionId $false "kill failed pid=$targetPid"
 exit 1

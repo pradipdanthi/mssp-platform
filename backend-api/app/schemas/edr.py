@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 EdrActionType = Literal[
     "ISOLATE_HOST",
@@ -61,9 +61,42 @@ class EdrActionExecuteRequest(BaseModel):
     alert_id: Optional[str] = None
     agent_id: Optional[str] = Field(default=None, max_length=64)
     pid: Optional[int] = Field(default=None, ge=1, le=2_147_483_647)
+    # Live image name (e.g. notepad.exe). Preferred over pid — resolved on the endpoint.
+    process_name: Optional[str] = Field(default=None, max_length=64, pattern=r"^[A-Za-z0-9._\-]+$")
     file_hash_sha256: Optional[str] = Field(default=None, min_length=64, max_length=64)
     confirm_isolation: bool = False
     retry_of_execution_id: Optional[str] = None
+    # When true with process_name: enumerate live matches on endpoint (no kill).
+    list_only: bool = False
+
+    @model_validator(mode="after")
+    def _kill_target_required(self) -> "EdrActionExecuteRequest":
+        if self.action_type != "KILL_PROCESS":
+            return self
+        if self.list_only and not self.process_name:
+            raise ValueError("process_name is required when list_only=true")
+        if self.pid is None and not self.process_name:
+            raise ValueError("pid or process_name is required for KILL_PROCESS")
+        return self
+
+
+class LiveProcessInfo(BaseModel):
+    pid: int
+    name: Optional[str] = None
+    path: Optional[str] = None
+
+
+class LiveProcessesResponse(BaseModel):
+    agent_id: str
+    process_name: str
+    execution_id: str
+    status: EdrActionStatus
+    processes: List[LiveProcessInfo] = Field(default_factory=list)
+    message: Optional[str] = None
+    source: str = "endpoint_live"
+    # Present when falling back to Wazuh syscollector (may be stale).
+    scan_time: Optional[str] = None
+    stale: bool = False
 
 
 class EdrActionExecuteResponse(BaseModel):
@@ -85,6 +118,7 @@ class EdrActionStatusResponse(BaseModel):
     forensic_artifact_id: Optional[str] = None
     created_at: str
     updated_at: str
+    callback_payload: Optional[Dict[str, Any]] = None
 
 
 class EdrActionCallbackRequest(BaseModel):

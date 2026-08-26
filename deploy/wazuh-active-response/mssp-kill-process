@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""MSSP AR: kill process by PID + optional control-plane applied callback."""
+"""MSSP AR: kill by live PID or process name + control-plane callback."""
 import json
 import os
 import signal
 import sys
-import urllib.error
 import urllib.request
 from datetime import datetime
 from pathlib import Path
@@ -33,30 +32,48 @@ def read_payload() -> dict:
 
 
 def _env_from_file() -> dict:
-    env_path = Path("/var/ossec/etc/mssp-ar.env")
     out = {}
-    if not env_path.exists():
-        return out
-    for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    for env_path in (
+        Path("/var/ossec/etc/mssp-ar.env"),
+        Path("/var/ossec/etc/shared/mssp-ar.env.defaults"),
+        Path("/var/ossec/active-response/bin/mssp-ar.env"),
+    ):
+        if not env_path.exists():
             continue
-        k, v = line.split("=", 1)
-        out[k.strip()] = v.strip().strip('"').strip("'")
+        for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            out.setdefault(k.strip(), v.strip().strip('"').strip("'"))
     return out
 
 
-def post_callback(url: str, execution_id: str, applied: bool, message: str) -> None:
+def post_callback(
+    url: str,
+    execution_id: str,
+    applied: bool,
+    message: str,
+    *,
+    processes=None,
+    action: str = "KILL_PROCESS",
+) -> None:
     if not url or not execution_id:
         return
     conf = _env_from_file()
     key = conf.get("MSSP_CALLBACK_KEY") or conf.get("EDR_CALLBACK_API_KEY") or ""
+    if not url:
+        url = conf.get("MSSP_CALLBACK_URL") or ""
+    payload = {"applied": applied, "action": action}
+    if processes is not None:
+        payload["processes"] = processes
     body = json.dumps(
         {
             "execution_id": execution_id,
             "status": "success" if applied else "failed",
             "message": message,
-            "payload": {"applied": applied},
+            "applied": applied,
+            "payload": payload,
         }
     ).encode("utf-8")
     headers = {"Content-Type": "application/json"}
@@ -72,17 +89,142 @@ def post_callback(url: str, execution_id: str, applied: bool, message: str) -> N
         log(f"callback failed: {exc}")
 
 
+def normalize_name(raw: str) -> str:
+    n = raw
+    for prefix in ("name=", "enum="):
+        if n.lower().startswith(prefix):
+            n = n[len(prefix) :]
+            break
+    n = n.strip()
+    return n
+
+
+def live_by_name(name: str) -> list[dict]:
+    """Return live processes matching basename (uses /proc)."""
+    want = name.lower()
+    if want.endswith(".exe"):
+        want = want[:-4]
+    found = []
+    try:
+        pids = [p for p in os.listdir("/proc") if p.isdigit()]
+    except OSError:
+        return found
+    for pid_s in pids:
+        pid = int(pid_s)
+        if pid <= 1:
+            continue
+        try:
+            comm = Path(f"/proc/{pid}/comm").read_text(encoding="utf-8", errors="ignore").strip()
+            cmdline = (
+                Path(f"/proc/{pid}/cmdline")
+                .read_bytes()
+                .replace(b"\x00", b" ")
+                .decode("utf-8", errors="ignore")
+                .strip()
+            )
+        except OSError:
+            continue
+        base = Path(comm).name.lower()
+        if base == want or base == f"{want}.exe":
+            found.append({"pid": pid, "name": comm, "path": cmdline[:200]})
+    return found
+
+
+def kill_pid(pid: int) -> bool:
+    if pid <= 1:
+        return False
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    try:
+        os.kill(pid, signal.SIGKILL)
+        return True
+    except OSError:
+        try:
+            os.kill(pid, 0)
+            return False
+        except OSError:
+            return True
+
+
 def main() -> int:
     data = read_payload()
     args = (data.get("parameters") or {}).get("extra_args") or data.get("arguments") or []
-    pid_s = str(args[0]) if args else ""
+    target = str(args[0]) if args else ""
     execution_id = str(args[1]) if len(args) > 1 else ""
     callback_url = str(args[2]) if len(args) > 2 else ""
-    if not pid_s.isdigit():
-        log(f"invalid pid={pid_s!r}")
-        post_callback(callback_url, execution_id, False, "invalid pid")
+    conf = _env_from_file()
+    if not callback_url:
+        callback_url = conf.get("MSSP_CALLBACK_URL") or ""
+
+    target = target.strip()
+    if not target:
+        log("missing target")
+        post_callback(callback_url, execution_id, False, "missing kill target")
         return 1
-    pid = int(pid_s)
+
+    if target.lower().startswith("enum="):
+        name = normalize_name(target)
+        matches = live_by_name(name)
+        log(f"enum name={name} count={len(matches)}")
+        if matches:
+            post_callback(
+                callback_url,
+                execution_id,
+                True,
+                f"live processes name={name} count={len(matches)}",
+                processes=matches,
+                action="LIST_PROCESSES",
+            )
+            return 0
+        post_callback(
+            callback_url,
+            execution_id,
+            False,
+            f"no live process named {name}",
+            processes=[],
+            action="LIST_PROCESSES",
+        )
+        return 1
+
+    if target.lower().startswith("name=") or not target.isdigit():
+        name = normalize_name(target)
+        matches = live_by_name(name)
+        if not matches:
+            log(f"no live process named {name}")
+            post_callback(
+                callback_url,
+                execution_id,
+                False,
+                f"no live process named {name}",
+                processes=[],
+            )
+            return 1
+        killed = []
+        for m in matches:
+            if kill_pid(int(m["pid"])):
+                killed.append(m["pid"])
+                log(f"killed pid={m['pid']} name={name}")
+        if killed:
+            post_callback(
+                callback_url,
+                execution_id,
+                True,
+                f"killed name={name} pids={','.join(str(x) for x in killed)}",
+                processes=matches,
+            )
+            return 0
+        post_callback(
+            callback_url,
+            execution_id,
+            False,
+            f"kill failed name={name}",
+            processes=matches,
+        )
+        return 1
+
+    pid = int(target)
     if pid <= 1:
         log(f"refusing pid={pid}")
         post_callback(callback_url, execution_id, False, "refused pid")
@@ -90,19 +232,28 @@ def main() -> int:
     try:
         os.kill(pid, 0)
     except OSError:
-        log(f"pid not running={pid}")
-        post_callback(callback_url, execution_id, True, "pid already gone")
-        return 0
-    try:
-        os.kill(pid, signal.SIGKILL)
-        log(f"killed pid={pid}")
-        post_callback(callback_url, execution_id, True, f"killed pid={pid}")
-    except OSError as exc:
-        log(f"kill failed pid={pid} err={exc}")
-        post_callback(callback_url, execution_id, False, f"kill failed: {exc}")
+        log(f"pid not running={pid} (stale inventory?)")
+        post_callback(
+            callback_url,
+            execution_id,
+            False,
+            f"pid={pid} not running (stale inventory?)",
+        )
         return 1
-    return 0
+    if kill_pid(pid):
+        log(f"killed pid={pid}")
+        post_callback(
+            callback_url,
+            execution_id,
+            True,
+            f"killed pid={pid}",
+            processes=[{"pid": pid, "name": ""}],
+        )
+        return 0
+    log(f"kill failed pid={pid}")
+    post_callback(callback_url, execution_id, False, f"kill failed pid={pid}")
+    return 1
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

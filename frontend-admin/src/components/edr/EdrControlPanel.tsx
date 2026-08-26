@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   executeEdrAction,
   getEdrActionStatus,
+  getLiveProcesses,
   statusBadgeLabel,
   type EdrActionType,
 } from "../../api/edr";
@@ -23,6 +24,10 @@ export default function EdrControlPanel({
   canExecute,
 }: Props) {
   const [pid, setPid] = useState("");
+  const [processName, setProcessName] = useState("");
+  const [liveMatches, setLiveMatches] = useState<
+    { pid: number; name?: string | null; path?: string | null }[]
+  >([]);
   const [hash, setHash] = useState("");
   const [status, setStatus] = useState<string | null>(null);
   const [badge, setBadge] = useState<string | null>(null);
@@ -78,6 +83,7 @@ export default function EdrControlPanel({
         incident_number: incidentNumber,
         agent_id: agentId ?? undefined,
         pid: pid ? Number(pid) : undefined,
+        process_name: processName.trim() || undefined,
         file_hash_sha256: hash || undefined,
         ...extra,
       });
@@ -100,6 +106,37 @@ export default function EdrControlPanel({
     }
   }
 
+  async function findLive() {
+    if (!canExecute || !agentId || !processName.trim()) return;
+    setBusy(true);
+    setStatus("Asking endpoint for live processes…");
+    try {
+      const res = await getLiveProcesses({
+        agentId,
+        processName: processName.trim(),
+        tenantShortCode,
+      });
+      setLiveMatches(res.processes || []);
+      if (res.processes?.length === 1) {
+        setPid(String(res.processes[0].pid));
+      }
+      setStatus(
+        res.processes?.length
+          ? `Live on endpoint: ${res.processes
+              .map((p) => `${p.name || processName} pid=${p.pid}`)
+              .join(", ")}`
+          : res.message || "No live matching process on endpoint"
+      );
+      setBadge(res.processes?.length ? "Live inventory" : "Not found");
+    } catch (e) {
+      setBadge("Failed");
+      setStatus(e instanceof Error ? e.message : "Live process lookup failed");
+      setLiveMatches([]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!canExecute) {
     return (
       <div className="edr-control-panel card-surface">
@@ -113,13 +150,45 @@ export default function EdrControlPanel({
     );
   }
 
+  const canKill = Boolean(pid || processName.trim());
+
   return (
     <div className="edr-control-panel card-surface">
       <h3 className="section-title" style={{ marginTop: "1rem" }}>
         EDR control
       </h3>
       <label className="form-label">
-        Target PID
+        Process name (live on endpoint)
+        <input
+          className="form-input"
+          placeholder="notepad.exe"
+          value={processName}
+          onChange={(e) => setProcessName(e.target.value)}
+        />
+      </label>
+      <div className="edr-control-actions" style={{ marginBottom: "0.75rem" }}>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          disabled={busy || !agentId || !processName.trim()}
+          onClick={() => void findLive()}
+        >
+          Find live PID
+        </button>
+      </div>
+      {liveMatches.length > 0 ? (
+        <ul className="muted" style={{ marginTop: 0 }}>
+          {liveMatches.map((m) => (
+            <li key={m.pid}>
+              <button type="button" className="btn btn-link" onClick={() => setPid(String(m.pid))}>
+                {m.name || processName} pid={m.pid}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <label className="form-label">
+        Target PID (optional if name set)
         <input className="form-input" value={pid} onChange={(e) => setPid(e.target.value)} />
       </label>
       <label className="form-label">
@@ -132,12 +201,16 @@ export default function EdrControlPanel({
           className="btn btn-danger"
           disabled={busy}
           onClick={() => {
-            if (window.confirm(
-              "Quarantine this host?\n\n" +
-                "All network traffic will be blocked except " + NIKTIAR.coreTelemetry + " management ports 1514/1515 " +
-                "(plus DHCP/loopback so the agent can stay reachable for Un-isolate). " +
-                "The host stays isolated until you click Un-isolate."
-            )) {
+            if (
+              window.confirm(
+                "Quarantine this host?\n\n" +
+                  "All network traffic will be blocked except " +
+                  NIKTIAR.coreTelemetry +
+                  " management ports 1514/1515 " +
+                  "(plus DHCP/loopback so the agent can stay reachable for Un-isolate). " +
+                  "The host stays isolated until you click Un-isolate."
+              )
+            ) {
               void run("ISOLATE_HOST", { confirm_isolation: true });
             }
           }}
@@ -159,7 +232,7 @@ export default function EdrControlPanel({
         <button
           type="button"
           className="btn btn-secondary"
-          disabled={busy || !pid}
+          disabled={busy || !canKill}
           onClick={() => void run("KILL_PROCESS")}
         >
           Kill process

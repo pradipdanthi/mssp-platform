@@ -94,6 +94,8 @@ export function executeEdrAction(body: {
   incident_number?: string;
   agent_id?: string;
   pid?: number;
+  process_name?: string;
+  list_only?: boolean;
   file_hash_sha256?: string;
   confirm_isolation?: boolean;
   retry_of_execution_id?: string;
@@ -106,6 +108,31 @@ export function executeEdrAction(body: {
 }> {
   // Pass the object — client.request() already JSON.stringifies once.
   return request("/v1/edr/actions/execute", { method: "POST", body });
+}
+
+export function getLiveProcesses(params: {
+  agentId: string;
+  processName: string;
+  tenantShortCode: string;
+  timeoutSeconds?: number;
+}): Promise<{
+  agent_id: string;
+  process_name: string;
+  execution_id: string;
+  status: string;
+  processes: { pid: number; name?: string | null; path?: string | null }[];
+  message?: string | null;
+  source: string;
+  scan_time?: string | null;
+  stale: boolean;
+}> {
+  const q = new URLSearchParams({
+    agent_id: params.agentId,
+    process_name: params.processName,
+    tenant_short_code: params.tenantShortCode,
+  });
+  if (params.timeoutSeconds) q.set("timeout_seconds", String(params.timeoutSeconds));
+  return request(`/v1/edr/telemetry/processes/live?${q.toString()}`);
 }
 
 export function getEdrActionStatus(

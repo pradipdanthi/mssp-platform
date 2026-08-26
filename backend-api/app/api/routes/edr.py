@@ -21,6 +21,8 @@ from app.schemas.edr import (
     EdrIncidentDeepDiveResponse,
     EdrMetricsSummary,
     ForensicArtifactPublic,
+    LiveProcessInfo,
+    LiveProcessesResponse,
     MitreMappingPublic,
     ProcessTreeResponse,
 )
@@ -30,6 +32,7 @@ from app.services.edr_actions import (
     execute_edr_action,
     lookup_endpoint_from_incident,
     normalize_status,
+    request_live_processes,
 )
 from app.services.audit_service import audit_from_user, write_audit_event
 from app.services.edr_metrics import (
@@ -161,6 +164,45 @@ def _action_status_response(row: Dict[str, Any]) -> EdrActionStatusResponse:
         forensic_artifact_id=artifact_id,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        callback_payload=row.get("callback_payload")
+        if isinstance(row.get("callback_payload"), dict)
+        else None,
+    )
+
+
+@router.get("/telemetry/processes/live", response_model=LiveProcessesResponse)
+def edr_live_processes(
+    agent_id: str = Query(..., min_length=1, max_length=64),
+    process_name: str = Query(..., min_length=1, max_length=64),
+    tenant_short_code: Optional[str] = Query(default=None),
+    timeout_seconds: int = Query(default=45, ge=5, le=120),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> LiveProcessesResponse:
+    """Ask the endpoint for LIVE matching processes (not stale syscollector)."""
+    tenant = _resolve_tenant_for_user(current_user, tenant_short_code)
+    try:
+        result = request_live_processes(
+            current_user,
+            tenant_id=tenant["id"],
+            tenant_short_code=tenant["short_code"],
+            agent_id=agent_id,
+            process_name=process_name,
+            timeout_seconds=timeout_seconds,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return LiveProcessesResponse(
+        agent_id=agent_id,
+        process_name=process_name,
+        execution_id=result["execution_id"],
+        status=result["status"],  # type: ignore[arg-type]
+        processes=[LiveProcessInfo(**p) for p in result.get("processes") or []],
+        message=result.get("message"),
+        source=result.get("source") or "endpoint_live",
+        scan_time=result.get("scan_time"),
+        stale=bool(result.get("stale")),
     )
 
 
@@ -351,7 +393,7 @@ def edr_action_status(
     row = fetch_one(
         """
         SELECT id::text, action_type, status, result_message, status_detail,
-               verified_at::text, created_at::text, updated_at::text
+               verified_at::text, created_at::text, updated_at::text, callback_payload
         FROM edr_action_executions
         WHERE id = %s::uuid AND tenant_id = %s::uuid;
         """,
