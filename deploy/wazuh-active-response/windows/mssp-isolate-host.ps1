@@ -932,19 +932,18 @@ function Add-LateralBlockRules {
 
 function Stop-InteractiveRemoteSessions {
   # Stateful firewall often leaves EXISTING RDP TCP sessions alive.
-  # True containment drops interactive remote sessions (SOC should use agent path).
-  Write-ArLog "Dropping interactive remote sessions (RDP/console shadow) for containment"
+  # Drop RDP only — never reset console/local session (operator may be at the keyboard).
+  Write-ArLog "Dropping interactive RDP sessions for containment (console left intact)"
   try {
     $sessions = & qwinsta 2>$null
     foreach ($line in $sessions) {
-      if ($line -match 'rdp-tcp#\s*(\d+)' -or $line -match '^\s*(\S+)\s+\S+\s+(\d+)\s+Active') {
-        $id = $null
-        if ($line -match 'rdp-tcp#\d+\s+(\S+)\s+(\d+)') { $id = $Matches[2] }
-        elseif ($line -match '^\s*\S+\s+\S+\s+(\d+)\s+Active') { $id = $Matches[1] }
+      # Match only rdp-tcp#N rows; ignore console / services.
+      if ($line -match 'rdp-tcp#\d+\s+\S+\s+(\d+)') {
+        $id = $Matches[1]
         if ($id -and $id -ne "0") {
           try {
             & rwinsta $id 2>$null
-            Write-ArLog "reset session id=$id"
+            Write-ArLog "reset RDP session id=$id"
           } catch {
             Write-ArLog "WARN reset session $id failed"
           }
