@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
-# Bake fleet-reporting (heartbeat inventory + CPU/mem/disk + image-release) into golden VM 199.
+# Bake fleet-reporting + EDR AR auto-sync pack into golden VM 199 (appliance master image).
 # Does NOT seed lab entitlements — clones stay idle until licensed.
 # After bake, VM 199 is shut down so it remains a clean clone source.
+#
+# Run after containment / AR improvisations that must appear on NEW appliances:
+#   ./kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh
+# or from fleet publish:
+#   BAKE_GOLDEN=1 ./scripts/publish_edr_ar_fleet.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -84,11 +89,18 @@ WIN_AR_FILES=(
   mssp-kill-process.ps1 mssp-kill-process.cmd
   mssp-block-hash.ps1 mssp-block-hash.cmd
   Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1
+  Install-MsspWindowsEdrAr.ps1
+  mssp-ar.env.defaults
+  agent.conf.mssp-edr-sync.xml
 )
 for f in "${WIN_AR_FILES[@]}"; do
   [[ -f "$WIN_AR/$f" ]] || die "missing Windows AR file: $f"
   cp "$WIN_AR/$f" "$TMP/win-ar/"
 done
+# Linux AR applicator + defaults (auto-sync for appliance-local Linux agents).
+[[ -f "$AR_SRC/Sync-MsspEdrAr.sh" ]] || die "missing Sync-MsspEdrAr.sh"
+cp "$AR_SRC/Sync-MsspEdrAr.sh" "$TMP/"
+cp "$WIN_AR/mssp-ar.env.defaults" "$TMP/mssp-ar.env.defaults"
 LINUX_EDR_RULES="$CTRL/deploy/wazuh-manager/mssp_linux_exec_rules.xml"
 LINUX_EDR_SH="$CTRL/backend-api/app/endpoint_configs/linux-edr-telemetry/install-mssp-linux-telemetry.sh"
 LINUX_EDR_AUDIT="$CTRL/backend-api/app/endpoint_configs/linux-edr-telemetry/mssp-exec.rules"
@@ -109,7 +121,7 @@ from pathlib import Path
 path, commit, attrib_txt, attrib_md = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 data = json.loads(Path(path).read_text(encoding="utf-8"))
 data["git_commit"] = commit
-data["edr_ar_version"] = data.get("edr_ar_version") or "1.0.1"
+data["edr_ar_version"] = "1.1.0"
 data["attributions_sha256"] = hashlib.sha256(Path(attrib_txt).read_bytes()).hexdigest()
 data["attributions_md_sha256"] = hashlib.sha256(Path(attrib_md).read_bytes()).hexdigest()
 Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -139,6 +151,10 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/win-ar/mssp-block-hash.cmd" \
   "$TMP/win-ar/Sync-MsspEdrAr.ps1" \
   "$TMP/win-ar/Watch-MsspQuarantine.ps1" \
+  "$TMP/win-ar/Install-MsspWindowsEdrAr.ps1" \
+  "$TMP/win-ar/mssp-ar.env.defaults" \
+  "$TMP/win-ar/agent.conf.mssp-edr-sync.xml" \
+  "$TMP/Sync-MsspEdrAr.sh" \
   "$TMP/mssp_linux_exec_rules.xml" \
   "$TMP/install-mssp-linux-telemetry.sh" \
   "$TMP/mssp-exec.rules" \
@@ -174,16 +190,18 @@ for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
 done
 sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
 sudo install -d -m 0755 /var/lib/junexis/edr-ar/linux /var/lib/kevantic/edr-ar/linux
-for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1; do
+for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1 Install-MsspWindowsEdrAr.ps1 mssp-ar.env.defaults agent.conf.mssp-edr-sync.xml; do
   if [[ -f /tmp/\$f ]]; then
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
   fi
 done
-for f in mssp_linux_exec_rules.xml install-mssp-linux-telemetry.sh mssp-exec.rules; do
+for f in mssp_linux_exec_rules.xml install-mssp-linux-telemetry.sh mssp-exec.rules Sync-MsspEdrAr.sh mssp-ar.env.defaults; do
   if [[ -f /tmp/\$f ]]; then
-    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/linux/\$f"
-    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/linux/\$f"
+    mode=0640
+    if [[ "\$f" == "Sync-MsspEdrAr.sh" ]]; then mode=0750; fi
+    sudo install -o wazuh -g wazuh -m "\$mode" "/tmp/\$f" "/var/lib/junexis/edr-ar/linux/\$f"
+    sudo install -o wazuh -g wazuh -m "\$mode" "/tmp/\$f" "/var/lib/kevantic/edr-ar/linux/\$f"
   fi
 done
 sudo install -d -m 0755 /usr/share/doc/kevantic /usr/share/doc/junexis
@@ -196,9 +214,9 @@ if [[ -d /opt/junexis/appliance-src/appliance/jobs ]]; then
 fi
 # Register isolate/kill/block command names on the local Manager (Windows + Linux).
 if [[ -d /opt/junexis/cli/junexis_cli ]]; then
-  sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+  sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands, _publish_windows_edr_ar_shared; _ensure_local_edr_ar_commands(); _publish_windows_edr_ar_shared()'
 else
-  sudo env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+  sudo env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands, _publish_windows_edr_ar_shared; _ensure_local_edr_ar_commands(); _publish_windows_edr_ar_shared()'
 fi
 sudo grep -q '<name>mssp-isolate-host.cmd</name>' /var/ossec/etc/ossec.conf
 
@@ -227,6 +245,12 @@ grep -q 'not confirmed for agent' "\$CLI/register_ops.py"
 sudo test -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
 sudo test -f /var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml
 sudo test -f /var/lib/kevantic/edr-ar/linux/install-mssp-linux-telemetry.sh
+sudo test -f /var/lib/kevantic/edr-ar/linux/Sync-MsspEdrAr.sh
+sudo test -f /var/lib/kevantic/edr-ar/windows/Sync-MsspEdrAr.ps1
+sudo test -f /var/lib/kevantic/edr-ar/windows/mssp-ar.env.defaults
+sudo grep -q 'api.kevantic.com' /var/lib/kevantic/edr-ar/windows/mssp-ar.env.defaults
+sudo grep -q 'MSSP_CALLBACK_URL' /var/lib/kevantic/edr-ar/windows/Sync-MsspEdrAr.ps1
+sudo grep -q 'Get-MsspManagerIp\|ossec.conf' /var/lib/kevantic/edr-ar/windows/Sync-MsspEdrAr.ps1
 sudo test -f /usr/share/doc/kevantic/ATTRIBUTIONS.txt
 sudo grep -q 'Open Source Software Attributions' /usr/share/doc/kevantic/ATTRIBUTIONS.txt
 sudo grep -q '_validate_nuclei_template' /opt/kevantic/appliance-src/appliance/jobs/executor.py
