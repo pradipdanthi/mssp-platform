@@ -292,15 +292,15 @@ fi
 echo "      Endpoints auto-apply within ~1 minute via Sync-MsspEdrAr + agent.conf wodle / scheduled task"
 
 # When AR/containment changes must ship in new appliance clones, bake golden VM 199.
-# Default: remind. Set BAKE_GOLDEN=1 to run the bake (starts VM, installs, shuts down, optional snapshot).
-if [[ "${BAKE_GOLDEN:-0}" == "1" ]]; then
+# Default ON (user standing order). Set SKIP_GOLDEN_BAKE=1 only for live-only publishes.
+if [[ "${SKIP_GOLDEN_BAKE:-0}" == "1" ]]; then
+  echo "NOTE: golden master bake skipped (SKIP_GOLDEN_BAKE=1)."
+elif [[ "${BAKE_GOLDEN:-1}" == "1" ]]; then
   echo "==> Baking appliance golden master (VM 199) with this AR pack"
-  SNAP="${GOLDEN_SNAPSHOT_NAME:-kb107-edr-ar-auto-sync-$(date +%Y%m%d)}"
+  SNAP="${GOLDEN_SNAPSHOT_NAME:-kb-edr-ar-$(date +%Y%m%d%H%M)}"
   MSSP_GOLDEN_SNAPSHOT_NAME="$SNAP" \
     "$ROOT/kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh"
 else
   echo "NOTE: live appliances updated; golden master NOT baked."
-  echo "      For new clones to inherit this pack, run:"
-  echo "        BAKE_GOLDEN=1 $0"
-  echo "      or: kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh"
+  echo "      For new clones to inherit this pack, run without SKIP_GOLDEN_BAKE=1."
 fi

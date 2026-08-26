@@ -5,8 +5,8 @@
 #
 # Run after containment / AR improvisations that must appear on NEW appliances:
 #   ./kevantic-appliance/scripts/bake_golden_vm199_fleet_reporting.sh
-# or from fleet publish:
-#   BAKE_GOLDEN=1 ./scripts/publish_edr_ar_fleet.sh
+# or from fleet publish (golden bake is default; SKIP_GOLDEN_BAKE=1 to skip):
+#   ./scripts/publish_edr_ar_fleet.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
