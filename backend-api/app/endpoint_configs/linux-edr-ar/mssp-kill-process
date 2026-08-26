@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""MSSP AR: kill process by PID + optional control-plane applied callback."""
+import json
+import os
+import signal
+import sys
+import urllib.error
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+LOG = "/var/ossec/logs/active-responses.log"
+
+
+def log(msg: str) -> None:
+    try:
+        with open(LOG, "a", encoding="utf-8") as fh:
+            fh.write(
+                f"{datetime.utcnow().strftime('%Y/%m/%d %H:%M:%S')} mssp-kill-process: {msg}\n"
+            )
+    except OSError:
+        pass
+
+
+def read_payload() -> dict:
+    raw = sys.stdin.readline()
+    if not raw.strip() and len(sys.argv) > 1:
+        raw = sys.argv[1]
+    try:
+        return json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError:
+        return {}
+
+
+def _env_from_file() -> dict:
+    env_path = Path("/var/ossec/etc/mssp-ar.env")
+    out = {}
+    if not env_path.exists():
+        return out
+    for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        out[k.strip()] = v.strip().strip('"').strip("'")
+    return out
+
+
+def post_callback(url: str, execution_id: str, applied: bool, message: str) -> None:
+    if not url or not execution_id:
+        return
+    conf = _env_from_file()
+    key = conf.get("MSSP_CALLBACK_KEY") or conf.get("EDR_CALLBACK_API_KEY") or ""
+    body = json.dumps(
+        {
+            "execution_id": execution_id,
+            "status": "success" if applied else "failed",
+            "message": message,
+            "payload": {"applied": applied},
+        }
+    ).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["X-EDR-Callback-Key"] = key
+        headers["X-SOC-Sync-Key"] = key
+    req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            resp.read()
+            log(f"callback ok applied={applied}")
+    except Exception as exc:  # noqa: BLE001
+        log(f"callback failed: {exc}")
+
+
+def main() -> int:
+    data = read_payload()
+    args = (data.get("parameters") or {}).get("extra_args") or data.get("arguments") or []
+    pid_s = str(args[0]) if args else ""
+    execution_id = str(args[1]) if len(args) > 1 else ""
+    callback_url = str(args[2]) if len(args) > 2 else ""
+    if not pid_s.isdigit():
+        log(f"invalid pid={pid_s!r}")
+        post_callback(callback_url, execution_id, False, "invalid pid")
+        return 1
+    pid = int(pid_s)
+    if pid <= 1:
+        log(f"refusing pid={pid}")
+        post_callback(callback_url, execution_id, False, "refused pid")
+        return 1
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        log(f"pid not running={pid}")
+        post_callback(callback_url, execution_id, True, "pid already gone")
+        return 0
+    try:
+        os.kill(pid, signal.SIGKILL)
+        log(f"killed pid={pid}")
+        post_callback(callback_url, execution_id, True, f"killed pid={pid}")
+    except OSError as exc:
+        log(f"kill failed pid={pid} err={exc}")
+        post_callback(callback_url, execution_id, False, f"kill failed: {exc}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

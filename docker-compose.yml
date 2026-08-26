@@ -89,6 +89,9 @@ services:
       SALES_NOTIFY_EMAIL: ${SALES_NOTIFY_EMAIL:-sales@kevantic.com}
       ADMIN_PORTAL_BASE_URL: ${ADMIN_PORTAL_BASE_URL:-https://admin.kevantic.com}
       CUSTOMER_PORTAL_BASE_URL: ${CUSTOMER_PORTAL_BASE_URL:-https://portal.kevantic.com}
+      # Public base for EDR endpoint callbacks (WAN agents cannot reach RFC1918 API).
+      EDR_PUBLIC_API_BASE: ${EDR_PUBLIC_API_BASE:-https://api.kevantic.com}
+      MSSP_PUBLIC_API_BASE: ${MSSP_PUBLIC_API_BASE:-https://api.kevantic.com}
       PLATFORM_ROOT_DOMAIN: ${PLATFORM_ROOT_DOMAIN:-kevantic.com}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       TZ: ${TZ}

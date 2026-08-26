@@ -5,25 +5,29 @@
 
 .DESCRIPTION
   Day-one and remediation installer. Copies AR scripts into the endpoint agent
-  active-response\bin folder. Safe to re-run (idempotent). Does not require Python.
+  active-response\bin folder, writes mssp-ar.env, and enables automatic shared/
+  sync (scheduled task). Safe to re-run (idempotent).
+
+  Manager IP defaults from agent ossec.conf when present (appliance or WAN edge).
+  Callback defaults to the public API so LAN and WAN agents both verify.
 
 .PARAMETER ManagerIp
-  Wazuh Manager IP allowed during isolation (default 192.168.0.211).
+  Wazuh Manager IP allowed during isolation. Empty = read from ossec.conf.
 
 .PARAMETER CallbackUrl
-  Control-plane EDR callback URL (KB-091). Written into mssp-ar.env.
+  Control-plane EDR callback URL (KB-091). Default: https://api.kevantic.com/...
 
 .PARAMETER CallbackKey
-  Shared callback key (same as SOC sync key until per-execution tokens land).
+  Shared callback key (SOC sync key until per-execution tokens land).
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\Install-MsspWindowsEdrAr.ps1
 #>
 [CmdletBinding()]
 param(
-  [string]$ManagerIp = "192.168.0.211",
+  [string]$ManagerIp = "",
   [string]$ControlPlaneIp = "192.168.0.201",
-  [string]$CallbackUrl = "http://192.168.0.201:8000/v1/edr/actions/callback",
+  [string]$CallbackUrl = "https://api.kevantic.com/v1/edr/actions/callback",
   [string]$CallbackKey = ""
 )
 
@@ -55,8 +59,7 @@ $required = @(
   "Sync-MsspEdrAr.ps1",
   "Watch-MsspQuarantine.ps1"
 )
-# Optional proof helper (not required on agent bin)
-$optionalCopy = @("Test-MsspQuarantineProof.ps1")
+$optionalCopy = @("Test-MsspQuarantineProof.ps1", "mssp-ar.env.defaults")
 foreach ($f in $required) {
   if (-not (Test-Path -LiteralPath (Join-Path $Here $f))) {
     throw "Missing $f next to this installer"
@@ -70,6 +73,40 @@ $agentRoots = @(
 $agentRoot = $agentRoots | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $agentRoot) {
   throw "Endpoint agent not found. Install the Windows agent first, then re-run this script."
+}
+
+# Prefer Manager IP already configured on the agent (appliance vs WAN edge).
+if (-not $ManagerIp) {
+  $conf = Join-Path $agentRoot "etc\ossec.conf"
+  if (Test-Path -LiteralPath $conf) {
+    try {
+      [xml]$xml = Get-Content -LiteralPath $conf -Raw
+      $addr = $xml.ossec_config.client.server.address
+      if ($addr -is [Array]) { $addr = $addr | Select-Object -First 1 }
+      $ManagerIp = [string]$addr
+    } catch {
+      $raw = Get-Content -LiteralPath $conf -Raw -ErrorAction SilentlyContinue
+      if ($raw -match '<address>\s*([^<]+)\s*</address>') {
+        $ManagerIp = $Matches[1].Trim()
+      }
+    }
+  }
+}
+if (-not $ManagerIp) { $ManagerIp = "192.168.0.211" }
+
+if (-not $CallbackKey) {
+  $CallbackKey = [string]$env:MSSP_CALLBACK_KEY
+}
+if (-not $CallbackKey) {
+  foreach ($kf in @(
+    (Join-Path $Here "mssp-callback.key"),
+    (Join-Path $env:ProgramData "mssp-edr-ar\mssp-callback.key")
+  )) {
+    if (Test-Path -LiteralPath $kf) {
+      $CallbackKey = (Get-Content -LiteralPath $kf -Raw).Trim()
+      if ($CallbackKey) { break }
+    }
+  }
 }
 
 $dest = Join-Path $agentRoot "active-response\bin"
@@ -92,7 +129,10 @@ foreach ($f in $optionalCopy) {
   }
 }
 
+$etcDir = Join-Path $agentRoot "etc"
+New-Item -ItemType Directory -Path $etcDir -Force | Out-Null
 $envOut = Join-Path $dest "mssp-ar.env"
+$envEtc = Join-Path $etcDir "mssp-ar.env"
 $envLines = @(
   "WAZUH_MANAGER_IP=$ManagerIp",
   "MSSP_CONTROL_PLANE_IP=$ControlPlaneIp",
@@ -100,39 +140,29 @@ $envLines = @(
 )
 if ($CallbackKey) {
   $envLines += "MSSP_CALLBACK_KEY=$CallbackKey"
+  Set-Content -LiteralPath (Join-Path $pd "mssp-callback.key") -Value $CallbackKey -Encoding ASCII
   $keyState = "present"
 } else {
   Write-Step "WARNING: CallbackKey empty - isolate will stay Dispatched (no applied=true callback)."
   $keyState = "MISSING"
 }
 $envLines | Set-Content -LiteralPath $envOut -Encoding ASCII
-Write-Step "Wrote $envOut (callback URL set; key=$keyState)"
+$envLines | Set-Content -LiteralPath $envEtc -Encoding ASCII
+Write-Step "Wrote $envOut (callback URL set; key=$keyState; manager=$ManagerIp)"
 
 Write-Step "Restarting WazuhSvc..."
 Restart-Service -Name WazuhSvc -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
 Get-Service -Name WazuhSvc | Format-List Name, Status
 
-# Keep isolate scripts current from Manager shared/ (hold-until-unisolate).
-$syncShared = Join-Path $agentRoot "shared\Sync-MsspEdrAr.ps1"
-$syncLocal = Join-Path $Here "Sync-MsspEdrAr.ps1"
-$syncDstDir = Join-Path $env:ProgramData "mssp-edr-ar"
-New-Item -ItemType Directory -Path $syncDstDir -Force | Out-Null
-$syncRun = Join-Path $syncDstDir "Sync-MsspEdrAr.ps1"
-if (Test-Path -LiteralPath $syncLocal) {
-  Copy-Item -LiteralPath $syncLocal -Destination $syncRun -Force
-}
-if (Test-Path -LiteralPath $syncShared) {
-  Copy-Item -LiteralPath $syncShared -Destination $syncRun -Force
-}
+$syncRun = Join-Path $pd "Sync-MsspEdrAr.ps1"
 if (Test-Path -LiteralPath $syncRun) {
   & $syncRun
   $tr = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$syncRun`""
   schtasks.exe /Create /TN "MSSP-EDR-AR-Sync" /SC MINUTE /MO 1 /RU SYSTEM /RL HIGHEST /TR $tr /F | Out-Null
-  Write-Step "Scheduled MSSP-EDR-AR-Sync (every 1 minute)"
+  Write-Step "Scheduled MSSP-EDR-AR-Sync (every 1 minute) - auto shared apply + env refresh"
 }
 
-# Same trust as Active Response: Manager may refresh AR files via agent.conf wodle.
 $lio = Join-Path $agentRoot "local_internal_options.conf"
 $need = @(
   "wazuh_command.remote_commands=1",
@@ -153,4 +183,4 @@ Restart-Service -Name WazuhSvc -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "MSSP_WINDOWS_EDR_AR_OK"
-Write-Host "Installed: kill / isolate / block-hash + quarantine watchdog into $dest"
+Write-Host "Installed: kill / isolate / block-hash + auto-sync into $dest"

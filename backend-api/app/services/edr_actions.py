@@ -750,6 +750,8 @@ def execute_edr_action(
                 raise ValueError("Could not resolve endpoint agent for isolation")
             ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
             # Appliance tenants: queue job for local Manager (do not hit cloud Wazuh).
+            # extra_args: ["hold", execution_id, callback_url] -- never a number (Wazuh timeout).
+            isolate_args = [ISOLATE_HOLD_ARG, execution_id, callback_url]
             if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
                 return _queue_appliance_ar_job(
                     tenant_id=tenant_id,
@@ -758,13 +760,12 @@ def execute_edr_action(
                     action_type=body.action_type,
                     agent_id=agent_id,
                     ar_command=ar_cmd,
-                    arguments=[ISOLATE_HOLD_ARG, execution_id],
+                    arguments=isolate_args,
                 )
-            # extra_args: ["hold", execution_id] -- never a number (Wazuh timeout).
             st, msg = _dispatch_cloud_active_response(
                 agent_id=agent_id,
                 ar_cmd=ar_cmd,
-                arguments=[ISOLATE_HOLD_ARG, execution_id],
+                arguments=isolate_args,
                 action_type=body.action_type,
                 execution_id=execution_id,
                 tolerate_api_timeout=True,
@@ -812,6 +813,7 @@ def execute_edr_action(
                 raise ValueError("Could not resolve endpoint agent for un-isolate")
             # Pass "delete" so the AR script restores connectivity.
             ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
+            unisolate_args = ["delete", execution_id, callback_url]
             if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
                 return _queue_appliance_ar_job(
                     tenant_id=tenant_id,
@@ -820,12 +822,12 @@ def execute_edr_action(
                     action_type=body.action_type,
                     agent_id=agent_id,
                     ar_command=ar_cmd,
-                    arguments=["delete", execution_id],
+                    arguments=unisolate_args,
                 )
             st, msg = _dispatch_cloud_active_response(
                 agent_id=agent_id,
                 ar_cmd=ar_cmd,
-                arguments=["delete", execution_id],
+                arguments=unisolate_args,
                 action_type=body.action_type,
                 execution_id=execution_id,
                 tolerate_api_timeout=True,

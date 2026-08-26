@@ -56,11 +56,14 @@ if (Test-Path -LiteralPath $envFile) {
   }
 }
 # Prefer callback URL host when set (KB-091: quarantine must still reach control plane).
+# Hostname DNS resolve is deferred until Write-ArLog exists (see Resolve-MsspCallbackAllowIps).
+$CallbackAllowIps = @()
 if ($CallbackUrl) {
   try {
     $cbHost = ([Uri]$CallbackUrl).Host
     if ($cbHost -and $cbHost -match '^\d{1,3}(\.\d{1,3}){3}$') {
       $ControlPlane = $cbHost
+      $CallbackAllowIps += $cbHost
     }
   } catch {  }
 }
@@ -104,6 +107,26 @@ function Write-ArLog([string]$Message) {
       )
       try { $fs.Write($bytes, 0, $bytes.Length) } finally { $fs.Dispose() }
     } catch {}
+  }
+}
+
+function Resolve-MsspCallbackAllowIps {
+  if (-not $CallbackUrl) { return }
+  try {
+    $cbHost = ([Uri]$CallbackUrl).Host
+  } catch { return }
+  if (-not $cbHost) { return }
+  if ($cbHost -match '^\d{1,3}(\.\d{1,3}){3}$') { return }
+  try {
+    $resolved = [System.Net.Dns]::GetHostAddresses($cbHost) |
+      Where-Object { $_.AddressFamily -eq 'InterNetwork' } |
+      ForEach-Object { $_.IPAddressToString }
+    foreach ($ip in $resolved) {
+      if ($script:CallbackAllowIps -notcontains $ip) { $script:CallbackAllowIps += $ip }
+    }
+    Write-ArLog "callback host=$cbHost resolved=$($script:CallbackAllowIps -join ',')"
+  } catch {
+    Write-ArLog "WARN callback DNS resolve failed for $cbHost : $($_.Exception.Message)"
   }
 }
 
@@ -173,8 +196,18 @@ function Clear-MsspAllowRules {
     "MSSP_QUAR_ALLOW_WAZUH_IN_1515",
     "MSSP_QUAR_ALLOW_WAZUH_OUT_UDP1514",
     "MSSP_QUAR_ALLOW_DHCP",
+    "MSSP_QUAR_ALLOW_DNS_UDP",
+    "MSSP_QUAR_ALLOW_DNS_TCP",
     "MSSP_QUAR_ALLOW_LOOPBACK_OUT",
     "MSSP_QUAR_ALLOW_LOOPBACK_IN",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_1",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_2",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_3",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_4",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_5",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_6",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_7",
+    "MSSP_QUAR_ALLOW_CALLBACK_OUT_8",
     "MSSP_QUAR_BLOCK_RDP_IN",
     "MSSP_QUAR_BLOCK_RDP_OUT",
     "MSSP_QUAR_BLOCK_SMB_IN",
@@ -1210,17 +1243,35 @@ function Add-IsolationRules([int]$Seconds, [string]$ExecutionId = "") {
   Clear-MsspQuarantineRulesFast
   [void](Invoke-Netsh @("advfirewall", "firewall", "delete", "rule", "name=MSSP_RDP_RESTORE_IN"))
 
+  Resolve-MsspCallbackAllowIps
+
   $allowSpecs = @(
     @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1514"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1514") },
     @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_1515"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$Manager", "remoteport=1515") },
     @{ Name = "MSSP_QUAR_ALLOW_WAZUH_IN_1514"; Dir = "in"; Extra = @("protocol=tcp", "remoteip=$Manager", "localport=1514") },
     @{ Name = "MSSP_QUAR_ALLOW_WAZUH_IN_1515"; Dir = "in"; Extra = @("protocol=tcp", "remoteip=$Manager", "localport=1515") },
     @{ Name = "MSSP_QUAR_ALLOW_WAZUH_OUT_UDP1514"; Dir = "out"; Extra = @("protocol=udp", "remoteip=$Manager", "remoteport=1514") },
+    @{ Name = "MSSP_QUAR_ALLOW_CTRLPLANE_OUT"; Dir = "out"; Extra = @("protocol=tcp", "remoteip=$ControlPlane", "remoteport=8000,443,80") },
+    @{ Name = "MSSP_QUAR_ALLOW_CTRLPLANE_IN"; Dir = "in"; Extra = @("protocol=tcp", "remoteip=$ControlPlane") },
+    @{ Name = "MSSP_QUAR_ALLOW_DNS_UDP"; Dir = "out"; Extra = @("protocol=udp", "remoteport=53") },
+    @{ Name = "MSSP_QUAR_ALLOW_DNS_TCP"; Dir = "out"; Extra = @("protocol=tcp", "remoteport=53") },
     @{ Name = "MSSP_QUAR_ALLOW_DHCP"; Dir = "out"; Extra = @("protocol=udp", "remoteport=67,68") },
     @{ Name = "MSSP_QUAR_ALLOW_LOOPBACK_OUT"; Dir = "out"; Extra = @("remoteip=127.0.0.1") },
     @{ Name = "MSSP_QUAR_ALLOW_LOOPBACK_IN"; Dir = "in"; Extra = @("remoteip=127.0.0.1") }
   )
-  Write-ArLog "allow-list wazuh_manager=$Manager ports=1514,1515"
+  # Public callback hostname IPs (Cloudflare / api.kevantic.com) — required for WAN verify.
+  $cbIdx = 0
+  foreach ($ip in @($CallbackAllowIps)) {
+    if (-not $ip) { continue }
+    if ($ip -eq $ControlPlane) { continue }
+    $cbIdx++
+    $allowSpecs += @{
+      Name = "MSSP_QUAR_ALLOW_CALLBACK_OUT_$cbIdx"
+      Dir = "out"
+      Extra = @("protocol=tcp", "remoteip=$ip", "remoteport=443,80")
+    }
+  }
+  Write-ArLog "allow-list wazuh_manager=$Manager control_plane=$ControlPlane callback_ips=$($CallbackAllowIps -join ',')"
   foreach ($spec in $allowSpecs) {
     $args = @(
       "advfirewall", "firewall", "add", "rule",

@@ -11,7 +11,11 @@ from fastapi.responses import Response
 from app.api.dependencies import require_roles
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_one
-from app.services.agent_package_builder import build_agent_package_zip
+from app.services.agent_package_builder import (
+    build_agent_package_zip,
+    is_wan_os_type,
+    wan_manager_address,
+)
 from app.services.agent_install_repo import publish_linux_install
 from app.services.appliance_manager_resolver import resolve_tenant_manager_address
 from app.services.audit_service import audit_from_user
@@ -116,7 +120,7 @@ def download_tenant_agent_package(
     """
     Download a ZIP that installs the endpoint agent into this tenant's Wazuh group.
 
-    os_type: windows | linux | all
+    os_type: windows | linux | all | windows-wan | linux-wan
     """
     tenant = fetch_one(
         """
@@ -145,14 +149,23 @@ def download_tenant_agent_package(
         # Package still usable; group create may already exist.
         pass
 
+    wan = is_wan_os_type(os_type)
     try:
-        mgr = resolve_tenant_manager_address(tenant["id"])
+        if wan:
+            manager = wan_manager_address()
+            manager_source = "wan_public_edge"
+            appliance_id = None
+        else:
+            mgr = resolve_tenant_manager_address(tenant["id"])
+            manager = mgr["manager_address"]
+            manager_source = mgr["source"]
+            appliance_id = mgr.get("appliance_id")
         payload, filename = build_agent_package_zip(
             tenant_name=tenant["name"],
             short_code=tenant["short_code"],
             wazuh_agent_group=group,
             os_type=os_type,
-            manager=mgr["manager_address"],
+            manager=manager,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -176,11 +189,12 @@ def download_tenant_agent_package(
         details={
             "short_code": tenant["short_code"],
             "os_type": os_type.lower(),
+            "channel": "wan" if wan else "local",
             "wazuh_agent_group": group,
             "filename": filename,
-            "manager_address": mgr["manager_address"],
-            "manager_source": mgr["source"],
-            "appliance_id": mgr.get("appliance_id"),
+            "manager_address": manager,
+            "manager_source": manager_source,
+            "appliance_id": appliance_id,
         },
     )
 

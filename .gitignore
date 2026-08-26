@@ -12,6 +12,8 @@ docker-compose.yml.backup-*
 
 # KB-061 local runtime secrets (never commit)
 .secrets/
+**/mssp-callback.key
+backend-api/app/endpoint_configs/**/mssp-callback.key
 
 # KB-078 local scanner runtime (binaries, templates, vuln DBs — never commit)
 runtime/vuln-free/

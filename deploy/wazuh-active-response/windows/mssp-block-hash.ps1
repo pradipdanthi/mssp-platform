@@ -18,6 +18,15 @@ $List = $ListCandidates | Where-Object { Test-Path (Split-Path $_ -Parent) } | S
 if (-not $List) { $List = $ListCandidates[0] }
 $EnvFile = $EnvCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 
+try {
+  $syncCand = @(
+    "$env:ProgramData\mssp-edr-ar\Sync-MsspEdrAr.ps1",
+    "${env:ProgramFiles(x86)}\ossec-agent\shared\Sync-MsspEdrAr.ps1",
+    "$env:ProgramFiles\ossec-agent\shared\Sync-MsspEdrAr.ps1"
+  ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+  if ($syncCand) { & $syncCand | Out-Null }
+} catch {}
+
 function Write-ArLog([string]$Message) {
   try {
     $dir = Split-Path $Log -Parent

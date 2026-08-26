@@ -25,7 +25,10 @@ async def edr_sweeper_loop() -> None:
             await asyncio.sleep(SWEEP_INTERVAL_SECONDS)
             count = _sweep_stuck_actions()
             if count:
-                logger.warning("EDR sweeper transitioned %d stuck actions to TIMEOUT", count)
+                logger.warning(
+                    "EDR sweeper transitioned %d stuck actions to failed (timeout)",
+                    count,
+                )
         except asyncio.CancelledError:
             logger.info("EDR sweeper stopped")
             break
@@ -34,17 +37,21 @@ async def edr_sweeper_loop() -> None:
 
 
 def _sweep_stuck_actions() -> int:
-    """Find and transition actions stuck in 'executing' past the timeout."""
+    """Find and transition actions stuck in 'executing' past the timeout.
+
+    DB CHECK allows: pending, executing, success, failed, verified, executed.
+    Use 'failed' (not 'timeout') so the sweeper does not crash on CheckViolation.
+    """
     with db_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE edr_action_executions
-                SET status = 'timeout',
-                    result_message = 'Action timed out (sweeper)',
+                SET status = 'failed',
+                    result_message = 'Action timed out waiting for endpoint callback (sweeper)',
                     updated_at = now()
                 WHERE status = 'executing'
-                  AND updated_at < now() - interval '%s seconds'
+                  AND updated_at < now() - make_interval(secs => %s)
                 RETURNING id::text;
                 """,
                 (STUCK_TIMEOUT_SECONDS,),

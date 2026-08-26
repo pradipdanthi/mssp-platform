@@ -268,6 +268,8 @@ def _publish_windows_edr_ar_shared() -> None:
         "mssp-block-hash.ps1",
         "Watch-MsspQuarantine.ps1",
         "Sync-MsspEdrAr.ps1",
+        "mssp-ar.env.defaults",
+        "mssp-callback.key",
     )
     agent_conf = """<agent_config os="windows">
   <wodle name="command">
@@ -275,9 +277,39 @@ def _publish_windows_edr_ar_shared() -> None:
     <tag>mssp-edr-ar-sync</tag>
     <interval>1m</interval>
     <run_on_start>yes</run_on_start>
-    <timeout>60</timeout>
+    <timeout>90</timeout>
     <ignore_output>yes</ignore_output>
-    <command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File "C:\\Program Files (x86)\\ossec-agent\\shared\\Sync-MsspEdrAr.ps1"</command>
+    <command>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$p=@($env:ProgramData+'\\mssp-edr-ar\\Sync-MsspEdrAr.ps1',${env:ProgramFiles(x86)}+'\\ossec-agent\\shared\\Sync-MsspEdrAr.ps1',$env:ProgramFiles+'\\ossec-agent\\shared\\Sync-MsspEdrAr.ps1'); foreach($f in $p){ if(Test-Path -LiteralPath $f){ & $f; break } }"</command>
+  </wodle>
+</agent_config>
+"""
+    linux_files = (
+        "mssp-isolate-host",
+        "mssp-kill-process",
+        "mssp-block-hash",
+        "Sync-MsspEdrAr.sh",
+        "mssp-ar.env.defaults",
+        "mssp-callback.key",
+    )
+    linux_src_dirs = (
+        Path("/var/lib/junexis/edr-ar/linux"),
+        Path("/var/lib/kevantic/edr-ar/linux"),
+        Path("/opt/junexis/edr-ar/linux"),
+        Path("/opt/kevantic/edr-ar/linux"),
+    )
+    linux_src = next(
+        (d for d in linux_src_dirs if (d / "Sync-MsspEdrAr.sh").is_file() or (d / "mssp-isolate-host").is_file()),
+        None,
+    )
+    linux_agent_conf = """<agent_config os="linux">
+  <wodle name="command">
+    <disabled>no</disabled>
+    <tag>mssp-edr-ar-sync-linux</tag>
+    <interval>1m</interval>
+    <run_on_start>yes</run_on_start>
+    <timeout>90</timeout>
+    <ignore_output>yes</ignore_output>
+    <command>bash /var/ossec/etc/shared/Sync-MsspEdrAr.sh</command>
   </wodle>
 </agent_config>
 """
@@ -302,18 +334,34 @@ def _publish_windows_edr_ar_shared() -> None:
                 except OSError:
                     pass
                 _chown_wazuh(dest)
+        if linux_src:
+            for name in linux_files:
+                p = linux_src / name
+                if not p.is_file():
+                    continue
+                dest = group_dir / name
+                try:
+                    dest.write_bytes(p.read_bytes())
+                except OSError as exc:
+                    logger.warning("skip shared publish %s: %s", dest, exc)
+                    continue
+                try:
+                    dest.chmod(0o750 if name.endswith(".sh") or "." not in name else 0o640)
+                except OSError:
+                    pass
+                _chown_wazuh(dest)
         conf_path = group_dir / "agent.conf"
         try:
             current = conf_path.read_text(encoding="utf-8") if conf_path.is_file() else ""
         except OSError:
             continue
+        new = current
         if "mssp-edr-ar-sync" not in current:
+            new = (new.rstrip() + "\n" + agent_conf) if new.strip() else agent_conf
+        if "mssp-edr-ar-sync-linux" not in new:
+            new = (new.rstrip() + "\n" + linux_agent_conf) if new.strip() else linux_agent_conf
+        if new != current:
             try:
-                new = (
-                    current.rstrip() + "\n" + agent_conf
-                    if current.strip()
-                    else agent_conf
-                )
                 conf_path.write_text(new, encoding="utf-8")
             except OSError as exc:
                 logger.warning("skip shared agent.conf %s: %s", conf_path, exc)
@@ -323,7 +371,6 @@ def _publish_windows_edr_ar_shared() -> None:
             except OSError:
                 pass
             _chown_wazuh(conf_path)
-
 
 _LINUX_EXEC_AGENT_CONF = """<agent_config os="linux">
   <!-- mssp-linux-exec-localfile -->
