@@ -531,10 +531,14 @@ def apply_action_callback(
     applied = None
     released = None
     if isinstance(payload, dict):
-        if "applied" in payload:
+        if payload.get("applied") is not None:
             applied = bool(payload.get("applied"))
-        if "released" in payload:
+        elif isinstance(payload.get("payload"), dict) and payload["payload"].get("applied") is not None:
+            applied = bool(payload["payload"].get("applied"))
+        if payload.get("released") is not None:
             released = bool(payload.get("released"))
+        elif isinstance(payload.get("payload"), dict) and payload["payload"].get("released") is not None:
+            released = bool(payload["payload"].get("released"))
 
     # Explicit Un-isolate only. Ignore Wazuh timed command=delete callbacks on
     # an ISOLATE_HOST execution -- those auto-lift the host while the dashboard

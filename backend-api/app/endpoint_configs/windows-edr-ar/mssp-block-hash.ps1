@@ -38,10 +38,35 @@ function Write-ArLog([string]$Message) {
 
 function Get-EnvMap {
   $map = @{}
-  if (-not $EnvFile) { return $map }
-  Get-Content -LiteralPath $EnvFile | ForEach-Object {
-    if ($_ -match '^\s*#' -or $_ -notmatch '=') { return }
-    $p = $_.Split('=',2); $map[$p[0].Trim()] = $p[1].Trim().Trim('"')
+  $files = @()
+  if ($EnvFile) { $files += $EnvFile }
+  $files += @(
+    "${env:ProgramFiles(x86)}\ossec-agent\shared\mssp-ar.env.defaults",
+    "$env:ProgramFiles\ossec-agent\shared\mssp-ar.env.defaults",
+    "${env:ProgramFiles(x86)}\ossec-agent\shared\mssp-ar.env",
+    "$env:ProgramFiles\ossec-agent\shared\mssp-ar.env"
+  )
+  foreach ($f in $files) {
+    if (-not (Test-Path -LiteralPath $f)) { continue }
+    Get-Content -LiteralPath $f -ErrorAction SilentlyContinue | ForEach-Object {
+      if ($_ -match '^\s*#' -or $_ -notmatch '=') { return }
+      $p = $_.Split('=',2)
+      if ($p.Count -ge 2 -and -not $map.ContainsKey($p[0].Trim())) {
+        $map[$p[0].Trim()] = $p[1].Trim().Trim('"').Trim("'")
+      }
+    }
+  }
+  if (-not $map['MSSP_CALLBACK_KEY']) {
+    foreach ($kf in @(
+      "${env:ProgramFiles(x86)}\ossec-agent\shared\mssp-callback.key",
+      "$env:ProgramFiles\ossec-agent\shared\mssp-callback.key",
+      "$env:ProgramData\mssp-edr-ar\mssp-callback.key"
+    )) {
+      if (Test-Path -LiteralPath $kf) {
+        $map['MSSP_CALLBACK_KEY'] = (Get-Content -LiteralPath $kf -Raw).Trim()
+        if ($map['MSSP_CALLBACK_KEY']) { break }
+      }
+    }
   }
   return $map
 }
@@ -54,6 +79,7 @@ function Send-Callback([string]$Url, [string]$ExecutionId, [bool]$Applied, [stri
     execution_id = $ExecutionId
     status = $(if ($Applied) { 'success' } else { 'failed' })
     message = $Message
+    applied = $Applied
     payload = @{ applied = $Applied; action = 'BLOCK_HASH' }
   } | ConvertTo-Json -Compress
   try {

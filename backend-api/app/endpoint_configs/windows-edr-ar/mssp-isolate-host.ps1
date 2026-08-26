@@ -55,6 +55,32 @@ if (Test-Path -LiteralPath $envFile) {
     }
   }
 }
+# Fallback: Manager-shared callback material (auto-sync may not have written bin env yet).
+if (-not $CallbackKey -or -not $CallbackUrl) {
+  foreach ($sharedRoot in @(
+    "${env:ProgramFiles(x86)}\ossec-agent\shared",
+    "$env:ProgramFiles\ossec-agent\shared"
+  )) {
+    if (-not (Test-Path -LiteralPath $sharedRoot)) { continue }
+    $def = Join-Path $sharedRoot "mssp-ar.env.defaults"
+    if (Test-Path -LiteralPath $def) {
+      Get-Content -LiteralPath $def | ForEach-Object {
+        if (-not $CallbackUrl -and $_ -match '^\s*MSSP_CALLBACK_URL\s*=\s*(.+)\s*$') {
+          $CallbackUrl = $Matches[1].Trim()
+        }
+        if (-not $CallbackKey -and $_ -match '^\s*MSSP_CALLBACK_KEY\s*=\s*(.+)\s*$') {
+          $CallbackKey = $Matches[1].Trim()
+        }
+      }
+    }
+    if (-not $CallbackKey) {
+      $kf = Join-Path $sharedRoot "mssp-callback.key"
+      if (Test-Path -LiteralPath $kf) {
+        $CallbackKey = (Get-Content -LiteralPath $kf -Raw).Trim()
+      }
+    }
+  }
+}
 # Prefer callback URL host when set (KB-091: quarantine must still reach control plane).
 # Hostname DNS resolve is deferred until Write-ArLog exists (see Resolve-MsspCallbackAllowIps).
 $CallbackAllowIps = @()
