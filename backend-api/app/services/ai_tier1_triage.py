@@ -113,6 +113,10 @@ DEFAULT_TIMEOUT_SECONDS = 8
 DEFAULT_NUM_THREAD = 2
 DEFAULT_NUM_PREDICT = 128
 DEFAULT_NUM_CTX = 2048
+OLLAMA_HEALTH_PROBE_TIMEOUT_SECONDS = 3.0
+
+# Extend via AI_TIER1_TRUSTED_SHA256 env (comma-separated lowercase hex).
+_BUILTIN_TRUSTED_SHA256: frozenset[str] = frozenset()
 
 _SIGNED_PATH_HINTS = (
     "\\windows\\system32\\",
@@ -1317,6 +1321,205 @@ def _matches_known_fp_pattern(enrichment: Dict[str, Any]) -> bool:
     return admin_ok
 
 
+def _trusted_system_sha256_set() -> frozenset[str]:
+    extra = (os.getenv("AI_TIER1_TRUSTED_SHA256") or "").strip()
+    if not extra:
+        return _BUILTIN_TRUSTED_SHA256
+    parsed = {
+        part.strip().lower()
+        for part in extra.split(",")
+        if len(part.strip()) == 64 and all(c in "0123456789abcdef" for c in part.strip().lower())
+    }
+    return _BUILTIN_TRUSTED_SHA256 | frozenset(parsed)
+
+
+def _is_trusted_system_hash(hash_sha256: str) -> bool:
+    digest = str(hash_sha256 or "").strip().lower()
+    if len(digest) != 64:
+        return False
+    return digest in _trusted_system_sha256_set()
+
+
+def _hash_matches_prior_verified_fp(tenant_id: str, hash_sha256: str) -> bool:
+    """True when the same file hash was previously marked false_positive in-tenant."""
+    digest = str(hash_sha256 or "").strip().lower()
+    if not tenant_id or len(digest) != 64:
+        return False
+    try:
+        row = fetch_one(
+            """
+            SELECT 1 AS ok
+            FROM security_alerts
+            WHERE tenant_id = %s::uuid
+              AND status = 'false_positive'
+              AND (
+                lower(COALESCE(raw_event#>>'{data,win,eventdata,Sha256}', '')) = %s
+                OR lower(COALESCE(raw_event#>>'{data,win,eventdata,sha256}', '')) = %s
+                OR lower(COALESCE(raw_event#>>'{data,win,eventdata,Hashes}', '')) LIKE %s
+              )
+            LIMIT 1;
+            """,
+            (tenant_id, digest, digest, f"%{digest}%"),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("Prior verified FP hash lookup failed")
+        return False
+    return bool(row)
+
+
+def check_pre_llm_whitelist_veto(
+    alert: Dict[str, Any],
+    enrichment: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    """
+    Phase 4: deterministic pre-LLM veto gate.
+    Returns a full triage result dict when confidence is 100% without calling Ollama.
+    """
+    hints = enrichment.get("pre_score_hints") or {}
+    if (
+        hints.get("path_temp_or_userprofile")
+        or hints.get("known_windows_binary_unexpected_path")
+        or hints.get("encoded_powershell_or_cmdline_red_flags")
+    ):
+        return None
+
+    ti_hit = bool((enrichment.get("threat_intel") or {}).get("hit"))
+    if ti_hit:
+        return None
+
+    vt = (enrichment.get("threat_intel") or {}).get("external_vt") or {}
+    if vt.get("status") == "ok" and (
+        int(vt.get("malicious") or 0) > 0 or int(vt.get("suspicious") or 0) >= 3
+    ):
+        return None
+
+    fields = _resolve_process_fields(alert)
+    hash_sha256 = str(fields.get("hash_sha256") or alert.get("hash_sha256") or "").strip().lower()
+    tenant_id = str(alert.get("tenant_id") or "").strip()
+    prior = enrichment.get("prior_false_positives") or {}
+    suppressions = enrichment.get("active_suppressions") or {}
+
+    veto_reason: Optional[str] = None
+    if hash_sha256 and _is_trusted_system_hash(hash_sha256):
+        veto_reason = "Verified system binary"
+    elif hash_sha256 and _hash_matches_prior_verified_fp(tenant_id, hash_sha256):
+        veto_reason = "Prior verified false-positive hash"
+    elif _matches_known_fp_pattern(enrichment) and (
+        int(prior.get("prior_fp_same_rule") or 0) >= 1
+        or bool(suppressions.get("match"))
+        or int(prior.get("prior_fp_host_title") or 0) >= 1
+    ):
+        veto_reason = "Verified system binary / pattern"
+
+    if not veto_reason:
+        return None
+
+    guardrails = enrichment.get("action_guardrails") or {}
+    rule_id = str(alert.get("wazuh_rule_id") or fields.get("wazuh_rule_id") or "")
+    process_path = str(
+        fields.get("process_path") or fields.get("file_path") or fields.get("process_name") or ""
+    )
+    return {
+        "verdict": "BENIGN_FALSE_POSITIVE",
+        "confidence": 100.0,
+        "summary": "Pre-LLM Deterministic Whitelist Match: Verified system binary / pattern.",
+        "recommended_action": str(
+            guardrails.get("prefer_recommended_action") or "AUTO_SUPPRESS"
+        ).upper(),
+        "suggested_suppression_scope": {
+            "rule_id": rule_id[:512],
+            "process_path": process_path[:1024],
+            "justification": f"Deterministic whitelist: {veto_reason}.",
+        },
+        "pre_llm_veto": True,
+        "veto_reason": veto_reason,
+    }
+
+
+def probe_ollama_health() -> bool:
+    """Lightweight VM 115 health probe (GET /api/tags, 3s timeout)."""
+    try:
+        root = _ollama_root()
+    except RuntimeError:
+        return False
+    url = f"{root}/api/tags"
+    req = urllib.request.Request(
+        url,
+        method="GET",
+        headers={"Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=OLLAMA_HEALTH_PROBE_TIMEOUT_SECONDS) as resp:
+            return int(getattr(resp, "status", 200) or 200) < 500
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def build_rule_based_triage_result(
+    alert: Dict[str, Any],
+    enrichment: Dict[str, Any],
+    payload: Dict[str, Any],
+    *,
+    fallback_reason: str = "ollama_unreachable",
+) -> Dict[str, Any]:
+    """Deterministic triage when Ollama is unavailable — never raises."""
+    guardrails = enrichment.get("action_guardrails") or {}
+    ti_hit = bool((enrichment.get("threat_intel") or {}).get("hit"))
+    pre_score = enrichment.get("pre_score_hints") or {}
+    fields = _resolve_process_fields(alert)
+    rule_id = str(payload.get("wazuh_rule_id") or fields.get("wazuh_rule_id") or "")
+    process_path = str(
+        payload.get("file_path") or payload.get("process_name") or fields.get("process_path") or ""
+    )
+
+    high_risk = bool(
+        pre_score.get("path_temp_or_userprofile")
+        or pre_score.get("known_windows_binary_unexpected_path")
+        or pre_score.get("encoded_powershell_or_cmdline_red_flags")
+    )
+    vt = (enrichment.get("threat_intel") or {}).get("external_vt") or {}
+    vt_bad = vt.get("status") == "ok" and (
+        int(vt.get("malicious") or 0) > 0 or int(vt.get("suspicious") or 0) >= 3
+    )
+
+    if ti_hit or vt_bad:
+        verdict = "MALICIOUS"
+        confidence = 78.0 if ti_hit else 72.0
+        action = str(guardrails.get("prefer_recommended_action") or "ISOLATE_AGENT")
+    elif _matches_known_fp_pattern(enrichment) and not high_risk:
+        verdict = "BENIGN_FALSE_POSITIVE"
+        confidence = 86.0
+        action = "AUTO_SUPPRESS"
+    elif high_risk:
+        verdict = "SUSPICIOUS"
+        confidence = 62.0
+        action = "INVESTIGATE_HOST"
+    else:
+        verdict = "SUSPICIOUS"
+        confidence = 52.0
+        action = str(guardrails.get("prefer_recommended_action") or "INVESTIGATE_HOST")
+
+    if action not in ACTIONS:
+        action = "INVESTIGATE_HOST"
+
+    rationale = str(guardrails.get("action_rationale") or "Deterministic rule-based scoring.")
+    return {
+        "verdict": verdict,
+        "confidence": confidence,
+        "summary": (
+            f"Rule-based triage fallback ({fallback_reason}): {rationale}"
+        )[:2000],
+        "recommended_action": action,
+        "suggested_suppression_scope": {
+            "rule_id": rule_id[:512],
+            "process_path": process_path[:1024],
+            "justification": rationale[:2000],
+        },
+        "rule_based_fallback": True,
+        "fallback_reason": fallback_reason,
+    }
+
+
 def compute_ai_queue(verdict: str, confidence: float) -> Optional[str]:
     """Low-priority queue when BENIGN_FALSE_POSITIVE and confidence >= 85."""
     if (
@@ -1947,8 +2150,9 @@ def run_tier1_triage(
 ) -> Dict[str, Any]:
     """
     Return cached or freshly computed Tier-1 triage for one alert.
-    Raises TimeoutError / RuntimeError on Ollama failure (caller maps to HTTP).
-    Persists ai_verdict/ai_confidence/ai_queue; optional auto-close when flag on.
+
+    Phase 4: pre-LLM whitelist veto bypasses Ollama; unhealthy VM 115 falls back
+    to rule-based scoring without raising HTTP errors to callers.
     """
     # Ensure tenant/id available for enrichment queries even if caller omitted them.
     alert_for_enrich = dict(alert)
@@ -1988,12 +2192,54 @@ def run_tier1_triage(
             attached["auto_close"] = auto
             return attached
 
-    parsed, meta = _call_ollama_chat(
-        build_user_prompt(payload, enrichment), alert_id=alert_id, cache_status="miss"
-    )
-    result = _normalize_result(
-        parsed, fallback_rule=str(payload.get("wazuh_rule_id") or "")
-    )
+    veto = check_pre_llm_whitelist_veto(alert_for_enrich, enrichment)
+    if veto:
+        logger.info(
+            "AI triage pre-LLM whitelist veto alert_id=%s reason=%s",
+            alert_id,
+            veto.get("veto_reason"),
+        )
+        result = dict(veto)
+        model = "deterministic_whitelist"
+        raw_response: Optional[Dict[str, Any]] = {"pre_llm_veto": True}
+    elif not probe_ollama_health():
+        logger.warning(
+            "VM 115 Ollama service unreachable. Falling back to rule-based triage."
+        )
+        result = build_rule_based_triage_result(
+            alert_for_enrich,
+            enrichment,
+            payload,
+            fallback_reason="health_probe_failed",
+        )
+        model = "rule_based_fallback"
+        raw_response = {"rule_based_fallback": True, "reason": "health_probe_failed"}
+    else:
+        try:
+            parsed, meta = _call_ollama_chat(
+                build_user_prompt(payload, enrichment),
+                alert_id=alert_id,
+                cache_status="miss",
+            )
+            result = _normalize_result(
+                parsed, fallback_rule=str(payload.get("wazuh_rule_id") or "")
+            )
+            model = str(meta.get("model") or "")
+            raw_response = meta.get("ollama_raw")
+        except (TimeoutError, RuntimeError, urllib.error.URLError, json.JSONDecodeError) as exc:
+            logger.warning(
+                "VM 115 Ollama service unreachable. Falling back to rule-based triage. (%s)",
+                exc,
+            )
+            result = build_rule_based_triage_result(
+                alert_for_enrich,
+                enrichment,
+                payload,
+                fallback_reason=type(exc).__name__,
+            )
+            model = "rule_based_fallback"
+            raw_response = {"rule_based_fallback": True, "reason": type(exc).__name__}
+
     # Prefer alert process path when model omits it
     scope = result["suggested_suppression_scope"]
     if not scope.get("process_path"):
@@ -2003,14 +2249,13 @@ def run_tier1_triage(
     if not scope.get("rule_id"):
         scope["rule_id"] = str(payload.get("wazuh_rule_id") or "")
 
-    model = str(meta.get("model") or "")
     _write_cache(
         alert_id=alert_id,
         tenant_id=tenant_id,
         content_hash=content_hash,
         model=model,
         result=result,
-        raw_response=meta.get("ollama_raw"),
+        raw_response=raw_response if isinstance(raw_response, dict) else None,
     )
     attached = _attach_enrichment(
         {

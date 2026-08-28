@@ -11,6 +11,7 @@ import urllib.request
 from typing import Any, Dict, Optional
 
 from app.db.session import fetch_one, fetch_one_write
+from app.services.ai_tier1_triage import probe_ollama_health
 
 logger = logging.getLogger(__name__)
 
@@ -200,6 +201,12 @@ def process_alert_job(*, alert_id: str, tenant_id: str) -> bool:
         return True
 
     try:
+        if not probe_ollama_health():
+            logger.warning(
+                "VM 115 Ollama service unreachable. Skipping AI alert analysis job id=%s",
+                alert_id,
+            )
+            return False
         result = _call_openai_compatible(build_prompt(row))
     except Exception as exc:  # noqa: BLE001
         logger.warning("AI alert analysis failed id=%s: %s", alert_id, exc)
