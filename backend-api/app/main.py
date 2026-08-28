@@ -19,6 +19,7 @@ from app.api.routes.appliance_channel import router as appliance_channel_router
 from app.api.routes.appliance_alert_ingest import router as appliance_alert_ingest_router
 from app.api.routes.appliance_management import router as appliance_management_router
 from app.api.routes.telemetry_ingest import router as telemetry_ingest_router
+from app.api.v1.identity_ingest import router as identity_ingest_router
 from app.api.routes.auth import router as auth_router
 from app.api.routes.customer import router as customer_router
 from app.api.routes.health import router as health_router
@@ -149,6 +150,9 @@ app.include_router(appliance_alert_ingest_router)
 # (/api/v1/telemetry/*). Same appliance API-key auth; may move to Appliance
 # Management plane in production.
 app.include_router(telemetry_ingest_router)
+
+# Phase 6: Okta / Active Directory identity telemetry ingest.
+app.include_router(identity_ingest_router)
 
 # KB-061: Shuffle/TheHive → control plane normalized sync (X-SOC-Sync-Key).
 app.include_router(soc_sync_router)
