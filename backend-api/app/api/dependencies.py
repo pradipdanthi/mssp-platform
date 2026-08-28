@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 from fastapi import Depends, Header, HTTPException, status
 
 from app.core.security import decode_access_token
+from app.db.session import bind_db_session_context_from_user
 from app.services.auth_service import get_user_by_id
 
 
@@ -69,6 +70,7 @@ def get_current_user(authorization: Optional[str] = Header(default=None)) -> Dic
             detail="Account is not active",
         )
 
+    bind_db_session_context_from_user(user)
     return user
 
 

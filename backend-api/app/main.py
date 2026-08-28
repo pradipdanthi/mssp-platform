@@ -57,6 +57,7 @@ from app.api.routes.vulnerability_management import router as vulnerability_mana
 from app.api.routes.admin_ai_chat import router as admin_ai_chat_router
 from app.core.cors import get_cors_allowed_origins
 from app.core.error_handlers import validation_exception_handler
+from app.db.session import reset_db_session_context, set_db_session_context
 
 APP_NAME = os.getenv("APP_NAME", "MSSP Control Plane API")
 APP_ENV = os.getenv("APP_ENV", "development")
@@ -86,6 +87,17 @@ app.add_middleware(
 # other existing 422 response (e.g. KB-013's tenant validation errors) is
 # unaffected.
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
+
+
+@app.middleware("http")
+async def db_rls_context_middleware(request, call_next):
+    """Reset per-request RLS GUC context; authenticated routes re-bind in get_current_user."""
+    tokens = set_db_session_context(tenant_id=None, role=None)
+    try:
+        return await call_next(request)
+    finally:
+        reset_db_session_context(tokens)
+
 
 # KB-010: auth/RBAC foundation. Public: POST /auth/login, GET /auth/roles.
 # Protected: GET /auth/me.
