@@ -100,10 +100,23 @@ services:
       AI_ALERT_PROVIDER: ${AI_ALERT_PROVIDER:-openai_compatible}
       AI_ALERT_BASE_URL: ${AI_ALERT_BASE_URL:-}
       AI_ALERT_API_KEY: ${AI_ALERT_API_KEY:-}
-      AI_ALERT_MODEL: ${AI_ALERT_MODEL:-qwen2.5:14b}
+      AI_ALERT_MODEL: ${AI_ALERT_MODEL:-qwen2.5:7b}
       AI_ALERT_QUEUE_KEY: ${AI_ALERT_QUEUE_KEY:-mssp:ai:alert_analysis}
       AI_ALERT_MIN_SEVERITY: ${AI_ALERT_MIN_SEVERITY:-high}
       AI_ALERT_TIMEOUT_SECONDS: ${AI_ALERT_TIMEOUT_SECONDS:-90}
+      # Tier-1 on-demand triage (default 8s per product requirement; raise if Ollama host is slow)
+      AI_TIER1_TRIAGE_TIMEOUT_SECONDS: ${AI_TIER1_TRIAGE_TIMEOUT_SECONDS:-8}
+      AI_TIER1_NUM_THREAD: ${AI_TIER1_NUM_THREAD:-2}
+      AI_TIER1_NUM_PREDICT: ${AI_TIER1_NUM_PREDICT:-128}
+      AI_TIER1_NUM_CTX: ${AI_TIER1_NUM_CTX:-2048}
+      OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-2}
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
+      # Optional VirusTotal hash lookup for Tier-1 triage (2s timeout; soft-fail).
+      # Operator must set VT_API_KEY or mount VT_API_KEY_FILE — never expose to browsers.
+      VT_API_KEY: ${VT_API_KEY:-}
+      VT_API_KEY_FILE: ${VT_API_KEY_FILE:-/run/secrets/vt_api_key}
+      # Phase 3: OPT-IN auto-close for low-risk AI FP (default false — no silent closes)
+      ENABLE_AUTO_CLOSE_LOW_RISK: ${ENABLE_AUTO_CLOSE_LOW_RISK:-false}
       # KB-096: enrich/correlate/risk draft (default off — enable after validation)
       AI_SOC_TRIAGE_ENABLED: ${AI_SOC_TRIAGE_ENABLED:-false}
       AI_CHAT_ENABLED: ${AI_CHAT_ENABLED:-false}

@@ -7,8 +7,8 @@ import {
   listConsultationRequests,
 } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
-import ListToolbar from "../components/ListToolbar";
 import SeverityPill from "../components/SeverityPill";
+import SocFilterBar, { SocFilterValues } from "../components/soc/SocFilterBar";
 import { formatScopeSummary } from "../data/serviceCatalog";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
 
@@ -38,6 +38,7 @@ export default function IncidentsPage() {
   const statusFilter = params.get("status") ?? "";
   const severityFilter = params.get("severity") ?? "";
   const qFilter = params.get("q") ?? "";
+  const sinceFilter = params.get("since") ?? "";
   const page = Math.max(1, Number(params.get("page") || "1") || 1);
   const pageSize = [25, 50, 100].includes(Number(params.get("page_size")))
     ? Number(params.get("page_size"))
@@ -56,6 +57,21 @@ export default function IncidentsPage() {
     setParams(next, { replace: true });
   }
 
+  const filterValues: SocFilterValues = {
+    q: qFilter,
+    status: statusFilter,
+    severity: severityFilter,
+    category: "",
+    rule_id: "",
+    hostname: "",
+    process: "",
+    path: "",
+    user: "",
+    hash: "",
+    cmdline: "",
+    since: sinceFilter,
+  };
+
   const { status, data, errorMessage } = useCustomerQuery(
     () =>
       getCustomerIncidents(shortCode as string, {
@@ -64,9 +80,10 @@ export default function IncidentsPage() {
         ...(statusFilter ? { status: statusFilter } : {}),
         ...(severityFilter ? { severity: severityFilter } : {}),
         ...(qFilter ? { q: qFilter } : {}),
+        ...(sinceFilter ? { since: sinceFilter } : {}),
       }),
     Boolean(shortCode) && tab === "security",
-    [shortCode, statusFilter, severityFilter, qFilter, page, pageSize, tab]
+    [shortCode, statusFilter, severityFilter, qFilter, sinceFilter, page, pageSize, tab]
   );
 
   useEffect(() => {
@@ -138,16 +155,20 @@ export default function IncidentsPage() {
 
       {tab === "security" && (
         <>
-          <ListToolbar
+          <SocFilterBar
             searchPlaceholder="Search number, title, host, or summary…"
-            searchValue={qFilter}
-            onSearchChange={(q) => patchParams({ q, page: "1" })}
+            values={filterValues}
+            onChange={(patch) => {
+              const updates: Record<string, string | null> = {};
+              for (const [k, v] of Object.entries(patch)) {
+                updates[k] = v == null || v === "" ? null : String(v);
+              }
+              patchParams(updates);
+            }}
             statusOptions={STATUS_OPTIONS}
-            statusValue={statusFilter}
-            onStatusChange={(st) => patchParams({ status: st, page: "1" })}
             severityOptions={SEVERITY_OPTIONS}
-            severityValue={severityFilter}
-            onSeverityChange={(severity) => patchParams({ severity, page: "1" })}
+            showAlertFacets={false}
+            presetNamespace="customer.incidents"
             pageSize={pageSize}
             onPageSizeChange={(size) => patchParams({ page_size: String(size), page: "1" })}
             meta={meta}

@@ -7,17 +7,25 @@ import {
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import AiSocAssistPanel from "../components/soc/AiSocAssistPanel";
+import AlertTechnicalEvidence from "../components/soc/AlertTechnicalEvidence";
+import ClickToFilter from "../components/soc/ClickToFilter";
+import SuppressionRuleModal, {
+  SuppressionSeedAlert,
+} from "../components/soc/SuppressionRuleModal";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 import { NIKTIAR, niktiairSourceLabel } from "../config/niktiairBrands";
+import { AiSuggestedSuppressionScope } from "../lib/ai-triage";
+import { alertStatusLabel } from "../utils/socStatusLabels";
 
 type AlertStatus = NonNullable<AlertTriageUpdate["status"]>;
 
-const ALERT_STATUSES: AlertStatus[] = [
-  "new",
-  "triaged",
-  "incident_created",
-  "false_positive",
-  "closed",
+const ALERT_STATUSES: { value: AlertStatus; label: string }[] = [
+  { value: "new", label: "Open" },
+  { value: "triaged", label: "In Review" },
+  { value: "incident_created", label: "Incident created" },
+  { value: "false_positive", label: "False Positive" },
+  { value: "closed", label: "Closed" },
 ];
 
 export default function AlertDetailPage() {
@@ -34,6 +42,12 @@ export default function AlertDetailPage() {
   const [recommendedAction, setRecommendedAction] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [suppressOpen, setSuppressOpen] = useState(false);
+  const [aiPrefill, setAiPrefill] = useState<AiSuggestedSuppressionScope | null>(null);
+  const canSuppress =
+    user?.role === "platform_admin" ||
+    user?.role === "soc_manager" ||
+    user?.role === "soc_analyst";
 
   useEffect(() => {
     if (data) {
@@ -102,9 +116,14 @@ export default function AlertDetailPage() {
               <tr><th>Tenant</th><td>{alert.tenant_name} ({alert.short_code})</td></tr>
               <tr><th>Title</th><td>{alert.alert_title}</td></tr>
               <tr><th>Severity</th><td><span className={`badge badge-${alert.severity}`}>{alert.severity}</span></td></tr>
-              <tr><th>Status</th><td>{alert.status}</td></tr>
+              <tr><th>Status</th><td>{alertStatusLabel(alert.status)}</td></tr>
               <tr><th>Source</th><td>{niktiairSourceLabel(alert.source_tool)} / {alert.external_alert_id ?? "—"}</td></tr>
-              <tr><th>Detection rule</th><td>{alert.wazuh_rule_id ?? "—"}</td></tr>
+              <tr>
+                <th>Detection rule</th>
+                <td>
+                  <ClickToFilter label="Rule ID" value={alert.wazuh_rule_id} filterKey="rule_id" />
+                </td>
+              </tr>
               <tr><th>Event time</th><td>{alert.event_time ?? "—"}</td></tr>
               <tr><th>Description</th><td>{alert.alert_description ?? "—"}</td></tr>
             </tbody>
@@ -117,7 +136,7 @@ export default function AlertDetailPage() {
               <tr><th>Device type</th><td>{alert.device_type ?? "—"}</td></tr>
               <tr><th>Criticality</th><td>{alert.asset_criticality ?? "—"}</td></tr>
               <tr><th>Location</th><td>{alert.asset_location ?? "—"}</td></tr>
-              <tr><th>Asset</th><td>{alert.asset_hostname ?? "—"}</td></tr>
+              <tr><th>Asset</th><td><ClickToFilter label="Hostname" value={alert.asset_hostname} filterKey="hostname" /></td></tr>
               <tr><th>Asset owner</th><td>{alert.asset_owner ?? "—"}</td></tr>
               <tr><th>Endpoint agent</th><td>{alert.wazuh_agent_id ?? "—"}</td></tr>
               <tr><th>IP address</th><td className="cell-mono">{alert.display_ip_address ?? "—"}</td></tr>
@@ -131,26 +150,26 @@ export default function AlertDetailPage() {
           </table>
 
           <h2 className="section-title">Technical evidence</h2>
-          <table className="data-table">
-            <tbody>
-              <tr><th>File path</th><td className="cell-mono">{alert.file_path ?? "—"}</td></tr>
-              <tr><th>File name</th><td>{alert.file_name ?? "—"}</td></tr>
-              <tr><th>Process</th><td className="cell-mono">{alert.process_name ?? "—"}</td></tr>
-              <tr><th>Parent process</th><td className="cell-mono">{alert.parent_process_name ?? "—"}</td></tr>
-              <tr><th>Command line</th><td className="cell-mono">{alert.command_line ?? "—"}</td></tr>
-              <tr><th>Parent command line</th><td className="cell-mono">{alert.parent_command_line ?? "—"}</td></tr>
-              <tr><th>SHA256</th><td className="cell-mono">{alert.hash_sha256 ?? "—"}</td></tr>
-              <tr><th>MD5</th><td className="cell-mono">{alert.hash_md5 ?? "—"}</td></tr>
-              <tr>
-                <th>MITRE tactics</th>
-                <td>{alert.mitre_tactics?.length ? alert.mitre_tactics.join(", ") : "—"}</td>
-              </tr>
-              <tr>
-                <th>MITRE techniques</th>
-                <td>{alert.mitre_techniques?.length ? alert.mitre_techniques.join(", ") : "—"}</td>
-              </tr>
-            </tbody>
-          </table>
+          <AlertTechnicalEvidence
+            alert={alert}
+            renderProcessLink={(value) => (
+              <ClickToFilter label="Process" value={value} filterKey="process" />
+            )}
+            renderPathLink={(value) => (
+              <ClickToFilter label="Path" value={value} filterKey="path" />
+            )}
+          />
+
+          {alertId ? (
+            <AiSocAssistPanel
+              alertId={alertId}
+              canSuppress={canSuppress}
+              onApplySuppress={(scope) => {
+                setAiPrefill(scope);
+                setSuppressOpen(true);
+              }}
+            />
+          ) : null}
 
           <h2 className="section-title">SOC analysis</h2>
           <table className="data-table">
@@ -262,7 +281,11 @@ export default function AlertDetailPage() {
               disabled={!canUpdate || saving}
               onChange={(event) => setTriageStatus(event.target.value as AlertStatus)}
             >
-              {ALERT_STATUSES.map((value) => <option key={value} value={value}>{value}</option>)}
+              {ALERT_STATUSES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
             <label className="form-label" style={{ display: "block" }}>
               <input
@@ -314,6 +337,36 @@ export default function AlertDetailPage() {
           <pre className="credential-panel">{JSON.stringify(alert.mitre_mapping, null, 2)}</pre>
           <h2 className="section-title">Raw event (internal)</h2>
           <pre className="credential-panel">{JSON.stringify(alert.raw_event, null, 2)}</pre>
+
+          <SuppressionRuleModal
+            open={suppressOpen}
+            seedAlerts={
+              [
+                {
+                  id: alert.id,
+                  tenant_name: alert.tenant_name,
+                  short_code: alert.short_code,
+                  wazuh_rule_id: alert.wazuh_rule_id,
+                  process_name: alert.process_name,
+                  parent_process_name: alert.parent_process_name,
+                  hash_sha256: alert.hash_sha256,
+                  hash_md5: alert.hash_md5,
+                  file_path: alert.file_path,
+                  asset_hostname: alert.asset_hostname,
+                  destination_host: alert.destination_host,
+                },
+              ] as SuppressionSeedAlert[]
+            }
+            aiPrefill={aiPrefill}
+            onClose={() => {
+              setSuppressOpen(false);
+              setAiPrefill(null);
+            }}
+            onCreated={async () => {
+              setSaveMessage("Suppression created from AI recommendation.");
+              refetch();
+            }}
+          />
         </>
       )}
     </div>

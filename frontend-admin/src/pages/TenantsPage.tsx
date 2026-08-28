@@ -27,6 +27,7 @@ import ConfirmDangerModal from "../components/ConfirmDangerModal";
 import CreateEntitlementsFields, {
   CreateEntitlementsState,
 } from "../components/CreateEntitlementsFields";
+import FormSection from "../components/FormSection";
 import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import SubscriptionEntitlementsPanel from "../components/SubscriptionEntitlementsPanel";
@@ -931,7 +932,7 @@ export default function TenantsPage() {
           {canWrite && engineTenant && (
             <div className="edr-control-actions" style={{ marginTop: "0.75rem" }}>
               <button
-                className="btn btn-primary"
+                className="btn btn-ghost"
                 type="button"
                 disabled={engineBusy}
                 onClick={() => {
@@ -943,7 +944,7 @@ export default function TenantsPage() {
                 Download Windows package
               </button>
               <button
-                className="btn btn-primary"
+                className="btn btn-ghost"
                 type="button"
                 disabled={engineBusy}
                 onClick={() => {
@@ -955,7 +956,7 @@ export default function TenantsPage() {
                 Download Linux package
               </button>
               <button
-                className="btn btn-secondary"
+                className="btn btn-ghost"
                 type="button"
                 disabled={engineBusy}
                 onClick={() => {
@@ -965,6 +966,25 @@ export default function TenantsPage() {
                 }}
               >
                 Download both (ZIP)
+              </button>
+              <button
+                className="btn btn-ghost"
+                type="button"
+                disabled={engineBusy}
+                title="Remote/demo Windows agents via public VPS enrollment edge"
+                onClick={() => {
+                  void downloadTenantAgentPackage(
+                    engineTenant.id,
+                    "windows-wan",
+                    engineTenant.short_code
+                  ).catch((err) =>
+                    setActionError(
+                      apiErrorMessage(err, "Could not download WAN Windows agent package")
+                    )
+                  );
+                }}
+              >
+                Download WAN / Remote (Windows)
               </button>
               <button
                 className="btn btn-ghost"
@@ -1060,18 +1080,20 @@ export default function TenantsPage() {
       />
 
       {showCreate && canWrite && (
-        <form className="management-panel" onSubmit={handleCreate}>
-          <h2 className="section-title" style={{ marginTop: 0 }}>
-            Onboard new customer
-          </h2>
-          <p className="page-subtitle" style={{ marginBottom: "12px" }}>
-            This is the standard path for every customer — not a special case.
-            Completing this form creates the tenant, contracted service entitlements, backend tool
-            bindings (SIEM / IR), and the first customer portal admin user.
-          </p>
-          <div className="form-grid">
+        <form className="kv-onboard-form" onSubmit={handleCreate}>
+          <div className="page-header-row">
+            <div>
+              <h2 className="page-title">Onboard new customer</h2>
+              <p className="page-subtitle">
+                This is the standard path for every customer — not a special case.
+                Completing this form creates the tenant, contracted service entitlements, backend tool
+                bindings (SIEM / IR), and the first customer portal admin user.
+              </p>
+            </div>
+          </div>
+          <FormSection title="Customer Profile">
             <label className="form-label">
-              Customer name
+              Customer name <span className="req">*</span>
               <input
                 className="form-input"
                 required
@@ -1081,7 +1103,7 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Short code (auto-generated — editable)
+              Short code <span className="req">*</span>
               <div className="short-code-row">
                 <input
                   className="form-input"
@@ -1112,7 +1134,7 @@ export default function TenantsPage() {
                   </button>
                 )}
               </div>
-              <span className="muted-text">
+              <span className="kv-help">
                 Auto format: <code>NAME-XXXX</code> (e.g. <code>MELVIK-K7M2</code>) → Core Telemetry group{" "}
                 <code>tenant_{createForm.short_code || "…"}</code>
                 {shortCodeManual ? " · manual override" : ""}. Locked after save.
@@ -1120,7 +1142,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Status
-              <select
+                <select
                 className="form-input"
                 value={createForm.status}
                 onChange={(e) =>
@@ -1136,7 +1158,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               SLA level
-              <select
+                <select
                 className="form-input"
                 value={createForm.sla_level}
                 onChange={(e) =>
@@ -1152,7 +1174,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Business criticality
-              <select
+                <select
                 className="form-input"
                 value={createForm.business_criticality}
                 onChange={(e) =>
@@ -1170,8 +1192,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Timezone
-              <select
+              Timezone <span className="req">*</span>
+                <select
                 className="form-input"
                 required
                 value={
@@ -1189,8 +1211,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Legal / registered name (optional)
-              <input
+              Legal / registered name
+                <input
                 className="form-input"
                 maxLength={200}
                 placeholder="Registered company name if different"
@@ -1199,8 +1221,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Industry (optional)
-              <select
+              Industry
+                <select
                 className="form-input"
                 value={createForm.industry}
                 onChange={(e) => setCreateForm({ ...createForm, industry: e.target.value })}
@@ -1214,8 +1236,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Company size (optional)
-              <select
+              Company size
+                <select
                 className="form-input"
                 value={createForm.company_size}
                 onChange={(e) => setCreateForm({ ...createForm, company_size: e.target.value })}
@@ -1229,8 +1251,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Website (optional)
-              <input
+              Website
+                <input
                 className="form-input"
                 maxLength={300}
                 placeholder="https://example.com"
@@ -1239,11 +1261,10 @@ export default function TenantsPage() {
               />
             </label>
 
-            <p className="form-section-title" style={{ gridColumn: "1 / -1", margin: "0.5rem 0 0" }}>
-              Primary contact
-            </p>
+          </FormSection>
+          <FormSection title="Primary Contact">
             <label className="form-label">
-              Contact name
+              Contact name <span className="req">*</span> <span className="req">*</span>
               <input
                 className="form-input"
                 required
@@ -1255,8 +1276,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contact email
-              <input
+              Contact email <span className="req">*</span>
+                <input
                 className="form-input"
                 required
                 type="email"
@@ -1268,8 +1289,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contact phone (optional)
-              <input
+              Contact phone
+                <input
                 className="form-input"
                 maxLength={40}
                 value={createForm.primary_contact_phone}
@@ -1279,8 +1300,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Billing email (optional)
-              <input
+              Billing email
+                <input
                 className="form-input"
                 type="email"
                 maxLength={320}
@@ -1289,12 +1310,11 @@ export default function TenantsPage() {
               />
             </label>
 
-            <p className="form-section-title" style={{ gridColumn: "1 / -1", margin: "0.5rem 0 0" }}>
-              Secondary contact (optional)
-            </p>
+          </FormSection>
+          <FormSection title="Secondary Contact" optional>
             <label className="form-label">
               Secondary name
-              <input
+                <input
                 className="form-input"
                 maxLength={200}
                 value={createForm.secondary_contact_name}
@@ -1305,7 +1325,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Secondary email
-              <input
+                <input
                 className="form-input"
                 type="email"
                 maxLength={320}
@@ -1317,7 +1337,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Secondary phone
-              <input
+                <input
                 className="form-input"
                 maxLength={40}
                 value={createForm.secondary_contact_phone}
@@ -1327,12 +1347,11 @@ export default function TenantsPage() {
               />
             </label>
 
-            <p className="form-section-title" style={{ gridColumn: "1 / -1", margin: "0.5rem 0 0" }}>
-              Address
-            </p>
+          </FormSection>
+          <FormSection title="Address">
             <label className="form-label">
-              Address line 1 (optional)
-              <input
+              Address line 1
+                <input
                 className="form-input"
                 maxLength={300}
                 value={createForm.address_line1}
@@ -1340,8 +1359,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Address line 2 (optional)
-              <input
+              Address line 2
+                <input
                 className="form-input"
                 maxLength={300}
                 value={createForm.address_line2}
@@ -1349,8 +1368,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              City (optional)
-              <input
+              City
+                <input
                 className="form-input"
                 maxLength={120}
                 value={createForm.city}
@@ -1358,8 +1377,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              State / Region (optional)
-              <input
+              State / Region
+                <input
                 className="form-input"
                 maxLength={120}
                 value={createForm.state_region}
@@ -1367,8 +1386,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Postal code (optional)
-              <input
+              Postal code
+                <input
                 className="form-input"
                 maxLength={32}
                 value={createForm.postal_code}
@@ -1376,8 +1395,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Country
-              <select
+              Country <span className="req">*</span>
+                <select
                 className="form-input"
                 required
                 value={createForm.country}
@@ -1392,12 +1411,11 @@ export default function TenantsPage() {
               </select>
             </label>
 
-            <p className="form-section-title" style={{ gridColumn: "1 / -1", margin: "0.5rem 0 0" }}>
-              Contract &amp; commercial
-            </p>
+          </FormSection>
+          <FormSection title="Contract & Commercial">
             <label className="form-label">
-              Contract / MSA reference (optional)
-              <input
+              Contract / MSA reference
+                <input
                 className="form-input"
                 maxLength={120}
                 placeholder="e.g. MSA-2026-014"
@@ -1406,8 +1424,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Tax / GST / VAT ID (optional)
-              <input
+              Tax / GST / VAT ID
+                <input
                 className="form-input"
                 maxLength={64}
                 value={createForm.tax_id}
@@ -1415,8 +1433,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contract start (optional)
-              <input
+              Contract start
+                <input
                 className="form-input"
                 type="date"
                 value={createForm.contract_start_date}
@@ -1424,8 +1442,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contract end (optional)
-              <input
+              Contract end
+                <input
                 className="form-input"
                 type="date"
                 value={createForm.contract_end_date}
@@ -1433,8 +1451,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Licensed endpoints (optional)
-              <input
+              Licensed endpoints
+                <input
                 className="form-input"
                 type="number"
                 min={1}
@@ -1445,8 +1463,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Data residency (optional)
-              <select
+              Data residency
+                <select
                 className="form-input"
                 value={createForm.data_residency}
                 onChange={(e) => setCreateForm({ ...createForm, data_residency: e.target.value })}
@@ -1461,7 +1479,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Preferred language
-              <select
+                <select
                 className="form-input"
                 value={createForm.preferred_language}
                 onChange={(e) => setCreateForm({ ...createForm, preferred_language: e.target.value })}
@@ -1474,21 +1492,23 @@ export default function TenantsPage() {
               </select>
             </label>
 
+          </FormSection>
+          <FormSection
+            title="Service Entitlements"
+            description="Same names as the Service Catalog. New customers start with Core. Turn on add-ons only when they are in the contract."
+          >
             <CreateEntitlementsFields
               value={createForm.entitlements}
               onChange={(entitlements) => setCreateForm({ ...createForm, entitlements })}
             />
-
-            <p className="form-section-title" style={{ gridColumn: "1 / -1", margin: "0.5rem 0 0" }}>
-              Customer portal admin (required)
-            </p>
-            <p className="page-subtitle form-grid-full" style={{ margin: 0 }}>
-              Every customer gets a portal login at onboard. Leave email/name blank to use the
-              primary contact. You set the initial password here (share it securely with the customer).
-            </p>
+          </FormSection>
+          <FormSection
+            title="Customer Portal Admin"
+            description="Leave email/name blank to use the primary contact. You set the initial password here and share it securely with the customer."
+          >
             <label className="form-label">
               Portal admin email
-              <input
+                <input
                 className="form-input"
                 type="email"
                 maxLength={320}
@@ -1501,7 +1521,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Portal admin full name
-              <input
+                <input
                 className="form-input"
                 maxLength={200}
                 placeholder="Defaults to primary contact name"
@@ -1512,8 +1532,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Portal admin password
-              <input
+              Portal admin password <span className="req">*</span>
+                <input
                 className="form-input"
                 type="password"
                 required
@@ -1527,8 +1547,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Portal admin phone (optional)
-              <input
+              Portal admin phone
+                <input
                 className="form-input"
                 maxLength={40}
                 value={createForm.portal_admin_phone}
@@ -1538,12 +1558,11 @@ export default function TenantsPage() {
               />
             </label>
 
-            <p className="form-section-title" style={{ gridColumn: "1 / -1", margin: "0.5rem 0 0" }}>
-              Deployment
-            </p>
+          </FormSection>
+          <FormSection title="Deployment">
             <label className="form-label">
               Deployment mode
-              <select
+                <select
                 className="form-input"
                 value={createForm.deployment_mode}
                 onChange={(e) => {
@@ -1567,7 +1586,7 @@ export default function TenantsPage() {
             {needsCloudProvider(createForm.deployment_mode) && (
               <label className="form-label">
                 Cloud provider
-                <select
+                  <select
                   className="form-input"
                   required={requiresCloudProviderStrict(createForm.deployment_mode)}
                   value={createForm.cloud_provider}
@@ -1594,19 +1613,16 @@ export default function TenantsPage() {
             </p>
             <label className="form-label form-grid-full">
               Notes (internal)
-              <textarea
+                <textarea
                 className="form-input"
                 rows={3}
                 value={createForm.notes}
                 onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
               />
             </label>
-          </div>
+          </FormSection>
           {createError && <div className="form-error">{createError}</div>}
-          <div className="confirm-actions">
-            <button className="btn btn-primary" type="submit" disabled={creating}>
-              {creating ? "Onboarding..." : "Onboard customer"}
-            </button>
+          <div className="kv-form-actions">
             <button
               className="btn btn-ghost"
               type="button"
@@ -1614,6 +1630,9 @@ export default function TenantsPage() {
               onClick={() => setShowCreate(false)}
             >
               Cancel
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={creating}>
+              {creating ? "Onboarding..." : "Onboard customer"}
             </button>
           </div>
         </form>
@@ -1662,7 +1681,7 @@ export default function TenantsPage() {
           <div className="form-grid" style={canWrite ? undefined : { pointerEvents: "none", opacity: 0.85 }}>
             <label className="form-label">
               Customer name
-              <input
+                <input
                 className="form-input"
                 required
                 maxLength={200}
@@ -1673,7 +1692,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Status
-              <select
+                <select
                 className="form-input"
                 value={editForm.status}
                 onChange={(e) =>
@@ -1689,7 +1708,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               SLA level
-              <select
+                <select
                 className="form-input"
                 value={editForm.sla_level}
                 onChange={(e) =>
@@ -1705,7 +1724,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Business criticality
-              <select
+                <select
                 className="form-input"
                 value={editForm.business_criticality}
                 onChange={(e) =>
@@ -1723,8 +1742,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Timezone
-              <select
+              Timezone <span className="req">*</span>
+                <select
                 className="form-input"
                 required
                 value={
@@ -1744,8 +1763,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Legal / registered name (optional)
-              <input
+              Legal / registered name
+                <input
                 className="form-input"
                 maxLength={200}
                 value={editForm.legal_name}
@@ -1753,8 +1772,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Industry (optional)
-              <select
+              Industry
+                <select
                 className="form-input"
                 value={editForm.industry}
                 onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
@@ -1771,8 +1790,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Company size (optional)
-              <select
+              Company size
+                <select
                 className="form-input"
                 value={editForm.company_size}
                 onChange={(e) => setEditForm({ ...editForm, company_size: e.target.value })}
@@ -1786,8 +1805,8 @@ export default function TenantsPage() {
               </select>
             </label>
             <label className="form-label">
-              Website (optional)
-              <input
+              Website
+                <input
                 className="form-input"
                 maxLength={300}
                 value={editForm.website}
@@ -1799,8 +1818,8 @@ export default function TenantsPage() {
               Primary contact
             </p>
             <label className="form-label">
-              Contact name
-              <input
+              Contact name <span className="req">*</span>
+                <input
                 className="form-input"
                 required
                 maxLength={200}
@@ -1811,8 +1830,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contact email
-              <input
+              Contact email <span className="req">*</span>
+                <input
                 className="form-input"
                 required
                 type="email"
@@ -1824,8 +1843,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contact phone (optional)
-              <input
+              Contact phone
+                <input
                 className="form-input"
                 maxLength={40}
                 value={editForm.primary_contact_phone}
@@ -1835,8 +1854,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Billing email (optional)
-              <input
+              Billing email
+                <input
                 className="form-input"
                 type="email"
                 maxLength={320}
@@ -1846,11 +1865,11 @@ export default function TenantsPage() {
             </label>
 
             <p className="form-section-title" style={{ gridColumn: "1 / -1", margin: "0.5rem 0 0" }}>
-              Secondary contact (optional)
+              Secondary contact
             </p>
             <label className="form-label">
               Secondary name
-              <input
+                <input
                 className="form-input"
                 maxLength={200}
                 value={editForm.secondary_contact_name}
@@ -1861,7 +1880,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Secondary email
-              <input
+                <input
                 className="form-input"
                 type="email"
                 maxLength={320}
@@ -1873,7 +1892,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Secondary phone
-              <input
+                <input
                 className="form-input"
                 maxLength={40}
                 value={editForm.secondary_contact_phone}
@@ -1887,8 +1906,8 @@ export default function TenantsPage() {
               Address
             </p>
             <label className="form-label">
-              Address line 1 (optional)
-              <input
+              Address line 1
+                <input
                 className="form-input"
                 maxLength={300}
                 value={editForm.address_line1}
@@ -1896,8 +1915,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Address line 2 (optional)
-              <input
+              Address line 2
+                <input
                 className="form-input"
                 maxLength={300}
                 value={editForm.address_line2}
@@ -1905,8 +1924,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              City (optional)
-              <input
+              City
+                <input
                 className="form-input"
                 maxLength={120}
                 value={editForm.city}
@@ -1914,8 +1933,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              State / Region (optional)
-              <input
+              State / Region
+                <input
                 className="form-input"
                 maxLength={120}
                 value={editForm.state_region}
@@ -1923,8 +1942,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Postal code (optional)
-              <input
+              Postal code
+                <input
                 className="form-input"
                 maxLength={32}
                 value={editForm.postal_code}
@@ -1932,8 +1951,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Country
-              <select
+              Country <span className="req">*</span>
+                <select
                 className="form-input"
                 required
                 value={editForm.country}
@@ -1955,8 +1974,8 @@ export default function TenantsPage() {
               Contract &amp; commercial
             </p>
             <label className="form-label">
-              Contract / MSA reference (optional)
-              <input
+              Contract / MSA reference
+                <input
                 className="form-input"
                 maxLength={120}
                 value={editForm.contract_reference}
@@ -1964,8 +1983,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Tax / GST / VAT ID (optional)
-              <input
+              Tax / GST / VAT ID
+                <input
                 className="form-input"
                 maxLength={64}
                 value={editForm.tax_id}
@@ -1973,8 +1992,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contract start (optional)
-              <input
+              Contract start
+                <input
                 className="form-input"
                 type="date"
                 value={editForm.contract_start_date}
@@ -1982,8 +2001,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Contract end (optional)
-              <input
+              Contract end
+                <input
                 className="form-input"
                 type="date"
                 value={editForm.contract_end_date}
@@ -1991,8 +2010,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Licensed endpoints (optional)
-              <input
+              Licensed endpoints
+                <input
                 className="form-input"
                 type="number"
                 min={1}
@@ -2002,8 +2021,8 @@ export default function TenantsPage() {
               />
             </label>
             <label className="form-label">
-              Data residency (optional)
-              <select
+              Data residency
+                <select
                 className="form-input"
                 value={editForm.data_residency}
                 onChange={(e) => setEditForm({ ...editForm, data_residency: e.target.value })}
@@ -2021,7 +2040,7 @@ export default function TenantsPage() {
             </label>
             <label className="form-label">
               Preferred language
-              <select
+                <select
                 className="form-input"
                 value={editForm.preferred_language}
                 onChange={(e) => setEditForm({ ...editForm, preferred_language: e.target.value })}
@@ -2039,7 +2058,7 @@ export default function TenantsPage() {
             </p>
             <label className="form-label">
               Deployment mode
-              <select
+                <select
                 className="form-input"
                 value={editForm.deployment_mode}
                 onChange={(e) => {
@@ -2063,7 +2082,7 @@ export default function TenantsPage() {
             {needsCloudProvider(editForm.deployment_mode) && (
               <label className="form-label">
                 Cloud provider
-                <select
+                  <select
                   className="form-input"
                   required={requiresCloudProviderStrict(editForm.deployment_mode)}
                   value={editForm.cloud_provider}
@@ -2090,7 +2109,7 @@ export default function TenantsPage() {
             </p>
             <label className="form-label form-grid-full">
               Notes (optional — leave blank to clear, or type new notes)
-              <textarea
+                <textarea
                 className="form-input"
                 rows={3}
                 value={editForm.notes}

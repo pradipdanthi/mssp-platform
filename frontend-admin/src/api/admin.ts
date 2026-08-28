@@ -160,6 +160,7 @@ export interface Alert {
   id: string;
   tenant_name: string;
   short_code: string;
+  tenant_id?: string;
   external_alert_id: string | null;
   source_tool: string | null;
   severity: string;
@@ -173,11 +174,26 @@ export interface Alert {
   customer_visible: boolean;
   status: string;
   created_at: string;
+  /** Tier-1 AI queue fields (persisted on triage write). */
+  ai_verdict?: string | null;
+  ai_confidence?: number | null;
+  ai_queue?: "low_priority" | string | null;
+  ai_auto_closed?: boolean | null;
+  ai_resolution_label?: string | null;
+  ai_triaged_at?: string | null;
   /** KB-082 derived taxonomy (additive). */
   asset_category?: string;
   device_type?: string;
   asset_category_label?: string;
   contextual?: Record<string, unknown>;
+  /** Evidence fields attached via SOC enrichment on list rows. */
+  wazuh_rule_id?: string | null;
+  process_name?: string | null;
+  parent_process_name?: string | null;
+  file_path?: string | null;
+  hash_sha256?: string | null;
+  hash_md5?: string | null;
+  asset_hostname?: string | null;
 }
 
 export type AlertTaxonomyCounts = Record<string, number>;
@@ -255,6 +271,18 @@ export interface AlertDetail extends Alert {
   parent_command_line?: string | null;
   hash_md5?: string | null;
   hash_sha256?: string | null;
+  hash_imphash?: string | null;
+  hashes_raw?: string | null;
+  current_directory?: string | null;
+  integrity_level?: string | null;
+  process_guid?: string | null;
+  parent_process_guid?: string | null;
+  logon_id?: string | null;
+  logon_guid?: string | null;
+  user_sid?: string | null;
+  process_id?: string | null;
+  parent_process_id?: string | null;
+  win_eventdata?: Record<string, unknown> | null;
   mitre_tactics?: string[] | null;
   mitre_techniques?: string[] | null;
 }
@@ -284,6 +312,13 @@ export interface Incident {
   customer_action_required: string | null;
   opened_at: string | null;
   created_at: string;
+  /** From primary alert Tier-1 fields (when present). */
+  ai_verdict?: string | null;
+  ai_confidence?: number | null;
+  ai_queue?: "low_priority" | string | null;
+  ai_auto_closed?: boolean | null;
+  ai_resolution_label?: string | null;
+  ai_triaged_at?: string | null;
 }
 
 export interface IncidentsListResponse {
@@ -358,6 +393,19 @@ export interface TriageListFilters {
   tenant_id?: string;
   asset_category?: string;
   q?: string;
+  /** Exact Wazuh/detection rule id filter (GET /admin/alerts). */
+  rule_id?: string;
+  hostname?: string;
+  /** Query alias `process` → backend process_name. */
+  process?: string;
+  path?: string;
+  user?: string;
+  hash?: string;
+  cmdline?: string;
+  since?: string;
+  until?: string;
+  /** actionable (default)|low_priority|all */
+  ai_queue?: string;
   page?: number;
   page_size?: number;
   source_platform?: string;
@@ -372,6 +420,16 @@ function withFilters(path: string, filters?: TriageListFilters): string {
   if (filters?.tenant_id) params.set("tenant_id", filters.tenant_id);
   if (filters?.asset_category) params.set("asset_category", filters.asset_category);
   if (filters?.q) params.set("q", filters.q);
+  if (filters?.rule_id) params.set("rule_id", filters.rule_id);
+  if (filters?.hostname) params.set("hostname", filters.hostname);
+  if (filters?.process) params.set("process", filters.process);
+  if (filters?.path) params.set("path", filters.path);
+  if (filters?.user) params.set("user", filters.user);
+  if (filters?.hash) params.set("hash", filters.hash);
+  if (filters?.cmdline) params.set("cmdline", filters.cmdline);
+  if (filters?.since) params.set("since", filters.since);
+  if (filters?.until) params.set("until", filters.until);
+  if (filters?.ai_queue) params.set("ai_queue", filters.ai_queue);
   if (filters?.page != null) params.set("page", String(filters.page));
   if (filters?.page_size != null) params.set("page_size", String(filters.page_size));
   if (filters?.source_platform) params.set("source_platform", filters.source_platform);
@@ -694,6 +752,34 @@ export function getAlerts(filters?: TriageListFilters): Promise<AlertsListRespon
   return request<AlertsListResponse>(withFilters("/admin/alerts", filters));
 }
 
+export interface AlertRuleFacet {
+  rule_id: string;
+  description: string;
+  hits: number;
+}
+
+export interface AlertRuleFacetsResponse {
+  rules: AlertRuleFacet[];
+}
+
+export function getAlertRuleFacets(filters?: {
+  status?: string;
+  severity?: string;
+  tenant_id?: string;
+  q?: string;
+  limit?: number;
+}): Promise<AlertRuleFacetsResponse> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.severity) params.set("severity", filters.severity);
+  if (filters?.tenant_id) params.set("tenant_id", filters.tenant_id);
+  if (filters?.q) params.set("q", filters.q);
+  if (filters?.limit != null) params.set("limit", String(filters.limit));
+  const query = params.toString();
+  const path = "/admin/alerts/rule-facets";
+  return request<AlertRuleFacetsResponse>(query ? `${path}?${query}` : path);
+}
+
 export function getAlertTaxonomySummary(
   filters?: Pick<TriageListFilters, "status" | "severity" | "tenant_id">
 ): Promise<AlertTaxonomySummaryResponse> {
@@ -721,6 +807,162 @@ export function updateAlertTriage(
   return request<AlertDetailResponse>(`/admin/alerts/${encodeURIComponent(alertId)}`, {
     method: "PATCH",
     body: update,
+  });
+}
+
+export type BulkAlertStatus = "false_positive" | "closed";
+export type BulkAlertAction = "approve_ai_low_priority";
+export type BulkIncidentStatus = "closed" | "resolved";
+export type BulkIncidentCloseReason = "false_positive" | "benign_admin_activity" | "resolved";
+
+export interface BulkAlertsRequest {
+  alert_ids: string[];
+  status?: BulkAlertStatus;
+  action?: BulkAlertAction;
+  reason?: string | null;
+  create_suppressions?: boolean;
+}
+
+export interface BulkAlertsResponse {
+  updated: number;
+  updated_ids: string[];
+  missing_ids: string[];
+  skipped_ids?: string[];
+  suppressions_created?: number;
+  suppression_ids?: string[];
+  status: BulkAlertStatus;
+  action?: BulkAlertAction;
+}
+
+export interface BulkIncidentsRequest {
+  incident_ids: string[];
+  status: BulkIncidentStatus;
+  close_reason: BulkIncidentCloseReason;
+}
+
+export interface BulkIncidentsResponse {
+  updated: number;
+  updated_ids: string[];
+  missing_ids: string[];
+  status: BulkIncidentStatus;
+}
+
+export function bulkUpdateAlerts(payload: BulkAlertsRequest): Promise<BulkAlertsResponse> {
+  return request<BulkAlertsResponse>("/admin/alerts/bulk", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function bulkUpdateIncidents(
+  payload: BulkIncidentsRequest
+): Promise<BulkIncidentsResponse> {
+  return request<BulkIncidentsResponse>("/admin/incidents/bulk", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export type SuppressionScope = "global" | "tenant" | "host";
+
+export interface AlertSuppression {
+  id: string;
+  tenant_id: string | null;
+  tenant_name?: string | null;
+  tenant_short_code?: string | null;
+  hostname: string | null;
+  rule_id: string;
+  scope: SuppressionScope;
+  match_process_path: boolean;
+  process_path_value: string | null;
+  match_parent_process: boolean;
+  parent_process_value: string | null;
+  match_file_hash: boolean;
+  file_hash_value: string | null;
+  match_hostname: boolean;
+  hostname_value: string | null;
+  expires_at: string | null;
+  reason: string | null;
+  created_by_user_id: string | null;
+  created_by?: string | null;
+  created_at: string;
+  disabled_at: string | null;
+}
+
+export interface SuppressionCreateRequest {
+  scope: SuppressionScope;
+  rule_id: string;
+  tenant_id?: string | null;
+  hostname?: string | null;
+  match_process_path?: boolean;
+  process_path_value?: string | null;
+  match_parent_process?: boolean;
+  parent_process_value?: string | null;
+  match_file_hash?: boolean;
+  file_hash_value?: string | null;
+  match_hostname?: boolean;
+  hostname_value?: string | null;
+  expires_at?: string | null;
+  reason?: string | null;
+}
+
+export interface SuppressionPatchRequest {
+  expires_at?: string | null;
+  reason?: string | null;
+  disabled?: boolean;
+}
+
+export interface SuppressionsListResponse {
+  suppressions: AlertSuppression[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_prev?: boolean;
+}
+
+export function listSuppressions(filters?: {
+  tenant_id?: string;
+  rule_id?: string;
+  scope?: SuppressionScope;
+  include_disabled?: boolean;
+  page?: number;
+  page_size?: number;
+}): Promise<SuppressionsListResponse> {
+  const params = new URLSearchParams();
+  if (filters?.tenant_id) params.set("tenant_id", filters.tenant_id);
+  if (filters?.rule_id) params.set("rule_id", filters.rule_id);
+  if (filters?.scope) params.set("scope", filters.scope);
+  if (filters?.include_disabled) params.set("include_disabled", "true");
+  if (filters?.page != null) params.set("page", String(filters.page));
+  if (filters?.page_size != null) params.set("page_size", String(filters.page_size));
+  const q = params.toString();
+  return request<SuppressionsListResponse>(`/v1/suppressions${q ? `?${q}` : ""}`);
+}
+
+export function createSuppression(
+  payload: SuppressionCreateRequest
+): Promise<{ suppression: AlertSuppression }> {
+  return request<{ suppression: AlertSuppression }>("/v1/suppressions", {
+    method: "POST",
+    body: payload,
+  });
+}
+
+export function patchSuppression(
+  id: string,
+  payload: SuppressionPatchRequest
+): Promise<{ suppression: AlertSuppression }> {
+  return request<{ suppression: AlertSuppression }>(`/v1/suppressions/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export function deleteSuppression(id: string): Promise<{ suppression: AlertSuppression }> {
+  return request<{ suppression: AlertSuppression }>(`/v1/suppressions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 
@@ -1032,7 +1274,7 @@ export function downloadReportXlsx(id: string): Promise<void> {
 
 export function downloadTenantAgentPackage(
   tenantId: string,
-  osType: "windows" | "linux" | "all",
+  osType: "windows" | "linux" | "all" | "windows-wan" | "linux-wan",
   shortCode?: string
 ): Promise<void> {
   const code = (shortCode || "tenant").toLowerCase().replace(/[^a-z0-9_-]/g, "");

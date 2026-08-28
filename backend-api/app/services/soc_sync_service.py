@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from app.db.session import db_transaction
 from app.schemas.soc_sync import SocSyncRequest
+from app.services.alert_suppressions import try_suppress_alert
 
 logger = logging.getLogger(__name__)
 
@@ -437,18 +438,32 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                 incident_id = inc["id"]
                 incident_number = inc["incident_number"]
             elif _should_create_incident(payload):
-                incident_id, incident_number = _create_or_correlate_incident(
+                suppressed = try_suppress_alert(
                     cur,
                     tenant_id=tenant_id,
-                    short_code=short_code,
                     alert_id=alert_row["id"],
-                    payload=payload,
+                    destination_host=payload.destination_host,
+                    rule_id=payload.rule_id,
                 )
-                alert_row = {
-                    "id": alert_row["id"],
-                    "customer_visible": bool(alert_row["customer_visible"]),
-                    "status": "incident_created",
-                }
+                if suppressed:
+                    alert_row = {
+                        "id": alert_row["id"],
+                        "customer_visible": False,
+                        "status": "false_positive",
+                    }
+                else:
+                    incident_id, incident_number = _create_or_correlate_incident(
+                        cur,
+                        tenant_id=tenant_id,
+                        short_code=short_code,
+                        alert_id=alert_row["id"],
+                        payload=payload,
+                    )
+                    alert_row = {
+                        "id": alert_row["id"],
+                        "customer_visible": bool(alert_row["customer_visible"]),
+                        "status": "incident_created",
+                    }
         else:
             event_time = payload.event_time or datetime.utcnow()
             initial_status = (
@@ -496,7 +511,20 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
             )
             alert_row = cur.fetchone()
 
-            if _should_create_incident(payload):
+            suppressed = try_suppress_alert(
+                cur,
+                tenant_id=tenant_id,
+                alert_id=alert_row["id"],
+                destination_host=payload.destination_host,
+                rule_id=payload.rule_id,
+            )
+            if suppressed:
+                alert_row = {
+                    "id": alert_row["id"],
+                    "customer_visible": False,
+                    "status": "false_positive",
+                }
+            elif _should_create_incident(payload):
                 incident_id, incident_number = _create_or_correlate_incident(
                     cur,
                     tenant_id=tenant_id,

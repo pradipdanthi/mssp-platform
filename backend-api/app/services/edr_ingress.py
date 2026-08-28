@@ -280,6 +280,15 @@ def persist_wazuh_alert_enrichment(alert_id: str, tenant_id: str, raw: Dict[str,
                     tenant_id,
                 ),
             )
+            from app.services.alert_parser import persist_alert_telemetry
+
+            persist_alert_telemetry(
+                cur,
+                alert_id=alert_id,
+                tenant_id=tenant_id,
+                raw=raw,
+                alert_description=str((alert_meta or {}).get("alert_title") or ""),
+            )
     except Exception:
         logger.exception("Failed persisting Wazuh EDR enrichment alert_id=%s", alert_id)
         return

@@ -25,6 +25,8 @@ class SocSyncRequest(BaseModel):
     source_user: Optional[str] = Field(default=None, max_length=255)
     wazuh_agent_id: Optional[str] = Field(default=None, max_length=64)
     technical_summary: Optional[str] = Field(default=None, max_length=4000)
+    # Optional Wazuh/rule identifier for suppression matching when raw_event is absent.
+    rule_id: Optional[str] = Field(default=None, max_length=64)
     tenant_short_code: str = Field(min_length=2, max_length=32)
     # If None: create incident automatically for high/critical.
     create_incident: Optional[bool] = None

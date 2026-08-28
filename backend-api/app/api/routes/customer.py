@@ -13,17 +13,52 @@ mismatch raises 404 (not 403) so a customer token can never be used to tell
 "wrong tenant" apart from "tenant doesn't exist" (anti-enumeration).
 """
 
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.api.dependencies import get_current_user, require_tenant_match
-from app.db.session import fetch_all, fetch_one
+from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.db.session import fetch_all, fetch_one, fetch_one_write
+from app.schemas.suppressions import BulkAlertsRequest, CustomerSuppressionCreateRequest
+from app.services.alert_list_filters import (
+    append_alert_facet_filters,
+    append_alert_time_filter,
+    append_rich_alert_q_filter,
+)
+from app.services.audit_service import audit_from_user
+from app.services.ai_tier1_triage import run_tier1_triage
 from app.services.customer_safe_labels import customer_safe_alert_source
 from app.services.list_pagination import clamp_pagination, pagination_meta
-from app.services.soc_alert_taxonomy import enrich_alert_row
+from app.services.soc_alert_taxonomy import (
+    TAXONOMY_SLUGS,
+    enrich_alert_row,
+    filter_by_asset_category,
+)
 
 router = APIRouter(prefix="/customer", tags=["customer"])
+
+CUSTOMER_ADMIN_ROLE = ("customer_admin",)
+_TAXONOMY_FETCH_BATCH = 2000
+_TAXONOMY_FETCH_MAX = 50000
+
+
+def _fetch_alert_rows_batched(select_sql: str, params: tuple) -> list:
+    """Load taxonomy-classified alert rows without a silent cap."""
+    rows: list = []
+    offset = 0
+    while len(rows) < _TAXONOMY_FETCH_MAX:
+        chunk = fetch_all(
+            select_sql + " LIMIT %s OFFSET %s;",
+            tuple(list(params) + [_TAXONOMY_FETCH_BATCH, offset]),
+        )
+        if not chunk:
+            break
+        rows.extend(chunk)
+        if len(chunk) < _TAXONOMY_FETCH_BATCH:
+            break
+        offset += _TAXONOMY_FETCH_BATCH
+    return rows
 
 
 def _customer_safe_alert_rows(rows: list) -> list:
@@ -65,6 +100,18 @@ def _customer_safe_alert_detail_row(row: Optional[Dict[str, Any]]) -> Optional[D
         "parent_command_line": enriched.get("parent_command_line"),
         "hash_md5": enriched.get("hash_md5"),
         "hash_sha256": enriched.get("hash_sha256"),
+        "hash_imphash": enriched.get("hash_imphash"),
+        "hashes_raw": enriched.get("hashes_raw"),
+        "current_directory": enriched.get("current_directory"),
+        "integrity_level": enriched.get("integrity_level"),
+        "process_guid": enriched.get("process_guid"),
+        "parent_process_guid": enriched.get("parent_process_guid"),
+        "logon_id": enriched.get("logon_id"),
+        "logon_guid": enriched.get("logon_guid"),
+        "user_sid": enriched.get("user_sid"),
+        "process_id": enriched.get("process_id"),
+        "parent_process_id": enriched.get("parent_process_id"),
+        "win_eventdata": enriched.get("win_eventdata") or {},
         "mitre_tactics": enriched.get("mitre_tactics") or [],
         "mitre_techniques": enriched.get("mitre_techniques") or [],
     }
@@ -464,6 +511,23 @@ def customer_incident_detail(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.win_eventdata,
+            sa.wazuh_full_log,
+            sa.parent_process,
+            sa.parent_command_line,
+            sa.current_directory,
+            sa.integrity_level,
+            sa.process_guid,
+            sa.parent_process_guid,
+            sa.logon_id,
+            sa.logon_guid,
+            sa.hashes_raw,
+            sa.hash_md5,
+            sa.hash_sha256,
+            sa.hash_imphash,
+            sa.process_id,
+            sa.parent_process_id,
+            sa.user_sid,
             sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
@@ -501,6 +565,23 @@ def customer_incident_detail(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.win_eventdata,
+            sa.wazuh_full_log,
+            sa.parent_process,
+            sa.parent_command_line,
+            sa.current_directory,
+            sa.integrity_level,
+            sa.process_guid,
+            sa.parent_process_guid,
+            sa.logon_id,
+            sa.logon_guid,
+            sa.hashes_raw,
+            sa.hash_md5,
+            sa.hash_sha256,
+            sa.hash_imphash,
+            sa.process_id,
+            sa.parent_process_id,
+            sa.user_sid,
             sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
@@ -532,7 +613,17 @@ def customer_alerts(
         Literal["new", "triaged", "incident_created", "false_positive", "closed"]
     ] = None,
     severity: Optional[str] = Query(default=None),
+    asset_category: Optional[str] = Query(default=None, description="KB-082 taxonomy slug"),
     q: Optional[str] = Query(default=None, max_length=200),
+    rule_id: Optional[str] = Query(default=None, max_length=128),
+    hostname: Optional[str] = Query(default=None, max_length=255),
+    process_name: Optional[str] = Query(default=None, max_length=255, alias="process"),
+    path: Optional[str] = Query(default=None, max_length=1000),
+    user: Optional[str] = Query(default=None, max_length=255),
+    hash_value: Optional[str] = Query(default=None, max_length=128, alias="hash"),
+    cmdline: Optional[str] = Query(default=None, max_length=500),
+    since: Optional[str] = Query(default=None, max_length=64),
+    until: Optional[str] = Query(default=None, max_length=64),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user),
@@ -555,6 +646,8 @@ def customer_alerts(
     # KB-011: see customer_dashboard() above for why this is 404, not 403.
     require_tenant_match(tenant["id"], current_user)
 
+    if asset_category and asset_category not in TAXONOMY_SLUGS:
+        asset_category = "uncategorized"
     page, page_size, offset = clamp_pagination(page, page_size)
     where = ["sa.tenant_id = %s", "sa.customer_visible = true"]
     params: list = [tenant["id"]]
@@ -567,33 +660,22 @@ def customer_alerts(
     elif sev in ("low", "medium", "high", "critical"):
         where.append("sa.severity = %s")
         params.append(sev)
-    q_clean = (q or "").strip()
-    if q_clean:
-        where.append(
-            "("
-            "sa.alert_title ILIKE %s OR "
-            "COALESCE(sa.ai_plain_summary, '') ILIKE %s OR "
-            "COALESCE(sa.destination_host, '') ILIKE %s OR "
-            "COALESCE(pa.hostname, '') ILIKE %s"
-            ")"
-        )
-        like = f"%{q_clean}%"
-        params.extend([like, like, like, like])
+    append_rich_alert_q_filter(where, params, q, include_tenant_fields=False)
+    append_alert_facet_filters(
+        where,
+        params,
+        rule_id=rule_id,
+        hostname=hostname,
+        process_name=process_name,
+        path=path,
+        user=user,
+        hash_value=hash_value,
+        cmdline=cmdline,
+    )
+    append_alert_time_filter(where, params, since=since, until=until)
     where_sql = " AND ".join(where)
 
-    count_row = fetch_one(
-        f"""
-        SELECT count(*)::int AS total
-        FROM security_alerts sa
-        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
-        WHERE {where_sql};
-        """,
-        tuple(params),
-    )
-    total = int((count_row or {}).get("total") or 0)
-
-    rows = fetch_all(
-        f"""
+    select_sql = f"""
         SELECT
             sa.id::text AS alert_id,
             sa.alert_title AS title,
@@ -609,16 +691,66 @@ def customer_alerts(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.win_eventdata,
+            sa.wazuh_full_log,
+            sa.parent_process,
+            sa.parent_command_line,
+            sa.current_directory,
+            sa.integrity_level,
+            sa.process_guid,
+            sa.parent_process_guid,
+            sa.logon_id,
+            sa.logon_guid,
+            sa.hashes_raw,
+            sa.hash_md5,
+            sa.hash_sha256,
+            sa.hash_imphash,
+            sa.process_id,
+            sa.parent_process_id,
+            sa.user_sid,
             sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
-            sa.ai_likely_attack_type
+            sa.ai_likely_attack_type,
+            sa.source_tool,
+            sa.alert_title,
+            sa.alert_description,
+            sa.destination_host,
+            sa.source_user
         FROM security_alerts sa
         LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
         WHERE {where_sql}
         ORDER BY sa.event_time DESC NULLS LAST, sa.created_at DESC
-        LIMIT %s OFFSET %s;
+    """
+
+    # Taxonomy category is derived in Python; when filtering by category we
+    # page after enrichment. Otherwise use SQL LIMIT/OFFSET.
+    if asset_category and asset_category != "all":
+        rows = _fetch_alert_rows_batched(select_sql, tuple(params))
+        enriched = filter_by_asset_category(
+            [enrich_alert_row(r) for r in rows], asset_category
+        )
+        total = len(enriched)
+        page_rows = enriched[offset : offset + page_size]
+        return {
+            "tenant": tenant,
+            "alerts": [_customer_safe_alert_detail_row(r) for r in page_rows],
+            **pagination_meta(total, page, page_size),
+        }
+
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS total
+        FROM security_alerts sa
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE {where_sql};
         """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("total") or 0)
+
+    rows = fetch_all(
+        select_sql + " LIMIT %s OFFSET %s;",
         tuple(params + [page_size, offset]),
     )
 
@@ -627,6 +759,225 @@ def customer_alerts(
         "alerts": [_customer_safe_alert_detail_row(row) for row in rows],
         **pagination_meta(total, page, page_size),
     }
+
+
+@router.get("/alerts/{short_code}/rule-facets")
+def customer_alerts_rule_facets(
+    short_code: str,
+    alert_status: Optional[
+        Literal["new", "triaged", "incident_created", "false_positive", "closed"]
+    ] = Query(default=None, alias="status"),
+    severity: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None, max_length=64, description="Filter rule ids by substring"),
+    limit: int = Query(default=40, ge=1, le=200),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Distinct Wazuh rule ids (customer_visible) for searchable Rule ID dropdown."""
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    require_tenant_match(tenant["id"], current_user)
+
+    where = [
+        "sa.tenant_id = %s",
+        "sa.customer_visible = true",
+        "COALESCE(sa.raw_event->'rule'->>'id', sa.raw_event->>'rule_id', '') <> ''",
+    ]
+    params: list = [tenant["id"]]
+    if alert_status is not None:
+        where.append("sa.status = %s")
+        params.append(alert_status)
+    sev = (severity or "").strip().lower()
+    if sev in ("urgent", "high_critical", "high,critical"):
+        where.append("sa.severity IN ('high', 'critical')")
+    elif sev in ("low", "medium", "high", "critical"):
+        where.append("sa.severity = %s")
+        params.append(sev)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "COALESCE(sa.raw_event->'rule'->>'id', sa.raw_event->>'rule_id', '') ILIKE %s"
+        )
+        params.append(f"%{q_clean}%")
+    where_sql = " AND ".join(where)
+    params.append(limit)
+    rows = fetch_all(
+        f"""
+        SELECT
+            COALESCE(sa.raw_event->'rule'->>'id', sa.raw_event->>'rule_id') AS rule_id,
+            MAX(COALESCE(sa.raw_event->'rule'->>'description', sa.alert_title, '')) AS description,
+            count(*)::int AS hits
+        FROM security_alerts sa
+        WHERE {where_sql}
+        GROUP BY 1
+        ORDER BY hits DESC, rule_id ASC
+        LIMIT %s;
+        """,
+        tuple(params),
+    )
+    return {
+        "rules": [
+            {
+                "rule_id": r["rule_id"],
+                "description": (r.get("description") or "")[:120],
+                "hits": int(r.get("hits") or 0),
+            }
+            for r in rows
+            if r.get("rule_id")
+        ]
+    }
+
+
+@router.post("/alerts/{short_code}/bulk")
+def customer_bulk_update_alerts(
+    short_code: str,
+    payload: BulkAlertsRequest,
+    current_user: Dict[str, Any] = Depends(require_roles(*CUSTOMER_ADMIN_ROLE)),
+) -> Dict[str, Any]:
+    """Tenant-scoped bulk FP/close for customer_admin only."""
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    require_tenant_match(tenant["id"], current_user)
+
+    updated_ids: List[str] = []
+    missing_ids: List[str] = []
+    reason_note = (payload.reason or "").strip()
+
+    for alert_id in payload.alert_ids:
+        assignments = ["status = %s", "updated_at = now()"]
+        values: list = [payload.status]
+        if payload.status == "false_positive":
+            assignments.append("customer_visible = false")
+        if reason_note:
+            assignments.append(
+                "ai_technical_summary = CASE "
+                "WHEN ai_technical_summary IS NULL OR btrim(ai_technical_summary) = '' "
+                "THEN %s "
+                "ELSE left(ai_technical_summary || E'\\n' || %s, 4000) END"
+            )
+            note = (
+                f"Customer bulk triage ({payload.status}) by "
+                f"{current_user.get('email')}: {reason_note}"
+            )[:4000]
+            values.extend([note, note])
+        values.extend([tenant["id"], alert_id])
+        row = fetch_one_write(
+            f"""
+            UPDATE security_alerts
+            SET {", ".join(assignments)}
+            WHERE tenant_id = %s
+              AND id = %s
+              AND customer_visible = true
+            RETURNING id::text;
+            """,
+            tuple(values),
+        )
+        if row:
+            updated_ids.append(row["id"])
+        else:
+            missing_ids.append(str(alert_id))
+
+    audit_from_user(
+        current_user,
+        action="customer.alerts.bulk_update",
+        entity_type="security_alert",
+        details={
+            "tenant_id": tenant["id"],
+            "short_code": tenant["short_code"],
+            "status": payload.status,
+            "updated_count": len(updated_ids),
+            "missing_count": len(missing_ids),
+            "alert_ids": updated_ids[:50],
+            "reason": reason_note or None,
+        },
+    )
+    return {
+        "updated": len(updated_ids),
+        "updated_ids": updated_ids,
+        "missing_ids": missing_ids,
+        "status": payload.status,
+    }
+
+
+@router.post("/alerts/{short_code}/suppressions", status_code=status.HTTP_201_CREATED)
+def customer_create_suppression(
+    short_code: str,
+    payload: CustomerSuppressionCreateRequest,
+    current_user: Dict[str, Any] = Depends(require_roles(*CUSTOMER_ADMIN_ROLE)),
+) -> Dict[str, Any]:
+    """Create a tenant- or host-scoped suppression (never global) for customer_admin."""
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    require_tenant_match(tenant["id"], current_user)
+
+    tenant_uuid = UUID(str(tenant["id"]))
+    hostname_value = payload.hostname_value
+    if payload.match_hostname and not hostname_value and payload.hostname:
+        hostname_value = payload.hostname
+
+    row = fetch_one_write(
+        """
+        INSERT INTO alert_suppressions (
+            tenant_id, hostname, rule_id, scope,
+            match_process_path, process_path_value,
+            match_parent_process, parent_process_value,
+            match_file_hash, file_hash_value,
+            match_hostname, hostname_value,
+            expires_at, reason, created_by_user_id
+        )
+        VALUES (
+            %s, %s, %s, %s,
+            %s, %s,
+            %s, %s,
+            %s, %s,
+            %s, %s,
+            %s, %s, %s
+        )
+        RETURNING id::text, rule_id, scope, tenant_id::text, hostname, expires_at, reason, created_at;
+        """,
+        (
+            tenant_uuid,
+            payload.hostname if payload.scope == "host" else None,
+            payload.rule_id,
+            payload.scope,
+            payload.match_process_path,
+            payload.process_path_value if payload.match_process_path else None,
+            payload.match_parent_process,
+            payload.parent_process_value if payload.match_parent_process else None,
+            payload.match_file_hash,
+            payload.file_hash_value if payload.match_file_hash else None,
+            payload.match_hostname,
+            hostname_value if payload.match_hostname else None,
+            payload.expires_at,
+            payload.reason,
+            current_user["id"],
+        ),
+    )
+    audit_from_user(
+        current_user,
+        action="customer.suppression.create",
+        entity_type="alert_suppression",
+        entity_id=row["id"] if row else None,
+        details={
+            "tenant_id": tenant["id"],
+            "short_code": tenant["short_code"],
+            "rule_id": payload.rule_id,
+            "scope": payload.scope,
+            "hostname": payload.hostname if payload.scope == "host" else None,
+        },
+    )
+    return {"suppression": row}
 
 
 @router.get("/alerts/{short_code}/{alert_id}")
@@ -670,6 +1021,23 @@ def customer_alert_detail(
             pa.os_name AS asset_os_name,
             pa.criticality AS asset_criticality,
             sa.raw_event,
+            sa.win_eventdata,
+            sa.wazuh_full_log,
+            sa.parent_process,
+            sa.parent_command_line,
+            sa.current_directory,
+            sa.integrity_level,
+            sa.process_guid,
+            sa.parent_process_guid,
+            sa.logon_id,
+            sa.logon_guid,
+            sa.hashes_raw,
+            sa.hash_md5,
+            sa.hash_sha256,
+            sa.hash_imphash,
+            sa.process_id,
+            sa.parent_process_id,
+            sa.user_sid,
             sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
@@ -687,6 +1055,100 @@ def customer_alert_detail(
         raise HTTPException(status_code=404, detail="Alert not found")
 
     return {"tenant": tenant, "alert": _customer_safe_alert_detail_row(alert)}
+
+
+@router.get("/alerts/{short_code}/{alert_id}/ai-triage")
+@router.post("/alerts/{short_code}/{alert_id}/ai-triage")
+def customer_alert_ai_triage(
+    short_code: str,
+    alert_id: str,
+    force: bool = Query(default=False),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Tier-1 AI SOC triage for customer portal (tenant-scoped, customer-safe prompt).
+    On-demand only — never called from alert list loads.
+    """
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    require_tenant_match(tenant["id"], current_user)
+
+    alert = fetch_one(
+        """
+        SELECT
+            sa.id::text AS alert_id,
+            sa.tenant_id::text AS tenant_id,
+            sa.alert_title AS title,
+            sa.severity,
+            sa.status,
+            sa.source_tool AS source,
+            sa.ai_plain_summary AS summary,
+            sa.alert_description AS description,
+            sa.event_time AS detected_at,
+            sa.destination_host AS hostname,
+            pa.hostname AS asset_hostname,
+            pa.asset_type,
+            pa.os_name AS asset_os_name,
+            pa.criticality AS asset_criticality,
+            sa.raw_event,
+            sa.win_eventdata,
+            sa.wazuh_full_log,
+            sa.parent_process,
+            sa.parent_command_line,
+            sa.current_directory,
+            sa.integrity_level,
+            sa.process_guid,
+            sa.parent_process_guid,
+            sa.logon_id,
+            sa.logon_guid,
+            sa.hashes_raw,
+            sa.hash_md5,
+            sa.hash_sha256,
+            sa.hash_imphash,
+            sa.process_id,
+            sa.parent_process_id,
+            sa.user_sid,
+            sa.mitre_mapping,
+            sa.ai_business_impact,
+            sa.ai_recommended_action,
+            sa.ai_likely_attack_type
+        FROM security_alerts sa
+        LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
+        WHERE sa.tenant_id = %s
+          AND sa.id = %s
+          AND sa.customer_visible = true;
+        """,
+        (tenant["id"], alert_id),
+    )
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+
+    # Pass full row (with raw_event/asset joins) so enrichment can extract
+    # signature + evidence; customer_safe=True strips prompt/API exposure.
+    enriched_alert = enrich_alert_row(alert)
+    try:
+        triage = run_tier1_triage(
+            alert_id=str(alert_id),
+            tenant_id=str(tenant["id"]),
+            alert=enriched_alert,
+            customer_safe=True,
+            force=force,
+        )
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=str(exc) or "AI triage timed out",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI triage failed: {exc}",
+        ) from exc
+    return {"alert_id": str(alert_id), "triage": triage}
 
 
 @router.get("/assets/{short_code}")

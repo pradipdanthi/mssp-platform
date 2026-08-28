@@ -35,7 +35,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const brand = useBrand();
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-portal="admin">
       <KestrelSecurityWatermark />
       <aside className="sidebar">
         <div className="sidebar-brand">

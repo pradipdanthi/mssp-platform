@@ -129,7 +129,7 @@
     dest: /etc/systemd/system/kevantic-appliance-engine.service
     mode: "0644"
 
-- name: Install heartbeat service + timer + critical-alert forwarder (golden image)
+- name: Install heartbeat service + timer + critical-alert forwarder + Ollama unit
   ansible.builtin.copy:
     src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/configs/systemd/{{ item }}"
     dest: "/etc/systemd/system/{{ item }}"
@@ -143,6 +143,48 @@
     - kevantic-license-enforce.timer
     - kevantic-critical-alert-forwarder.service
     - junexis-critical-alert-forwarder.service
+    - ollama.service
+
+- name: Ensure Ollama systemd drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/ollama.service.d
+    state: directory
+    mode: "0755"
+
+- name: Install Ollama localhost-only drop-in
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/configs/systemd/ollama.service.d/override.conf"
+    dest: /etc/systemd/system/ollama.service.d/override.conf
+    mode: "0644"
+
+- name: Install appliance Ollama helper scripts
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - { src: "scripts/install_appliance_ollama.sh", dest: "/usr/local/sbin/install_appliance_ollama.sh" }
+    - { src: "scripts/pull_local_ai_model.sh", dest: "/usr/local/sbin/pull_local_ai_model.sh" }
+    - { src: "configs/systemd/ollama-serve-pinned.sh", dest: "/usr/local/sbin/ollama-serve-pinned.sh" }
+
+- name: Install Ollama env example (lab defaults)
+  ansible.builtin.copy:
+    src: "{{ kevantic_repo_root | default(playbook_dir + '/../..') }}/configs/kevantic/ollama.env.example"
+    dest: /etc/kevantic/ollama.env.example
+    mode: "0644"
+
+- name: Assert local AI filter module present in image
+  ansible.builtin.stat:
+    path: /opt/kevantic/appliance-src/appliance/telemetry/local_ai_filter.py
+  register: kevantic_local_ai_mod
+
+- name: Fail provision if local AI filter module missing
+  ansible.builtin.assert:
+    that:
+      - kevantic_local_ai_mod.stat.exists
+    fail_msg: >-
+      Golden image incomplete: local_ai_filter.py missing under appliance-src.
+      Appliance-local AI triage is part of the edge filter path (KB-108).
 
 - name: Install local agent inventory helper (heartbeat metadata)
   ansible.builtin.copy:

@@ -22,7 +22,7 @@ export default function KestrelFalconShieldLogo({
   const brand = useBrand();
   const alt = title ?? brand.logo.alt ?? "Kevantic Cyber Security";
   const src = variant === "mark" ? brand.logo.markSrc : brand.logo.logoSrc;
-  const width = variant === "mark" ? Math.min(size, 48) : size;
+  const width = variant === "mark" && !className.includes("login-brand-logo") ? Math.min(size, 48) : size;
 
   return (
     <img

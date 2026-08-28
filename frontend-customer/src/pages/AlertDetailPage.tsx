@@ -1,17 +1,28 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getCustomerAlertDetail } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
+import AiSocAssistPanel from "../components/soc/AiSocAssistPanel";
+import AlertTechnicalEvidence from "../components/soc/AlertTechnicalEvidence";
+import FilterValueLink from "../components/soc/FilterValueLink";
+import SeverityPill from "../components/SeverityPill";
+import SuppressionRuleModal from "../components/soc/SuppressionRuleModal";
 import { useCustomerQuery } from "../hooks/useCustomerQuery";
+import { AiSuggestedSuppressionScope } from "../lib/ai-triage";
 
 export default function AlertDetailPage() {
   const { user } = useAuth();
   const { alertId } = useParams<{ alertId: string }>();
   const shortCode = user?.tenant_short_code ?? null;
-  const { status, data, errorMessage } = useCustomerQuery(
+  const canSuppress = user?.role === "customer_admin";
+  const { status, data, errorMessage, refetch } = useCustomerQuery(
     () => getCustomerAlertDetail(shortCode as string, alertId as string),
     Boolean(shortCode && alertId),
     [shortCode, alertId]
   );
+  const [suppressOpen, setSuppressOpen] = useState(false);
+  const [aiPrefill, setAiPrefill] = useState<AiSuggestedSuppressionScope | null>(null);
+  const [suppressMessage, setSuppressMessage] = useState<string | null>(null);
 
   if (!shortCode) {
     return (
@@ -54,6 +65,7 @@ export default function AlertDetailPage() {
 
       {status === "success" && data && (
         <>
+          {suppressMessage ? <div className="state-message">{suppressMessage}</div> : null}
           <table className="data-table">
             <tbody>
               <tr>
@@ -63,12 +75,14 @@ export default function AlertDetailPage() {
               <tr>
                 <th>Severity</th>
                 <td>
-                  <span className={`badge badge-${data.alert.severity}`}>{data.alert.severity}</span>
+                  <SeverityPill value={data.alert.severity} filterBase="/alerts" />
                 </td>
               </tr>
               <tr>
                 <th>Status</th>
-                <td>{data.alert.status}</td>
+                <td>
+                  <SeverityPill value={data.alert.status} kind="status" filterBase="/alerts" />
+                </td>
               </tr>
               <tr>
                 <th>Detection</th>
@@ -84,7 +98,13 @@ export default function AlertDetailPage() {
               </tr>
               <tr>
                 <th>Hostname</th>
-                <td>{data.alert.hostname ?? "—"}</td>
+                <td>
+                  <FilterValueLink
+                    base="/alerts"
+                    param="hostname"
+                    value={data.alert.hostname}
+                  />
+                </td>
               </tr>
               <tr>
                 <th>Device type</th>
@@ -109,9 +129,20 @@ export default function AlertDetailPage() {
               <tr>
                 <th>Detection rule</th>
                 <td>
-                  {data.alert.wazuh_rule_id
-                    ? `${data.alert.wazuh_rule_id}${data.alert.wazuh_rule_level ? ` (level ${data.alert.wazuh_rule_level})` : ""}`
-                    : "—"}
+                  {data.alert.wazuh_rule_id ? (
+                    <>
+                      <FilterValueLink
+                        base="/alerts"
+                        param="rule_id"
+                        value={data.alert.wazuh_rule_id}
+                      />
+                      {data.alert.wazuh_rule_level
+                        ? ` (level ${data.alert.wazuh_rule_level})`
+                        : null}
+                    </>
+                  ) : (
+                    "—"
+                  )}
                 </td>
               </tr>
             </tbody>
@@ -120,52 +151,25 @@ export default function AlertDetailPage() {
           <h2 className="page-subtitle" style={{ marginTop: "2rem" }}>
             Technical evidence
           </h2>
-          <table className="data-table">
-            <tbody>
-              <tr>
-                <th>File path</th>
-                <td>{data.alert.file_path ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>File name</th>
-                <td>{data.alert.file_name ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>Process</th>
-                <td>{data.alert.process_name ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>Parent process</th>
-                <td>{data.alert.parent_process_name ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>Command line</th>
-                <td>{data.alert.command_line ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>Parent command line</th>
-                <td>{data.alert.parent_command_line ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>SHA256</th>
-                <td>{data.alert.hash_sha256 ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>MD5</th>
-                <td>{data.alert.hash_md5 ?? "—"}</td>
-              </tr>
-              <tr>
-                <th>MITRE tactics</th>
-                <td>{data.alert.mitre_tactics?.length ? data.alert.mitre_tactics.join(", ") : "—"}</td>
-              </tr>
-              <tr>
-                <th>MITRE techniques</th>
-                <td>
-                  {data.alert.mitre_techniques?.length ? data.alert.mitre_techniques.join(", ") : "—"}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <AlertTechnicalEvidence
+            alert={data.alert}
+            renderProcessLink={(value) => (
+              <FilterValueLink base="/alerts" param="process" value={value} />
+            )}
+            renderPathLink={(value) => (
+              <FilterValueLink base="/alerts" param="path" value={value} />
+            )}
+          />
+
+          <AiSocAssistPanel
+            shortCode={shortCode}
+            alertId={alertId}
+            canSuppress={canSuppress}
+            onApplySuppress={(scope) => {
+              setAiPrefill(scope);
+              setSuppressOpen(true);
+            }}
+          />
 
           <h2 className="page-subtitle" style={{ marginTop: "2rem" }}>
             What this means
@@ -186,6 +190,35 @@ export default function AlertDetailPage() {
               </tr>
             </tbody>
           </table>
+
+          {canSuppress ? (
+            <SuppressionRuleModal
+              open={suppressOpen}
+              shortCode={shortCode}
+              seedAlerts={[
+                {
+                  alert_id: data.alert.alert_id,
+                  title: data.alert.title,
+                  wazuh_rule_id: data.alert.wazuh_rule_id,
+                  process_name: data.alert.process_name,
+                  parent_process_name: data.alert.parent_process_name,
+                  hash_sha256: data.alert.hash_sha256,
+                  hash_md5: data.alert.hash_md5,
+                  file_path: data.alert.file_path,
+                  hostname: data.alert.hostname,
+                },
+              ]}
+              aiPrefill={aiPrefill}
+              onClose={() => {
+                setSuppressOpen(false);
+                setAiPrefill(null);
+              }}
+              onCreated={async () => {
+                setSuppressMessage("Suppression created from AI recommendation.");
+                refetch();
+              }}
+            />
+          ) : null}
         </>
       )}
     </div>

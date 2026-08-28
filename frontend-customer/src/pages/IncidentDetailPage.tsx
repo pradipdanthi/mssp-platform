@@ -8,6 +8,9 @@ import EdrControlPanel from "../components/edr/EdrControlPanel";
 import MitreBadges from "../components/edr/MitreBadges";
 import ProcessTreeWidget from "../components/edr/ProcessTreeWidget";
 import AiExecutiveSummary from "../components/AiExecutiveSummary";
+import FilterValueLink from "../components/soc/FilterValueLink";
+import SeverityPill from "../components/SeverityPill";
+import { alertStatusLabel } from "../lib/alertStatusLabels";
 
 export default function IncidentDetailPage() {
   const { user } = useAuth();
@@ -94,14 +97,14 @@ export default function IncidentDetailPage() {
               <tr>
                 <th>Severity</th>
                 <td>
-                  <span className={`badge badge-${data.incident.severity}`}>
-                    {data.incident.severity}
-                  </span>
+                  <SeverityPill value={data.incident.severity} filterBase="/incidents" />
                 </td>
               </tr>
               <tr>
                 <th>Status</th>
-                <td>{data.incident.status}</td>
+                <td>
+                  <SeverityPill value={data.incident.status} kind="status" filterBase="/incidents" />
+                </td>
               </tr>
               <tr>
                 <th>Summary</th>
@@ -148,7 +151,13 @@ export default function IncidentDetailPage() {
                 <tbody>
                   <tr>
                     <th>Hostname</th>
-                    <td>{data.primary_alert.hostname ?? "—"}</td>
+                    <td>
+                      <FilterValueLink
+                        base="/incidents"
+                        param="hostname"
+                        value={data.primary_alert.hostname}
+                      />
+                    </td>
                   </tr>
                   <tr>
                     <th>Device type</th>
@@ -177,9 +186,20 @@ export default function IncidentDetailPage() {
                   <tr>
                     <th>Detection rule</th>
                     <td>
-                      {data.primary_alert.wazuh_rule_id
-                        ? `${data.primary_alert.wazuh_rule_id}${data.primary_alert.wazuh_rule_level ? ` (level ${data.primary_alert.wazuh_rule_level})` : ""}`
-                        : "—"}
+                      {data.primary_alert.wazuh_rule_id ? (
+                        <>
+                          <FilterValueLink
+                            base="/alerts"
+                            param="rule_id"
+                            value={data.primary_alert.wazuh_rule_id}
+                          />
+                          {data.primary_alert.wazuh_rule_level
+                            ? ` (level ${data.primary_alert.wazuh_rule_level})`
+                            : null}
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 </tbody>
@@ -192,7 +212,13 @@ export default function IncidentDetailPage() {
                 <tbody>
                   <tr>
                     <th>File path</th>
-                    <td>{data.primary_alert.file_path ?? "—"}</td>
+                    <td>
+                      <FilterValueLink
+                        base="/alerts"
+                        param="path"
+                        value={data.primary_alert.file_path}
+                      />
+                    </td>
                   </tr>
                   <tr>
                     <th>File name</th>
@@ -200,7 +226,13 @@ export default function IncidentDetailPage() {
                   </tr>
                   <tr>
                     <th>Process</th>
-                    <td>{data.primary_alert.process_name ?? "—"}</td>
+                    <td>
+                      <FilterValueLink
+                        base="/alerts"
+                        param="process"
+                        value={data.primary_alert.process_name}
+                      />
+                    </td>
                   </tr>
                   <tr>
                     <th>Parent process</th>
@@ -287,9 +319,9 @@ export default function IncidentDetailPage() {
                   <tr key={alert.alert_id}>
                     <td>{alert.title}</td>
                     <td>
-                      <span className={`badge badge-${alert.severity}`}>{alert.severity}</span>
+                      <SeverityPill value={alert.severity} filterBase="/alerts" />
                     </td>
-                    <td>{alert.status}</td>
+                    <td>{alertStatusLabel(alert.status)}</td>
                     <td>{alert.source}</td>
                     <td>{alert.device_type ?? "—"}</td>
                     <td>{alert.summary ?? alert.description ?? "—"}</td>

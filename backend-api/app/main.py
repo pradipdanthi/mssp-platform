@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes.admin import router as admin_router
 from app.api.routes.admin_ops import router as admin_ops_router
 from app.api.routes.alert_incident_triage import router as alert_incident_triage_router
+from app.api.routes.suppressions import router as suppressions_router
 from app.api.routes.appliance_agent import router as appliance_agent_router
 from app.api.routes.appliance_channel import router as appliance_channel_router
 from app.api.routes.appliance_alert_ingest import router as appliance_alert_ingest_router
@@ -99,6 +100,7 @@ app.include_router(health_router)
 # main.py; it did not change any auth/RBAC/tenant-isolation behavior.
 app.include_router(admin_router)
 app.include_router(alert_incident_triage_router)
+app.include_router(suppressions_router)
 app.include_router(recommendation_management_router)
 app.include_router(admin_ops_router)
 app.include_router(customer_router)

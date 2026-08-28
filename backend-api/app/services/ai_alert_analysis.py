@@ -86,7 +86,7 @@ def _call_openai_compatible(prompt: str) -> Dict[str, str]:
     base = (os.getenv("AI_ALERT_BASE_URL") or "").rstrip("/")
     if not base:
         raise RuntimeError("AI_ALERT_BASE_URL is not set")
-    model = (os.getenv("AI_ALERT_MODEL") or "qwen2.5:14b").strip()
+    model = (os.getenv("AI_ALERT_MODEL") or "qwen2.5:7b").strip()
     api_key = (os.getenv("AI_ALERT_API_KEY") or "").strip()
     timeout = float(os.getenv("AI_ALERT_TIMEOUT_SECONDS") or "90")
 

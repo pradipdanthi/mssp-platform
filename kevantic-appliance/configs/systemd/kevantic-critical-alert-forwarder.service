@@ -20,6 +20,17 @@ Environment=KEVANTIC_FORWARD_MIN_LEVEL=10
 Environment=JUNEXIS_FORWARD_MIN_LEVEL=10
 Environment=KEVANTIC_WAZUH_ALERTS_PATH=/var/ossec/logs/alerts/alerts.json
 Environment=JUNEXIS_WAZUH_ALERTS_PATH=/var/ossec/logs/alerts/alerts.json
+# Local AI triage gate (off by default; enable via appliance.env or set true).
+Environment=ENABLE_LOCAL_AI_FILTER=false
+Environment=LOCAL_AI_FAIL_OPEN=true
+Environment=OLLAMA_URL=http://127.0.0.1:11434
+Environment=LOCAL_AI_MODEL=qwen2.5:7b
+Environment=LOCAL_AI_TIMEOUT_SECONDS=60
+Environment=LOCAL_AI_NUM_THREAD=4
+Environment=LOCAL_AI_CACHE_ENABLED=true
+Environment=LOCAL_AI_CACHE_TTL_SECONDS=86400
+EnvironmentFile=-/etc/kevantic/ollama.env
+EnvironmentFile=-/etc/junexis/ollama.env
 ExecStartPre=/bin/mkdir -p /var/lib/kevantic /var/log/kevantic /run/kevantic /var/lib/junexis /var/log/junexis /run/junexis
 ExecStart=/usr/bin/python3 -m appliance.telemetry.critical_alert_watcher
 Restart=always

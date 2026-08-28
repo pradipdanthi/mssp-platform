@@ -15,6 +15,7 @@ import {
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ConfirmDangerModal from "../components/ConfirmDangerModal";
+import FormSection from "../components/FormSection";
 import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
 import { useAdminQuery } from "../hooks/useAdminQuery";
@@ -361,13 +362,10 @@ export default function UsersPage() {
       />
 
       {showCreate && canWrite && (
-        <form className="management-panel" onSubmit={handleCreate}>
-          <h2 className="section-title" style={{ marginTop: 0 }}>
-            Add User
-          </h2>
-          <div className="form-grid">
+        <form className="kv-onboard-form" onSubmit={handleCreate}>
+          <FormSection title="Add User">
             <label className="form-label">
-              Full name
+              Full name <span className="req">*</span>
               <input
                 className="form-input"
                 required
@@ -440,7 +438,7 @@ export default function UsersPage() {
               </label>
             )}
             <label className="form-label">
-              Phone (optional)
+              Phone
               <input
                 className="form-input"
                 maxLength={40}
@@ -464,12 +462,9 @@ export default function UsersPage() {
                 ))}
               </select>
             </label>
-          </div>
+          </FormSection>
           {createError && <div className="form-error">{createError}</div>}
-          <div className="confirm-actions">
-            <button className="btn btn-primary" type="submit" disabled={creating}>
-              {creating ? "Creating..." : "Create user"}
-            </button>
+          <div className="kv-form-actions">
             <button
               className="btn btn-ghost"
               type="button"
@@ -477,6 +472,9 @@ export default function UsersPage() {
               onClick={() => setShowCreate(false)}
             >
               Cancel
+            </button>
+            <button className="btn btn-primary" type="submit" disabled={creating}>
+              {creating ? "Creating..." : "Create User"}
             </button>
           </div>
         </form>

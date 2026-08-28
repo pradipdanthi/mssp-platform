@@ -113,3 +113,9 @@ cd /opt/mssp-control
 - Do not point customer agents at cloud Wazuh for this model.
 - Do not forward raw logs, PCAP, or low/medium noise by default.
 - Do not host TheHive on the appliance.
+
+## Related: appliance-local AI gate (KB-108)
+
+Optional Ollama triage runs **inside** `process_event()` before
+`TelemetryForwarder` POST. See `docs/KB108_APPLIANCE_LOCAL_AI_TRIAGE.md`.
+Default off (`ENABLE_LOCAL_AI_FILTER=false`); fail-open on AI outage.

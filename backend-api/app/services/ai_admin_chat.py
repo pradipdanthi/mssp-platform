@@ -121,7 +121,7 @@ def _gather_context(tenant: Dict[str, Any], question: str) -> Dict[str, Any]:
 
 def _call_llm(system: str, user: str) -> str:
     base = (os.getenv("AI_ALERT_BASE_URL") or "").rstrip("/")
-    model = (os.getenv("AI_CHAT_MODEL") or os.getenv("AI_ALERT_MODEL") or "qwen2.5:14b").strip()
+    model = (os.getenv("AI_CHAT_MODEL") or os.getenv("AI_ALERT_MODEL") or "qwen2.5:7b").strip()
     api_key = (os.getenv("AI_ALERT_API_KEY") or "ollama").strip()
     timeout = int(os.getenv("AI_CHAT_TIMEOUT_SECONDS") or os.getenv("AI_ALERT_TIMEOUT_SECONDS") or "90")
     if not base:

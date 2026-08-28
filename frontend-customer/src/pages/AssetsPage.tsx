@@ -107,7 +107,9 @@ export default function AssetsPage() {
     });
   }, [folders]);
 
-  async function handleAgentDownload(osType: "windows" | "linux" | "all") {
+  async function handleAgentDownload(
+    osType: "windows" | "linux" | "all" | "windows-wan" | "linux-wan"
+  ) {
     if (!shortCode || pkgBusy) return;
     setPkgBusy(true);
     setPkgError(null);
@@ -187,12 +189,14 @@ export default function AssetsPage() {
           Install endpoint agent
         </h2>
         <p className="page-subtitle" style={{ marginTop: 0 }}>
-          Windows: download and run the installer. Linux (no GUI): copy the one-line command below —
-          it pulls your organization&apos;s package from our repository and installs the agent.
+          Windows / Linux: for computers on your office network. WAN / Remote (Windows): for
+          demo or remote laptops connecting over the internet (public enrollment edge). Linux
+          (no GUI): copy the one-line command below — it pulls your organization&apos;s package
+          from our repository and installs the agent.
         </p>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
           <button
-            className="btn btn-primary"
+            className="btn btn-ghost"
             type="button"
             disabled={pkgBusy}
             onClick={() => void handleAgentDownload("windows")}
@@ -206,6 +210,14 @@ export default function AssetsPage() {
             onClick={() => void handleAgentDownload("linux")}
           >
             Download Linux ZIP (optional)
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            disabled={pkgBusy}
+            onClick={() => void handleAgentDownload("windows-wan")}
+          >
+            Download WAN / Remote (Windows) package
           </button>
         </div>
         <div style={{ marginTop: "1rem" }}>
@@ -234,7 +246,7 @@ export default function AssetsPage() {
           )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
             <button
-              className="btn btn-primary"
+              className="btn btn-ghost"
               type="button"
               disabled={linuxBusy}
               onClick={() => void refreshLinuxCmd()}

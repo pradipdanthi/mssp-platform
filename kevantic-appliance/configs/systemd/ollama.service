@@ -1,0 +1,22 @@
+[Unit]
+Description=Ollama (appliance-local LLM — localhost only)
+Documentation=https://github.com/ollama/ollama
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ollama
+Group=ollama
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=3
+# Hardened defaults live in ollama.service.d/override.conf (localhost bind).
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+# Do not use ProtectSystem=strict without ReadWritePaths — breaks model storage.
+
+[Install]
+WantedBy=multi-user.target

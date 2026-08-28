@@ -87,7 +87,7 @@ export default function ReportDetailPage() {
         {status === "success" && (
           <div className="confirm-actions" style={{ marginTop: 0 }}>
             <button
-              className="btn btn-primary"
+              className="btn btn-ghost"
               type="button"
               disabled={busy}
               onClick={() => void handleDownload("pdf")}

@@ -169,7 +169,25 @@ def to_cloud_alert(event: dict[str, Any]) -> dict[str, Any]:
         "location": clean.get("location"),
     }
 
-    return {
+    # Optional appliance-local AI triage annotation (never required by ingest).
+    appliance_ai = clean.get("appliance_ai")
+    if isinstance(appliance_ai, dict) and appliance_ai:
+        rich_event["appliance_ai"] = {
+            "verdict": str(appliance_ai.get("verdict") or "")[:64] or None,
+            "confidence": appliance_ai.get("confidence"),
+            "summary": str(appliance_ai.get("summary") or "")[:2000] or None,
+            "recommended_action": str(appliance_ai.get("recommended_action") or "")[:64]
+            or None,
+            "reason": str(appliance_ai.get("reason") or "")[:256] or None,
+            "model": str(appliance_ai.get("model") or "")[:128] or None,
+            "filter": str(appliance_ai.get("filter") or "local_ai_v1")[:64],
+        }
+        # Drop empty keys for a clean payload.
+        rich_event["appliance_ai"] = {
+            k: v for k, v in rich_event["appliance_ai"].items() if v is not None
+        }
+
+    out: dict[str, Any] = {
         "source_tool": source_tool,
         "external_alert_id": external_id,
         "severity": severity,
@@ -183,3 +201,14 @@ def to_cloud_alert(event: dict[str, Any]) -> dict[str, Any]:
         "raw_event": rich_event,
         "mitre_mapping": mitre_mapping,
     }
+    # Top-level optional fields for control-plane convenience (ignored if schema
+    # forbids extras; also mirrored under raw_event.appliance_ai).
+    if isinstance(appliance_ai, dict) and appliance_ai.get("verdict"):
+        out["appliance_ai_verdict"] = str(appliance_ai.get("verdict"))[:64]
+        try:
+            out["appliance_ai_confidence"] = float(appliance_ai.get("confidence"))
+        except (TypeError, ValueError):
+            pass
+        if appliance_ai.get("summary"):
+            out["appliance_ai_summary"] = str(appliance_ai.get("summary"))[:2000]
+    return out

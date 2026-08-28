@@ -2,11 +2,16 @@
 
 Deployment model (KB-073 on_prem_appliance / cloud_appliance / hybrid):
   endpoint wazuh-agent → local appliance Manager (LAN)
-  appliance → scrub + filter → POST /api/v1/telemetry/ingest (secure channel)
+  appliance → scrub + optional local AI triage → POST /api/v1/telemetry/ingest
 
 Raw logs and low-noise alerts stay on the appliance. Default forward threshold
 is Wazuh rule level >= 10 (high + critical). Set KEVANTIC_FORWARD_MIN_LEVEL=12
 for critical-only.
+
+Optional local AI gate (ENABLE_LOCAL_AI_FILTER=true): Ollama on localhost
+classifies alerts before egress. BENIGN_FALSE_POSITIVE + high confidence is
+held locally; MALICIOUS/SUSPICIOUS and AI failures (fail-open default) forward.
+Wazuh ingest is unaffected — this watcher is a separate process.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from typing import Any, Iterator, Optional
 from appliance.common import metadata_db
 from appliance.common.privacy import to_cloud_alert
 from appliance.telemetry.forwarder import TelemetryForwarder
+from appliance.telemetry import local_ai_filter
 
 logger = logging.getLogger("kevantic.critical-alert-forwarder")
 
@@ -144,7 +150,29 @@ def process_event(
     cloud = to_cloud_alert(payload_event)
     if cloud.get("severity") not in ("high", "critical"):
         return None
-    return forwarder.forward_event(payload_event)
+
+    # Local AI triage gate (feature-flagged; fail-open by default).
+    ai_result = local_ai_filter.classify(payload_event)
+    if ai_result.get("held"):
+        logger.info(
+            "local AI hold reason=%s verdict=%s conf=%s",
+            ai_result.get("reason"),
+            (ai_result.get("triage") or {}).get("verdict"),
+            (ai_result.get("triage") or {}).get("confidence"),
+        )
+        return {"ok": True, "held": True, "ai": ai_result, "buffered": False}
+    if ai_result.get("enabled") and ai_result.get("triage"):
+        payload_event = local_ai_filter.attach_triage_to_event(payload_event, ai_result)
+
+    result = forwarder.forward_event(payload_event)
+    if isinstance(result, dict) and ai_result.get("enabled"):
+        result = dict(result)
+        result["ai"] = {
+            "reason": ai_result.get("reason"),
+            "fail_open_used": ai_result.get("fail_open_used"),
+            "verdict": (ai_result.get("triage") or {}).get("verdict"),
+        }
+    return result
 
 
 def _iter_new_lines(path: Path, *, start_offset: int) -> Iterator[tuple[int, str]]:
@@ -167,7 +195,14 @@ def drain_once(
     alerts = path or _alerts_path()
     level = _min_level() if min_level is None else min_level
     fwd = forwarder or TelemetryForwarder()
-    stats = {"read": 0, "forwarded": 0, "skipped": 0, "errors": 0, "missing": 0}
+    stats = {
+        "read": 0,
+        "forwarded": 0,
+        "skipped": 0,
+        "held_ai": 0,
+        "errors": 0,
+        "missing": 0,
+    }
 
     if not alerts.is_file():
         stats["missing"] = 1
@@ -209,6 +244,8 @@ def drain_once(
             continue
         if result is None:
             stats["skipped"] += 1
+        elif isinstance(result, dict) and result.get("held"):
+            stats["held_ai"] += 1
         else:
             stats["forwarded"] += 1
 

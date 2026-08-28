@@ -43,12 +43,51 @@ EXECUTOR="$ROOT/appliance/jobs/executor.py"
 [[ -f "$EXECUTOR" ]] || die "missing $EXECUTOR"
 API_PATCH="$ROOT/scripts/patch_wazuh_api_request_timeout.sh"
 [[ -f "$API_PATCH" ]] || die "missing $API_PATCH"
+LOCAL_AI_FILTER="$ROOT/appliance/telemetry/local_ai_filter.py"
+[[ -f "$LOCAL_AI_FILTER" ]] || die "missing $LOCAL_AI_FILTER"
+WATCHER="$ROOT/appliance/telemetry/critical_alert_watcher.py"
+[[ -f "$WATCHER" ]] || die "missing $WATCHER"
+PRIVACY="$ROOT/appliance/common/privacy.py"
+[[ -f "$PRIVACY" ]] || die "missing $PRIVACY"
+FWD_UNIT="$ROOT/configs/systemd/kevantic-critical-alert-forwarder.service"
+[[ -f "$FWD_UNIT" ]] || die "missing $FWD_UNIT"
+JFWD_UNIT="$ROOT/configs/systemd/junexis-critical-alert-forwarder.service"
+[[ -f "$JFWD_UNIT" ]] || die "missing $JFWD_UNIT"
+OLLAMA_UNIT="$ROOT/configs/systemd/ollama.service"
+[[ -f "$OLLAMA_UNIT" ]] || die "missing $OLLAMA_UNIT"
+OLLAMA_DROPIN="$ROOT/configs/systemd/ollama.service.d/override.conf"
+[[ -f "$OLLAMA_DROPIN" ]] || die "missing $OLLAMA_DROPIN"
+OLLAMA_WRAPPER="$ROOT/configs/systemd/ollama-serve-pinned.sh"
+[[ -f "$OLLAMA_WRAPPER" ]] || die "missing $OLLAMA_WRAPPER"
+OLLAMA_ENV_EX="$ROOT/configs/kevantic/ollama.env.example"
+[[ -f "$OLLAMA_ENV_EX" ]] || die "missing $OLLAMA_ENV_EX"
+INSTALL_OLLAMA="$ROOT/scripts/install_appliance_ollama.sh"
+[[ -x "$INSTALL_OLLAMA" ]] || die "missing $INSTALL_OLLAMA"
+PULL_MODEL="$ROOT/scripts/pull_local_ai_model.sh"
+[[ -x "$PULL_MODEL" ]] || die "missing $PULL_MODEL"
 grep -q '_validate_nuclei_template' "$EXECUTOR" || die "executor.py missing nuclei path validation"
 
 GIT_COMMIT="$(git -C "$CTRL" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+# Dated snapshot name when caller did not set MSSP_GOLDEN_SNAPSHOT_NAME.
+if [[ -z "$SNAP_NAME" ]]; then
+  SNAP_NAME="kb109-ollama-cpu-tune-$(date -u +%Y%m%d%H%M)"
+fi
 
-log "Starting Proxmox VM ${VMID} if stopped"
+log "Preparing Proxmox VM ${VMID} (power + bake RAM)"
 status="$("${PVE_SSH[@]}" "qm status ${VMID}" | awk '{print $2}')"
+BAKE_MEM_MB="${MSSP_GOLDEN_BAKE_MEMORY_MB:-24576}"
+ORIG_MEM="$("${PVE_SSH[@]}" "qm config ${VMID}" | awk -F': ' '/^memory:/{print $2; exit}')"
+ORIG_MEM="${ORIG_MEM:-8192}"
+RESTORE_MEM_AFTER_BAKE="${MSSP_GOLDEN_RESTORE_MEMORY_MB:-$ORIG_MEM}"
+if [[ "${ORIG_MEM}" -lt "${BAKE_MEM_MB}" ]]; then
+  log "Raising VM ${VMID} memory ${ORIG_MEM} → ${BAKE_MEM_MB} MB for Ollama bake"
+  if [[ "$status" == "running" ]]; then
+    "${PVE_SSH[@]}" "qm shutdown ${VMID} --timeout 90 || qm stop ${VMID} --timeout 30"
+    sleep 3
+    status=stopped
+  fi
+  "${PVE_SSH[@]}" "qm set ${VMID} --memory ${BAKE_MEM_MB}"
+fi
 if [[ "$status" != "running" ]]; then
   "${PVE_SSH[@]}" "qm start ${VMID}"
 fi
@@ -112,6 +151,18 @@ cp "$LINUX_EDR_AUDIT" "$TMP/mssp-exec.rules"
 cp "$ATTRIB" "$TMP/ATTRIBUTIONS.txt"
 cp "$EXECUTOR" "$TMP/executor.py"
 cp "$API_PATCH" "$TMP/patch_wazuh_api_request_timeout.sh"
+cp "$LOCAL_AI_FILTER" "$TMP/local_ai_filter.py"
+cp "$WATCHER" "$TMP/critical_alert_watcher.py"
+cp "$PRIVACY" "$TMP/privacy.py"
+cp "$FWD_UNIT" "$TMP/kevantic-critical-alert-forwarder.service"
+cp "$JFWD_UNIT" "$TMP/junexis-critical-alert-forwarder.service"
+cp "$OLLAMA_UNIT" "$TMP/ollama.service"
+mkdir -p "$TMP/ollama.service.d"
+cp "$OLLAMA_DROPIN" "$TMP/ollama.service.d/override.conf"
+cp "$OLLAMA_WRAPPER" "$TMP/ollama-serve-pinned.sh"
+cp "$OLLAMA_ENV_EX" "$TMP/ollama.env.example"
+cp "$INSTALL_OLLAMA" "$TMP/install_appliance_ollama.sh"
+cp "$PULL_MODEL" "$TMP/pull_local_ai_model.sh"
 python3 - "$TMP/image-release.json" "$GIT_COMMIT" "$ATTRIB" "$ATTRIB_MD" <<'PY'
 import hashlib
 import json
@@ -122,6 +173,7 @@ path, commit, attrib_txt, attrib_md = sys.argv[1], sys.argv[2], sys.argv[3], sys
 data = json.loads(Path(path).read_text(encoding="utf-8"))
 data["git_commit"] = commit
 data["edr_ar_version"] = "1.1.0"
+data["local_ai_version"] = "1.1.0"
 data["attributions_sha256"] = hashlib.sha256(Path(attrib_txt).read_bytes()).hexdigest()
 data["attributions_md_sha256"] = hashlib.sha256(Path(attrib_md).read_bytes()).hexdigest()
 Path(path).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -161,7 +213,19 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/ATTRIBUTIONS.txt" \
   "$TMP/executor.py" \
   "$TMP/patch_wazuh_api_request_timeout.sh" \
+  "$TMP/local_ai_filter.py" \
+  "$TMP/critical_alert_watcher.py" \
+  "$TMP/privacy.py" \
+  "$TMP/kevantic-critical-alert-forwarder.service" \
+  "$TMP/junexis-critical-alert-forwarder.service" \
+  "$TMP/ollama.service" \
+  "$TMP/install_appliance_ollama.sh" \
+  "$TMP/pull_local_ai_model.sh" \
+  "$TMP/ollama-serve-pinned.sh" \
+  "$TMP/ollama.env.example" \
   "${USER_NAME}@${HOST}:/tmp/"
+
+"${SCP[@]}" -r "$TMP/ollama.service.d" "${USER_NAME}@${HOST}:/tmp/"
 
 "${SSH[@]}" "bash -s" <<REMOTE
 set -euo pipefail
@@ -212,6 +276,45 @@ sudo install -m 0644 /tmp/executor.py /opt/kevantic/appliance-src/appliance/jobs
 if [[ -d /opt/junexis/appliance-src/appliance/jobs ]]; then
   sudo install -m 0644 /tmp/executor.py /opt/junexis/appliance-src/appliance/jobs/executor.py
 fi
+
+# KB-108: local AI filter modules + forwarder units + Ollama (localhost only).
+sudo install -d -m 0755 /opt/kevantic/appliance-src/appliance/telemetry /opt/kevantic/appliance-src/appliance/common
+sudo install -m 0644 /tmp/local_ai_filter.py /opt/kevantic/appliance-src/appliance/telemetry/local_ai_filter.py
+sudo install -m 0644 /tmp/critical_alert_watcher.py /opt/kevantic/appliance-src/appliance/telemetry/critical_alert_watcher.py
+sudo install -m 0644 /tmp/privacy.py /opt/kevantic/appliance-src/appliance/common/privacy.py
+if [[ -d /opt/junexis/appliance-src/appliance ]]; then
+  sudo install -d -m 0755 /opt/junexis/appliance-src/appliance/telemetry /opt/junexis/appliance-src/appliance/common
+  sudo install -m 0644 /tmp/local_ai_filter.py /opt/junexis/appliance-src/appliance/telemetry/local_ai_filter.py
+  sudo install -m 0644 /tmp/critical_alert_watcher.py /opt/junexis/appliance-src/appliance/telemetry/critical_alert_watcher.py
+  sudo install -m 0644 /tmp/privacy.py /opt/junexis/appliance-src/appliance/common/privacy.py
+fi
+sudo install -m 0644 /tmp/kevantic-critical-alert-forwarder.service /etc/systemd/system/kevantic-critical-alert-forwarder.service
+sudo install -m 0644 /tmp/junexis-critical-alert-forwarder.service /etc/systemd/system/junexis-critical-alert-forwarder.service
+sudo install -d -m 0755 /etc/systemd/system/ollama.service.d
+sudo install -m 0644 /tmp/ollama.service /etc/systemd/system/ollama.service
+sudo install -m 0644 /tmp/ollama.service.d/override.conf /etc/systemd/system/ollama.service.d/override.conf
+sudo install -m 0755 /tmp/ollama-serve-pinned.sh /usr/local/sbin/ollama-serve-pinned.sh
+sudo install -d -m 0755 /etc/kevantic /etc/junexis
+if [[ ! -f /etc/kevantic/ollama.env ]]; then
+  sudo install -m 0644 /tmp/ollama.env.example /etc/kevantic/ollama.env
+fi
+sudo install -m 0755 /tmp/install_appliance_ollama.sh /usr/local/sbin/install_appliance_ollama.sh
+sudo install -m 0755 /tmp/pull_local_ai_model.sh /usr/local/sbin/pull_local_ai_model.sh
+# Install Ollama binary + pull qwen2.5:7b into golden image (~5GB disk).
+SKIP_OLLAMA_PULL="\${SKIP_OLLAMA_PULL:-0}"
+if [[ "\$SKIP_OLLAMA_PULL" != "1" ]]; then
+  sudo OLLAMA_UNIT_SRC=/tmp/ollama.service \
+       OLLAMA_DROPIN_SRC=/tmp/ollama.service.d/override.conf \
+       OLLAMA_WRAPPER_SRC=/tmp/ollama-serve-pinned.sh \
+       OLLAMA_ENV_EXAMPLE=/tmp/ollama.env.example \
+       bash /usr/local/sbin/install_appliance_ollama.sh
+  sudo bash /usr/local/sbin/pull_local_ai_model.sh qwen2.5:7b
+else
+  echo "SKIP_OLLAMA_PULL=1 — Ollama unit staged, binary/model not pulled"
+fi
+# Filter stays off by default on golden; operators enable via appliance.env.
+sudo systemctl enable ollama.service >/dev/null || true
+
 # Register isolate/kill/block command names on the local Manager (Windows + Linux).
 if [[ -d /opt/junexis/cli/junexis_cli ]]; then
   sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands, _publish_windows_edr_ar_shared; _ensure_local_edr_ar_commands(); _publish_windows_edr_ar_shared()'
@@ -255,8 +358,23 @@ sudo test -f /usr/share/doc/kevantic/ATTRIBUTIONS.txt
 sudo grep -q 'Open Source Software Attributions' /usr/share/doc/kevantic/ATTRIBUTIONS.txt
 sudo grep -q '_validate_nuclei_template' /opt/kevantic/appliance-src/appliance/jobs/executor.py
 sudo grep -q 'timeout=120' /opt/kevantic/appliance-src/appliance/jobs/executor.py
+sudo test -f /opt/kevantic/appliance-src/appliance/telemetry/local_ai_filter.py
+sudo grep -q 'ENABLE_LOCAL_AI_FILTER' /etc/systemd/system/kevantic-critical-alert-forwarder.service
+sudo grep -q 'LOCAL_AI_FAIL_OPEN=true' /etc/systemd/system/kevantic-critical-alert-forwarder.service
+sudo test -f /etc/systemd/system/ollama.service
+sudo test -f /etc/systemd/system/ollama.service.d/override.conf
+sudo grep -q 'OLLAMA_HOST=127.0.0.1:11434' /etc/systemd/system/ollama.service.d/override.conf
+sudo grep -q 'OLLAMA_KEEP_ALIVE=-1' /etc/systemd/system/ollama.service.d/override.conf || sudo grep -q 'OLLAMA_KEEP_ALIVE=-1' /etc/kevantic/ollama.env
+sudo test -x /usr/local/sbin/ollama-serve-pinned.sh
+if [[ "\${SKIP_OLLAMA_PULL:-0}" != "1" ]]; then
+  command -v ollama >/dev/null
+  sudo systemctl is-enabled ollama.service | grep -qx enabled
+  ollama list | grep -F 'qwen2.5:7b'
+  # Must not be WAN-exposed.
+  ! ss -ltn | grep -E '0\.0\.0\.0:11434|:::11434|\*:11434' || { echo 'ollama WAN bind' >&2; exit 3; }
+fi
 sudo grep -E '^[[:space:]]*request_timeout:[[:space:]]*120[[:space:]]*$' /var/ossec/api/configuration/api.yaml
-python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version") and d.get("edr_ar_version") and d.get("attributions_sha256") and d.get("attributions_md_sha256")'
+python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version") and d.get("edr_ar_version") and d.get("local_ai_version") and d.get("attributions_sha256") and d.get("attributions_md_sha256")'
 sudo grep -q 'Invoke-MsspUnisolate' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
   sudo grep -q 'Invoke-MsspUnisolate' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
 SHARED=\$(sudo find /var/ossec/etc/shared -name mssp-isolate-host.ps1 2>/dev/null | head -1)
@@ -284,14 +402,20 @@ else
   log "Shutting down golden VM ${VMID} (clone source stays stopped)"
   "${PVE_SSH[@]}" "qm shutdown ${VMID} --timeout 90 || qm stop ${VMID} --timeout 30"
   sleep 3
+  # Restore lab memory footprint after bake (prod clones use ≥32GB SKU).
+  if [[ -n "${RESTORE_MEM_AFTER_BAKE:-}" && "${RESTORE_MEM_AFTER_BAKE}" != "${BAKE_MEM_MB:-}" ]]; then
+    log "Restoring VM ${VMID} memory → ${RESTORE_MEM_AFTER_BAKE} MB"
+    "${PVE_SSH[@]}" "qm set ${VMID} --memory ${RESTORE_MEM_AFTER_BAKE}" || true
+  fi
   "${PVE_SSH[@]}" "qm status ${VMID}"
 fi
 
 if [[ -n "$SNAP_NAME" ]]; then
   log "Taking Proxmox snapshot ${VMID} → ${SNAP_NAME}"
-  "${PVE_SSH[@]}" "qm snapshot ${VMID} ${SNAP_NAME} --description 'Golden bake git=${GIT_COMMIT} HIPAA+containment+attributions'"
+  "${PVE_SSH[@]}" "qm snapshot ${VMID} ${SNAP_NAME} --description 'Golden bake git=${GIT_COMMIT} local-ai+ollama+fleet'"
   "${PVE_SSH[@]}" "qm listsnapshot ${VMID}"
 fi
 
-log "OK — golden VM ${VMID} now includes fleet reporting (git_commit=${GIT_COMMIT})"
+log "OK — golden VM ${VMID} bake complete (git_commit=${GIT_COMMIT} snapshot=${SNAP_NAME})"
+echo "GOLDEN_SNAPSHOT=${SNAP_NAME}"
 echo GOLDEN_FLEET_BAKE_OK

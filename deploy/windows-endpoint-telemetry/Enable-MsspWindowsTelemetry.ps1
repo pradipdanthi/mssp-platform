@@ -141,7 +141,7 @@ function Install-OrUpdateSysmon {
       if ($SkipDownload) {
         throw "Sysmon64.exe not found next to this script and -SkipSysmonDownload was set. Place Sysmon64.exe in the installer folder."
       }
-      Write-Step "No local Sysmon binary — attempting Sysinternals download..."
+      Write-Step "No local Sysmon binary - attempting Sysinternals download..."
       $zip = Join-Path $work "Sysmon.zip"
       try {
         Invoke-WebRequest -Uri "https://download.sysinternals.com/files/Sysmon.zip" -OutFile $zip -UseBasicParsing
@@ -160,7 +160,7 @@ function Install-OrUpdateSysmon {
     }
 
     if ($alreadyInstalled) {
-      Write-Step "Sysmon already present — updating config with $sysmonExe"
+      Write-Step "Sysmon already present - updating config with $sysmonExe"
       & $sysmonExe -accepteula -c $ConfigPath
     } else {
       Write-Step "Installing Sysmon with MSSP baseline config..."
@@ -271,7 +271,7 @@ $config = Resolve-SysmonConfig -Explicit $SysmonConfigPath
 Write-Step "Using Sysmon config: $config"
 
 if ($SkipSysmonDownload) {
-  Write-Step "SkipSysmonDownload set — using bundled/local Sysmon only (no Sysinternals download)"
+  Write-Step "SkipSysmonDownload set - using bundled/local Sysmon only (no Sysinternals download)"
   Install-OrUpdateSysmon -ConfigPath $config -SkipDownload
 } else {
   Install-OrUpdateSysmon -ConfigPath $config

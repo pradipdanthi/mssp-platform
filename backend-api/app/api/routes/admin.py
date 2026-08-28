@@ -17,6 +17,11 @@ from fastapi import APIRouter, Depends, Query
 
 from app.api.dependencies import require_roles
 from app.db.session import fetch_all, fetch_one
+from app.services.alert_list_filters import (
+    append_alert_facet_filters,
+    append_alert_time_filter,
+    append_rich_alert_q_filter,
+)
 from app.services.list_pagination import clamp_pagination, pagination_meta
 from app.services.soc_alert_taxonomy import (
     TAXONOMY_LABELS,
@@ -45,6 +50,30 @@ def _append_alert_severity_filter(where: list, params: list, severity: Optional[
     elif sev in ("low", "medium", "high", "critical"):
         where.append("sa.severity = %s")
         params.append(sev)
+
+
+def _append_ai_queue_filter(
+    where: list,
+    params: list,
+    ai_queue: Optional[str],
+    *,
+    column: str = "sa.ai_queue",
+) -> None:
+    """
+    ai_queue query param:
+      - low_priority → Low-Priority / AI Reviewed tab
+      - all → no queue filter
+      - actionable / omitted → exclude low_priority (default actionable queue)
+    """
+    q = (ai_queue or "actionable").strip().lower()
+    if q in ("low_priority", "low-priority", "ai_reviewed"):
+        where.append(f"{column} = %s")
+        params.append("low_priority")
+    elif q in ("all", "*"):
+        return
+    else:
+        # Default actionable: hide AI low-priority reviewed items.
+        where.append(f"({column} IS NULL OR {column} <> 'low_priority')")
 
 
 def _fetch_alert_rows_batched(select_sql: str, params: tuple) -> list:
@@ -391,6 +420,65 @@ def admin_alerts_tenant_summary(
     return {"tenants": rows}
 
 
+@router.get("/alerts/rule-facets")
+def admin_alerts_rule_facets(
+    alert_status: Optional[
+        Literal["new", "triaged", "incident_created", "false_positive", "closed"]
+    ] = Query(default=None, alias="status"),
+    severity: Optional[str] = Query(default=None),
+    tenant_id: Optional[UUID] = None,
+    q: Optional[str] = Query(default=None, max_length=64, description="Filter rule ids by substring"),
+    limit: int = Query(default=40, ge=1, le=200),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Distinct Wazuh rule ids with hit counts for searchable Rule ID dropdown."""
+    _ = current_user
+    where = [
+        "COALESCE(sa.raw_event->'rule'->>'id', sa.raw_event->>'rule_id', '') <> ''"
+    ]
+    params: list = []
+    if alert_status is not None:
+        where.append("sa.status = %s")
+        params.append(alert_status)
+    _append_alert_severity_filter(where, params, severity)
+    if tenant_id is not None:
+        where.append("sa.tenant_id = %s")
+        params.append(tenant_id)
+    q_clean = (q or "").strip()
+    if q_clean:
+        where.append(
+            "COALESCE(sa.raw_event->'rule'->>'id', sa.raw_event->>'rule_id', '') ILIKE %s"
+        )
+        params.append(f"%{q_clean}%")
+    where_sql = " AND ".join(where)
+    params.append(limit)
+    rows = fetch_all(
+        f"""
+        SELECT
+            COALESCE(sa.raw_event->'rule'->>'id', sa.raw_event->>'rule_id') AS rule_id,
+            MAX(COALESCE(sa.raw_event->'rule'->>'description', sa.alert_title, '')) AS description,
+            count(*)::int AS hits
+        FROM security_alerts sa
+        WHERE {where_sql}
+        GROUP BY 1
+        ORDER BY hits DESC, rule_id ASC
+        LIMIT %s;
+        """,
+        tuple(params),
+    )
+    return {
+        "rules": [
+            {
+                "rule_id": r["rule_id"],
+                "description": (r.get("description") or "")[:120],
+                "hits": int(r.get("hits") or 0),
+            }
+            for r in rows
+            if r.get("rule_id")
+        ]
+    }
+
+
 @router.get("/alerts/taxonomy-summary")
 def admin_alerts_taxonomy_summary(
     alert_status: Optional[
@@ -447,7 +535,29 @@ def admin_alerts(
     ),
     tenant_id: Optional[UUID] = None,
     asset_category: Optional[str] = Query(default=None, description="KB-082 taxonomy slug"),
-    q: Optional[str] = Query(default=None, max_length=200, description="Search title/host/summary"),
+    q: Optional[str] = Query(
+        default=None,
+        max_length=200,
+        description="Search title/description/rule/host/process/path/user",
+    ),
+    rule_id: Optional[str] = Query(default=None, max_length=128),
+    hostname: Optional[str] = Query(default=None, max_length=255),
+    process_name: Optional[str] = Query(default=None, max_length=255, alias="process"),
+    path: Optional[str] = Query(default=None, max_length=1000),
+    user: Optional[str] = Query(default=None, max_length=255),
+    hash_value: Optional[str] = Query(default=None, max_length=128, alias="hash"),
+    cmdline: Optional[str] = Query(default=None, max_length=500),
+    since: Optional[str] = Query(
+        default=None,
+        max_length=64,
+        description="Relative (15m|1h|24h|7d) or ISO-8601 lower bound on event/created time",
+    ),
+    until: Optional[str] = Query(default=None, max_length=64, description="ISO-8601 upper bound"),
+    ai_queue: Optional[str] = Query(
+        default=None,
+        max_length=32,
+        description="actionable (default)|low_priority|all — AI Reviewed queue filter",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
@@ -465,21 +575,20 @@ def admin_alerts(
     if tenant_id is not None:
         where.append("sa.tenant_id = %s")
         params.append(tenant_id)
-    q_clean = (q or "").strip()
-    if q_clean:
-        where.append(
-            "("
-            "sa.alert_title ILIKE %s OR "
-            "COALESCE(sa.alert_description, '') ILIKE %s OR "
-            "COALESCE(sa.destination_host, '') ILIKE %s OR "
-            "COALESCE(sa.ai_plain_summary, '') ILIKE %s OR "
-            "COALESCE(sa.external_alert_id, '') ILIKE %s OR "
-            "t.name ILIKE %s OR "
-            "t.short_code ILIKE %s"
-            ")"
-        )
-        like = f"%{q_clean}%"
-        params.extend([like, like, like, like, like, like, like])
+    append_rich_alert_q_filter(where, params, q, include_tenant_fields=True)
+    append_alert_facet_filters(
+        where,
+        params,
+        rule_id=rule_id,
+        hostname=hostname,
+        process_name=process_name,
+        path=path,
+        user=user,
+        hash_value=hash_value,
+        cmdline=cmdline,
+    )
+    append_alert_time_filter(where, params, since=since, until=until)
+    _append_ai_queue_filter(where, params, ai_queue, column="sa.ai_queue")
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
     select_sql = f"""
@@ -500,6 +609,12 @@ def admin_alerts(
             sa.ai_plain_summary,
             sa.ai_likely_attack_type,
             sa.ai_recommended_action,
+            sa.ai_verdict,
+            sa.ai_confidence,
+            sa.ai_queue,
+            sa.ai_auto_closed,
+            sa.ai_resolution_label,
+            sa.ai_triaged_at,
             sa.customer_visible,
             sa.status,
             sa.created_at
@@ -553,6 +668,12 @@ def admin_incidents(
     q: Optional[str] = Query(
         default=None, max_length=200, description="Search number/title/tenant/summary"
     ),
+    since: Optional[str] = Query(default=None, max_length=64),
+    ai_queue: Optional[str] = Query(
+        default=None,
+        max_length=32,
+        description="actionable (default)|low_priority|all — via primary alert AI queue",
+    ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
@@ -588,6 +709,30 @@ def admin_incidents(
         )
         like = f"%{q_clean}%"
         params.extend([like, like, like, like, like])
+    # Reuse relative since tokens against incident opened_at/created_at.
+    from datetime import datetime, timedelta, timezone
+
+    since_raw = (since or "").strip().lower()
+    now = datetime.now(timezone.utc)
+    since_dt = None
+    if since_raw in ("15m", "15min"):
+        since_dt = now - timedelta(minutes=15)
+    elif since_raw in ("1h", "60m"):
+        since_dt = now - timedelta(hours=1)
+    elif since_raw in ("24h", "1d"):
+        since_dt = now - timedelta(hours=24)
+    elif since_raw in ("7d", "7days"):
+        since_dt = now - timedelta(days=7)
+    elif since_raw:
+        try:
+            since_dt = datetime.fromisoformat(since_raw.replace("Z", "+00:00"))
+        except ValueError:
+            since_dt = None
+    if since_dt is not None:
+        where.append("COALESCE(i.opened_at, i.created_at) >= %s")
+        params.append(since_dt)
+    # AI queue via primary alert (persisted Tier-1 fields).
+    _append_ai_queue_filter(where, params, ai_queue, column="pa.ai_queue")
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
 
     count_row = fetch_one(
@@ -595,6 +740,7 @@ def admin_incidents(
         SELECT count(*)::int AS total
         FROM incidents i
         JOIN tenants t ON t.id = i.tenant_id
+        LEFT JOIN security_alerts pa ON pa.id = i.primary_alert_id
         {where_sql};
         """,
         tuple(params),
@@ -615,10 +761,17 @@ def admin_incidents(
             i.customer_visible_summary,
             i.customer_action_required,
             i.opened_at,
-            i.created_at
+            i.created_at,
+            pa.ai_verdict,
+            pa.ai_confidence,
+            pa.ai_queue,
+            pa.ai_auto_closed,
+            pa.ai_resolution_label,
+            pa.ai_triaged_at
         FROM incidents i
         JOIN tenants t ON t.id = i.tenant_id
         LEFT JOIN platform_users u ON u.id = i.assigned_to_user_id
+        LEFT JOIN security_alerts pa ON pa.id = i.primary_alert_id
         {where_sql}
         ORDER BY i.created_at DESC
         LIMIT %s OFFSET %s;
@@ -626,7 +779,6 @@ def admin_incidents(
         tuple(params + [page_size, offset]),
     )
     return {"incidents": rows, **pagination_meta(total, page, page_size)}
-
 
 @router.get("/recommendations")
 def admin_recommendations(

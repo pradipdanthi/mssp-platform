@@ -133,6 +133,18 @@ export interface CustomerAlert {
   parent_command_line?: string | null;
   hash_md5?: string | null;
   hash_sha256?: string | null;
+  hash_imphash?: string | null;
+  hashes_raw?: string | null;
+  current_directory?: string | null;
+  integrity_level?: string | null;
+  process_guid?: string | null;
+  parent_process_guid?: string | null;
+  logon_id?: string | null;
+  logon_guid?: string | null;
+  user_sid?: string | null;
+  process_id?: string | null;
+  parent_process_id?: string | null;
+  win_eventdata?: Record<string, unknown> | null;
   mitre_tactics?: string[];
   mitre_techniques?: string[];
 }
@@ -151,7 +163,20 @@ export interface CustomerAlertsResponse {
 export interface CustomerListFilters {
   status?: string;
   severity?: string;
+  /** KB-082 taxonomy slug (API param asset_category). */
+  asset_category?: string;
   q?: string;
+  /** Exact / substring rule id filter (alerts list). */
+  rule_id?: string;
+  hostname?: string;
+  /** Query param name on the wire is `process` (alias for process_name). */
+  process?: string;
+  path?: string;
+  user?: string;
+  hash?: string;
+  cmdline?: string;
+  since?: string;
+  until?: string;
   page?: number;
   page_size?: number;
 }
@@ -160,7 +185,17 @@ function withCustomerListFilters(path: string, filters?: CustomerListFilters): s
   const params = new URLSearchParams();
   if (filters?.status) params.set("status", filters.status);
   if (filters?.severity) params.set("severity", filters.severity);
+  if (filters?.asset_category) params.set("asset_category", filters.asset_category);
   if (filters?.q) params.set("q", filters.q);
+  if (filters?.rule_id) params.set("rule_id", filters.rule_id);
+  if (filters?.hostname) params.set("hostname", filters.hostname);
+  if (filters?.process) params.set("process", filters.process);
+  if (filters?.path) params.set("path", filters.path);
+  if (filters?.user) params.set("user", filters.user);
+  if (filters?.hash) params.set("hash", filters.hash);
+  if (filters?.cmdline) params.set("cmdline", filters.cmdline);
+  if (filters?.since) params.set("since", filters.since);
+  if (filters?.until) params.set("until", filters.until);
   if (filters?.page != null) params.set("page", String(filters.page));
   if (filters?.page_size != null) params.set("page_size", String(filters.page_size));
   const query = params.toString();
@@ -195,6 +230,83 @@ export function getCustomerAlerts(
 ): Promise<CustomerAlertsResponse> {
   return request<CustomerAlertsResponse>(
     withCustomerListFilters(`/customer/alerts/${encodeURIComponent(shortCode)}`, filters)
+  );
+}
+
+export interface AlertRuleFacet {
+  rule_id: string;
+  description: string;
+  hits: number;
+}
+
+export interface AlertRuleFacetsResponse {
+  rules: AlertRuleFacet[];
+}
+
+export function getCustomerAlertRuleFacets(
+  shortCode: string,
+  filters?: { status?: string; severity?: string; q?: string; limit?: number }
+): Promise<AlertRuleFacetsResponse> {
+  const params = new URLSearchParams();
+  if (filters?.status) params.set("status", filters.status);
+  if (filters?.severity) params.set("severity", filters.severity);
+  if (filters?.q) params.set("q", filters.q);
+  if (filters?.limit != null) params.set("limit", String(filters.limit));
+  const query = params.toString();
+  const path = `/customer/alerts/${encodeURIComponent(shortCode)}/rule-facets`;
+  return request<AlertRuleFacetsResponse>(query ? `${path}?${query}` : path);
+}
+
+export type BulkAlertStatus = "false_positive" | "closed";
+
+export interface BulkAlertsRequest {
+  alert_ids: string[];
+  status: BulkAlertStatus;
+  reason?: string | null;
+}
+
+export interface BulkAlertsResponse {
+  updated: number;
+  updated_ids: string[];
+  missing_ids: string[];
+  status: BulkAlertStatus;
+}
+
+export function bulkUpdateCustomerAlerts(
+  shortCode: string,
+  payload: BulkAlertsRequest
+): Promise<BulkAlertsResponse> {
+  return request<BulkAlertsResponse>(
+    `/customer/alerts/${encodeURIComponent(shortCode)}/bulk`,
+    { method: "POST", body: payload }
+  );
+}
+
+export type SuppressionScope = "tenant" | "host";
+
+export interface CustomerSuppressionCreateRequest {
+  scope: SuppressionScope;
+  rule_id: string;
+  hostname?: string | null;
+  match_process_path?: boolean;
+  process_path_value?: string | null;
+  match_parent_process?: boolean;
+  parent_process_value?: string | null;
+  match_file_hash?: boolean;
+  file_hash_value?: string | null;
+  match_hostname?: boolean;
+  hostname_value?: string | null;
+  expires_at?: string | null;
+  reason?: string | null;
+}
+
+export function createCustomerSuppression(
+  shortCode: string,
+  payload: CustomerSuppressionCreateRequest
+): Promise<{ suppression: { id: string; rule_id: string; scope: string } }> {
+  return request<{ suppression: { id: string; rule_id: string; scope: string } }>(
+    `/customer/alerts/${encodeURIComponent(shortCode)}/suppressions`,
+    { method: "POST", body: payload }
   );
 }
 
@@ -376,7 +488,7 @@ export function downloadCustomerReportXlsx(shortCode: string, reportId: string):
 /** KB-086: download endpoint monitoring agent installer for this tenant. */
 export function downloadCustomerAgentPackage(
   shortCode: string,
-  osType: "windows" | "linux" | "all"
+  osType: "windows" | "linux" | "all" | "windows-wan" | "linux-wan"
 ): Promise<void> {
   return downloadAuthenticated(
     `/customer/agent-packages/${encodeURIComponent(shortCode)}/${osType}`,

@@ -1,7 +1,19 @@
 # KB-092 — AI Alert Analysis Worker
 
 **Status:** IMPLEMENTED (Phase A MVP) — 2026-08-12  
-**Provider (lab):** Local Ollama on **VM 115** `mssp-ai` (`192.168.0.227`) — model `qwen2.5:14b`  
+**Provider (lab):** Local Ollama on **VM 115** `mssp-ai` (`192.168.0.227`) — model `qwen2.5:7b`
+
+### VM 115 sizing (required for stable 7B)
+
+| Resource | Minimum for `qwen2.5:7b` | Lab observed issue |
+|----------|--------------------------|---------------------|
+| **RAM** | **16 GiB** (32 GiB recommended) | **7.6 GiB** → runner evicted every request (~80–90s reload, 100% CPU spikes) |
+| **vCPU** | 8 | OK at 8 cores with `taskset -c 0-5` + `num_thread=2` |
+| **Swap** | 8 GiB emergency buffer | Added `/swapfile` — prevents OOM kill but **does not** replace RAM |
+
+Proxmox: `qm set 115 --memory 16384` then reboot guest or `systemctl restart ollama`.
+
+Systemd template: `scripts/mssp-ai/ollama.service.override.conf.example` + `ollama-warmup.sh`.  
 **Brand context:** Supports “AI-ready” → “AI-assisted plain-English alerts” after live proof  
 
 ---
@@ -43,7 +55,7 @@ Alert ingest (soc_sync / appliance / telemetry→appliance)
 | `AI_ALERT_PROVIDER` | `openai_compatible` |
 | `AI_ALERT_BASE_URL` | `http://192.168.0.227:11434/v1` |
 | `AI_ALERT_API_KEY` | `ollama` (unused by Ollama; placeholder OK) |
-| `AI_ALERT_MODEL` | `qwen2.5:14b` |
+| `AI_ALERT_MODEL` | `qwen2.5:7b` |
 | `AI_ALERT_MIN_SEVERITY` | `high` |
 | `AI_ALERT_TIMEOUT_SECONDS` | `90` |
 

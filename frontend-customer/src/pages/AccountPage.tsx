@@ -3,6 +3,7 @@ import { ApiError } from "../api/client";
 import { changePassword, updateMyProfile } from "../api/auth";
 import { useAuth } from "../auth/AuthContext";
 import { useBrand } from "../config/BrandContext";
+import FormSection from "../components/FormSection";
 
 export default function AccountPage() {
   const { user, setUser } = useAuth();
@@ -123,79 +124,84 @@ export default function AccountPage() {
         )}
       </div>
 
-      <form className="account-panel account-form" onSubmit={onSaveProfile}>
-        <h2 className="account-form-title">Profile</h2>
-        <label className="account-label">
-          Name
-          <input
-            className="account-input"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            required
-            maxLength={200}
-            autoComplete="name"
-          />
-        </label>
-        <label className="account-label">
-          Phone
-          <input
-            className="account-input"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            maxLength={40}
-            autoComplete="tel"
-            placeholder="Optional"
-          />
-        </label>
+      <form className="account-form" onSubmit={onSaveProfile}>
+        <FormSection title="Profile">
+          <label className="form-label">
+            Name <span className="req">*</span>
+            <input
+              className="form-input"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              required
+              maxLength={200}
+              autoComplete="name"
+            />
+          </label>
+          <label className="form-label">
+            Phone
+            <input
+              className="form-input"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              maxLength={40}
+              autoComplete="tel"
+            />
+          </label>
+        </FormSection>
         {profileError && <div className="state-message state-error">{profileError}</div>}
         {profileMessage && <div className="state-message state-success">{profileMessage}</div>}
-        <button className="btn btn-primary" type="submit" disabled={profileSaving}>
-          {profileSaving ? "Saving..." : "Save profile"}
-        </button>
+        <div className="kv-form-actions">
+          <button className="btn btn-primary" type="submit" disabled={profileSaving}>
+            {profileSaving ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
       </form>
 
-      <form className="account-panel account-form" onSubmit={onChangePassword}>
-        <h2 className="account-form-title">Change password</h2>
-        <label className="account-label">
-          Current password
-          <input
-            className="account-input"
-            type="password"
-            value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
-        </label>
-        <label className="account-label">
-          New password
-          <input
-            className="account-input"
-            type="password"
-            value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
-        </label>
-        <label className="account-label">
-          Confirm new password
-          <input
-            className="account-input"
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            minLength={8}
-            autoComplete="new-password"
-          />
-        </label>
+      <form className="account-form" onSubmit={onChangePassword}>
+        <FormSection title="Change password">
+          <label className="form-label">
+            Current password <span className="req">*</span>
+            <input
+              className="form-input"
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+            />
+          </label>
+          <label className="form-label">
+            New password <span className="req">*</span>
+            <input
+              className="form-input"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </label>
+          <label className="form-label">
+            Confirm new password <span className="req">*</span>
+            <input
+              className="form-input"
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              required
+              minLength={8}
+              autoComplete="new-password"
+            />
+          </label>
+        </FormSection>
         {passwordError && <div className="state-message state-error">{passwordError}</div>}
         {passwordMessage && <div className="state-message state-success">{passwordMessage}</div>}
-        <button className="btn btn-primary" type="submit" disabled={passwordSaving}>
-          {passwordSaving ? "Updating..." : "Update password"}
-        </button>
+        <div className="kv-form-actions">
+          <button className="btn btn-primary" type="submit" disabled={passwordSaving}>
+            {passwordSaving ? "Updating..." : "Save Changes"}
+          </button>
+        </div>
       </form>
     </div>
   );

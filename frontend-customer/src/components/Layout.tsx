@@ -17,7 +17,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const navItems = buildCustomerNavItems(entitlementsLoading ? null : entitlements);
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-portal="customer">
       <KestrelSecurityWatermark />
       <aside className="sidebar">
         <div className="sidebar-brand">

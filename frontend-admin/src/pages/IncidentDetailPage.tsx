@@ -10,6 +10,7 @@ import {
 import { getEdrDeepDive, type EdrDeepDive } from "../api/edr";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import ClickToFilter from "../components/soc/ClickToFilter";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 import EdrControlPanel from "../components/edr/EdrControlPanel";
 import MitreBadges from "../components/edr/MitreBadges";
@@ -177,6 +178,19 @@ export default function IncidentDetailPage() {
                     </td>
                   </tr>
                   <tr><th>Device type</th><td>{incidentQuery.data.primary_alert.device_type ?? "—"}</td></tr>
+                  <tr>
+                    <th>Hostname</th>
+                    <td>
+                      <ClickToFilter
+                        label="Hostname"
+                        value={
+                          incidentQuery.data.primary_alert.asset_hostname ||
+                          incidentQuery.data.primary_alert.destination_host
+                        }
+                        filterKey="hostname"
+                      />
+                    </td>
+                  </tr>
                   <tr><th>Asset category</th><td>{incidentQuery.data.primary_alert.asset_category_label ?? "—"}</td></tr>
                   <tr><th>Criticality</th><td>{incidentQuery.data.primary_alert.asset_criticality ?? "—"}</td></tr>
                   <tr><th>Location</th><td>{incidentQuery.data.primary_alert.asset_location ?? "—"}</td></tr>
@@ -189,13 +203,20 @@ export default function IncidentDetailPage() {
                   <tr>
                     <th>Detection rule</th>
                     <td>
-                      {incidentQuery.data.primary_alert.wazuh_rule_id
-                        ? `${incidentQuery.data.primary_alert.wazuh_rule_id}${
-                            incidentQuery.data.primary_alert.wazuh_rule_level
-                              ? ` (level ${incidentQuery.data.primary_alert.wazuh_rule_level})`
-                              : ""
-                          }`
-                        : "—"}
+                      {incidentQuery.data.primary_alert.wazuh_rule_id ? (
+                        <>
+                          <ClickToFilter
+                            label="Rule ID"
+                            value={incidentQuery.data.primary_alert.wazuh_rule_id}
+                            filterKey="rule_id"
+                          />
+                          {incidentQuery.data.primary_alert.wazuh_rule_level
+                            ? ` (level ${incidentQuery.data.primary_alert.wazuh_rule_level})`
+                            : ""}
+                        </>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 </tbody>
@@ -204,9 +225,27 @@ export default function IncidentDetailPage() {
               <h2 className="section-title">Primary alert evidence</h2>
               <table className="data-table">
                 <tbody>
-                  <tr><th>File path</th><td className="cell-mono">{incidentQuery.data.primary_alert.file_path ?? "—"}</td></tr>
+                  <tr>
+                    <th>File path</th>
+                    <td>
+                      <ClickToFilter
+                        label="Path"
+                        value={incidentQuery.data.primary_alert.file_path}
+                        filterKey="path"
+                      />
+                    </td>
+                  </tr>
                   <tr><th>File name</th><td>{incidentQuery.data.primary_alert.file_name ?? "—"}</td></tr>
-                  <tr><th>Process</th><td className="cell-mono">{incidentQuery.data.primary_alert.process_name ?? "—"}</td></tr>
+                  <tr>
+                    <th>Process</th>
+                    <td>
+                      <ClickToFilter
+                        label="Process"
+                        value={incidentQuery.data.primary_alert.process_name}
+                        filterKey="process"
+                      />
+                    </td>
+                  </tr>
                   <tr><th>Parent process</th><td className="cell-mono">{incidentQuery.data.primary_alert.parent_process_name ?? "—"}</td></tr>
                   <tr><th>Command line</th><td className="cell-mono">{incidentQuery.data.primary_alert.command_line ?? "—"}</td></tr>
                   <tr><th>Parent command line</th><td className="cell-mono">{incidentQuery.data.primary_alert.parent_command_line ?? "—"}</td></tr>

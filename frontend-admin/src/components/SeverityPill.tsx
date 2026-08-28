@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { Link } from "react-router-dom";
+import { alertStatusLabel, incidentStatusLabel } from "../utils/socStatusLabels";
 
 type Kind = "severity" | "status" | "priority";
 
@@ -17,7 +18,25 @@ type Props = {
   /** Prevent parent row click (drawer open). Default true when interactive. */
   stopPropagation?: boolean;
   className?: string;
+  /** Override displayed text (DB `value` still drives badge class + filter URL). */
+  label?: string;
+  /** When kind=status, map alert New→Open / Triaged→In Review (default true for /alerts). */
+  statusDomain?: "alert" | "incident" | "raw";
 };
+
+function resolveStatusLabel(
+  value: string,
+  statusDomain: "alert" | "incident" | "raw" | undefined,
+  filterBase?: string
+): string {
+  if (statusDomain === "raw") return value;
+  if (statusDomain === "incident") return incidentStatusLabel(value);
+  if (statusDomain === "alert") return alertStatusLabel(value);
+  // Infer from filter base when not specified.
+  if (filterBase && filterBase.includes("/incidents")) return incidentStatusLabel(value);
+  if (filterBase && filterBase.includes("/alerts")) return alertStatusLabel(value);
+  return value;
+}
 
 function buildHref(kind: Kind, value: string, filterBase?: string): string | null {
   if (!filterBase) return null;
@@ -49,8 +68,13 @@ export default function SeverityPill({
   onIsolate,
   stopPropagation,
   className = "",
+  label,
+  statusDomain,
 }: Props) {
   const key = (value || "unknown").toLowerCase().replace(/\s+/g, "-");
+  const display =
+    label ??
+    (kind === "status" ? resolveStatusLabel(value, statusDomain, filterBase) : value);
   const isInteractive =
     interactive ?? (kind === "severity" || Boolean(to) || Boolean(onIsolate) || Boolean(filterBase));
   const defaultBase =
@@ -76,7 +100,7 @@ export default function SeverityPill({
     }
   };
 
-  const title = isInteractive ? tooltipFor(kind, value) : undefined;
+  const title = isInteractive ? tooltipFor(kind, display) : undefined;
 
   if (href && !onIsolate) {
     return (
@@ -87,7 +111,7 @@ export default function SeverityPill({
         aria-label={title}
         onClick={onClick}
       >
-        {value}
+        {display}
       </Link>
     );
   }
@@ -95,14 +119,14 @@ export default function SeverityPill({
   if (isInteractive) {
     return (
       <button type="button" className={classes} title={title} aria-label={title} onClick={onClick}>
-        {value}
+        {display}
       </button>
     );
   }
 
   return (
-    <span className={classes} title={value}>
-      {value}
+    <span className={classes} title={display}>
+      {display}
     </span>
   );
 }

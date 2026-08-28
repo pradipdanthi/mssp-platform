@@ -26,9 +26,13 @@ class ApplianceAlertIngestRequest(BaseModel):
     source_user: Optional[str] = Field(default=None, max_length=255)
     raw_event: Optional[Dict[str, Any]] = None
     mitre_mapping: Optional[Dict[str, Any]] = None
+    # Optional appliance-local AI pre-triage (absent on older appliances — OK).
+    appliance_ai_verdict: Optional[str] = Field(default=None, max_length=64)
+    appliance_ai_confidence: Optional[float] = Field(default=None, ge=0, le=100)
+    appliance_ai_summary: Optional[str] = Field(default=None, max_length=2000)
 
     # Deliberately absent: tenant_id, appliance_id, customer_visible,
-    # local_ip, internal/admin notes, AI internals, credentials, tokens, and
+    # local_ip, internal/admin notes, credentials, tokens, and
     # packet/full-log payloads. raw_event must already be scrubbed on appliance.
 
 

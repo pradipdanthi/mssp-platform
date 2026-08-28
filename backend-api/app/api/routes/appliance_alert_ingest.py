@@ -123,6 +123,17 @@ def ingest_appliance_alert(
                 merged_raw = dict(incoming_raw)
                 if raw_stub:
                     merged_raw.setdefault("asset_stub", raw_stub)
+                # Optional appliance-local AI fields (absent on older appliances — OK).
+                existing_ai = merged_raw.get("appliance_ai")
+                ai_block = dict(existing_ai) if isinstance(existing_ai, dict) else {}
+                if payload.appliance_ai_verdict:
+                    ai_block["verdict"] = payload.appliance_ai_verdict
+                if payload.appliance_ai_confidence is not None:
+                    ai_block["confidence"] = payload.appliance_ai_confidence
+                if payload.appliance_ai_summary:
+                    ai_block["summary"] = payload.appliance_ai_summary
+                if ai_block:
+                    merged_raw["appliance_ai"] = ai_block
                 cur.execute(
                     """
                     INSERT INTO security_alerts (
@@ -162,27 +173,26 @@ def ingest_appliance_alert(
                 alert_row = cur.fetchone()
                 duplicate = False
 
-                cur.execute(
-                    "SELECT short_code FROM tenants WHERE id = %s::uuid;",
-                    (appliance["tenant_id"],),
-                )
-                tenant_row = cur.fetchone() or {}
-                short_code = str(tenant_row.get("short_code") or "TENANT")
-                from app.services.appliance_alert_incidents import (
-                    ensure_incident_for_appliance_alert,
+                from app.services.alert_parser import persist_alert_telemetry
+
+                persist_alert_telemetry(
+                    cur,
+                    alert_id=alert_row["id"],
+                    tenant_id=str(appliance["tenant_id"]),
+                    raw=merged_raw,
+                    alert_description=payload.alert_description or "",
                 )
 
-                incident = ensure_incident_for_appliance_alert(
+                from app.services.alert_suppressions import try_suppress_alert
+
+                suppressed = try_suppress_alert(
                     cur,
                     tenant_id=str(appliance["tenant_id"]),
-                    short_code=short_code,
                     alert_id=alert_row["id"],
-                    severity=payload.severity,
-                    alert_title=payload.alert_title,
+                    raw_event=merged_raw,
                     destination_host=dest_host,
                 )
-                if incident:
-                    incident_id, incident_number = incident
+                if suppressed:
                     cur.execute(
                         """
                         SELECT id::text, customer_visible, status
@@ -191,6 +201,36 @@ def ingest_appliance_alert(
                         (alert_row["id"],),
                     )
                     alert_row = cur.fetchone() or alert_row
+                else:
+                    cur.execute(
+                        "SELECT short_code FROM tenants WHERE id = %s::uuid;",
+                        (appliance["tenant_id"],),
+                    )
+                    tenant_row = cur.fetchone() or {}
+                    short_code = str(tenant_row.get("short_code") or "TENANT")
+                    from app.services.appliance_alert_incidents import (
+                        ensure_incident_for_appliance_alert,
+                    )
+
+                    incident = ensure_incident_for_appliance_alert(
+                        cur,
+                        tenant_id=str(appliance["tenant_id"]),
+                        short_code=short_code,
+                        alert_id=alert_row["id"],
+                        severity=payload.severity,
+                        alert_title=payload.alert_title,
+                        destination_host=dest_host,
+                    )
+                    if incident:
+                        incident_id, incident_number = incident
+                        cur.execute(
+                            """
+                            SELECT id::text, customer_visible, status
+                            FROM security_alerts WHERE id = %s::uuid;
+                            """,
+                            (alert_row["id"],),
+                        )
+                        alert_row = cur.fetchone() or alert_row
 
             cur.execute(
                 """

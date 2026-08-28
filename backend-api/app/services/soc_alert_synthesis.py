@@ -249,17 +249,40 @@ def build_alert_evidence(row: Dict[str, Any]) -> Dict[str, Any]:
         if value:
             technique_values.append(value[:160])
 
+    from app.services.alert_parser import telemetry_for_api_row
+
+    telemetry = telemetry_for_api_row(row)
+    process_name = process_name or telemetry.get("process_name")
+    parent_process_name = parent_process_name or telemetry.get("parent_process")
+    command_line = command_line or telemetry.get("command_line")
+    parent_command_line = parent_command_line or telemetry.get("parent_command_line")
+    hash_md5 = hash_md5 or telemetry.get("hash_md5")
+    hash_sha256 = hash_sha256 or telemetry.get("hash_sha256")
+
     return {
         "wazuh_rule_id": extract_wazuh_rule_id(raw),
         "wazuh_rule_level": _str_or_none(rule.get("level"), 16),
         "file_path": file_path,
         "file_name": file_name,
         "process_name": process_name,
-        "parent_process_name": parent_process_name,
+        "parent_process_name": parent_process_name or telemetry.get("parent_process"),
         "command_line": command_line,
-        "parent_command_line": parent_command_line,
+        "parent_command_line": parent_command_line or telemetry.get("parent_command_line"),
         "hash_md5": hash_md5,
         "hash_sha256": hash_sha256,
+        "hash_imphash": telemetry.get("hash_imphash"),
+        "hashes_raw": telemetry.get("hashes_raw"),
+        "current_directory": telemetry.get("current_directory"),
+        "integrity_level": telemetry.get("integrity_level"),
+        "process_guid": telemetry.get("process_guid"),
+        "parent_process_guid": telemetry.get("parent_process_guid"),
+        "logon_id": telemetry.get("logon_id"),
+        "logon_guid": telemetry.get("logon_guid"),
+        "user_sid": telemetry.get("user_sid"),
+        "process_id": telemetry.get("process_id"),
+        "parent_process_id": telemetry.get("parent_process_id"),
+        "win_eventdata": telemetry.get("win_eventdata") or {},
+        "wazuh_full_log": telemetry.get("wazuh_full_log") or {},
         "mitre_tactics": [str(x)[:120] for x in tactics[:10] if str(x).strip()],
         "mitre_techniques": technique_values,
     }

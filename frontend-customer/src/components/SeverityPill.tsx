@@ -1,5 +1,6 @@
 import type { MouseEvent } from "react";
 import { Link } from "react-router-dom";
+import { alertStatusLabel } from "../lib/alertStatusLabels";
 
 type Kind = "severity" | "status" | "priority";
 
@@ -18,6 +19,11 @@ type Props = {
   stopPropagation?: boolean;
   className?: string;
 };
+
+function displayLabel(kind: Kind, value: string): string {
+  if (kind === "status") return alertStatusLabel(value);
+  return value;
+}
 
 function buildHref(kind: Kind, value: string, filterBase?: string): string | null {
   if (!filterBase) return null;
@@ -57,6 +63,7 @@ export default function SeverityPill({
     (kind === "priority" ? "/recommendations" : kind === "status" ? "/incidents" : "/alerts");
   const href = to ?? (isInteractive && !onIsolate ? buildHref(kind, value, defaultBase) : null);
   const shouldStop = stopPropagation ?? isInteractive;
+  const shown = displayLabel(kind, value);
 
   const classes = [
     "badge",
@@ -75,7 +82,7 @@ export default function SeverityPill({
     }
   };
 
-  const title = isInteractive ? tooltipFor(kind, value) : undefined;
+  const title = isInteractive ? tooltipFor(kind, shown) : undefined;
 
   if (href && !onIsolate) {
     return (
@@ -86,7 +93,7 @@ export default function SeverityPill({
         aria-label={title}
         onClick={onClick}
       >
-        {value}
+        {shown}
       </Link>
     );
   }
@@ -94,14 +101,14 @@ export default function SeverityPill({
   if (isInteractive) {
     return (
       <button type="button" className={classes} title={title} aria-label={title} onClick={onClick}>
-        {value}
+        {shown}
       </button>
     );
   }
 
   return (
-    <span className={classes} title={value}>
-      {value}
+    <span className={classes} title={shown}>
+      {shown}
     </span>
   );
 }
