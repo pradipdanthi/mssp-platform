@@ -27,7 +27,7 @@ if pub_path.is_file() and priv_path.is_file():
     print(f"Kept existing private key: {priv_path} (do not commit)")
     print(f"Synced role files copy:    {role_files / 'licensing-ed25519-v1.pub'}")
     print("Control plane: export KEVANTIC_LICENSE_PRIVATE_KEY_FILE=<that pem path>")
-    print("Alias also accepted: JUNEXIS_LICENSE_PRIVATE_KEY_FILE")
+    print("Alias also accepted: NIKTIAR_LICENSE_PRIVATE_KEY_FILE")
     raise SystemExit(0)
 
 priv = Ed25519PrivateKey.generate()
@@ -41,5 +41,5 @@ print(f"Wrote public key:  {pub_path}")
 print(f"Wrote private key: {priv_path} (do not commit)")
 print(f"Synced role files copy: {role_files / 'licensing-ed25519-v1.pub'}")
 print("Control plane: export KEVANTIC_LICENSE_PRIVATE_KEY_FILE=<that pem path>")
-print("Alias also accepted: JUNEXIS_LICENSE_PRIVATE_KEY_FILE")
+print("Alias also accepted: NIKTIAR_LICENSE_PRIVATE_KEY_FILE")
 PY

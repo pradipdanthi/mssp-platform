@@ -381,7 +381,7 @@ export default function ThreatIntelAdminPage() {
                 <p className="page-subtitle">
                   Pull objects from a TAXII collection, then ingest as STIX. You can use a one-off
                   URL or the configured feed env vars (
-                  <code>JUNEXIS_TAXII_API_ROOT</code> / <code>JUNEXIS_TAXII_COLLECTION_ID</code>).
+                  <code>NIKTIAR_TAXII_API_ROOT</code> / <code>NIKTIAR_TAXII_COLLECTION_ID</code>).
                 </p>
                 <label className="form-label">
                   API root

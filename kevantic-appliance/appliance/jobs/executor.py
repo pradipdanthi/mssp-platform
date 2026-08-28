@@ -86,7 +86,7 @@ def _exec_containment(job_type: str, payload: Dict[str, Any]) -> Tuple[bool, Dic
             _wazuh_local_json,
         )
     except ImportError:
-        from junexis_cli.register_ops import (  # type: ignore
+        from niktiar_cli.register_ops import (  # type: ignore
             _authenticate_local_wazuh,
             _ensure_local_edr_ar_commands,
             _wazuh_local_json,

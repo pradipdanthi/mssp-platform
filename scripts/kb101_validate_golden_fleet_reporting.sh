@@ -15,8 +15,8 @@ need "$APP/cli/kevantic-cli/kevantic_cli/register_ops.py"
 need "$APP/cli/kevantic-cli/kevantic_cli/state.py"
 need "$APP/configs/image-release.json"
 need "$APP/configs/systemd/kevantic-heartbeat.service"
-need "$APP/configs/systemd/junexis-heartbeat.service"
-need "$APP/configs/systemd/junexis-heartbeat.timer"
+need "$APP/configs/systemd/niktiar-heartbeat.service"
+need "$APP/configs/systemd/niktiar-heartbeat.timer"
 need "$APP/scripts/bake_golden_vm199_fleet_reporting.sh"
 need "$APP/scripts/upgrade_appliance_fleet_reporting.sh"
 need "$APP/scripts/upgrade_appliance_heartbeat_inventory.sh"
@@ -103,18 +103,18 @@ grep -F 'ExecStart=/usr/bin/python3 -m kevantic_cli heartbeat' \
   && pass "kevantic heartbeat uses python -m" \
   || fail "kevantic-heartbeat.service still uses bash wrapper"
 
-grep -F 'ExecStart=/usr/bin/python3 -m junexis_cli heartbeat' \
-  "$APP/configs/systemd/junexis-heartbeat.service" \
+grep -F 'ExecStart=/usr/bin/python3 -m niktiar_cli heartbeat' \
+  "$APP/configs/systemd/niktiar-heartbeat.service" \
   && pass "junexis heartbeat uses python -m" \
-  || fail "junexis-heartbeat.service still uses bash wrapper"
+  || fail "niktiar-heartbeat.service still uses bash wrapper"
 
 grep -q 'image-release.json' "$APP/ansible/roles/kevantic_runtime/tasks/main.yml" \
   && pass "ansible runtime installs image-release.json" \
   || fail "kevantic_runtime missing image-release.json"
 
-grep -q 'junexis-heartbeat.service' "$APP/ansible/roles/kevantic_runtime/tasks/main.yml" \
+grep -q 'niktiar-heartbeat.service' "$APP/ansible/roles/kevantic_runtime/tasks/main.yml" \
   && pass "ansible runtime installs junexis heartbeat unit" \
-  || fail "kevantic_runtime missing junexis-heartbeat.service"
+  || fail "kevantic_runtime missing niktiar-heartbeat.service"
 
 grep -q 'python3 -m kevantic_cli heartbeat' "$APP/ansible/playbooks/install-provision.yml" \
   && pass "install-provision asserts python -m heartbeat" \

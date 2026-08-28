@@ -1,6 +1,6 @@
 # ISO 27001 Annex A 8.28 / OWASP Top 10 — Secure Coding Compliance Report
 
-**Project:** MSSP Platform (`mssp-platform`), `website-junexis/`, backend services, active-response scripts  
+**Project:** MSSP Platform (`mssp-platform`), `website-niktiar/`, backend services, active-response scripts  
 **Audit date:** 2026-08-19  
 **Auditor role:** Principal Application Security Auditor & Lead QA Engineer (automated SAST pass)  
 **Scope:** Static analysis across 821 source/config files (Python, TypeScript/JavaScript, Shell, PowerShell, YAML, JSON)  
@@ -30,7 +30,7 @@ This pass confirms the platform follows secure-coding fundamentals aligned with 
 ### Scan coverage
 - `backend-api/` (FastAPI services)
 - `frontend-admin/`, `frontend-customer/` (React/TS)
-- `website-junexis/` (static marketing site)
+- `website-niktiar/` (static marketing site)
 - `kevantic-appliance/`, `deploy/wazuh-active-response/`, `ansible/`, `scripts/`
 - Excluded from content read: `.env`, `.secrets/`, live credential files
 
@@ -43,7 +43,7 @@ This pass confirms the platform follows secure-coding fundamentals aligned with 
 | SEC-003 | Medium | `scripts/kb070_greenbone_start_lab_scan.sh` | GMP password on CLI (`--gmp-password`) | **Documented** — lab-only script; migrate to credential file |
 | SEC-004 | Low | `scripts/kb034_validate_customer_account_profile_hardening.sh` | Static temp password in validation script | **Accepted** — lab validator only; not production runtime |
 | SEC-005 | Info | `backend-api/app/core/config.py` | `JWT_SECRET` fails closed (no insecure default) | **Pass** |
-| SEC-006 | Info | `website-junexis/` | No API keys, tokens, or passwords in JS/HTML | **Pass** |
+| SEC-006 | Info | `website-niktiar/` | No API keys, tokens, or passwords in JS/HTML | **Pass** |
 | SEC-007 | Info | Frontends | Secrets loaded via build-time env / runtime API auth only | **Pass** |
 
 ### Positive controls
@@ -136,7 +136,7 @@ This pass confirms the platform follows secure-coding fundamentals aligned with 
 | `frontend-customer` | `package.json` | Same stack as admin portal |
 | `e2e` | `package.json` | Playwright test deps only |
 | `backend-api` | `requirements.txt` | Pinned versions; FastAPI 0.115.x |
-| `website-junexis` | Static JS | No npm dependencies |
+| `website-niktiar` | Static JS | No npm dependencies |
 
 ### Syntax / build checks (audit run)
 | Check | Result |

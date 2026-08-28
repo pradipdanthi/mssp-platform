@@ -1,6 +1,6 @@
 # Marketing Website Updates — kevantic.com Pricing & Capabilities
 
-Paste the block below into the **Pricing & Capabilities** section of [www.kevantic.com](https://www.kevantic.com/) (e.g. `website-junexis/services.html` or your CMS pricing module).
+Paste the block below into the **Pricing & Capabilities** section of [www.kevantic.com](https://www.kevantic.com/) (e.g. `website-niktiar/services.html` or your CMS pricing module).
 
 ---
 
@@ -43,11 +43,11 @@ Paste the block below into the **Pricing & Capabilities** section of [www.kevant
         </p>
         <p className="tier-inherits">Everything in Silver, plus:</p>
         <ul>
-          <li>Wazuh EDR telemetry &amp; alerting</li>
+          <li>NikTiar Core EDR telemetry &amp; alerting</li>
           <li>Automated active containment (host isolation)</li>
-          <li>Pre-LLM AI veto gate</li>
-          <li>Vulnerability management sync</li>
-          <li>External attack surface (EASM) sync</li>
+          <li>Pre-LLM whitelist AI veto gate</li>
+          <li>NikTiar Aegis vulnerability sync</li>
+          <li>NikTiar perimeter EASM sync</li>
         </ul>
       </article>
 
@@ -55,14 +55,15 @@ Paste the block below into the **Pricing & Capabilities** section of [www.kevant
         <p className="tier-eyebrow">Tier 3</p>
         <h3>Platinum</h3>
         <p className="tier-headline">
-          Full MXDR — DeepSight NDR, Spectre Endpoint DFIR &amp; Retrospective Sweeps
+          Full MXDR &mdash; NikTiar DeepSight NDR, NikTiar Spectre Endpoint DFIR &amp; Retrospective Sweeps
         </p>
         <p className="tier-inherits">Everything in Gold, plus:</p>
         <ul>
-          <li>Suricata / Zeek NDR (NikTiar DeepSight)</li>
-          <li>Spectre endpoint DFIR (process tree &amp; artifacts)</li>
+          <li>NikTiar DeepSight NDR</li>
+          <li>NikTiar Spectre endpoint DFIR (process tree &amp; artifacts)</li>
           <li>90-day retrospective threat sweeps</li>
-          <li>ClickHouse OLAP analytics &amp; log archiver</li>
+          <li>NikTiar analytics OLAP &amp; compressed archival</li>
+          <li>NikTiar continuous compliance indicators</li>
         </ul>
       </article>
     </div>
@@ -84,14 +85,15 @@ Paste the block below into the **Pricing & Capabilities** section of [www.kevant
           <tr><th scope="row">Kerberoasting detection</th><td>✓</td><td>✓</td><td>✓</td></tr>
           <tr><th scope="row">Portal MFA</th><td>✓</td><td>✓</td><td>✓</td></tr>
           <tr><th scope="row">90-day retention</th><td>✓</td><td>✓</td><td>✓</td></tr>
-          <tr><th scope="row">Wazuh EDR</th><td>—</td><td>✓</td><td>✓</td></tr>
+          <tr><th scope="row">NikTiar Core EDR</th><td>—</td><td>✓</td><td>✓</td></tr>
           <tr><th scope="row">Automated active containment (host isolation)</th><td>—</td><td>✓</td><td>✓</td></tr>
-          <tr><th scope="row">Pre-LLM AI veto gate</th><td>—</td><td>✓</td><td>✓</td></tr>
-          <tr><th scope="row">Vulnerability &amp; EASM sync</th><td>—</td><td>✓</td><td>✓</td></tr>
-          <tr><th scope="row">Suricata / Zeek NDR (DeepSight)</th><td>—</td><td>—</td><td>✓</td></tr>
-          <tr><th scope="row">Spectre endpoint DFIR (process tree / artifacts)</th><td>—</td><td>—</td><td>✓</td></tr>
+          <tr><th scope="row">Pre-LLM whitelist AI veto gate</th><td>—</td><td>✓</td><td>✓</td></tr>
+          <tr><th scope="row">NikTiar Aegis &amp; perimeter EASM sync</th><td>—</td><td>✓</td><td>✓</td></tr>
+          <tr><th scope="row">NikTiar DeepSight NDR</th><td>—</td><td>—</td><td>✓</td></tr>
+          <tr><th scope="row">NikTiar Spectre DFIR (process tree / artifacts)</th><td>—</td><td>—</td><td>✓</td></tr>
           <tr><th scope="row">90-day retrospective sweeps</th><td>—</td><td>—</td><td>✓</td></tr>
-          <tr><th scope="row">ClickHouse OLAP &amp; archiver</th><td>—</td><td>—</td><td>✓</td></tr>
+          <tr><th scope="row">NikTiar analytics OLAP &amp; archival</th><td>—</td><td>—</td><td>✓</td></tr>
+          <tr><th scope="row">NikTiar continuous compliance</th><td>—</td><td>—</td><td>✓</td></tr>
         </tbody>
       </table>
     </div>
@@ -141,24 +143,25 @@ Paste the block below into the **Pricing & Capabilities** section of [www.kevant
         <p class="tier-headline">Core MDR &mdash; 24/7 Host Protection, Automated Containment &amp; Pre-LLM AI Triage</p>
         <p class="tier-inherits">Everything in Silver, plus:</p>
         <ul>
-          <li>Wazuh EDR telemetry &amp; alerting</li>
+          <li>NikTiar Core EDR telemetry &amp; alerting</li>
           <li>Automated active containment (host isolation)</li>
-          <li>Pre-LLM AI veto gate</li>
-          <li>Vulnerability management sync</li>
-          <li>External attack surface (EASM) sync</li>
+          <li>Pre-LLM whitelist AI veto gate</li>
+          <li>NikTiar Aegis vulnerability sync</li>
+          <li>NikTiar perimeter EASM sync</li>
         </ul>
       </article>
 
       <article class="tier-card tier-card--platinum">
         <p class="tier-eyebrow">Tier 3</p>
         <h3>Platinum</h3>
-        <p class="tier-headline">Full MXDR &mdash; DeepSight NDR, Spectre Endpoint DFIR &amp; Retrospective Sweeps</p>
+        <p class="tier-headline">Full MXDR &mdash; NikTiar DeepSight NDR, NikTiar Spectre Endpoint DFIR &amp; Retrospective Sweeps</p>
         <p class="tier-inherits">Everything in Gold, plus:</p>
         <ul>
-          <li>Suricata / Zeek NDR (NikTiar DeepSight)</li>
-          <li>Spectre endpoint DFIR (process tree &amp; artifacts)</li>
+          <li>NikTiar DeepSight NDR</li>
+          <li>NikTiar Spectre endpoint DFIR (process tree &amp; artifacts)</li>
           <li>90-day retrospective threat sweeps</li>
-          <li>ClickHouse OLAP analytics &amp; log archiver</li>
+          <li>NikTiar analytics OLAP &amp; compressed archival</li>
+          <li>NikTiar continuous compliance indicators</li>
         </ul>
       </article>
     </div>
@@ -180,14 +183,15 @@ Paste the block below into the **Pricing & Capabilities** section of [www.kevant
           <tr><th scope="row">Kerberoasting detection</th><td>&#10003;</td><td>&#10003;</td><td>&#10003;</td></tr>
           <tr><th scope="row">Portal MFA</th><td>&#10003;</td><td>&#10003;</td><td>&#10003;</td></tr>
           <tr><th scope="row">90-day retention</th><td>&#10003;</td><td>&#10003;</td><td>&#10003;</td></tr>
-          <tr><th scope="row">Wazuh EDR</th><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td></tr>
+          <tr><th scope="row">NikTiar Core EDR</th><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td></tr>
           <tr><th scope="row">Automated active containment (host isolation)</th><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td></tr>
-          <tr><th scope="row">Pre-LLM AI veto gate</th><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td></tr>
-          <tr><th scope="row">Vulnerability &amp; EASM sync</th><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td></tr>
-          <tr><th scope="row">Suricata / Zeek NDR (DeepSight)</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
-          <tr><th scope="row">Spectre endpoint DFIR (process tree / artifacts)</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
+          <tr><th scope="row">Pre-LLM whitelist AI veto gate</th><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td></tr>
+          <tr><th scope="row">NikTiar Aegis &amp; perimeter EASM sync</th><td>&mdash;</td><td>&#10003;</td><td>&#10003;</td></tr>
+          <tr><th scope="row">NikTiar DeepSight NDR</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
+          <tr><th scope="row">NikTiar Spectre DFIR (process tree / artifacts)</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
           <tr><th scope="row">90-day retrospective sweeps</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
-          <tr><th scope="row">ClickHouse OLAP &amp; archiver</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
+          <tr><th scope="row">NikTiar analytics OLAP &amp; archival</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
+          <tr><th scope="row">NikTiar continuous compliance</th><td>&mdash;</td><td>&mdash;</td><td>&#10003;</td></tr>
         </tbody>
       </table>
     </div>
@@ -247,4 +251,4 @@ Paste the block below into the **Pricing & Capabilities** section of [www.kevant
 
 ---
 
-*Generated for Phase 7 — 3-tier entitlement rollout. Replaces legacy Bronze–Platinum four-column table with Silver / Gold / Platinum.*
+*Phase 3 complete — Silver / Gold / Platinum only. Public copy uses NikTiar™ product names (no third-party engine vendors). Canonical HTML lives in `website-niktiar/snippets/` and syncs to production via `scripts/sync_marketing_phase3.py`.*

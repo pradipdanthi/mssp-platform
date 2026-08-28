@@ -61,21 +61,21 @@ for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
   install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
 done
 
-install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
+install -d -m 0755 /var/lib/niktiar/edr-ar/windows /var/lib/kevantic/edr-ar/windows
 for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1; do
-  install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
+  install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/niktiar/edr-ar/windows/\$f"
   install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
 done
 
-if [[ -d /opt/junexis/cli/junexis_cli ]]; then
-  env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+if [[ -d /opt/niktiar/cli/niktiar_cli ]]; then
+  env PYTHONPATH=/opt/niktiar/cli:/opt/niktiar python3 -c 'from niktiar_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
 elif [[ -d /opt/kevantic/cli/kevantic_cli ]]; then
   env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
 else
   echo "WARN: CLI missing — scripts installed but shared publish skipped" >&2
 fi
 
-for path in /etc/junexis/image-release.json /etc/kevantic/image-release.json; do
+for path in /etc/niktiar/image-release.json /etc/kevantic/image-release.json; do
   if [[ -f "\$path" ]]; then
     python3 - <<PY
 import json
@@ -91,7 +91,7 @@ done
 
 echo "== verify permissions =="
 stat -c '%U:%G %a %n' /var/ossec/active-response/bin/mssp-isolate-host
-stat -c '%U:%G %a %n' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
+stat -c '%U:%G %a %n' /var/lib/niktiar/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
   stat -c '%U:%G %a %n' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
 
 SHARED=\$(find /var/ossec/etc/shared -name mssp-isolate-host.ps1 2>/dev/null | head -1)

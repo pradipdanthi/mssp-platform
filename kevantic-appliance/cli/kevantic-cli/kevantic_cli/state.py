@@ -8,19 +8,33 @@ from pathlib import Path
 from typing import Any
 
 
+def _env_path(*keys: str, defaults: tuple[str, ...] = ()) -> Path:
+    for key in keys:
+        val = (os.environ.get(key) or "").strip()
+        if val:
+            return Path(val)
+    for d in defaults:
+        p = Path(d)
+        if p.exists():
+            return p
+    return Path(defaults[0]) if defaults else Path("/var/lib/niktiar")
+
+
 def state_root() -> Path:
-    return Path(
-        os.environ.get("KEVANTIC_STATE_DIR")
-        or os.environ.get("JUNEXIS_STATE_DIR")
-        or "/var/lib/kevantic"
+    return _env_path(
+        "NIKTIAR_STATE_DIR",
+        "KEVANTIC_STATE_DIR",
+        "JUNEXIS_STATE_DIR",
+        defaults=("/var/lib/niktiar", "/var/lib/junexis", "/var/lib/kevantic"),
     )
 
 
 def config_root() -> Path:
-    return Path(
-        os.environ.get("KEVANTIC_CONFIG_DIR")
-        or os.environ.get("JUNEXIS_CONFIG_DIR")
-        or "/etc/kevantic"
+    return _env_path(
+        "NIKTIAR_CONFIG_DIR",
+        "KEVANTIC_CONFIG_DIR",
+        "JUNEXIS_CONFIG_DIR",
+        defaults=("/etc/niktiar", "/etc/junexis", "/etc/kevantic"),
     )
 
 
@@ -88,11 +102,14 @@ def default_control_plane() -> str:
     """Lab appliances default to Appliance Management VM 114 (KB-093L).
 
     Production/public edge: set KEVANTIC_DEFAULT_CONTROL_PLANE=https://soc.kevantic.com
-    at image build or in /etc/kevantic/appliance.env before register.
+    at image build or in /etc/niktiar/appliance.env before register.
     """
     return (
-        os.environ.get("KEVANTIC_DEFAULT_CONTROL_PLANE")
+        os.environ.get("NIKTIAR_DEFAULT_CONTROL_PLANE")
+        or os.environ.get("KEVANTIC_DEFAULT_CONTROL_PLANE")
         or os.environ.get("KEVANTIC_CONTROL_PLANE")
+        or os.environ.get("NIKTIAR_CONTROL_PLANE")
+        or os.environ.get("JUNEXIS_CONTROL_PLANE")
         or "http://192.168.0.224:8000"
     ).rstrip("/")
 

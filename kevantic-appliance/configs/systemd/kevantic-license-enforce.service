@@ -6,8 +6,8 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 EnvironmentFile=-/etc/kevantic/appliance.env
-EnvironmentFile=-/etc/junexis/appliance.env
-Environment=PYTHONPATH=/opt/kevantic/cli:/opt/kevantic:/opt/junexis/cli:/opt/junexis
+EnvironmentFile=-/etc/niktiar/appliance.env
+Environment=PYTHONPATH=/opt/kevantic/cli:/opt/kevantic:/opt/niktiar/cli:/opt/niktiar
 ExecStart=/usr/bin/python3 -m kevantic_cli license enforce --json
 Nice=10
 

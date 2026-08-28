@@ -1,0 +1,16 @@
+[Unit]
+Description=NikTiar appliance heartbeat (health + agent inventory + job pull)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/niktiar/appliance.env
+EnvironmentFile=-/etc/junexis/appliance.env
+Environment=PYTHONPATH=/opt/niktiar/cli:/opt/niktiar
+# Invoke the Python module directly — direct ExecStart of the bash wrapper drops agent inventory.
+ExecStart=/usr/bin/python3 -m niktiar_cli heartbeat --json
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

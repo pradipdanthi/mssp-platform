@@ -26,18 +26,22 @@ LOG = logging.getLogger("kevantic-channeld")
 
 
 def _state_root() -> Path:
-    return Path(
-        os.environ.get("KEVANTIC_STATE_DIR")
-        or os.environ.get("JUNEXIS_STATE_DIR")
-        or ("/var/lib/junexis" if Path("/var/lib/junexis/appliance.json").is_file() else "/var/lib/kevantic")
-    )
+    for env_name in ("KEVANTIC_STATE_DIR", "NIKTIAR_STATE_DIR", "JUNEXIS_STATE_DIR"):
+        env = os.environ.get(env_name, "").strip()
+        if env:
+            return Path(env)
+    if Path("/var/lib/niktiar/appliance.json").is_file():
+        return Path("/var/lib/niktiar")
+    if Path("/var/lib/junexis/appliance.json").is_file():
+        return Path("/var/lib/junexis")
+    return Path("/var/lib/kevantic")
 
 
 def _config_root() -> Path:
     return Path(
         os.environ.get("KEVANTIC_CONFIG_DIR")
-        or os.environ.get("JUNEXIS_CONFIG_DIR")
-        or ("/etc/junexis" if Path("/etc/junexis").is_dir() else "/etc/kevantic")
+        or os.environ.get("NIKTIAR_CONFIG_DIR")
+        or ("/etc/niktiar" if Path("/etc/niktiar").is_dir() else "/etc/kevantic")
     )
 
 
@@ -67,12 +71,12 @@ def load_creds() -> tuple[str, str]:
         appliance_id = str(json.loads(app_path.read_text()).get("appliance_id") or "")
     appliance_id = (
         os.environ.get("KEVANTIC_APPLIANCE_ID")
-        or os.environ.get("JUNEXIS_APPLIANCE_ID")
+        or os.environ.get("NIKTIAR_APPLIANCE_ID")
         or appliance_id
     )
     api_key = (
         os.environ.get("KEVANTIC_APPLIANCE_API_KEY")
-        or os.environ.get("JUNEXIS_APPLIANCE_API_KEY")
+        or os.environ.get("NIKTIAR_APPLIANCE_API_KEY")
         or ""
     )
     if not api_key and key_path.is_file():
@@ -86,7 +90,7 @@ def control_plane_base(cfg: dict[str, Any]) -> str:
     base = (
         cfg.get("control_plane")
         or os.environ.get("KEVANTIC_CONTROL_PLANE")
-        or os.environ.get("JUNEXIS_CONTROL_PLANE")
+        or os.environ.get("NIKTIAR_CONTROL_PLANE")
         or ""
     )
     if not base and (_state_root() / "appliance.json").is_file():
@@ -102,7 +106,7 @@ def control_plane_base(cfg: dict[str, Any]) -> str:
 def _ssl_context() -> ssl.SSLContext:
     verify = (
         os.environ.get("KEVANTIC_TLS_VERIFY")
-        or os.environ.get("JUNEXIS_TLS_VERIFY")
+        or os.environ.get("NIKTIAR_TLS_VERIFY")
         or "true"
     ).lower() not in (
         "0",
@@ -142,17 +146,21 @@ def handle_frame(frame: dict[str, Any], *, base: str, headers: dict[str, str]) -
     LOG.info("frame type=%s id=%s", ftype, fid)
 
     if ftype == "job":
-        # Execute via local engine API when possible
         job_id = payload.get("job_id") or fid
+        job_type = str(payload.get("job_type") or "").strip()
         try:
-            # Prefer local engine execute if job already known; else stage AR via heartbeat path
             try:
                 from kevantic_cli import register_ops  # type: ignore
             except ImportError:
-                from junexis_cli import register_ops  # type: ignore
+                from niktiar_cli import register_ops  # type: ignore
 
-            # Reuse AR runner for containment-style jobs
-            ok, msg = register_ops._run_local_ar({"payload": payload})
+            ok, msg = register_ops._dispatch_job(
+                {
+                    "id": job_id,
+                    "job_type": job_type,
+                    "payload": payload,
+                }
+            )
             return {"ref": fid, "job_id": job_id, "success": ok, "message": msg}
         except Exception as exc:
             return {"ref": fid, "job_id": job_id, "success": False, "message": str(exc)[:300]}
@@ -341,7 +349,7 @@ def run_ws_loop(cfg: dict[str, Any]) -> int:
     sslopt = {}
     tls_verify = (
         os.environ.get("KEVANTIC_TLS_VERIFY")
-        or os.environ.get("JUNEXIS_TLS_VERIFY")
+        or os.environ.get("NIKTIAR_TLS_VERIFY")
         or "true"
     )
     if (tls_verify or "true").lower() in ("0", "false", "no"):

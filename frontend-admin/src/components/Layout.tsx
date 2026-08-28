@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   { to: "/notifications", label: "Notifications" },
   { to: "/audit", label: "Audit" },
   { to: "/service-requests", label: "Service Requests" },
-  { to: "/services", label: "Service Catalog" },
+  { to: "/services", label: "Tier Operations" },
 ];
 
 export default function Layout({ children }: { children: ReactNode }) {

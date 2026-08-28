@@ -1,0 +1,21 @@
+[Unit]
+Description=Kevantic marketing website (lab preview)
+Documentation=file:///opt/mssp-control/website-niktiar/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secadmin
+Group=secadmin
+WorkingDirectory=/opt/mssp-control/website-niktiar
+ExecStart=/usr/bin/python3 -m http.server 8080 --bind 0.0.0.0
+Restart=always
+RestartSec=3
+
+# Static preview only — no write needed beyond cwd read
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

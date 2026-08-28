@@ -8,17 +8,17 @@
   vars:
     kevantic_repo_root: "{{ playbook_dir }}/../.."
   tasks:
-    - name: Detect Junexis vs kevantic layout
+    - name: Detect NikTiar vs kevantic layout
       ansible.builtin.stat:
-        path: /opt/junexis/appliance-src
+        path: /opt/niktiar/appliance-src
       register: junexis_src
 
     - name: Set brand paths
       ansible.builtin.set_fact:
-        appliance_src: "{{ '/opt/junexis/appliance-src' if junexis_src.stat.exists else '/opt/kevantic/appliance-src' }}"
-        env_file: "{{ '/etc/junexis/appliance.env' if junexis_src.stat.exists else '/etc/kevantic/appliance.env' }}"
-        unit_name: "{{ 'junexis-critical-alert-forwarder.service' if junexis_src.stat.exists else 'kevantic-critical-alert-forwarder.service' }}"
-        telemetry_key: "{{ 'JUNEXIS_TELEMETRY_URL' if junexis_src.stat.exists else 'KEVANTIC_TELEMETRY_URL' }}"
+        appliance_src: "{{ '/opt/niktiar/appliance-src' if junexis_src.stat.exists else '/opt/kevantic/appliance-src' }}"
+        env_file: "{{ '/etc/niktiar/appliance.env' if junexis_src.stat.exists else '/etc/kevantic/appliance.env' }}"
+        unit_name: "{{ 'niktiar-critical-alert-forwarder.service' if junexis_src.stat.exists else 'kevantic-critical-alert-forwarder.service' }}"
+        telemetry_key: "{{ 'NIKTIAR_TELEMETRY_URL' if junexis_src.stat.exists else 'KEVANTIC_TELEMETRY_URL' }}"
 
     - name: Ensure appliance-src telemetry directory
       ansible.builtin.file:
@@ -47,7 +47,7 @@
         mode: "0644"
       loop:
         - kevantic-critical-alert-forwarder.service
-        - junexis-critical-alert-forwarder.service
+        - niktiar-critical-alert-forwarder.service
 
     - name: Install inventory helper
       ansible.builtin.copy:
@@ -61,9 +61,9 @@
         state: directory
         mode: "0755"
       loop:
-        - /run/junexis
+        - /run/niktiar
         - /run/kevantic
-        - /var/log/junexis
+        - /var/log/niktiar
         - /var/log/kevantic
 
     - name: Point telemetry URL at SOC control plane VM 100 (not Appliance Mgmt heartbeat host)

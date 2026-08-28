@@ -1,4 +1,4 @@
--- Junexis ThreatLens + Retrospective Engine (universal appliance + cloud).
+-- NikTiar ThreatLens + Retrospective Engine (universal appliance + cloud).
 -- Note: prompt filename 025_* was already used by VMaaS — this is the live migration id.
 -- Idempotent for live apply.
 

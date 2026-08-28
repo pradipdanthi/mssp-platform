@@ -65,8 +65,8 @@ EOF
 fi
 
 # Environment file — lab vs prod thread defaults; operators may edit in place.
-install -d -m 0755 /etc/kevantic /etc/junexis
-for ENVF in /etc/kevantic/ollama.env /etc/junexis/ollama.env; do
+install -d -m 0755 /etc/kevantic /etc/niktiar
+for ENVF in /etc/kevantic/ollama.env /etc/niktiar/ollama.env; do
   if [[ ! -f "$ENVF" ]]; then
     if [[ -f "$ENV_EXAMPLE" ]]; then
       install -m 0644 "$ENV_EXAMPLE" "$ENVF"
@@ -122,7 +122,7 @@ else
   cat >/etc/systemd/system/ollama.service.d/override.conf <<'EOF'
 [Service]
 EnvironmentFile=-/etc/kevantic/ollama.env
-EnvironmentFile=-/etc/junexis/ollama.env
+EnvironmentFile=-/etc/niktiar/ollama.env
 Environment="OLLAMA_HOST=127.0.0.1:11434"
 Environment="OLLAMA_NUM_PARALLEL=1"
 Environment="OLLAMA_MAX_LOADED_MODELS=1"

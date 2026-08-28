@@ -1,4 +1,4 @@
-# KB-093E — Junexis Edge Appliance Engine (DuckDB/Parquet + Telemetry + Hunt)
+# KB-093E — NikTiar Edge Appliance Engine (DuckDB/Parquet + Telemetry + Hunt)
 
 Status: Implemented on appliance tree + thin control-plane ingest routes.  
 Extends KB-093 B1/B2. Prompt was truncated after hunt payload; completed with result callback contract below.
@@ -7,13 +7,13 @@ Extends KB-093 B1/B2. Prompt was truncated after hunt payload; completed with re
 
 | Module | Path | Role |
 |--------|------|------|
-| A — Archiver | `junexis-appliance/appliance/datalake/archiver.py` | Wazuh/Zeek/Suricata JSON → daily ZSTD Parquet under `/var/log/junexis/datalake/YYYY/MM/DD/` + SQLite metadata |
-| A — Query | `junexis-appliance/appliance/datalake/query_engine.py` | DuckDB search by IP / domain / hash / CVE |
-| B — Forwarder | `junexis-appliance/appliance/telemetry/forwarder.py` | Anonymize + POST `/api/v1/telemetry/ingest`; SQLite buffer + exponential backoff |
-| C — Hunter | `junexis-appliance/appliance/hunting/retrospective_sweeper.py` | Local retrospective IOC hunt |
-| C — API | `junexis-appliance/appliance/api/local_app.py` | `POST /appliance/v1/jobs/retrospective-hunt` (loopback by default) |
+| A — Archiver | `niktiar-appliance/appliance/datalake/archiver.py` | Wazuh/Zeek/Suricata JSON → daily ZSTD Parquet under `/var/log/niktiar/datalake/YYYY/MM/DD/` + SQLite metadata |
+| A — Query | `niktiar-appliance/appliance/datalake/query_engine.py` | DuckDB search by IP / domain / hash / CVE |
+| B — Forwarder | `niktiar-appliance/appliance/telemetry/forwarder.py` | Anonymize + POST `/api/v1/telemetry/ingest`; SQLite buffer + exponential backoff |
+| C — Hunter | `niktiar-appliance/appliance/hunting/retrospective_sweeper.py` | Local retrospective IOC hunt |
+| C — API | `niktiar-appliance/appliance/api/local_app.py` | `POST /appliance/v1/jobs/retrospective-hunt` (loopback by default) |
 
-Metadata DB: `/var/lib/junexis/appliance_local.db`
+Metadata DB: `/var/lib/niktiar/appliance_local.db`
 
 ## Hunt job contract
 
@@ -49,8 +49,8 @@ cd /opt/mssp-control
 ## Run local job API (dev)
 
 ```bash
-cd /opt/mssp-control/junexis-appliance
+cd /opt/mssp-control/niktiar-appliance
 export PYTHONPATH=$PWD
-export JUNEXIS_STATE_DIR=/tmp/jx-engine JUNEXIS_LOG_DIR=/tmp/jx-logs
+export NIKTIAR_STATE_DIR=/tmp/jx-engine NIKTIAR_LOG_DIR=/tmp/jx-logs
 python3 -m appliance.api.local_app
 ```

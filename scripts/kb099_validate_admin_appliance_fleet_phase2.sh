@@ -177,7 +177,7 @@ if not token:
 raw = subprocess.check_output([
     "curl", "-fsS",
     "-H", f"Authorization: Bearer {token}",
-    "http://localhost:8000/admin/appliances?q=junexis-appliance&page_size=10",
+    "http://localhost:8000/admin/appliances?q=niktiar-appliance&page_size=10",
 ], text=True)
 for row in json.loads(raw).get("appliances") or []:
     if "junexis" in (row.get("appliance_name") or "").lower():
@@ -199,7 +199,7 @@ for row in json.loads(raw).get("appliances") or []:
             raise SystemExit("Beta appliance resource metrics still missing")
         break
 else:
-    print("No junexis-appliance row (skipped live spot-check).")
+    print("No niktiar-appliance row (skipped live spot-check).")
 PY
 
 echo

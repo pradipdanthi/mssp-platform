@@ -7,16 +7,16 @@ Related: KB-093 §12, Track-4 channel/OTA
 
 | Item | Before | After |
 |------|--------|--------|
-| Channel / register / heartbeat edge | Co-located on **VM 100** `mssp-control` | Dedicated **VM 114** `junexis-appliance-mgmt` (`192.168.0.224`) |
+| Channel / register / heartbeat edge | Co-located on **VM 100** `mssp-control` | Dedicated **VM 114** `niktiar-appliance-mgmt` (`192.168.0.224`) |
 | Admin / Customer portals + Postgres SoR | VM 100 | **Still VM 100** (unchanged) |
-| Disposable ISO factory **VM 113** | Idle stopped VM | **Destroyed** (recreate with `junexis-appliance/scripts/b2_proxmox_create_build_vm.sh` when next ISO build is needed) |
+| Disposable ISO factory **VM 113** | Idle stopped VM | **Destroyed** (recreate with `niktiar-appliance/scripts/b2_proxmox_create_build_vm.sh` when next ISO build is needed) |
 
 ## VM 114 facts
 
 | Item | Value |
 |------|--------|
 | Proxmox VMID | **114** |
-| Name | `junexis-appliance-mgmt` |
+| Name | `niktiar-appliance-mgmt` |
 | IP | **192.168.0.224/24** |
 | Specs | 2 vCPU, 4 GiB RAM, 40 GiB disk, `onboot=1` |
 | API | `http://192.168.0.224:8000` |
@@ -39,7 +39,7 @@ Lab images and CLI already default to VM 114:
 | Mechanism | What happens |
 |-----------|----------------|
 | `junexis-cli setup` / `register` | Default `--control-plane` = `http://192.168.0.224:8000` |
-| ISO Ansible `group_vars` | Bakes the same URL into `/etc/junexis/channel.yaml` |
+| ISO Ansible `group_vars` | Bakes the same URL into `/etc/niktiar/channel.yaml` |
 | Admin → Create activation token | Shows a **Copy register command** button with gateway + token filled in |
 
 **New appliance workflow (remember this, not the IP):**
@@ -49,12 +49,12 @@ Lab images and CLI already default to VM 114:
 3. On the appliance: paste and run that one command  
 4. Done — channel/heartbeat use Appliance Management automatically  
 
-Production public edge later: set `JUNEXIS_DEFAULT_CONTROL_PLANE=https://soc.junexis.com` when building the customer ISO (and matching Admin `VITE_APPLIANCE_GATEWAY_URL`).
+Production public edge later: set `NIKTIAR_DEFAULT_CONTROL_PLANE=https://soc.junexis.com` when building the customer ISO (and matching Admin `VITE_APPLIANCE_GATEWAY_URL`).
 
 ### Manual override (rare)
 
 ```bash
-export JUNEXIS_CONTROL_PLANE=http://192.168.0.224:8000
+export NIKTIAR_CONTROL_PLANE=http://192.168.0.224:8000
 sudo systemctl restart junexis-channeld
 ```
 
@@ -76,7 +76,7 @@ Compose overlay on VM 100 (loopback DB publish only):
 
 ```bash
 curl -fsS http://192.168.0.224:8000/health
-# expect: "service":"junexis-appliance-mgmt","api":"ok","database":"ok","redis":"ok"
+# expect: "service":"niktiar-appliance-mgmt","api":"ok","database":"ok","redis":"ok"
 
 curl -sS -o /dev/null -w '%{http_code}\n' http://192.168.0.224:8000/appliance/channel/poll
 # expect: 401
@@ -88,7 +88,7 @@ curl -fsS http://127.0.0.1:8000/health   # control plane still ok
 
 Think of **VM 113** as a temporary workshop, not a permanent server:
 
-1. When you need a **new** Junexis install ISO/qcow2, we create VM 113 again (script does this).  
+1. When you need a **new** NikTiar install ISO/qcow2, we create VM 113 again (script does this).  
 2. The workshop builds the image and copies artifacts to VM 100 (`.cache/dist*`).  
 3. Then we can **delete VM 113 again** so Proxmox RAM/disk stay free.
 

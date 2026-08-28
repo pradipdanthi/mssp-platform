@@ -21,7 +21,7 @@ FILTER="$ROOT/appliance/telemetry/local_ai_filter.py"
 WATCHER="$ROOT/appliance/telemetry/critical_alert_watcher.py"
 PRIVACY="$ROOT/appliance/common/privacy.py"
 UNIT="$ROOT/configs/systemd/kevantic-critical-alert-forwarder.service"
-JUNIT="$ROOT/configs/systemd/junexis-critical-alert-forwarder.service"
+JUNIT="$ROOT/configs/systemd/niktiar-critical-alert-forwarder.service"
 INSTALL_OLLAMA="$ROOT/scripts/install_appliance_ollama.sh"
 PULL="$ROOT/scripts/pull_local_ai_model.sh"
 OLLAMA_UNIT="$ROOT/configs/systemd/ollama.service"
@@ -47,7 +47,7 @@ scp "${SSH_OPTS[@]}" -r \
   "$TMP/critical_alert_watcher.py" \
   "$TMP/privacy.py" \
   "$TMP/kevantic-critical-alert-forwarder.service" \
-  "$TMP/junexis-critical-alert-forwarder.service" \
+  "$TMP/niktiar-critical-alert-forwarder.service" \
   "$TMP/install_appliance_ollama.sh" \
   "$TMP/pull_local_ai_model.sh" \
   "$TMP/ollama.service" \
@@ -60,7 +60,7 @@ ssh "${SSH_OPTS[@]}" "$TARGET" 'bash -s' <<'REMOTE'
 set -euo pipefail
 SRC_APP="/opt/kevantic/appliance-src/appliance"
 if [[ ! -d "$SRC_APP" ]]; then
-  SRC_APP="/opt/junexis/appliance-src/appliance"
+  SRC_APP="/opt/niktiar/appliance-src/appliance"
 fi
 [[ -d "$SRC_APP" ]] || { echo "appliance-src missing" >&2; exit 2; }
 
@@ -68,14 +68,14 @@ sudo install -m 0644 /tmp/local_ai_filter.py "$SRC_APP/telemetry/local_ai_filter
 sudo install -m 0644 /tmp/critical_alert_watcher.py "$SRC_APP/telemetry/critical_alert_watcher.py"
 sudo install -m 0644 /tmp/privacy.py "$SRC_APP/common/privacy.py"
 sudo install -m 0644 /tmp/kevantic-critical-alert-forwarder.service /etc/systemd/system/kevantic-critical-alert-forwarder.service
-sudo install -m 0644 /tmp/junexis-critical-alert-forwarder.service /etc/systemd/system/junexis-critical-alert-forwarder.service
+sudo install -m 0644 /tmp/niktiar-critical-alert-forwarder.service /etc/systemd/system/niktiar-critical-alert-forwarder.service
 sudo install -m 0755 /tmp/ollama-serve-pinned.sh /usr/local/sbin/ollama-serve-pinned.sh
-sudo install -d -m 0755 /etc/kevantic /etc/junexis
+sudo install -d -m 0755 /etc/kevantic /etc/niktiar
 if [[ ! -f /etc/kevantic/ollama.env ]]; then
   sudo install -m 0644 /tmp/ollama.env.example /etc/kevantic/ollama.env
 fi
-if [[ ! -f /etc/junexis/ollama.env ]]; then
-  sudo install -m 0644 /tmp/ollama.env.example /etc/junexis/ollama.env
+if [[ ! -f /etc/niktiar/ollama.env ]]; then
+  sudo install -m 0644 /tmp/ollama.env.example /etc/niktiar/ollama.env
 fi
 sudo install -d -m 0755 /etc/systemd/system/ollama.service.d
 sudo install -m 0644 /tmp/ollama.service /etc/systemd/system/ollama.service
@@ -84,7 +84,7 @@ sudo install -m 0755 /tmp/install_appliance_ollama.sh /usr/local/sbin/install_ap
 sudo install -m 0755 /tmp/pull_local_ai_model.sh /usr/local/sbin/pull_local_ai_model.sh
 
 # Ensure filter env present in appliance.env (idempotent).
-for ENVF in /etc/kevantic/appliance.env /etc/junexis/appliance.env; do
+for ENVF in /etc/kevantic/appliance.env /etc/niktiar/appliance.env; do
   sudo mkdir -p "$(dirname "$ENVF")"
   sudo touch "$ENVF"
   for kv in \
@@ -113,7 +113,7 @@ sudo bash /usr/local/sbin/install_appliance_ollama.sh
 sudo bash /usr/local/sbin/pull_local_ai_model.sh qwen2.5:7b
 sudo systemctl daemon-reload
 sudo systemctl restart kevantic-critical-alert-forwarder.service || true
-sudo systemctl restart junexis-critical-alert-forwarder.service || true
+sudo systemctl restart niktiar-critical-alert-forwarder.service || true
 sudo systemctl is-active ollama.service
 echo LOCAL_AI_FILTER_ENABLED_OK
 REMOTE

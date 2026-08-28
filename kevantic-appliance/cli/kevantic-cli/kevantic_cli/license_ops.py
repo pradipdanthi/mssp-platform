@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
-# Must match backend-api/app/services/junexis_license.py ISSUER.
+# Must match backend-api/app/services/niktiar_license.py ISSUER.
 LICENSE_ISSUER = "kevantic-license"
 SKEW_SECONDS = 300
 CATALOGUE_SERVICE_IDS = {
@@ -30,21 +30,21 @@ CATALOGUE_SERVICE_IDS = {
 def _state_root() -> Path:
     return Path(
         os.environ.get("KEVANTIC_STATE_DIR")
-        or os.environ.get("JUNEXIS_STATE_DIR")
+        or os.environ.get("NIKTIAR_STATE_DIR")
         or "/var/lib/kevantic"
     )
 
 
 def _pubkey_candidates() -> list[Path]:
     out: list[Path] = []
-    for env_name in ("KEVANTIC_LICENSE_PUBKEY", "JUNEXIS_LICENSE_PUBKEY"):
+    for env_name in ("KEVANTIC_LICENSE_PUBKEY", "NIKTIAR_LICENSE_PUBKEY"):
         env = os.environ.get(env_name, "").strip()
         if env:
             out.append(Path(env))
     out.extend(
         [
             Path("/etc/kevantic/trust/keys/licensing-ed25519-v1.pub"),
-            Path("/etc/junexis/trust/keys/licensing-ed25519-v1.pub"),
+            Path("/etc/niktiar/trust/keys/licensing-ed25519-v1.pub"),
             Path(__file__).resolve().parents[3]
             / "licensing"
             / "keys"

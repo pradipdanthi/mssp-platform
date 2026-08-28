@@ -51,7 +51,7 @@ PRIVACY="$ROOT/appliance/common/privacy.py"
 [[ -f "$PRIVACY" ]] || die "missing $PRIVACY"
 FWD_UNIT="$ROOT/configs/systemd/kevantic-critical-alert-forwarder.service"
 [[ -f "$FWD_UNIT" ]] || die "missing $FWD_UNIT"
-JFWD_UNIT="$ROOT/configs/systemd/junexis-critical-alert-forwarder.service"
+JFWD_UNIT="$ROOT/configs/systemd/niktiar-critical-alert-forwarder.service"
 [[ -f "$JFWD_UNIT" ]] || die "missing $JFWD_UNIT"
 OLLAMA_UNIT="$ROOT/configs/systemd/ollama.service"
 [[ -f "$OLLAMA_UNIT" ]] || die "missing $OLLAMA_UNIT"
@@ -110,8 +110,8 @@ cp "$ROOT/cli/kevantic-cli/kevantic_cli/state.py" "$TMP/state.py"
 cp "$ROOT/cli/kevantic-cli/kevantic_cli/license_ops.py" "$TMP/license_ops.py"
 cp "$ROOT/configs/systemd/kevantic-heartbeat.service" "$TMP/kevantic-heartbeat.service"
 cp "$ROOT/configs/systemd/kevantic-heartbeat.timer" "$TMP/kevantic-heartbeat.timer"
-cp "$ROOT/configs/systemd/junexis-heartbeat.service" "$TMP/junexis-heartbeat.service"
-cp "$ROOT/configs/systemd/junexis-heartbeat.timer" "$TMP/junexis-heartbeat.timer"
+cp "$ROOT/configs/systemd/niktiar-heartbeat.service" "$TMP/niktiar-heartbeat.service"
+cp "$ROOT/configs/systemd/niktiar-heartbeat.timer" "$TMP/niktiar-heartbeat.timer"
 cp "$ROOT/configs/systemd/kevantic-license-enforce.service" "$TMP/kevantic-license-enforce.service"
 cp "$ROOT/configs/systemd/kevantic-license-enforce.timer" "$TMP/kevantic-license-enforce.timer"
 cp "$PUBKEY" "$TMP/licensing-ed25519-v1.pub"
@@ -155,7 +155,7 @@ cp "$LOCAL_AI_FILTER" "$TMP/local_ai_filter.py"
 cp "$WATCHER" "$TMP/critical_alert_watcher.py"
 cp "$PRIVACY" "$TMP/privacy.py"
 cp "$FWD_UNIT" "$TMP/kevantic-critical-alert-forwarder.service"
-cp "$JFWD_UNIT" "$TMP/junexis-critical-alert-forwarder.service"
+cp "$JFWD_UNIT" "$TMP/niktiar-critical-alert-forwarder.service"
 cp "$OLLAMA_UNIT" "$TMP/ollama.service"
 mkdir -p "$TMP/ollama.service.d"
 cp "$OLLAMA_DROPIN" "$TMP/ollama.service.d/override.conf"
@@ -186,8 +186,8 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/license_ops.py" \
   "$TMP/kevantic-heartbeat.service" \
   "$TMP/kevantic-heartbeat.timer" \
-  "$TMP/junexis-heartbeat.service" \
-  "$TMP/junexis-heartbeat.timer" \
+  "$TMP/niktiar-heartbeat.service" \
+  "$TMP/niktiar-heartbeat.timer" \
   "$TMP/kevantic-license-enforce.service" \
   "$TMP/kevantic-license-enforce.timer" \
   "$TMP/licensing-ed25519-v1.pub" \
@@ -217,7 +217,7 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/critical_alert_watcher.py" \
   "$TMP/privacy.py" \
   "$TMP/kevantic-critical-alert-forwarder.service" \
-  "$TMP/junexis-critical-alert-forwarder.service" \
+  "$TMP/niktiar-critical-alert-forwarder.service" \
   "$TMP/ollama.service" \
   "$TMP/install_appliance_ollama.sh" \
   "$TMP/pull_local_ai_model.sh" \
@@ -231,32 +231,32 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
 set -euo pipefail
 CLI="/opt/kevantic/cli/kevantic_cli"
 if [[ ! -d "\$CLI" ]]; then
-  CLI="/opt/junexis/cli/junexis_cli"
+  CLI="/opt/niktiar/cli/niktiar_cli"
 fi
 [[ -d "\$CLI" ]] || { echo "CLI directory missing" >&2; exit 2; }
 
 sudo install -m 0644 /tmp/register_ops.py "\$CLI/register_ops.py"
 sudo install -m 0644 /tmp/state.py "\$CLI/state.py"
 sudo install -m 0644 /tmp/license_ops.py "\$CLI/license_ops.py"
-sudo install -d -m 0755 /etc/kevantic /etc/junexis /etc/kevantic/trust/keys /etc/junexis/trust/keys
+sudo install -d -m 0755 /etc/kevantic /etc/niktiar /etc/kevantic/trust/keys /etc/niktiar/trust/keys
 sudo install -m 0644 /tmp/licensing-ed25519-v1.pub /etc/kevantic/trust/keys/licensing-ed25519-v1.pub
-sudo install -m 0644 /tmp/licensing-ed25519-v1.pub /etc/junexis/trust/keys/licensing-ed25519-v1.pub
+sudo install -m 0644 /tmp/licensing-ed25519-v1.pub /etc/niktiar/trust/keys/licensing-ed25519-v1.pub
 sudo install -m 0644 /tmp/image-release.json /etc/kevantic/image-release.json
-sudo install -m 0644 /tmp/image-release.json /etc/junexis/image-release.json
+sudo install -m 0644 /tmp/image-release.json /etc/niktiar/image-release.json
 sudo install -m 0644 /tmp/kevantic-heartbeat.service /etc/systemd/system/kevantic-heartbeat.service
 sudo install -m 0644 /tmp/kevantic-heartbeat.timer /etc/systemd/system/kevantic-heartbeat.timer
-sudo install -m 0644 /tmp/junexis-heartbeat.service /etc/systemd/system/junexis-heartbeat.service
-sudo install -m 0644 /tmp/junexis-heartbeat.timer /etc/systemd/system/junexis-heartbeat.timer
+sudo install -m 0644 /tmp/niktiar-heartbeat.service /etc/systemd/system/niktiar-heartbeat.service
+sudo install -m 0644 /tmp/niktiar-heartbeat.timer /etc/systemd/system/niktiar-heartbeat.timer
 sudo install -m 0644 /tmp/kevantic-license-enforce.service /etc/systemd/system/kevantic-license-enforce.service
 sudo install -m 0644 /tmp/kevantic-license-enforce.timer /etc/systemd/system/kevantic-license-enforce.timer
 for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
   sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
 done
-sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
-sudo install -d -m 0755 /var/lib/junexis/edr-ar/linux /var/lib/kevantic/edr-ar/linux
+sudo install -d -m 0755 /var/lib/niktiar/edr-ar/windows /var/lib/kevantic/edr-ar/windows
+sudo install -d -m 0755 /var/lib/niktiar/edr-ar/linux /var/lib/kevantic/edr-ar/linux
 for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1 Install-MsspWindowsEdrAr.ps1 mssp-ar.env.defaults agent.conf.mssp-edr-sync.xml; do
   if [[ -f /tmp/\$f ]]; then
-    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/niktiar/edr-ar/windows/\$f"
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
   fi
 done
@@ -264,17 +264,17 @@ for f in mssp_linux_exec_rules.xml install-mssp-linux-telemetry.sh mssp-exec.rul
   if [[ -f /tmp/\$f ]]; then
     mode=0640
     if [[ "\$f" == "Sync-MsspEdrAr.sh" ]]; then mode=0750; fi
-    sudo install -o wazuh -g wazuh -m "\$mode" "/tmp/\$f" "/var/lib/junexis/edr-ar/linux/\$f"
+    sudo install -o wazuh -g wazuh -m "\$mode" "/tmp/\$f" "/var/lib/niktiar/edr-ar/linux/\$f"
     sudo install -o wazuh -g wazuh -m "\$mode" "/tmp/\$f" "/var/lib/kevantic/edr-ar/linux/\$f"
   fi
 done
-sudo install -d -m 0755 /usr/share/doc/kevantic /usr/share/doc/junexis
+sudo install -d -m 0755 /usr/share/doc/kevantic /usr/share/doc/niktiar
 sudo install -m 0644 /tmp/ATTRIBUTIONS.txt /usr/share/doc/kevantic/ATTRIBUTIONS.txt
-sudo install -m 0644 /tmp/ATTRIBUTIONS.txt /usr/share/doc/junexis/ATTRIBUTIONS.txt
+sudo install -m 0644 /tmp/ATTRIBUTIONS.txt /usr/share/doc/niktiar/ATTRIBUTIONS.txt
 sudo install -d -m 0755 /opt/kevantic/appliance-src/appliance/jobs
 sudo install -m 0644 /tmp/executor.py /opt/kevantic/appliance-src/appliance/jobs/executor.py
-if [[ -d /opt/junexis/appliance-src/appliance/jobs ]]; then
-  sudo install -m 0644 /tmp/executor.py /opt/junexis/appliance-src/appliance/jobs/executor.py
+if [[ -d /opt/niktiar/appliance-src/appliance/jobs ]]; then
+  sudo install -m 0644 /tmp/executor.py /opt/niktiar/appliance-src/appliance/jobs/executor.py
 fi
 
 # KB-108: local AI filter modules + forwarder units + Ollama (localhost only).
@@ -282,19 +282,19 @@ sudo install -d -m 0755 /opt/kevantic/appliance-src/appliance/telemetry /opt/kev
 sudo install -m 0644 /tmp/local_ai_filter.py /opt/kevantic/appliance-src/appliance/telemetry/local_ai_filter.py
 sudo install -m 0644 /tmp/critical_alert_watcher.py /opt/kevantic/appliance-src/appliance/telemetry/critical_alert_watcher.py
 sudo install -m 0644 /tmp/privacy.py /opt/kevantic/appliance-src/appliance/common/privacy.py
-if [[ -d /opt/junexis/appliance-src/appliance ]]; then
-  sudo install -d -m 0755 /opt/junexis/appliance-src/appliance/telemetry /opt/junexis/appliance-src/appliance/common
-  sudo install -m 0644 /tmp/local_ai_filter.py /opt/junexis/appliance-src/appliance/telemetry/local_ai_filter.py
-  sudo install -m 0644 /tmp/critical_alert_watcher.py /opt/junexis/appliance-src/appliance/telemetry/critical_alert_watcher.py
-  sudo install -m 0644 /tmp/privacy.py /opt/junexis/appliance-src/appliance/common/privacy.py
+if [[ -d /opt/niktiar/appliance-src/appliance ]]; then
+  sudo install -d -m 0755 /opt/niktiar/appliance-src/appliance/telemetry /opt/niktiar/appliance-src/appliance/common
+  sudo install -m 0644 /tmp/local_ai_filter.py /opt/niktiar/appliance-src/appliance/telemetry/local_ai_filter.py
+  sudo install -m 0644 /tmp/critical_alert_watcher.py /opt/niktiar/appliance-src/appliance/telemetry/critical_alert_watcher.py
+  sudo install -m 0644 /tmp/privacy.py /opt/niktiar/appliance-src/appliance/common/privacy.py
 fi
 sudo install -m 0644 /tmp/kevantic-critical-alert-forwarder.service /etc/systemd/system/kevantic-critical-alert-forwarder.service
-sudo install -m 0644 /tmp/junexis-critical-alert-forwarder.service /etc/systemd/system/junexis-critical-alert-forwarder.service
+sudo install -m 0644 /tmp/niktiar-critical-alert-forwarder.service /etc/systemd/system/niktiar-critical-alert-forwarder.service
 sudo install -d -m 0755 /etc/systemd/system/ollama.service.d
 sudo install -m 0644 /tmp/ollama.service /etc/systemd/system/ollama.service
 sudo install -m 0644 /tmp/ollama.service.d/override.conf /etc/systemd/system/ollama.service.d/override.conf
 sudo install -m 0755 /tmp/ollama-serve-pinned.sh /usr/local/sbin/ollama-serve-pinned.sh
-sudo install -d -m 0755 /etc/kevantic /etc/junexis
+sudo install -d -m 0755 /etc/kevantic /etc/niktiar
 if [[ ! -f /etc/kevantic/ollama.env ]]; then
   sudo install -m 0644 /tmp/ollama.env.example /etc/kevantic/ollama.env
 fi
@@ -316,8 +316,8 @@ fi
 sudo systemctl enable ollama.service >/dev/null || true
 
 # Register isolate/kill/block command names on the local Manager (Windows + Linux).
-if [[ -d /opt/junexis/cli/junexis_cli ]]; then
-  sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands, _publish_windows_edr_ar_shared; _ensure_local_edr_ar_commands(); _publish_windows_edr_ar_shared()'
+if [[ -d /opt/niktiar/cli/niktiar_cli ]]; then
+  sudo env PYTHONPATH=/opt/niktiar/cli:/opt/niktiar python3 -c 'from niktiar_cli.register_ops import _ensure_local_edr_ar_commands, _publish_windows_edr_ar_shared; _ensure_local_edr_ar_commands(); _publish_windows_edr_ar_shared()'
 else
   sudo env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands, _publish_windows_edr_ar_shared; _ensure_local_edr_ar_commands(); _publish_windows_edr_ar_shared()'
 fi
@@ -327,8 +327,8 @@ sudo grep -q '<name>mssp-isolate-host.cmd</name>' /var/ossec/etc/ossec.conf
 sleep 8
 sudo bash /tmp/patch_wazuh_api_request_timeout.sh 120
 
-if [[ -x /usr/bin/kevantic-list-local-agents ]] && [[ ! -e /usr/bin/junexis-list-local-agents ]]; then
-  sudo ln -sf /usr/bin/kevantic-list-local-agents /usr/bin/junexis-list-local-agents
+if [[ -x /usr/bin/kevantic-list-local-agents ]] && [[ ! -e /usr/bin/niktiar-list-local-agents ]]; then
+  sudo ln -sf /usr/bin/kevantic-list-local-agents /usr/bin/niktiar-list-local-agents
 fi
 
 sudo systemctl daemon-reload
@@ -375,7 +375,7 @@ if [[ "\${SKIP_OLLAMA_PULL:-0}" != "1" ]]; then
 fi
 sudo grep -E '^[[:space:]]*request_timeout:[[:space:]]*120[[:space:]]*$' /var/ossec/api/configuration/api.yaml
 python3 -c 'import json; d=json.load(open("/etc/kevantic/image-release.json")); assert d.get("git_commit") and d.get("config_version") and d.get("edr_ar_version") and d.get("local_ai_version") and d.get("attributions_sha256") and d.get("attributions_md_sha256")'
-sudo grep -q 'Invoke-MsspUnisolate' /var/lib/junexis/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
+sudo grep -q 'Invoke-MsspUnisolate' /var/lib/niktiar/edr-ar/windows/mssp-isolate-host.ps1 2>/dev/null || \
   sudo grep -q 'Invoke-MsspUnisolate' /var/lib/kevantic/edr-ar/windows/mssp-isolate-host.ps1
 SHARED=\$(sudo find /var/ossec/etc/shared -name mssp-isolate-host.ps1 2>/dev/null | head -1)
 [[ -n "\$SHARED" ]] && sudo grep -q 'Repair-MsspDnsConnectivity' "\$SHARED"

@@ -831,5 +831,5 @@ def pull_taxii_collection(
         raw = json.loads(resp.read().decode("utf-8") or "{}")
     if raw.get("type") == "bundle":
         return raw
-    return {"type": "bundle", "id": "bundle--junexis", "objects": raw.get("objects") or []}
+    return {"type": "bundle", "id": "bundle--niktiar", "objects": raw.get("objects") or []}
 

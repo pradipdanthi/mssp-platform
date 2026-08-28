@@ -11,7 +11,7 @@
 
 - `backend-api/` (FastAPI, adapters, RBAC, compliance, EDR, ingest)
 - `frontend-admin/`, `frontend-customer/`
-- `website-junexis/`
+- `website-niktiar/`
 - `kevantic-appliance/` (CLI, licensing, bake, engine jobs)
 - `deploy/wazuh-active-response/`
 - `mssp-appliance-builder/` (spot-check of provision path)
@@ -106,7 +106,7 @@ SCA itself is **not simulated**. The **mapping** of SCA → ISO/PCI/NIST percent
 
 | ID | Finding | Evidence | Remediation |
 |----|---------|----------|-------------|
-| C-1 | **Public site claims HIPAA (and “real-time PCI/ISO/HIPAA scorecards”) that the product cannot generate.** | `website-junexis/index.html` (meta + body), `platform.html`, `solutions.html`, `portal.html`, `services.html`; pitch deck `docs/pitch-deck/notebooklm-source-deck.md`. Backend: `CUSTOMER_FRAMEWORKS` has no HIPAA. | Strip HIPAA from website/pitch **or** implement a real HIPAA Security Rule control library with evidence objects. Until then, scorecards must be labelled “CIS/ISO/PCI/NIST **hardening indicators from endpoint configuration assessment**, not a certification.” |
+| C-1 | **Public site claims HIPAA (and “real-time PCI/ISO/HIPAA scorecards”) that the product cannot generate.** | `website-niktiar/index.html` (meta + body), `platform.html`, `solutions.html`, `portal.html`, `services.html`; pitch deck `docs/pitch-deck/notebooklm-source-deck.md`. Backend: `CUSTOMER_FRAMEWORKS` has no HIPAA. | Strip HIPAA from website/pitch **or** implement a real HIPAA Security Rule control library with evidence objects. Until then, scorecards must be labelled “CIS/ISO/PCI/NIST **hardening indicators from endpoint configuration assessment**, not a certification.” |
 | C-2 | **ITDR sync writes synthetic identity threats into the tenant database when live Graph yields zero events.** | `backend-api/app/services/itdr_service.py` `sync_tenant_itdr`: `live = _import_graph_events_for_config`; `else: _seed_events_for_config`. Samples include impossible travel / MFA fatigue with RFC 5737 IPs. | Fail closed: if Graph is unconfigured, return `sync_status=empty` and **do not insert** demo events in `APP_ENV=production`. Gate sample seeder behind an explicit `ITDR_ALLOW_SAMPLE_ADAPTER=true` lab flag. Surface `source` on Admin UI; never imply live Entra on Customer UI unless `source=microsoft_graph`. |
 
 No Critical *exploitable* IDOR, SQLi, or customer cross-tenant read was found in this pass.
@@ -188,7 +188,7 @@ These are **evidenced**, not marketing adjectives.
 
 | # | Action | Owner surface | Done when |
 |---|--------|---------------|-----------|
-| 1 | **Honesty pass on compliance & ITDR.** Remove HIPAA from `website-junexis/` and pitch until a real control pack exists. Disable ITDR/Vuls sample seeders unless `APP_ENV=lab` (or explicit flags). Label portal scores “configuration assessment indicators.” | Website + `itdr_service.py` + `vmaas_service.py` + Compliance UI copy | No synthetic events in production DB; legal/marketing review sign-off |
+| 1 | **Honesty pass on compliance & ITDR.** Remove HIPAA from `website-niktiar/` and pitch until a real control pack exists. Disable ITDR/Vuls sample seeders unless `APP_ENV=lab` (or explicit flags). Label portal scores “configuration assessment indicators.” | Website + `itdr_service.py` + `vmaas_service.py` + Compliance UI copy | No synthetic events in production DB; legal/marketing review sign-off |
 | 2 | **Production TLS fail-closed.** Refuse API start if `APP_ENV=production` and `WAZUH_API_VERIFY_TLS` is not true. Empty-out lab IP defaults in `InfraSettings` / CORS / `applianceGateway.ts` / `IncidentDrawer.tsx`. | `wazuh_client.py`, `config.py`, frontends, `verify_platform_state.py` | Verifier assertion; cloud `.env` cannot silently MITM |
 | 3 | **Audit completeness.** Instrument credential rotation, activation tokens, user lifecycle, EDR execute, triage, AI chat. Fail closed if audit insert fails in production. Align action enums. | `audit_service.py` + listed route modules | PCI Req 10 sample: every privileged mutation has a row with actor, tenant, IP, outcome |
 | 4 | **Containment status honesty.** AR timeout / 3021 must not set `isolation_status=isolated`. Optional SOC co-sign for customer-initiated isolate. Split EDR callback key from SOC sync key. | `register_ops.py`, `edr_actions.py`, `edr.py` | Table status matches endpoint `applied` |
@@ -256,7 +256,7 @@ A **90+** score would require: MFA + lockout, production TLS fail-closed, comple
 - `backend-api/app/services/edr_actions.py` — isolation_status  
 - `frontend-admin/src/components/IncidentDrawer.tsx` — lab TheHive / fake SOAR  
 - `frontend-admin/src/config/applianceGateway.ts` — lab gateway  
-- `website-junexis/*.html` — HIPAA claims  
+- `website-niktiar/*.html` — HIPAA claims  
 - `deploy/wazuh-active-response/windows/mssp-isolate-host.ps1` — containment (strength)
 
 ---

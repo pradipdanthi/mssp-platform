@@ -160,15 +160,15 @@ SRC_WIN=/tmp/mssp-edr-ar-publish/windows
 SRC_LINUX=/tmp/mssp-edr-ar-publish/linux
 
 sudo mkdir -p /var/lib/kevantic/edr-ar/windows /var/lib/kevantic/edr-ar/linux \
-  /var/lib/junexis/edr-ar/windows /var/lib/junexis/edr-ar/linux
+  /var/lib/niktiar/edr-ar/windows /var/lib/niktiar/edr-ar/linux
 
 if [[ -d "$SRC_WIN" ]]; then
   sudo cp -a "$SRC_WIN"/. /var/lib/kevantic/edr-ar/windows/
-  sudo cp -a "$SRC_WIN"/. /var/lib/junexis/edr-ar/windows/ 2>/dev/null || true
+  sudo cp -a "$SRC_WIN"/. /var/lib/niktiar/edr-ar/windows/ 2>/dev/null || true
 fi
 if [[ -d "$SRC_LINUX" ]]; then
   sudo cp -a "$SRC_LINUX"/. /var/lib/kevantic/edr-ar/linux/
-  sudo cp -a "$SRC_LINUX"/. /var/lib/junexis/edr-ar/linux/ 2>/dev/null || true
+  sudo cp -a "$SRC_LINUX"/. /var/lib/niktiar/edr-ar/linux/ 2>/dev/null || true
   sudo chmod 0750 /var/lib/kevantic/edr-ar/linux/mssp-* /var/lib/kevantic/edr-ar/linux/Sync-MsspEdrAr.sh 2>/dev/null || true
 fi
 

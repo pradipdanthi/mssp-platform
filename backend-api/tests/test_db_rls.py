@@ -66,6 +66,17 @@ def _ensure_test_tenants() -> None:
         )
 
 
+def _delete_test_tenants() -> None:
+    """Remove lab-only RLS fixtures; never leave RLSTSTA/RLSTSTB in admin tenant lists."""
+    execute(
+        """
+        DELETE FROM tenants
+        WHERE id IN (%s::uuid, %s::uuid);
+        """,
+        (TENANT_A, TENANT_B),
+    )
+
+
 def _insert_marker_alert(tenant_id: str, suffix: str) -> str:
     alert_id = str(uuid.uuid4())
     execute(
@@ -111,6 +122,7 @@ class RlsTenantIsolationTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         _delete_marker_alerts()
+        _delete_test_tenants()
 
     def test_rls_blocks_cross_tenant_reads(self):
         tokens = set_db_session_context(tenant_id=TENANT_A, role="customer_admin")
@@ -193,6 +205,7 @@ class RetentionPurgeTests(unittest.TestCase):
                 "DELETE FROM security_alerts WHERE external_alert_id = %s;",
                 (purge_marker,),
             )
+            _delete_test_tenants()
 
 
 class RlsHelperUnitTests(unittest.TestCase):

@@ -9,7 +9,7 @@ Depends on: Tracks 1–4 + KB-093L (VM 114) + KB-093N N1 lab image
 
 ## Goal (plain English)
 
-Prove you can stand up a **real** Junexis appliance that:
+Prove you can stand up a **real** NikTiar appliance that:
 
 1. Registers through **VM 114** (not by memorizing IPs)
 2. Heartbeats and shows up in Admin

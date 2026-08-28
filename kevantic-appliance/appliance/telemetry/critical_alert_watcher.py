@@ -45,7 +45,7 @@ def _env(*keys: str, default: str = "") -> str:
 
 
 def _min_level() -> int:
-    raw = _env("KEVANTIC_FORWARD_MIN_LEVEL", "JUNEXIS_FORWARD_MIN_LEVEL", default=str(DEFAULT_MIN_LEVEL))
+    raw = _env("KEVANTIC_FORWARD_MIN_LEVEL", "NIKTIAR_FORWARD_MIN_LEVEL", default=str(DEFAULT_MIN_LEVEL))
     try:
         return max(1, min(15, int(raw)))
     except ValueError:
@@ -56,7 +56,7 @@ def _alerts_path() -> Path:
     return Path(
         _env(
             "KEVANTIC_WAZUH_ALERTS_PATH",
-            "JUNEXIS_WAZUH_ALERTS_PATH",
+            "NIKTIAR_WAZUH_ALERTS_PATH",
             default=DEFAULT_ALERTS_PATH,
         )
     )

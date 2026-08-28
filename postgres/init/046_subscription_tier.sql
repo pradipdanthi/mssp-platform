@@ -16,7 +16,4 @@ CREATE INDEX IF NOT EXISTS idx_tenants_subscription_tier
 COMMENT ON COLUMN tenants.subscription_tier IS
     'Commercial tier: SILVER (ITDR), GOLD (+MDR/EDR/EASM/VMaaS), PLATINUM (+NDR/DFIR/hunts/OLAP).';
 
--- Demo / QA tenant retains full Platinum capabilities.
-UPDATE tenants
-SET subscription_tier = 'PLATINUM'
-WHERE upper(short_code) = 'ALPHAWINCORP-6VS2';
+-- All tenants (including demo QA) start at SILVER; upgrade via admin tier rollout.

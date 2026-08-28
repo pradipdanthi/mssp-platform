@@ -161,7 +161,7 @@ def is_enabled() -> bool:
     return _env_bool(
         "ENABLE_LOCAL_AI_FILTER",
         "KEVANTIC_LOCAL_AI_FILTER_ENABLED",
-        "JUNEXIS_LOCAL_AI_FILTER_ENABLED",
+        "NIKTIAR_LOCAL_AI_FILTER_ENABLED",
         default=False,
     )
 
@@ -171,7 +171,7 @@ def fail_open() -> bool:
     return _env_bool(
         "LOCAL_AI_FAIL_OPEN",
         "KEVANTIC_LOCAL_AI_FAIL_OPEN",
-        "JUNEXIS_LOCAL_AI_FAIL_OPEN",
+        "NIKTIAR_LOCAL_AI_FAIL_OPEN",
         default=True,
     )
 
@@ -180,7 +180,7 @@ def _ollama_url() -> str:
     return _env(
         "OLLAMA_URL",
         "KEVANTIC_OLLAMA_URL",
-        "JUNEXIS_OLLAMA_URL",
+        "NIKTIAR_OLLAMA_URL",
         default=DEFAULT_OLLAMA_URL,
     ).rstrip("/")
 
@@ -189,7 +189,7 @@ def _model() -> str:
     return _env(
         "LOCAL_AI_MODEL",
         "KEVANTIC_LOCAL_AI_MODEL",
-        "JUNEXIS_LOCAL_AI_MODEL",
+        "NIKTIAR_LOCAL_AI_MODEL",
         default=DEFAULT_MODEL,
     )
 
@@ -198,7 +198,7 @@ def _timeout_seconds() -> float:
     val = _env_float(
         "LOCAL_AI_TIMEOUT_SECONDS",
         "KEVANTIC_LOCAL_AI_TIMEOUT_SECONDS",
-        "JUNEXIS_LOCAL_AI_TIMEOUT_SECONDS",
+        "NIKTIAR_LOCAL_AI_TIMEOUT_SECONDS",
         default=DEFAULT_TIMEOUT_SECONDS,
     )
     return max(5.0, min(val, 180.0))
@@ -210,7 +210,7 @@ def _num_thread() -> int:
         "OLLAMA_CPU_THREADS",
         "LOCAL_AI_NUM_THREAD",
         "KEVANTIC_LOCAL_AI_NUM_THREAD",
-        "JUNEXIS_LOCAL_AI_NUM_THREAD",
+        "NIKTIAR_LOCAL_AI_NUM_THREAD",
         default="",
     )
     if not raw:
@@ -231,7 +231,7 @@ def _keep_alive() -> str:
     return _env(
         "OLLAMA_KEEP_ALIVE",
         "KEVANTIC_OLLAMA_KEEP_ALIVE",
-        "JUNEXIS_OLLAMA_KEEP_ALIVE",
+        "NIKTIAR_OLLAMA_KEEP_ALIVE",
         default=DEFAULT_KEEP_ALIVE,
     )
 

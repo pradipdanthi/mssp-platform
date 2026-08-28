@@ -38,10 +38,16 @@ export default function Layout({ children }: { children: ReactNode }) {
             item.locked ? (
               <div key={item.to} className="sidebar-nav-link sidebar-nav-link-locked">
                 <NavIcon to={item.to} />
-                <span className="sidebar-nav-label">{item.label}</span>
-                {item.requiredTier ? (
-                  <TierUpgradeBadge requiredTier={item.requiredTier} className="tier-nav-badge" />
-                ) : null}
+                <div className="sidebar-nav-link-body">
+                  <span className="sidebar-nav-label">{item.label}</span>
+                  {item.requiredTier ? (
+                    <TierUpgradeBadge
+                      requiredTier={item.requiredTier}
+                      className="tier-nav-badge"
+                      compact
+                    />
+                  ) : null}
+                </div>
               </div>
             ) : (
               <NavLink

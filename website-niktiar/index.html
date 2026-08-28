@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kevantic NikTiar&trade; | Enterprise MSSP &amp; Managed SOC — 100% Data Sovereignty</title>
+  <meta name="description" content="Kevantic NikTiar&trade; is an enterprise MSSP: on-premises NikTiar&trade; Edge Nodes keep 100% of raw logs local with zero cloud log tax, while a 24/7 Cloud SOC delivers investigation, hold-until-unisolate containment, and continuous CIS / ISO 27001 / PCI-DSS / HIPAA §164.312 / NIST indicators." />
+  <meta name="keywords" content="Kevantic, Kevantic NikTiar, NikTiar Edge Node, Managed SOC, MSSP, data sovereignty, zero cloud tax, CIS, ISO 27001, PCI-DSS, HIPAA 164.312, NIST, hold-until-unisolate, enterprise cybersecurity" />
+  <meta property="og:title" content="Kevantic NikTiar&trade; | 100% Data Sovereignty MSSP" />
+  <meta property="og:description" content="100% Data Sovereignty — local raw log retention with zero cloud tax. Continuous CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST indicators on Kevantic NikTiar&trade; Edge Nodes." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://kevantic.com/" />
+  <meta property="og:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Kevantic NikTiar&trade; | 100% Data Sovereignty MSSP" />
+  <meta name="twitter:description" content="On-premises NikTiar&trade; Edge Node: 100% local raw logs, zero cloud tax, and live CIS / ISO 27001 / PCI-DSS / HIPAA §164.312 / NIST scorecards." />
+  <link rel="canonical" href="https://kevantic.com/" />
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"ProfessionalService","name":"Kevantic NikTiar","url":"https://kevantic.com/","logo":"https://kevantic.com/assets/brand/kevantic-horizontal.svg","image":"https://kevantic.com/assets/brand/kevantic-og-1200x630.png","description":"Kevantic NikTiar enterprise MSSP. On-premises NikTiar Edge Nodes keep 100% of raw logs local with zero cloud log tax. 24/7 Cloud SOC investigation, hold-until-unisolate containment, and continuous CIS, ISO 27001, PCI-DSS, HIPAA 164.312, and NIST technical-safeguard indicators.","areaServed":"Worldwide","serviceType":["Managed SOC","MSSP","Managed Detection and Response","Network Detection and Response","Incident Response","Continuous Compliance"],"brand":{"@type":"Brand","name":"Kevantic NikTiar"},"parentOrganization":{"@type":"Organization","name":"Kevantic Cyber Security Private Limited"}}
+  </script>
+  <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="assets/brand/favicon.ico" type="image/x-icon" />
+  <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon-180.png" />
+<link rel="stylesheet" href="assets/brand/kevantic-brand.css" />
+  <link rel="preload" href="css/styles.css?v=10" as="style" />
+  <link rel="stylesheet" href="css/styles.css?v=10" />
+  <meta name="theme-color" content="#0B1120" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav">
+      <a class="brand" href="index.html" aria-label="Kevantic Cyber Security"><img class="brand-logo kevantic-brand-logo brand-logo-full" src="assets/brand/kevantic-horizontal.svg?v=1.1.0" fetchpriority="high" decoding="async" alt="Kevantic Cyber Security" width="200" /><img class="brand-logo-mark kevantic-brand-mark" src="assets/brand/kevantic-mark.svg?v=1.1.0" alt="" width="40" aria-hidden="true" /></a>
+      <ul class="nav-links">
+        <li><a href="#architecture">Architecture</a></li>
+        <li class="has-mega">
+          <button type="button" class="mega-trigger" aria-expanded="false" aria-haspopup="true">Platform &amp; Services</button>
+          <div class="mega-panel" role="region" aria-label="Platform and services">
+            <div class="mega-grid">
+              <div class="mega-col">
+                <h4>Silver &middot; Identity ITDR <span class="badge badge-core">Tier 1</span></h4>
+                <a class="mega-item" href="services/cloud-identity-protection.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M7.5 18.5h10a4 4 0 0 0 .4-8 5.5 5.5 0 0 0-10.6 1.5A3.5 3.5 0 0 0 7.5 18.5Z"/></svg></span><span class="mega-copy"><strong>Cloud &amp; Identity Protection (ITDR)</strong><span>Okta / Entra / AD protection, MFA fatigue, impossible travel.</span></span></a>
+                <a class="mega-item" href="services/log-event-monitoring.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 3 4.5 6v6.2c0 4.6 3.1 8.8 7.5 10.1 4.4-1.3 7.5-5.5 7.5-10.1V6L12 3Z"/></svg></span><span class="mega-copy"><strong>Log &amp; Event Monitoring</strong><span>NikTiar&trade; telemetry retention with zero cloud log tax.</span></span></a>
+                <a class="mega-item" href="services/incident-response.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M13 2 4 14h7l-1 8 10-14h-7l0-6Z"/></svg></span><span class="mega-copy"><strong>Incident Response &amp; Casework</strong><span>24/7 analyst-led triage with AI-assisted executive summaries.</span></span></a>
+              </div>
+              <div class="mega-col">
+                <h4>Gold &middot; Core MDR <span class="badge badge-core">Tier 2</span></h4>
+                <a class="mega-item" href="services/security-automation.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="11" width="17" height="10" rx="2" fill="none" stroke="currentColor" stroke-width="1.75"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M7 11V8a5 5 0 0 1 10 0v3"/></svg></span><span class="mega-copy"><strong>Security Automation &amp; Containment</strong><span>Hold-until-unisolate host containment with verified endpoint callback.</span></span></a>
+                <a class="mega-item" href="services/vulnerability-management.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 3.5 21 19H3L12 3.5Z"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M12 10v4M12 16.5h.01"/></svg></span><span class="mega-copy"><strong>Vulnerability Management (NikTiar Aegis)</strong><span>Continuous CVE prioritization and patch guidance.</span></span></a>
+                <a class="mega-item" href="services/external-attack-surface.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.75"/><path fill="none" stroke="currentColor" stroke-width="1.75" d="M3.5 12h17M12 3.5c2.5 2.8 2.5 14.2 0 17M12 3.5c-2.5 2.8-2.5 14.2 0 17"/></svg></span><span class="mega-copy"><strong>External Attack Surface (EASM)</strong><span>Continuous perimeter domain &amp; SSL exposure discovery.</span></span></a>
+              </div>
+              <div class="mega-col">
+                <h4>Platinum &middot; Full MXDR <span class="badge badge-core">Tier 3</span></h4>
+                <a class="mega-item" href="services/network-detection-response.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.75"/><circle cx="18" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.75"/><circle cx="12" cy="18" r="2.2" fill="none" stroke="currentColor" stroke-width="1.75"/><path fill="none" stroke="currentColor" stroke-width="1.75" d="M8 7.2 10.5 16M16 7.2 13.5 16M8.2 6h7.6"/></svg></span><span class="mega-copy"><strong>Network Detection (NikTiar DeepSight NDR)</strong><span>Packet-level inspection for lateral movement and beaconing.</span></span></a>
+                <a class="mega-item" href="services/threat-intelligence.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.75"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="m20 20-3.5-3.5"/></svg></span><span class="mega-copy"><strong>Threat Intelligence &amp; Retrospective Sweeps</strong><span>90-day retrospective zero-day sweeps across retained telemetry.</span></span></a>
+                <a class="mega-item" href="services/endpoint-forensics-deception.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.75"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.75"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M12 2.5v2.5M12 19v2.5M2.5 12h2.5M19 12h2.5"/></svg></span><span class="mega-copy"><strong>Endpoint Forensics (NikTiar Spectre DFIR)</strong><span>Process tree DFIR, canary traps, and deep investigation support.</span></span></a>
+                <a class="mega-item" href="services/continuous-compliance.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M8 4.5h8a2 2 0 0 1 2 2v13l-6-3-6 3v-13a2 2 0 0 1 2-2Z"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M9 11h6M9 14h4"/></svg></span><span class="mega-copy"><strong>Continuous Compliance &amp; Hardening</strong><span>CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST indicators.</span></span></a>
+              </div>
+            </div>
+            <div class="mega-foot">
+              <a href="#tiers">Explore service tiers →</a>
+              <a href="#architecture">How the hybrid stack works →</a>
+              <a href="services.html">All capabilities →</a>
+            </div>
+          </div>
+        </li>
+        <li><a href="#tiers">Tiers</a></li>
+        <li><a href="solutions.html">Solutions</a></li>
+        <li><a href="contact.html">Contact</a></li>
+      </ul>
+      <div class="nav-cta">
+        <a class="btn btn-ghost btn-sm" data-customer-portal href="portal.html">Client Portal Access</a>
+        <a class="btn btn-primary btn-sm" href="#demo">Request Demo</a>
+      </div>
+      <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+  </header>
+
+  <div class="announce-strip">
+    <div class="container announce-strip-inner">
+      <span class="announce-kicker">v1.2.0 · Kevantic NikTiar&trade;</span>
+      <span class="announce-copy">100% Data Sovereignty — local raw log retention with zero cloud tax. Continuous CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST indicators.</span>
+      <a class="announce-link" href="#architecture">See how it works →</a>
+    </div>
+  </div>
+
+  <main>
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="hero-grid" aria-hidden="true"></div>
+      <div class="container hero-layout">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-dot" aria-hidden="true"></span> Kevantic NikTiar&trade; · Enterprise MSSP</div>
+          <h1>100% Data Sovereignty.<br />Local Raw Log Retention.<br /><span class="accent">Zero Cloud Tax.</span></h1>
+          <p class="hero-lead">
+            The <strong>Kevantic NikTiar&trade;</strong> platform deploys an on-premises <strong>NikTiar&trade; Edge Node</strong> so <strong>100% of raw logs stay on your network</strong>—no vendor cloud log tax. A 24/7 Cloud SOC hunts, contains, and publishes live scorecards for <strong>CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST</strong> without shipping raw ePHI or telemetry off-site.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#tiers">Explore Service Tiers</a>
+            <a class="btn btn-ghost" href="#demo" data-demo-interest="NikTiar&trade; Edge Node Demo">Request NikTiar&trade; Edge Node Demo</a>
+            <a class="btn btn-ghost" data-customer-portal href="portal.html">Client Portal Access</a>
+          </div>
+          <div class="uptime-bar" aria-label="Platform status">
+            <div class="uptime-item"><span class="status-pill status-online"><i></i> SOC online</span></div>
+            <div class="uptime-item">Cloud cluster <strong>HA 3-node</strong></div>
+            <div class="uptime-item">Edge uplink <strong>TLS encrypted</strong></div>
+            <div class="uptime-item">Uptime <strong>99.95%</strong></div>
+          </div>
+        </div>
+
+        <div class="hero-visual">
+          <div class="mock" aria-hidden="true">
+            <div class="mock-bar"><i></i><i></i><i></i><span class="mock-title">Kevantic NikTiar&trade; · Live scorecard</span><span class="status-pill status-live" style="margin-left:auto;">Live</span></div>
+            <div class="mock-body">
+              <div class="tele-row">
+                <span class="tag tag-ok">Edge</span>
+                <div>Kevantic NikTiar&trade; Edge Node retaining raw logs on-site<div class="tele-meta">NikTiar&trade; Core Telemetry · DeepSight NDR · metadata only → SOC</div></div>
+                <span class="status-pill status-online"><i></i> Local</span>
+              </div>
+              <div class="tele-row contain-flash">
+                <span class="tag tag-crit">Apex</span>
+                <div>Hold-until-unisolate armed · NikTiar&trade; Apex Orchestrator awaiting verified callback<div class="tele-meta">Isolated only after endpoint acknowledgment</div></div>
+                <span class="tele-meta">Active</span>
+              </div>
+              <div class="tele-row">
+                <span class="tag tag-info">Apex</span>
+                <div>Live threat feed match on C2 beacon<div class="ioc-row"><span class="ioc-chip">C2: 203.0.113.44</span><span class="ioc-chip warn">T1071.001</span><span class="ioc-chip">score 92</span></div></div>
+                <span class="tele-meta">Hunt</span>
+              </div>
+              <div class="tele-row">
+                <span class="tag tag-high">Portal</span>
+                <div>Control plane dashboards — client &amp; admin consoles<div class="tele-meta">CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST scorecards</div></div>
+                <span class="status-pill status-live">Synced</span>
+              </div>
+              <div class="soc-stats">
+                <div class="soc-stat"><span>MTTC path</span><strong>~800ms</strong></div>
+                <div class="soc-stat"><span>Nodes online</span><strong>3 / 3</strong></div>
+                <div class="soc-stat"><span>Raw log egress</span><strong>0%</strong></div>
+              </div>
+            </div>
+          </div>
+          <div class="shield-chip">
+            <div class="shield-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4.5 6v6.2c0 4.6 3.1 8.8 7.5 10.1 4.4-1.3 7.5-5.5 7.5-10.1V6L12 3Z"/><path d="M9 12.2 11.1 14.3 15.2 9.8"/></svg>
+            </div>
+            <div>
+              <strong>100% data sovereignty — not a software license</strong>
+              <span>Raw logs never leave the NikTiar&trade; Edge Node. Encrypted alerts fuel 24/7 Cloud SOC investigation, hold-until-unisolate containment, and continuous compliance indicators.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- AI band -->
+    <section class="ai-band" id="ai">
+      <div class="container ai-band-grid">
+        <div class="reveal">
+          <div class="ai-kicker">✦ Autonomous detection · Analyst-owned response</div>
+          <h2>Machine-speed correlation. Human-accountable containment.</h2>
+          <p class="lead">
+            You are not buying an AI product to operate yourself.
+            Kevantic AI runs inside <strong style="color:#fff;">our managed SOC</strong> — so our team can correlate threats faster,
+            explain risk clearly, and still take human responsibility for every decision that affects your business.
+          </p>
+          <div class="ai-points">
+            <div class="ai-point">
+              <div class="n">01</div>
+              <div>
+                <strong>Correlate at machine speed</strong>
+                <span>AI links related signals into attack chains so Kevantic analysts are not buried in single-event noise.</span>
+              </div>
+            </div>
+            <div class="ai-point">
+              <div class="n">02</div>
+              <div>
+                <strong>Explain risk in plain English</strong>
+                <span>Drafts business impact and recommended next steps for your leadership portal — reviewed by our analysts before you see them.</span>
+              </div>
+            </div>
+            <div class="ai-point">
+              <div class="n">03</div>
+              <div>
+                <strong>Recommend — our analysts decide</strong>
+                <span>Containment and escalation stay under Kevantic SOC control. AI proposes. People own the outcome for your company.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="ai-stage reveal reveal-delay-1" aria-hidden="true">
+          <div class="ai-stage-head">
+            <strong>How our service uses AI</strong>
+            <span class="ai-live"><i></i> Analyst-led</span>
+          </div>
+          <div class="ai-flow-steps">
+            <div class="ai-flow-step">
+              <div class="icon">Σ</div>
+              <strong>Ingest</strong>
+              <span>Your estate signals</span>
+            </div>
+            <div class="ai-flow-step">
+              <div class="icon">AI</div>
+              <strong>Analyze</strong>
+              <span>Correlate · summarize</span>
+            </div>
+            <div class="ai-flow-step">
+              <div class="icon">◎</div>
+              <strong>Protect</strong>
+              <span>Our analysts act</span>
+            </div>
+          </div>
+          <div class="ai-disclaimer">
+            Kevantic is a managed service. AI accelerates our detection and clarity — it does not replace our analysts, and it is not a DIY software license for your team.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Service tiers -->
+        <section class="tier-section tier-pricing-section" id="tiers">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-label">NikTiar&trade; Cyber Defense Platform</span>
+          <h2>Pricing &amp; Capabilities</h2>
+          <p>Three subscription tiers &mdash; Silver, Gold, and Platinum &mdash; aligned to identity ITDR, core MDR, and full MXDR coverage on one hybrid control plane.</p>
+        </div>
+
+        <div class="tier-switcher" role="tablist" aria-label="Service tiers">
+          <button type="button" class="tier-switch is-active" data-tier="silver">Silver</button>
+          <button type="button" class="tier-switch" data-tier="gold">Gold</button>
+          <button type="button" class="tier-switch" data-tier="platinum">Platinum</button>
+        </div>
+
+        <div class="tier-matrix-cards reveal" data-tier-cards>
+          <article class="tier-card tier-card--silver is-active" data-tier="silver">
+            <p class="tier-eyebrow">Tier 1 &middot; Identity ITDR</p>
+            <h3>Silver</h3>
+            <p class="tier-headline">Cloud &amp; Identity ITDR &mdash; Okta, Entra ID, &amp; Active Directory Protection</p>
+            <ul class="tier-feature-list">
+              <li>NikTiar identity telemetry (Okta / AD ingest)</li>
+              <li>MFA fatigue detection</li>
+              <li>Impossible travel alerts</li>
+              <li>Kerberoasting detection</li>
+              <li>Portal MFA enforcement</li>
+              <li>90-day log retention</li>
+            </ul>
+          </article>
+          <article class="tier-card tier-card--gold is-featured" data-tier="gold">
+            <span class="tier-ribbon">Most chosen</span>
+            <p class="tier-eyebrow">Tier 2 &middot; Core MDR</p>
+            <h3>Gold</h3>
+            <p class="tier-headline">Core MDR &mdash; 24/7 Host Protection, Automated Containment (Host Isolation) &amp; Pre-LLM Whitelist AI Veto Gate</p>
+            <p class="tier-inherits">Everything in Silver, plus:</p>
+            <ul class="tier-feature-list">
+              <li>NikTiar Core EDR telemetry &amp; alerting</li>
+              <li>Automated active containment (host isolation)</li>
+              <li>Pre-LLM whitelist AI veto gate</li>
+              <li>NikTiar Aegis vulnerability sync</li>
+              <li>NikTiar perimeter EASM sync</li>
+            </ul>
+          </article>
+          <article class="tier-card tier-card--platinum is-platinum" data-tier="platinum">
+            <span class="tier-ribbon flagship">Flagship</span>
+            <p class="tier-eyebrow">Tier 3 &middot; Full MXDR</p>
+            <h3>Platinum</h3>
+            <p class="tier-headline">Full MXDR &mdash; NikTiar DeepSight NDR, NikTiar Spectre Endpoint DFIR &amp; Retrospective Sweeps</p>
+            <p class="tier-inherits">Everything in Gold, plus:</p>
+            <ul class="tier-feature-list">
+              <li>NikTiar DeepSight NDR</li>
+              <li>NikTiar Spectre endpoint DFIR (process tree &amp; artifacts)</li>
+              <li>90-day retrospective threat sweeps</li>
+              <li>NikTiar analytics OLAP &amp; compressed archival</li>
+              <li>NikTiar continuous compliance indicators</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="tier-matrix-wrap reveal" data-tier-matrix>
+          <table class="tier-matrix tier-comparison-table">
+            <thead>
+              <tr>
+                <th scope="col">Capability</th>
+                <th scope="col" class="is-active" data-col="silver">Silver</th>
+                <th scope="col" data-col="gold">Gold</th>
+                <th scope="col" class="col-platinum" data-col="platinum">Platinum</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">NikTiar identity telemetry (Okta / AD)</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">MFA fatigue detection</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Impossible travel</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Kerberoasting detection</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Portal MFA</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">90-day retention</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar Core EDR</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Automated active containment (host isolation)</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Pre-LLM whitelist AI veto gate</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar Aegis &amp; perimeter EASM sync</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar DeepSight NDR</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar Spectre DFIR (process tree / artifacts)</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">90-day retrospective sweeps</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar analytics OLAP &amp; archival</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar continuous compliance</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="tier-note">Powered by the NikTiar&trade; Cyber Defense Platform. Need a mapped quote? <a href="#demo" style="color:var(--cyan);font-weight:600;">Request a NikTiar&trade; Edge Node demo &rarr;</a></p>
+      </div>
+    </section>
+
+<!-- How it works architecture -->
+    <section class="stack-section" id="architecture">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-label">How it works</span>
+          <h2>Three-tier stack. One sovereign operating model.</h2>
+          <p>Hybrid edge ingestion, a multi-node Cloud SOC, and a control plane that provisions services and proves compliance—without shipping your raw logs to a vendor lake.</p>
+        </div>
+
+        <div class="stack-tabs reveal" role="tablist" aria-label="Architecture tiers">
+          <button type="button" class="stack-tab is-active" id="stack-tab-edge" data-stack="edge" role="tab" aria-selected="true" aria-controls="stack-panel-edge" tabindex="0"><span class="n">01</span> Hybrid Edge</button>
+          <button type="button" class="stack-tab" id="stack-tab-soc" data-stack="soc" role="tab" aria-selected="false" aria-controls="stack-panel-soc" tabindex="-1"><span class="n">02</span> Cloud SOC</button>
+          <button type="button" class="stack-tab" id="stack-tab-control" data-stack="control" role="tab" aria-selected="false" aria-controls="stack-panel-control" tabindex="-1"><span class="n">03</span> Control Plane</button>
+        </div>
+
+        <div class="stack-shell reveal" data-stack-root>
+          <div class="stack-visual" aria-hidden="true">
+            <article class="stack-node is-active" data-stack="edge">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+                <span class="status-pill status-online"><i></i> On-prem</span>
+                <span class="tool-chip">Edge Node</span>
+              </div>
+              <h3>Hybrid Edge Tier</h3>
+              <p>Local ingestion. Raw logs never leave the boundary.</p>
+              <div class="tool-row">
+                <span class="tool-chip">Core Telemetry</span>
+                <span class="tool-chip">DeepSight NDR</span>
+                <span class="tool-chip">Aegis Scanning</span>
+              </div>
+            </article>
+            <div class="stack-connector"></div>
+            <article class="stack-node" data-stack="soc">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+                <span class="status-pill status-live"><i></i> HA cluster</span>
+                <span class="tool-chip">3-node</span>
+              </div>
+              <h3>Cloud SOC Tier</h3>
+              <p>Encrypted high-priority alerts in. Hunt, case, contain.</p>
+              <div class="tool-row">
+                <span class="tool-chip">Apex Orchestrator</span>
+                <span class="tool-chip">Spectre DFIR</span>
+              </div>
+            </article>
+            <div class="stack-connector"></div>
+            <article class="stack-node" data-stack="control">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.35rem;">
+                <span class="status-pill status-online"><i></i> Provisioned</span>
+                <span class="status-pill status-live">Encrypted</span>
+              </div>
+              <h3>Control Plane Tier</h3>
+              <p>Customer and admin dashboards. Scorecards. Licensing.</p>
+              <div class="tool-row">
+                <span class="tool-chip">PCI-DSS</span>
+                <span class="tool-chip">ISO 27001</span>
+                <span class="tool-chip">HIPAA</span>
+              </div>
+            </article>
+          </div>
+
+          <div class="stack-copy">
+            <div class="stack-panel is-active" id="stack-panel-edge" data-stack="edge" role="tabpanel" aria-labelledby="stack-tab-edge">
+              <span class="section-label">01 · Hybrid Edge</span>
+              <h3>Kevantic NikTiar&trade; Edge Node</h3>
+              <p>Local ingestion via NikTiar&trade; Core Telemetry and DeepSight NDR. Raw telemetry and packets stay on-site; only encrypted high-priority alerts leave the boundary.</p>
+              <ul>
+                <li>Raw telemetry, full packets (Gold/Platinum), and forensic artifacts stay in your datacenter</li>
+                <li>Local log normalization via NikTiar&trade; Core Telemetry — no cloud-tax data lake</li>
+                <li>Optional single node, HA pair, or dedicated high-throughput cluster per license tier</li>
+                <li>Only scored, encrypted alerts and metadata leave the boundary over TLS</li>
+              </ul>
+            </div>
+            <div class="stack-panel" id="stack-panel-soc" data-stack="soc" role="tabpanel" aria-labelledby="stack-tab-soc" aria-hidden="true">
+              <span class="section-label">02 · Cloud SOC</span>
+              <h3>Kevantic NikTiar&trade; Cloud SOC</h3>
+              <p>Multi-node operational core executing automated orchestration and human threat hunting.</p>
+              <ul>
+                <li>Receives encrypted high-priority alerts without raw log lock-in</li>
+                <li>NikTiar&trade; Apex Orchestrator automatically triggers playbooks and containment</li>
+                <li>NikTiar&trade; Spectre DFIR handles live memory forensics and process tree isolation</li>
+                <li>24/7 continuous threat monitoring with guaranteed response SLAs</li>
+              </ul>
+            </div>
+            <div class="stack-panel" id="stack-panel-control" data-stack="control" role="tabpanel" aria-labelledby="stack-tab-control" aria-hidden="true">
+              <span class="section-label">03 · Control Plane</span>
+              <h3>Kevantic NikTiar&trade; Control Plane</h3>
+              <p>Central portal for tenant administration, cryptographic license provisioning, and compliance tracking.</p>
+              <ul>
+                <li>Unified Client Portal and Administrative Console interfaces</li>
+                <li>Dynamic JWS license key management and tier capability enforcement</li>
+                <li>Real-time compliance scorecards for CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST — technical indicators, not certifications</li>
+                <li>Customer Portal live scorecards without forcing raw ePHI or raw logs off the client network</li>
+                <li>Multi-tenant isolation with custom threat feed orchestration</li>
+              </ul>
+              <div class="compliance-row">
+                <span class="status-pill status-online"><i></i> CIS</span>
+                <span class="status-pill status-online"><i></i> ISO 27001</span>
+                <span class="status-pill status-online"><i></i> PCI-DSS</span>
+                <span class="status-pill status-online"><i></i> HIPAA §164.312</span>
+                <span class="status-pill status-online"><i></i> NIST</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Deployments -->
+    <section id="deployments">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-label">Deployment architecture</span>
+          <h2>Two ways we connect your estate.</h2>
+          <p>Same managed SOC. Pick Direct SOC Stream for zero-friction agent telemetry, or the flagship NikTiar&trade; Edge Node for 100% local raw logs. Then choose where your systems live.</p>
+        </div>
+
+        <div class="env-selector reveal" role="tablist" aria-label="Environment">
+          <span class="env-selector-label">Environment</span>
+          <div class="env-pills">
+            <button type="button" class="env-pill is-active" role="tab" aria-selected="true" data-env="cloud">Cloud (AWS/Azure/GCP)</button>
+            <button type="button" class="env-pill" role="tab" aria-selected="false" data-env="onprem">On-Premises</button>
+            <button type="button" class="env-pill" role="tab" aria-selected="false" data-env="hybrid">Hybrid</button>
+          </div>
+        </div>
+
+        <div class="flow-legend reveal" aria-hidden="true">
+          <span class="lg-raw"><i></i> Raw logs stored locally (Edge Node only)</span>
+          <span class="lg-meta"><i></i> Encrypted metadata / alerts → Kevantic SOC (TLS)</span>
+        </div>
+
+        <div class="deploy-shell reveal" data-deploy data-env="cloud">
+          <div class="deploy-tabs" role="tablist" aria-label="Architecture">
+            <button type="button" class="deploy-tab is-active" role="tab" aria-selected="true" data-arch="direct">Direct SOC Stream</button>
+            <button type="button" class="deploy-tab deploy-tab-flagship" role="tab" aria-selected="false" data-arch="edge">Sovereign Edge Node</button>
+          </div>
+          <div class="deploy-body">
+            <div class="deploy-panel is-active" data-arch="direct">
+              <div class="deploy-stage" aria-hidden="true">
+                <div class="flow flow-direct">
+                  <div class="flow-node customer">
+                    <strong data-cloud="Your cloud" data-onprem="Your datacenter" data-hybrid="Hybrid estate">Your cloud</strong>
+                    <span data-cloud="AWS / Azure / GCP" data-onprem="On-prem servers" data-hybrid="Cloud + on-prem">AWS / Azure / GCP</span>
+                  </div>
+                  <div class="flow-node appliance dimmed"><strong>Edge Node</strong><span>Not used</span></div>
+                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Direct agent stream</span></div>
+                  <div class="flow-path direct meta"></div>
+                  <div class="flow-caption" data-cloud="Agents → Cloud SOC" data-onprem="On-prem agents → Cloud SOC" data-hybrid="Hybrid agents → Cloud SOC">Agents → Cloud SOC</div>
+                </div>
+              </div>
+              <div class="deploy-copy">
+                <span class="flag flag-direct">Direct agent connection</span>
+                <h3>Direct SOC Stream</h3>
+                <p><strong>Zero-friction deployment.</strong> <span data-cloud="Agents in AWS, Azure, or GCP stream telemetry straight to the Kevantic managed SOC." data-onprem="Agents on your datacenter servers stream telemetry straight to the Kevantic managed SOC." data-hybrid="Agents on cloud and on-prem systems stream telemetry straight to the Kevantic managed SOC.">Agents in AWS, Azure, or GCP stream telemetry straight to the Kevantic managed SOC.</span> No Edge Node to host — fastest path to fully managed monitoring for cloud-native or lightweight environments.</p>
+                <ul>
+                  <li>Agent-based direct telemetry — no onsite appliance maintenance</li>
+                  <li>Best for cloud-native or lightweight estates comfortable with SOC-bound telemetry</li>
+                  <li>Same customer portal, SLAs, and analyst accountability</li>
+                </ul>
+              </div>
+            </div>
+
+            <div class="deploy-panel" data-arch="edge">
+              <div class="deploy-stage" aria-hidden="true">
+                <div class="flow flow-edge">
+                  <div class="flow-node customer">
+                    <strong data-cloud="Your VPC" data-onprem="Your datacenter" data-hybrid="Hybrid estate">Your VPC</strong>
+                    <span data-cloud="100% raw logs stay" data-onprem="100% raw logs stay" data-hybrid="100% raw logs stay">100% raw logs stay</span>
+                    <span class="store-pill">Local store</span>
+                  </div>
+                  <div class="flow-node appliance"><strong>NikTiar&trade; Edge</strong><span>Local processing</span></div>
+                  <div class="flow-node soc"><strong>Kevantic SOC</strong><span>Metadata / alerts only</span></div>
+                  <div class="flow-path to-app amber"></div>
+                  <div class="flow-path from-app meta"></div>
+                  <div class="flow-path raw-loop"></div>
+                  <div class="flow-caption">Raw stays local · alerts over TLS</div>
+                </div>
+              </div>
+              <div class="deploy-copy">
+                <span class="flag">Flagship architecture</span>
+                <h3>Sovereign Edge Node</h3>
+                <p><strong>100% local raw log retention — zero cloud tax.</strong> A Kevantic NikTiar&trade; Edge Node in your <span data-cloud="cloud VPC" data-onprem="datacenter" data-hybrid="hybrid boundary">cloud VPC</span> keeps raw logs on-site. Only encrypted alert metadata reaches the Kevantic SOC. Built for HIPAA §164.312, PCI-DSS, and strict regulatory environments.</p>
+                <ul>
+                  <li>On-prem or local VPC data sovereignty — raw ePHI and logs never leave the client network</li>
+                  <li>Encrypted alerts and metadata only over TLS</li>
+                  <li>We provision and operate the Edge Node as part of the managed service</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Services -->
+    <section id="services">
+      <div class="container">
+                <div class="section-head reveal">
+          <span class="section-label">NikTiar&trade; capability modules</span>
+          <h2>Capabilities bundled by subscription tier.</h2>
+          <p>Silver, Gold, and Platinum include capability modules &mdash; not per-module add-ons. Upgrade your tier from the client portal when you are ready to expand coverage.</p>
+        </div>
+
+        <div class="svc-block reveal">
+          <div class="svc-block-head">
+            <h3>Silver &middot; Identity ITDR</h3>
+            <span class="badge badge-core">Tier 1</span>
+          </div>
+          <div class="grid-3">
+            <a class="card-link" href="services/cloud-identity-protection.html"><article class="card svc-card"><span class="badge badge-core">Silver</span><h3>Cloud &amp; Identity Protection (ITDR)</h3><p>Okta / Entra / AD protection, MFA fatigue, and impossible travel detection.</p><span class="card-cta">View full details &rarr;</span></article></a>
+            <a class="card-link" href="services/log-event-monitoring.html"><article class="card svc-card"><span class="badge badge-core">Silver</span><h3>Log &amp; Event Monitoring</h3><p>NikTiar&trade; telemetry retention with zero cloud log tax &mdash; 24/7 monitoring.</p><span class="card-cta">View full details &rarr;</span></article></a>
+            <a class="card-link" href="services/incident-response.html"><article class="card svc-card"><span class="badge badge-core">Silver</span><h3>Incident Response &amp; Casework</h3><p>24/7 analyst-led triage with AI-assisted executive summaries.</p><span class="card-cta">View full details &rarr;</span></article></a>
+          </div>
+        </div>
+
+        <div class="svc-block reveal">
+          <div class="svc-block-head">
+            <h3>Gold &middot; Core MDR</h3>
+            <span class="badge badge-core">Tier 2</span>
+          </div>
+          <p class="tier-inherits">Everything in Silver, plus:</p>
+          <div class="grid-3">
+            <a class="card-link" href="services/security-automation.html"><article class="card svc-card"><span class="badge badge-core">Gold</span><h3>Security Automation &amp; Containment</h3><p>Hold-until-unisolate host containment with verified endpoint callback.</p><span class="card-cta">View full details &rarr;</span></article></a>
+            <a class="card-link" href="services/vulnerability-management.html"><article class="card svc-card"><span class="badge badge-core">Gold</span><h3>Vulnerability Management (NikTiar Aegis)</h3><p>Continuous CVE prioritization and patch guidance for your IT team.</p><span class="card-cta">View full details &rarr;</span></article></a>
+            <a class="card-link" href="services/external-attack-surface.html"><article class="card svc-card"><span class="badge badge-core">Gold</span><h3>External Attack Surface (EASM)</h3><p>Continuous perimeter domain &amp; SSL exposure discovery.</p><span class="card-cta">View full details &rarr;</span></article></a>
+          </div>
+        </div>
+
+        <div class="svc-block reveal">
+          <div class="svc-block-head">
+            <h3>Platinum &middot; Full MXDR</h3>
+            <span class="badge badge-core">Tier 3</span>
+          </div>
+          <p class="tier-inherits">Everything in Gold, plus:</p>
+          <div class="grid-4">
+            <a class="card-link" href="services/network-detection-response.html"><article class="card svc-card"><span class="badge badge-core">Platinum</span><h3>Network Detection (NikTiar DeepSight NDR)</h3><p>Packet-level inspection for lateral movement and beaconing.</p><span class="card-cta">View full details &rarr;</span></article></a>
+            <a class="card-link" href="services/threat-intelligence.html"><article class="card svc-card"><span class="badge badge-core">Platinum</span><h3>Threat Intelligence &amp; Retrospective Sweeps</h3><p>90-day retrospective zero-day sweeps across retained telemetry.</p><span class="card-cta">View full details &rarr;</span></article></a>
+            <a class="card-link" href="services/endpoint-forensics-deception.html"><article class="card svc-card"><span class="badge badge-core">Platinum</span><h3>Endpoint Forensics (NikTiar Spectre DFIR)</h3><p>Process tree DFIR, canary traps, and deep investigation support.</p><span class="card-cta">View full details &rarr;</span></article></a>
+            <a class="card-link" href="services/continuous-compliance.html"><article class="card svc-card"><span class="badge badge-core">Platinum</span><h3>Continuous Compliance &amp; Hardening</h3><p>Live CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST indicators.</p><span class="card-cta">View full details &rarr;</span></article></a>
+          </div>
+        </div>
+        <p style="margin-top:0.5rem;"><a class="btn btn-ghost" href="services.html">Explore full service detail</a></p>
+      </div>
+    </section>
+
+    <!-- Human + AI -->
+    <section class="ai-collab">
+      <div class="container split">
+        <div class="reveal">
+          <span class="section-label">Managed service model</span>
+          <h2 style="font-family:var(--font-display);font-size:clamp(1.9rem,3.2vw,2.6rem);letter-spacing:-0.03em;margin:0 0 0.8rem;">AI helps our SOC. Our analysts stay accountable to you.</h2>
+          <p style="color:var(--muted);margin:0;">
+            Kevantic is not a DIY security platform. You subscribe to managed protection.
+            Our analysts use AI to move faster — then validate every customer-facing update before it reaches your portal.
+          </p>
+          <ul class="checklist">
+            <li>AI correlates attacks and drafts plain-English impact for our team</li>
+            <li>Kevantic analysts validate before anything is published to your portal</li>
+            <li>Containment runs under our SOC approval rules</li>
+            <li>Your portal stays clear, tenant-isolated, and leadership-ready</li>
+          </ul>
+        </div>
+        <div class="mock reveal reveal-delay-1" aria-hidden="true">
+          <div class="mock-bar"><i></i><i></i><i></i><span class="mock-title">AI → Analyst handoff</span></div>
+          <div class="mock-body">
+            <div class="tele-row"><span class="tag tag-info">AI</span><div>Draft summary ready for analyst review</div><span class="tele-meta">Assist</span></div>
+            <div class="tele-row"><span class="tag tag-high">SOC</span><div>Process tree validated · containment approved</div><span class="tele-meta">Human</span></div>
+            <div class="tele-row"><span class="tag tag-ok">Portal</span><div>Customer sees plain-English status only</div><span class="tele-meta">Safe</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Portal showcase -->
+    <section>
+      <div class="container split">
+        <div class="score-card reveal" aria-hidden="true">
+          <div class="score-ring">78%</div>
+          <h3 style="text-align:center;font-family:var(--font-display);margin:0 0 0.4rem;">Compliance readiness</h3>
+          <p style="text-align:center;color:var(--muted);margin:0 0 1rem;font-size:0.9rem;">Live CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST scorecards — raw logs stay on the NikTiar&trade; Edge Node</p>
+          <div class="tele-row"><span class="tag tag-high">Incident</span><div>Active case timeline</div><span class="tele-meta">Open</span></div>
+          <div class="tele-row" style="margin-top:0.55rem;"><span class="tag tag-ok">Upgrade</span><div>1-click tier upgrade request</div><span class="tele-meta">Tier upgrade</span></div>
+        </div>
+        <div class="reveal reveal-delay-1">
+          <span class="section-label">Your visibility portal</span>
+          <h2 style="font-family:var(--font-display);font-size:clamp(1.8rem,3vw,2.4rem);letter-spacing:-0.03em;margin:0 0 0.8rem;">Control plane dashboards — not a DIY SOC</h2>
+          <p style="color:var(--muted);margin:0;">
+            The Kevantic Customer Portal provides live, continuous compliance scorecards for technical controls without forcing raw ePHI logs to leave the client's network. Access CIS / ISO 27001 / PCI-DSS / HIPAA §164.312 / NIST indicators, incidents, and dynamic service provisioning. Existing clients use Client Portal Access. Public login is coming soon.
+          </p>
+          <div class="portal-pills">
+            <span>Overview</span><span>Alerts</span><span>Incidents</span><span>Compliance</span>
+            <span>Vulnerabilities</span><span>Attack Surface</span><span>Reports</span><span>Service menu</span>
+          </div>
+          <p style="margin-top:1.4rem;display:flex;flex-wrap:wrap;gap:0.7rem;">
+            <a class="btn btn-primary" data-customer-portal href="portal.html">Client Portal Access</a>
+            <a class="btn btn-ghost" href="platform.html">Control plane details</a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Demo form -->
+    <section id="demo">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-label">Consultation</span>
+          <h2>Request a NikTiar&trade; Edge Node demo</h2>
+          <p>Tell us estate size, residency constraints, and target tier. We’ll map Silver through Platinum—and whether you need a single appliance, HA pair, or dedicated cluster.</p>
+        </div>
+        <div class="contact-grid">
+          <aside class="side-card reveal">
+            <h3 style="font-family:var(--font-display);margin:0 0 0.5rem;">Direct channels</h3>
+            <p style="color:var(--muted);margin:0 0 1rem;">Prefer email? Reach the Kevantic team.</p>
+            <p style="margin:0 0 0.6rem;"><strong>Sales</strong><br /><a href="mailto:sales@kevantic.com" style="color:var(--cyan);">sales@kevantic.com</a></p>
+            <p style="margin:0;color:var(--muted);font-size:0.9rem;">Operated by Kevantic Cyber Security Private Limited. Existing customers use Client Portal Access — SOC admin access is not linked here.</p>
+          </aside>
+          <div class="form-card reveal reveal-delay-1">
+            <div id="form-success" class="form-success" role="status">Thanks — your mail client should open with the details pre-filled for sales@kevantic.com.</div>
+            <form id="demo-form">
+              <div class="form-row"><label for="name">Full name</label><input id="name" name="name" required autocomplete="name" /></div>
+              <div class="form-row"><label for="email">Work email</label><input id="email" name="email" type="email" required autocomplete="email" /></div>
+              <div class="form-row"><label for="company">Company name</label><input id="company" name="company" autocomplete="organization" /></div>
+              <div class="form-row"><label for="scale">Endpoint / server count</label><input id="scale" name="scale" placeholder="e.g. 120 endpoints, 15 servers" /></div>
+              <div class="form-row">
+                <label for="interest">Primary interest</label>
+                <select id="interest" name="interest">
+                  <option>Sovereign Edge Node (NikTiar&trade; flagship)</option>
+                  <option>Direct SOC Stream (agent connection)</option>
+                  <option>Explore Service Tiers</option>
+                  <option>Gold / Platinum DeepSight NDR + Apex Orchestrator</option>
+                  <option>Client portal walkthrough</option>
+                  <option>Not sure — recommend for me</option>
+                </select>
+              </div>
+              <div class="form-row"><label for="notes">Notes</label><textarea id="notes" name="notes" placeholder="Data residency needs, timeline, current tools…"></textarea></div>
+              <button class="btn btn-primary" type="submit">Send demo request</button>
+              <p class="form-note">Opens your email app to sales@kevantic.com. Create that mailbox in Hostinger if needed.</p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <a class="brand" href="index.html" aria-label="Kevantic Cyber Security"><img class="brand-logo kevantic-brand-logo brand-logo-full" src="assets/brand/kevantic-horizontal.svg?v=1.1.0" fetchpriority="high" decoding="async" alt="Kevantic Cyber Security" width="200" /><img class="brand-logo-mark kevantic-brand-mark" src="assets/brand/kevantic-mark.svg?v=1.1.0" alt="" width="40" aria-hidden="true" /></a>
+          <p>Kevantic NikTiar&trade; is an enterprise MSSP operated by Kevantic Cyber Security Private Limited. On-premises NikTiar&trade; Edge Nodes keep 100% of raw logs local with zero cloud tax. Our Cloud SOC investigates, contains with hold-until-unisolate, and reports CIS · ISO 27001 · PCI-DSS · HIPAA §164.312 · NIST indicators — this is not a software license to run yourself.</p>
+        </div>
+        <div class="footer-col">
+          <h4>Explore</h4>
+          <a href="services.html">Services</a>
+          <a href="#tiers">Service tiers</a>
+          <a href="#architecture">Architecture</a>
+          <a href="platform.html">Client portal</a>
+          <a href="solutions.html">Solutions</a>
+        </div>
+        <div class="footer-col">
+          <h4>Company</h4>
+          <a href="about.html">About</a>
+          <a href="contact.html">Contact</a>
+          <a href="privacy.html">Privacy Policy</a>
+          <a href="terms.html">Terms of Service</a>
+        </div>
+        <div class="footer-col">
+          <h4>Customers</h4>
+          <a data-customer-portal href="portal.html">Client Portal Access</a>
+          <a href="mailto:sales@kevantic.com">sales@kevantic.com</a>
+        </div>
+      </div>
+      <div class="footer-bottom" style="border:0;padding-top:0;"><span>© 2026 Kevantic Cyber Security Private Limited. All rights reserved.</span></div>
+    </div>
+  </footer>
+  <script src="js/site-config.js"></script>
+  <script src="js/app.js?v=10"></script>
+</body>
+</html>

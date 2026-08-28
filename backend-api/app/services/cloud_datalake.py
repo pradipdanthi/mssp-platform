@@ -12,7 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 def cloud_datalake_root() -> Path:
-    return Path(os.getenv("JUNEXIS_CLOUD_DATALAKE_ROOT", "/var/lib/junexis/datalake"))
+    return Path(
+        os.getenv("NIKTIAR_CLOUD_DATALAKE_ROOT")
+        or os.getenv("JUNEXIS_CLOUD_DATALAKE_ROOT")
+        or "/var/lib/niktiar/datalake"
+    )
 
 
 def tenant_lake_path(tenant_id: str) -> Path:
@@ -130,7 +134,7 @@ def search_iocs(
             }
             hits.append(
                 {
-                    "source": "junexis_data_lake",
+                    "source": "niktiar_data_lake",
                     "matched_ioc": ioc,
                     "record": record,
                 }

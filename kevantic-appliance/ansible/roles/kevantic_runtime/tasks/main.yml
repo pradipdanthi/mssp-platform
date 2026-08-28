@@ -38,7 +38,7 @@
     mode: "{{ '0750' if 'secrets' in item else '0755' }}"
   loop:
     - /etc/kevantic
-    - /etc/junexis
+    - /etc/niktiar
     - /etc/kevantic/nftables
     - /etc/kevantic/trust
     - /var/lib/kevantic
@@ -137,12 +137,12 @@
   loop:
     - kevantic-heartbeat.service
     - kevantic-heartbeat.timer
-    - junexis-heartbeat.service
-    - junexis-heartbeat.timer
+    - niktiar-heartbeat.service
+    - niktiar-heartbeat.timer
     - kevantic-license-enforce.service
     - kevantic-license-enforce.timer
     - kevantic-critical-alert-forwarder.service
-    - junexis-critical-alert-forwarder.service
+    - niktiar-critical-alert-forwarder.service
     - ollama.service
 
 - name: Ensure Ollama systemd drop-in directory
@@ -195,7 +195,7 @@
 - name: Symlink branded agent-inventory helper
   ansible.builtin.file:
     src: /usr/bin/kevantic-list-local-agents
-    dest: /usr/bin/junexis-list-local-agents
+    dest: /usr/bin/niktiar-list-local-agents
     state: link
     force: true
 
@@ -225,7 +225,7 @@
       }
   loop:
     - /etc/kevantic/image-release.json
-    - /etc/junexis/image-release.json
+    - /etc/niktiar/image-release.json
 
 - name: Assert heartbeat unit invokes Python module (not bash CLI wrapper)
   ansible.builtin.command: grep -F "ExecStart=/usr/bin/python3 -m kevantic_cli heartbeat" /etc/systemd/system/kevantic-heartbeat.service

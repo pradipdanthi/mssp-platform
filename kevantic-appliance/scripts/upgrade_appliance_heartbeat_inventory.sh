@@ -47,14 +47,14 @@ EOF
 }
 
 patch_unit kevantic-heartbeat.service kevantic_cli /opt/kevantic/cli:/opt/kevantic /etc/kevantic/appliance.env
-patch_unit junexis-heartbeat.service junexis_cli /opt/junexis/cli:/opt/junexis /etc/junexis/appliance.env
+patch_unit niktiar-heartbeat.service niktiar_cli /opt/niktiar/cli:/opt/niktiar /etc/niktiar/appliance.env
 
-if [[ -f /usr/bin/kevantic-list-local-agents ]] && [[ ! -f /usr/bin/junexis-list-local-agents ]]; then
-  sudo ln -sf /usr/bin/kevantic-list-local-agents /usr/bin/junexis-list-local-agents
+if [[ -f /usr/bin/kevantic-list-local-agents ]] && [[ ! -f /usr/bin/niktiar-list-local-agents ]]; then
+  sudo ln -sf /usr/bin/kevantic-list-local-agents /usr/bin/niktiar-list-local-agents
 fi
 
 sudo systemctl daemon-reload
-for t in kevantic-heartbeat.timer junexis-heartbeat.timer; do
+for t in kevantic-heartbeat.timer niktiar-heartbeat.timer; do
   if systemctl list-unit-files "$t" --no-legend 2>/dev/null | grep -q .; then
     sudo systemctl restart "$t"
     sudo systemctl start "${t%.timer}.service" || true

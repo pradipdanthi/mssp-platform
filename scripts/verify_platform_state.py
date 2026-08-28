@@ -1012,7 +1012,7 @@ def check_portability() -> CheckResult:
 def check_appliance_licensing() -> CheckResult:
     cr = CheckResult("CHECK 5: Appliance cryptographic licensing")
     f = cr.findings
-    mint = BACKEND / "app" / "services" / "junexis_license.py"
+    mint = BACKEND / "app" / "services" / "niktiar_license.py"
     sync = BACKEND / "app" / "services" / "appliance_entitlement_sync.py"
     ops = ROOT / "kevantic-appliance" / "cli" / "kevantic-cli" / "kevantic_cli" / "license_ops.py"
     register = ROOT / "kevantic-appliance" / "cli" / "kevantic-cli" / "kevantic_cli" / "register_ops.py"
@@ -1031,7 +1031,7 @@ def check_appliance_licensing() -> CheckResult:
     kb093g = ROOT / "scripts" / "kb093g_validate_appliance_install_iso.sh"
     bake = ROOT / "kevantic-appliance" / "scripts" / "bake_golden_vm199_fleet_reporting.sh"
 
-    require_file(f, mint, "junexis_license.py")
+    require_file(f, mint, "niktiar_license.py")
     require_file(f, sync, "appliance_entitlement_sync.py")
     require_file(f, ops, "license_ops.py")
     require_file(f, register, "register_ops.py")
@@ -1061,17 +1061,17 @@ def check_appliance_licensing() -> CheckResult:
     expect(
         f,
         "KEVANTIC_LICENSE_PRIVATE_KEY_PEM" in mint_txt
-        and "JUNEXIS_LICENSE_PRIVATE_KEY_PEM" in mint_txt,
-        "signing env accepts KEVANTIC_ and JUNEXIS_ private-key aliases",
+        and "NIKTIAR_LICENSE_PRIVATE_KEY_PEM" in mint_txt,
+        "signing env accepts KEVANTIC_ and NIKTIAR_ private-key aliases",
         path=mint,
         pattern=r"KEVANTIC_LICENSE_PRIVATE_KEY_PEM",
     )
     expect(
         f,
-        "from app.services.junexis_license import" in read(kb093g),
-        "kb093g imports junexis_license",
+        "from app.services.niktiar_license import" in read(kb093g),
+        "kb093g imports niktiar_license",
         path=kb093g,
-        pattern=r"from app.services.junexis_license import",
+        pattern=r"from app.services.niktiar_license import",
     )
     expect(
         f,
@@ -1118,7 +1118,7 @@ def check_appliance_licensing() -> CheckResult:
     )
 
     try:
-        from app.services.junexis_license import (  # noqa: WPS433
+        from app.services.niktiar_license import (  # noqa: WPS433
             ISSUER,
             generate_keypair,
             mint_license,

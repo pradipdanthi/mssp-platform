@@ -47,10 +47,10 @@ if [[ ! -f /usr/share/doc/kevantic/ATTRIBUTIONS.txt ]]; then
   echo "ERROR: open-source ATTRIBUTIONS.txt missing under /usr/share/doc/kevantic/" >&2
   exit 1
 fi
-mkdir -p /etc/kevantic /etc/junexis
+mkdir -p /etc/kevantic /etc/niktiar
 if [[ ! -f /etc/kevantic/image-release.json ]]; then
   printf '%s\n' '{"config_version":"track1","git_commit":"unknown"}' >/etc/kevantic/image-release.json
-  cp /etc/kevantic/image-release.json /etc/junexis/image-release.json
+  cp /etc/kevantic/image-release.json /etc/niktiar/image-release.json
 fi
 
 cat >/etc/motd <<'EOF'

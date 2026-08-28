@@ -1,0 +1,90 @@
+    <section class="tier-section tier-pricing-section" id="tiers">
+      <div class="container">
+        <div class="section-head reveal">
+          <span class="section-label">NikTiar&trade; Cyber Defense Platform</span>
+          <h2>Pricing &amp; Capabilities</h2>
+          <p>Three subscription tiers &mdash; Silver, Gold, and Platinum &mdash; aligned to identity ITDR, core MDR, and full MXDR coverage on one hybrid control plane.</p>
+        </div>
+
+        <div class="tier-switcher" role="tablist" aria-label="Service tiers">
+          <button type="button" class="tier-switch is-active" data-tier="silver">Silver</button>
+          <button type="button" class="tier-switch" data-tier="gold">Gold</button>
+          <button type="button" class="tier-switch" data-tier="platinum">Platinum</button>
+        </div>
+
+        <div class="tier-matrix-cards reveal" data-tier-cards>
+          <article class="tier-card tier-card--silver is-active" data-tier="silver">
+            <p class="tier-eyebrow">Tier 1 &middot; Identity ITDR</p>
+            <h3>Silver</h3>
+            <p class="tier-headline">Cloud &amp; Identity ITDR &mdash; Okta, Entra ID, &amp; Active Directory Protection</p>
+            <ul class="tier-feature-list">
+              <li>NikTiar identity telemetry (Okta / AD ingest)</li>
+              <li>MFA fatigue detection</li>
+              <li>Impossible travel alerts</li>
+              <li>Kerberoasting detection</li>
+              <li>Portal MFA enforcement</li>
+              <li>90-day log retention</li>
+            </ul>
+          </article>
+          <article class="tier-card tier-card--gold is-featured" data-tier="gold">
+            <span class="tier-ribbon">Most chosen</span>
+            <p class="tier-eyebrow">Tier 2 &middot; Core MDR</p>
+            <h3>Gold</h3>
+            <p class="tier-headline">Core MDR &mdash; 24/7 Host Protection, Automated Containment (Host Isolation) &amp; Pre-LLM Whitelist AI Veto Gate</p>
+            <p class="tier-inherits">Everything in Silver, plus:</p>
+            <ul class="tier-feature-list">
+              <li>NikTiar Core EDR telemetry &amp; alerting</li>
+              <li>Automated active containment (host isolation)</li>
+              <li>Pre-LLM whitelist AI veto gate</li>
+              <li>NikTiar Aegis vulnerability sync</li>
+              <li>NikTiar perimeter EASM sync</li>
+            </ul>
+          </article>
+          <article class="tier-card tier-card--platinum is-platinum" data-tier="platinum">
+            <span class="tier-ribbon flagship">Flagship</span>
+            <p class="tier-eyebrow">Tier 3 &middot; Full MXDR</p>
+            <h3>Platinum</h3>
+            <p class="tier-headline">Full MXDR &mdash; NikTiar DeepSight NDR, NikTiar Spectre Endpoint DFIR &amp; Retrospective Sweeps</p>
+            <p class="tier-inherits">Everything in Gold, plus:</p>
+            <ul class="tier-feature-list">
+              <li>NikTiar DeepSight NDR</li>
+              <li>NikTiar Spectre endpoint DFIR (process tree &amp; artifacts)</li>
+              <li>90-day retrospective threat sweeps</li>
+              <li>NikTiar analytics OLAP &amp; compressed archival</li>
+              <li>NikTiar continuous compliance indicators</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="tier-matrix-wrap reveal" data-tier-matrix>
+          <table class="tier-matrix tier-comparison-table">
+            <thead>
+              <tr>
+                <th scope="col">Capability</th>
+                <th scope="col" class="is-active" data-col="silver">Silver</th>
+                <th scope="col" data-col="gold">Gold</th>
+                <th scope="col" class="col-platinum" data-col="platinum">Platinum</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">NikTiar identity telemetry (Okta / AD)</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">MFA fatigue detection</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Impossible travel</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Kerberoasting detection</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Portal MFA</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">90-day retention</th><td class="is-active cell-yes" data-col="silver">&#10003;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar Core EDR</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Automated active containment (host isolation)</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">Pre-LLM whitelist AI veto gate</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar Aegis &amp; perimeter EASM sync</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-yes" data-col="gold">&#10003;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar DeepSight NDR</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar Spectre DFIR (process tree / artifacts)</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">90-day retrospective sweeps</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar analytics OLAP &amp; archival</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+              <tr><th scope="row">NikTiar continuous compliance</th><td class="is-active cell-na" data-col="silver">&mdash;</td><td class="cell-na" data-col="gold">&mdash;</td><td class="col-platinum cell-yes" data-col="platinum">&#10003;</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="tier-note">Powered by the NikTiar&trade; Cyber Defense Platform. Need a mapped quote? <a href="{{DEMO_HREF}}" style="color:var(--cyan);font-weight:600;">Request a NikTiar&trade; Edge Node demo &rarr;</a></p>
+      </div>
+    </section>

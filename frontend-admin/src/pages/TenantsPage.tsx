@@ -205,6 +205,8 @@ type CreateFormState = {
   portal_admin_full_name: string;
   portal_admin_password: string;
   portal_admin_phone: string;
+  subscription_tier: "SILVER" | "GOLD" | "PLATINUM";
+  showAdvancedEntitlements: boolean;
   entitlements: CreateEntitlementsState;
 };
 
@@ -282,6 +284,8 @@ const EMPTY_CREATE: CreateFormState = {
   portal_admin_full_name: "",
   portal_admin_password: "",
   portal_admin_phone: "",
+  subscription_tier: "SILVER",
+  showAdvancedEntitlements: false,
   entitlements: { ...DEFAULT_CREATE_ENTITLEMENTS, roadmap_notes: "" },
 };
 
@@ -581,10 +585,15 @@ export default function TenantsPage() {
         ? createForm.cloud_provider || null
         : null,
       ...profilePayloadFromForm(createForm),
-      entitlements: {
-        ...createForm.entitlements,
-        roadmap_notes: createForm.entitlements.roadmap_notes.trim() || null,
-      },
+      subscription_tier: createForm.subscription_tier,
+      ...(createForm.showAdvancedEntitlements
+        ? {
+            entitlements: {
+              ...createForm.entitlements,
+              roadmap_notes: createForm.entitlements.roadmap_notes.trim() || null,
+            },
+          }
+        : {}),
       portal_admin: {
         email: (createForm.portal_admin_email || createForm.primary_contact_email).trim(),
         full_name: (createForm.portal_admin_full_name || createForm.primary_contact_name).trim(),
@@ -1494,12 +1503,20 @@ export default function TenantsPage() {
 
           </FormSection>
           <FormSection
-            title="Service Entitlements"
-            description="Same names as the Service Catalog. New customers start with Core. Turn on add-ons only when they are in the contract."
+            title="Subscription tier"
+            description="Tier bundle is applied automatically. Customers request tier upgrades from the portal; MSSP provisions via Tier Operations."
           >
             <CreateEntitlementsFields
+              subscriptionTier={createForm.subscription_tier}
+              onTierChange={(subscription_tier) =>
+                setCreateForm({ ...createForm, subscription_tier })
+              }
               value={createForm.entitlements}
               onChange={(entitlements) => setCreateForm({ ...createForm, entitlements })}
+              showAdvanced={createForm.showAdvancedEntitlements}
+              onToggleAdvanced={(showAdvancedEntitlements) =>
+                setCreateForm({ ...createForm, showAdvancedEntitlements })
+              }
             />
           </FormSection>
           <FormSection

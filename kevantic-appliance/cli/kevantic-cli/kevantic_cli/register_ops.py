@@ -15,24 +15,28 @@ from uuid import uuid4
 
 try:
     from kevantic_cli import state
-except ImportError:  # branded junexis image
-    from junexis_cli import state
+except ImportError:
+    try:
+        from niktiar_cli import state
+    except ImportError:  # legacy lab images
+        from junexis_cli import state
 
 logger = logging.getLogger(__name__)
 
 
 def _cli_submodule(name: str):
-    """Load kevantic_cli.<name> or junexis_cli.<name> depending on image brand."""
+    """Load kevantic_cli / niktiar_cli / legacy junexis_cli submodule."""
     last: Exception | None = None
-    for pkg in ("kevantic_cli", "junexis_cli"):
+    for pkg in ("kevantic_cli", "niktiar_cli", "junexis_cli"):
         try:
             return __import__(f"{pkg}.{name}", fromlist=["*"])
         except ImportError as exc:
             last = exc
-    raise ImportError(f"{name} not found in kevantic_cli or junexis_cli") from last
+    raise ImportError(f"{name} not found in kevantic_cli, niktiar_cli, or junexis_cli") from last
 
 _AGENT_INVENTORY_HELPERS = (
     "/usr/bin/kevantic-list-local-agents",
+    "/usr/bin/niktiar-list-local-agents",
     "/usr/bin/junexis-list-local-agents",
 )
 
@@ -129,12 +133,14 @@ def _wazuh_api_credential_candidates() -> list[tuple[str, str]]:
     user = (
         os.environ.get("WAZUH_API_USER", "").strip()
         or _read_secret_line(
+            "/var/lib/niktiar/secrets/wazuh_api_user",
             "/var/lib/junexis/secrets/wazuh_api_user",
             "/var/lib/kevantic/secrets/wazuh_api_user",
         )
         or "wazuh-wui"
     )
     password = os.environ.get("WAZUH_API_PASSWORD", "").strip() or _read_secret_line(
+        "/var/lib/niktiar/secrets/wazuh_api_password",
         "/var/lib/junexis/secrets/wazuh_api_password",
         "/var/lib/kevantic/secrets/wazuh_api_password",
     )
@@ -250,8 +256,10 @@ def _chown_wazuh(path: Path) -> None:
 def _publish_windows_edr_ar_shared() -> None:
     """Push isolate scripts + sync helper into Manager shared groups."""
     src_dirs = (
+        Path("/var/lib/niktiar/edr-ar/windows"),
         Path("/var/lib/junexis/edr-ar/windows"),
         Path("/var/lib/kevantic/edr-ar/windows"),
+        Path("/opt/niktiar/edr-ar/windows"),
         Path("/opt/junexis/edr-ar/windows"),
         Path("/opt/kevantic/edr-ar/windows"),
     )
@@ -292,8 +300,10 @@ def _publish_windows_edr_ar_shared() -> None:
         "mssp-callback.key",
     )
     linux_src_dirs = (
+        Path("/var/lib/niktiar/edr-ar/linux"),
         Path("/var/lib/junexis/edr-ar/linux"),
         Path("/var/lib/kevantic/edr-ar/linux"),
+        Path("/opt/niktiar/edr-ar/linux"),
         Path("/opt/junexis/edr-ar/linux"),
         Path("/opt/kevantic/edr-ar/linux"),
     )
@@ -392,16 +402,20 @@ _LINUX_EXEC_AGENT_CONF = """<agent_config os="linux">
 
 _LINUX_EXEC_RULES_SRC = (
     Path("/var/lib/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml"),
+    Path("/var/lib/niktiar/edr-ar/linux/mssp_linux_exec_rules.xml"),
     Path("/var/lib/junexis/edr-ar/linux/mssp_linux_exec_rules.xml"),
     Path("/opt/kevantic/edr-ar/linux/mssp_linux_exec_rules.xml"),
+    Path("/opt/niktiar/edr-ar/linux/mssp_linux_exec_rules.xml"),
     Path("/opt/junexis/edr-ar/linux/mssp_linux_exec_rules.xml"),
     Path("/tmp/mssp_linux_exec_rules.xml"),
 )
 
 _LINUX_TELEMETRY_SRC = (
     Path("/var/lib/kevantic/edr-ar/linux/install-mssp-linux-telemetry.sh"),
+    Path("/var/lib/niktiar/edr-ar/linux/install-mssp-linux-telemetry.sh"),
     Path("/var/lib/junexis/edr-ar/linux/install-mssp-linux-telemetry.sh"),
     Path("/opt/kevantic/edr-ar/linux/install-mssp-linux-telemetry.sh"),
+    Path("/opt/niktiar/edr-ar/linux/install-mssp-linux-telemetry.sh"),
     Path("/opt/junexis/edr-ar/linux/install-mssp-linux-telemetry.sh"),
     Path("/tmp/install-mssp-linux-telemetry.sh"),
 )
@@ -913,6 +927,7 @@ def _read_image_metadata(app: dict[str, Any]) -> dict[str, str]:
     }
     for candidate in (
         state.config_root() / "image-release.json",
+        Path("/etc/niktiar/image-release.json"),
         Path("/etc/junexis/image-release.json"),
         Path("/etc/kevantic/image-release.json"),
     ):
@@ -928,7 +943,7 @@ def _read_image_metadata(app: dict[str, Any]) -> dict[str, str]:
             break
         except Exception as exc:  # noqa: BLE001
             logger.debug("image metadata read failed for %s: %s", candidate, exc)
-    env_commit = os.environ.get("KEVANTIC_GIT_COMMIT") or os.environ.get("JUNEXIS_GIT_COMMIT")
+    env_commit = os.environ.get("KEVANTIC_GIT_COMMIT") or os.environ.get("NIKTIAR_GIT_COMMIT")
     if env_commit:
         meta["git_commit"] = env_commit.strip()
     return meta

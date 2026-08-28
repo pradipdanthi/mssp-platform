@@ -7,7 +7,7 @@ SRC="$ROOT/packages/brand"
 TARGETS=(
   "$ROOT/frontend-admin/public/brand"
   "$ROOT/frontend-customer/public/brand"
-  "$ROOT/website-junexis/assets/brand"
+  "$ROOT/website-niktiar/assets/brand"
 )
 
 ASSETS=(
@@ -39,7 +39,7 @@ for dest in "${TARGETS[@]}"; do
 done
 
 # Website root asset convenience copies for legacy relative paths during transition
-WEB="$ROOT/website-junexis/assets"
+WEB="$ROOT/website-niktiar/assets"
 cp -a "$SRC/kevantic-horizontal.svg" "$WEB/logo-nav.svg"
 cp -a "$SRC/kevantic-mark.svg" "$WEB/mark.svg"
 cp -a "$SRC/favicon.svg" "$WEB/favicon.svg"

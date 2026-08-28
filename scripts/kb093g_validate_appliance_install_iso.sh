@@ -94,15 +94,15 @@ grep -q 'license' "$APP/cli/kevantic-cli/kevantic_cli/cli.py" || fail "CLI licen
 ok "kevantic-cli license commands present"
 
 # Backend license service + admin route
-[[ -f "$ROOT/backend-api/app/services/junexis_license.py" ]] || fail "missing junexis_license.py"
-grep -q 'ISSUER = "kevantic-license"' "$ROOT/backend-api/app/services/junexis_license.py" \
-  || fail "junexis_license.py issuer must be kevantic-license"
+[[ -f "$ROOT/backend-api/app/services/niktiar_license.py" ]] || fail "missing niktiar_license.py"
+grep -q 'ISSUER = "kevantic-license"' "$ROOT/backend-api/app/services/niktiar_license.py" \
+  || fail "niktiar_license.py issuer must be kevantic-license"
 grep -q 'LICENSE_ISSUER = "kevantic-license"' "$APP/cli/kevantic-cli/kevantic_cli/license_ops.py" \
   || fail "license_ops.py issuer must be kevantic-license"
-grep -q 'KEVANTIC_LICENSE_PRIVATE_KEY_PEM' "$ROOT/backend-api/app/services/junexis_license.py" \
+grep -q 'KEVANTIC_LICENSE_PRIVATE_KEY_PEM' "$ROOT/backend-api/app/services/niktiar_license.py" \
   || fail "signing env aliases missing KEVANTIC_LICENSE_PRIVATE_KEY_PEM"
-grep -q 'JUNEXIS_LICENSE_PRIVATE_KEY_PEM' "$ROOT/backend-api/app/services/junexis_license.py" \
-  || fail "signing env aliases missing JUNEXIS_LICENSE_PRIVATE_KEY_PEM"
+grep -q 'NIKTIAR_LICENSE_PRIVATE_KEY_PEM' "$ROOT/backend-api/app/services/niktiar_license.py" \
+  || fail "signing env aliases missing NIKTIAR_LICENSE_PRIVATE_KEY_PEM"
 grep -q 'appliance-licenses' "$ROOT/backend-api/app/api/routes/entitlements.py" || fail "mint route missing"
 grep -q 'cryptography==' "$ROOT/backend-api/requirements.txt" || fail "cryptography not pinned"
 ok "control-plane license mint path present"
@@ -131,7 +131,7 @@ python3 - <<'PY' "$TMP" "$ROOT"
 import json, os, sys, time
 from pathlib import Path
 sys.path.insert(0, str(Path(sys.argv[2]) / "backend-api"))
-from app.services.junexis_license import ISSUER, generate_keypair, mint_license, verify_license
+from app.services.niktiar_license import ISSUER, generate_keypair, mint_license, verify_license
 assert ISSUER == "kevantic-license"
 
 tmp = Path(sys.argv[1])

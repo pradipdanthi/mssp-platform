@@ -5,7 +5,7 @@ Audience: Product / operator
 Supersedes delivery misunderstanding of “qcow2 delivery ISO” for customer media.  
 Related: KB-093, KB-076, SERVICE_MATRIX.md  
 
-**P1 deliverables in tree:** `junexis-appliance/iso/build_install_iso.sh`, idle roles (`license_enforcer`, `service_manager`, `wazuh_local` + Fluent Bit), Admin mint `POST /admin/tenants/{id}/appliance-licenses`, `junexis-cli license apply|show`, validator `scripts/kb093g_validate_appliance_install_iso.sh`.
+**P1 deliverables in tree:** `niktiar-appliance/iso/build_install_iso.sh`, idle roles (`license_enforcer`, `service_manager`, `wazuh_local` + Fluent Bit), Admin mint `POST /admin/tenants/{id}/appliance-licenses`, `junexis-cli license apply|show`, validator `scripts/kb093g_validate_appliance_install_iso.sh`.
 
 ---
 
@@ -14,16 +14,16 @@ Related: KB-093, KB-076, SERVICE_MATRIX.md
 | Topic | Decision |
 |-------|----------|
 | Customer media | **One bootable/installable ISO** (bare metal, hypervisor VM, cloud VM) — not a pre-baked qcow2 as the field deliverable |
-| TheHive / Shuffle on ISO | **No** — central ticketing + SOAR stay in Junexis Cloud SOC / Admin |
-| Engines on ISO | **Every appliance-installable catalogue service** is **bundled on the ISO, fully installed/configurable, idle** until a Junexis-issued license enables it. No “ship later / download later” for those engines. |
-| Offline package pool | `junexis-appliance/iso/offline-packages/` — fetch with `scripts/b2_fetch_offline_packages.sh` (wazuh-manager, fluent-bit, suricata + deps); `build_install_iso.sh` embeds them so firstboot installs without Internet |
+| TheHive / Shuffle on ISO | **No** — central ticketing + SOAR stay in NikTiar Cloud SOC / Admin |
+| Engines on ISO | **Every appliance-installable catalogue service** is **bundled on the ISO, fully installed/configurable, idle** until a NikTiar-issued license enables it. No “ship later / download later” for those engines. |
+| Offline package pool | `niktiar-appliance/iso/offline-packages/` — fetch with `scripts/b2_fetch_offline_packages.sh` (wazuh-manager, fluent-bit, suricata + deps); `build_install_iso.sh` embeds them so firstboot installs without Internet |
 | Core always included (after contract) | **Log & Event Monitoring** + **Ticketing (central)** — with or without appliance |
 | Contract gate | Core (and any other service) only after **minimum 1-year contract** signed |
-| License keys | **Only** Junexis MSSP control plane can generate license keys, bound to **that customer/tenant identity** (and appliance fingerprint when appliance SKU) |
+| License keys | **Only** NikTiar MSSP control plane can generate license keys, bound to **that customer/tenant identity** (and appliance fingerprint when appliance SKU) |
 | Appliance Wazuh Manager | **Always-on for appliance SKU** once core contract active (local agents need a Manager) |
 | Fluent Bit | **Included on appliance ISO** (appliance-side collector next to Manager — never as an endpoint agent) |
 | Same commercial model | With-appliance and without-appliance use the **same entitlement / portal story** |
-| Hardening | Minimized Ubuntu + CIS-style harden + Junexis-only remote mgmt + tamper resistance |
+| Hardening | Minimized Ubuntu + CIS-style harden + NikTiar-only remote mgmt + tamper resistance |
 | ISO currency | Rebuild/promote patched ISOs for **new** deployments; in-field updates via channel/OTA after lock |
 | Single media | Same ISO for physical / on-prem VM / cloud VM |
 
@@ -68,7 +68,7 @@ With appliance:
 
 ### 3.3 All appliance-installable catalogue engines (on ISO, idle)
 
-**Correction:** Not “some engines later.” If a catalogue service is defined as installable on the appliance, its software **must already be on the installed system**, configured enough to start, and **stopped/disabled** until a Junexis license key enables it.
+**Correction:** Not “some engines later.” If a catalogue service is defined as installable on the appliance, its software **must already be on the installed system**, configured enough to start, and **stopped/disabled** until a NikTiar license key enables it.
 
 | ID | Catalogue service | On appliance ISO (idle until license) |
 |----|-------------------|----------------------------------------|
@@ -134,7 +134,7 @@ Flow: SOC opens/updates case in **central** TheHive → signed job → appliance
 | | Shuffle (cloud SOAR) | Appliance svc-03 |
 |--|----------------------|------------------|
 | What it is | Playbook UI, integrations, human/automation workflows | Small **local action worker** |
-| Where | Junexis Cloud SOC | Customer appliance |
+| Where | NikTiar Cloud SOC | Customer appliance |
 | On ISO? | **No** | Yes, idle until entitled |
 | Customer sees | Outcomes via portals / cases | Capability “Security Automation” when entitled |
 
@@ -166,7 +166,7 @@ If a customer requires **zero** orchestration dependency on cloud:
 ### 7.1 Principles
 
 - Portal/billing is system of record (same for appliance and non-appliance)  
-- **Only the Junexis MSSP control plane** can generate license keys (Admin role / internal API — never customer self-mint)  
+- **Only the NikTiar MSSP control plane** can generate license keys (Admin role / internal API — never customer self-mint)  
 - Keys are bound to **that customer/tenant identity** (+ appliance id/fingerprint for appliance SKU)  
 - Appliance **never** trusts an unsigned “enable” flag alone  
 - Binding: tenant + appliance fingerprint + expiry + service set  
@@ -174,7 +174,7 @@ If a customer requires **zero** orchestration dependency on cloud:
 
 ### 7.2 Artifact: signed entitlement token (JWS)
 
-Issued by Junexis license CA (Ed25519 or ECDSA P-256):
+Issued by NikTiar license CA (Ed25519 or ECDSA P-256):
 
 ```json
 {
@@ -192,11 +192,11 @@ Issued by Junexis license CA (Ed25519 or ECDSA P-256):
 }
 ```
 
-Signed → compact JWS. Appliance verifies with embedded Junexis public keys (rotatable via channel).
+Signed → compact JWS. Appliance verifies with embedded NikTiar public keys (rotatable via channel).
 
 ### 7.3 Delivery paths
 
-1. **Online:** Admin entitles → control plane signs → `license.push` on channel → appliance stores `/var/lib/junexis/entitlements.json` → `service_manager` reconciles units  
+1. **Online:** Admin entitles → control plane signs → `license.push` on channel → appliance stores `/var/lib/niktiar/entitlements.json` → `service_manager` reconciles units  
 2. **Offline / on-site:** Admin exports license file → engineer `junexis-cli license apply --file …`  
 3. **Heartbeat:** appliance reports `enabled_services[]` + health → Admin/Customer dashboards  
 
@@ -219,7 +219,7 @@ Same entitlement records in PostgreSQL; fulfillment target is `cloud_engines` vs
 ### 8.1 Minimized + hardened OS
 
 - Purge unused packages/snaps; CIS-aligned baselines  
-- ssh restricted; Junexis mgmt only via `junexis-cli` + outbound channel  
+- ssh restricted; NikTiar mgmt only via `junexis-cli` + outbound channel  
 - Secure Boot–capable layout where hardware allows  
 - Measured config: hashes of critical unit files / entitlement file  
 
@@ -243,7 +243,7 @@ Same entitlement records in PostgreSQL; fulfillment target is `cloud_engines` vs
 
 | Path | Use |
 |------|-----|
-| **Rebuild ISO** in CI when Ubuntu security + engine versions update → promote `Junexis-Appliance-vX.Y.iso` | New customer installs |
+| **Rebuild ISO** in CI when Ubuntu security + engine versions update → promote `NikTiar-Appliance-vX.Y.iso` | New customer installs |
 | **In-field OTA** over channel after LOCKED | Already-deployed appliances |
 
 Old ISOs are retired from the “ship new customers” channel; version + changelog published internally.

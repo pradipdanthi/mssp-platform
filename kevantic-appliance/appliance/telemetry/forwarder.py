@@ -30,9 +30,11 @@ def _env_first(*keys: str) -> str:
 def _read_api_key_file() -> str:
     candidates = [
         os.environ.get("KEVANTIC_API_KEY_FILE"),
+        os.environ.get("NIKTIAR_API_KEY_FILE"),
         os.environ.get("JUNEXIS_API_KEY_FILE"),
-        "/var/lib/kevantic/secrets/appliance_api_key",
+        "/var/lib/niktiar/secrets/appliance_api_key",
         "/var/lib/junexis/secrets/appliance_api_key",
+        "/var/lib/kevantic/secrets/appliance_api_key",
     ]
     for path in candidates:
         if not path:
@@ -71,11 +73,17 @@ class TelemetryForwarder:
         ensure_engine_dirs()
         self.url = url or telemetry_url()
         self.appliance_id = appliance_id or _env_first(
-            "KEVANTIC_APPLIANCE_ID", "JUNEXIS_APPLIANCE_ID"
+            "NIKTIAR_APPLIANCE_ID",
+            "KEVANTIC_APPLIANCE_ID",
+            "JUNEXIS_APPLIANCE_ID",
         )
         self.api_key = (
             api_key
-            or _env_first("KEVANTIC_APPLIANCE_API_KEY", "JUNEXIS_APPLIANCE_API_KEY")
+            or _env_first(
+                "NIKTIAR_APPLIANCE_API_KEY",
+                "KEVANTIC_APPLIANCE_API_KEY",
+                "JUNEXIS_APPLIANCE_API_KEY",
+            )
             or _read_api_key_file()
         )
         self.timeout = timeout

@@ -28,10 +28,10 @@ trap 'rm -rf "$TMP"' EXIT
 brandify() {
   local src="$1" dst="$2"
   sed \
-    -e 's/kevantic_cli/junexis_cli/g' \
-    -e 's/KEVANTIC_/JUNEXIS_/g' \
+    -e 's/kevantic_cli/niktiar_cli/g' \
+    -e 's/KEVANTIC_/NIKTIAR_/g' \
     -e 's/kevantic-cli/junexis-cli/g' \
-    -e 's/Kevantic/Junexis/g' \
+    -e 's/Kevantic/NikTiar/g' \
     "$src" > "$dst"
 }
 
@@ -70,19 +70,19 @@ fi
 
 "${SSH[@]}" "bash -s" <<REMOTE
 set -euo pipefail
-CLI="/opt/junexis/cli/junexis_cli"
+CLI="/opt/niktiar/cli/niktiar_cli"
 if [[ ! -d "\$CLI" ]]; then
   CLI="/opt/kevantic/cli/kevantic_cli"
 fi
 sudo install -m 0644 /tmp/register_ops.py "\$CLI/register_ops.py"
 sudo install -m 0644 /tmp/state.py "\$CLI/state.py"
-sudo install -d /etc/junexis /etc/kevantic
-sudo install -m 0644 /tmp/image-release.json /etc/junexis/image-release.json
+sudo install -d /etc/niktiar /etc/kevantic
+sudo install -m 0644 /tmp/image-release.json /etc/niktiar/image-release.json
 sudo install -m 0644 /tmp/image-release.json /etc/kevantic/image-release.json
 sudo python3 - <<'PY'
 import json
 from pathlib import Path
-for path in (Path("/etc/junexis/image-release.json"), Path("/etc/kevantic/image-release.json")):
+for path in (Path("/etc/niktiar/image-release.json"), Path("/etc/kevantic/image-release.json")):
     data = json.loads(path.read_text())
     data["git_commit"] = "${GIT_COMMIT}"
     data["edr_ar_version"] = data.get("edr_ar_version") or "1.0.1"
@@ -94,22 +94,22 @@ for f in mssp-isolate-host mssp-kill-process mssp-block-hash; do
     sudo install -o root -g wazuh -m 0750 "/tmp/\$f" "/var/ossec/active-response/bin/\$f"
   fi
 done
-sudo install -d -m 0755 /var/lib/junexis/edr-ar/windows /var/lib/kevantic/edr-ar/windows
-sudo install -d -m 0755 /var/lib/junexis/edr-ar/linux /var/lib/kevantic/edr-ar/linux
+sudo install -d -m 0755 /var/lib/niktiar/edr-ar/windows /var/lib/kevantic/edr-ar/windows
+sudo install -d -m 0755 /var/lib/niktiar/edr-ar/linux /var/lib/kevantic/edr-ar/linux
 for f in mssp-isolate-host.ps1 mssp-isolate-host.cmd mssp-kill-process.ps1 mssp-kill-process.cmd mssp-block-hash.ps1 mssp-block-hash.cmd Sync-MsspEdrAr.ps1 Watch-MsspQuarantine.ps1; do
   if [[ -f /tmp/\$f ]]; then
-    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/windows/\$f"
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/niktiar/edr-ar/windows/\$f"
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/windows/\$f"
   fi
 done
 for f in mssp_linux_exec_rules.xml install-mssp-linux-telemetry.sh mssp-exec.rules; do
   if [[ -f /tmp/\$f ]]; then
-    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/junexis/edr-ar/linux/\$f"
+    sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/niktiar/edr-ar/linux/\$f"
     sudo install -o wazuh -g wazuh -m 0640 "/tmp/\$f" "/var/lib/kevantic/edr-ar/linux/\$f"
   fi
 done
-if [[ -d /opt/junexis/cli/junexis_cli ]]; then
-  sudo env PYTHONPATH=/opt/junexis/cli:/opt/junexis python3 -c 'from junexis_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
+if [[ -d /opt/niktiar/cli/niktiar_cli ]]; then
+  sudo env PYTHONPATH=/opt/niktiar/cli:/opt/niktiar python3 -c 'from niktiar_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
 elif [[ -d /opt/kevantic/cli/kevantic_cli ]]; then
   sudo env PYTHONPATH=/opt/kevantic/cli:/opt/kevantic python3 -c 'from kevantic_cli.register_ops import _ensure_local_edr_ar_commands; _ensure_local_edr_ar_commands()'
 fi
@@ -118,7 +118,7 @@ fi
 sudo python3 - <<'PY'
 import json
 from pathlib import Path
-for state_dir in (Path("/var/lib/junexis"), Path("/var/lib/kevantic")):
+for state_dir in (Path("/var/lib/niktiar"), Path("/var/lib/kevantic")):
     path = state_dir / "entitlements.json"
     if not path.is_file():
         continue
@@ -140,7 +140,7 @@ for svc in junexis-channeld.service kevantic-channeld.service; do
     sudo systemctl restart "\$svc" || true
   fi
 done
-for t in junexis-heartbeat.timer kevantic-heartbeat.timer; do
+for t in niktiar-heartbeat.timer kevantic-heartbeat.timer; do
   if systemctl list-unit-files "\$t" --no-legend 2>/dev/null | grep -q .; then
     sudo systemctl restart "\$t"
     sudo systemctl start "\${t%.timer}.service" || true
@@ -149,7 +149,7 @@ done
 REMOTE
 
 echo "==> Manual heartbeat (verify enabled_services + resource metrics)"
-"${SSH[@]}" 'sudo systemctl start junexis-heartbeat.service 2>/dev/null || sudo systemctl start kevantic-heartbeat.service'
+"${SSH[@]}" 'sudo systemctl start niktiar-heartbeat.service 2>/dev/null || sudo systemctl start kevantic-heartbeat.service'
 sleep 2
 
 echo "==> OK — fleet reporting upgrade applied on ${HOST} (git_commit=${GIT_COMMIT})"

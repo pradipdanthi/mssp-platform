@@ -1,8 +1,8 @@
-# KB-093N — Immutable Junexis Appliance Image Strategy
+# KB-093N — Immutable NikTiar Appliance Image Strategy
 
 Status: **Active architecture decision (2026-08-06)**  
 Replaces: Subiquity live-ISO remaster (`iso/build_install_iso.sh`) as the **primary** customer ship path.  
-Brand: **Junexis** · Base: **Ubuntu 24.04 LTS** (not rebranded) · Control plane: VM 100 · Appliance Mgmt: **VM 114** · **Image factory: VM 113** (never VM 100 / never VM 114)
+Brand: **NikTiar** · Base: **Ubuntu 24.04 LTS** (not rebranded) · Control plane: VM 100 · Appliance Mgmt: **VM 114** · **Image factory: VM 113** (never VM 100 / never VM 114)
 
 ---
 
@@ -14,7 +14,7 @@ We are switching to an **image-based, tamper-resistant appliance**:
 
 | Pillar | Target |
 |--------|--------|
-| Boot | Unified Kernel Image (UKI) + Secure Boot (Junexis keys / MOK where needed) |
+| Boot | Unified Kernel Image (UKI) + Secure Boot (NikTiar keys / MOK where needed) |
 | Root | **dm-verity** integrity-protected, effectively read-only |
 | Secrets / state | Encrypted writable volumes (LUKS2; TPM2/Clevis when hardware allows) |
 | Hardening | CIS-aligned + AppArmor enforce + nftables locked + strict sysctl (sealed post-factory) |
@@ -22,7 +22,7 @@ We are switching to an **image-based, tamper-resistant appliance**:
 | Updates | **A/B dual root** atomic OTA with automatic rollback |
 | Trust | Hardware fingerprint now; **remote TPM attestation** to Appliance Mgmt later |
 
-Old `Junexis-Appliance-Install-v*.iso` remaster artifacts are **retired** (deleted from ship channel). Keep reusable content: `cli/`, `channel/`, `licensing/`, `engines/`, offline package fetch, nftables/AppArmor sources — consumed by the **new** image build, not by Subiquity firstboot.
+Old `NikTiar-Appliance-Install-v*.iso` remaster artifacts are **retired** (deleted from ship channel). Keep reusable content: `cli/`, `channel/`, `licensing/`, `engines/`, offline package fetch, nftables/AppArmor sources — consumed by the **new** image build, not by Subiquity firstboot.
 
 ---
 
@@ -39,7 +39,7 @@ The remaster path blocked true immutability: firstboot **writes** the rootfs (ap
 | Image build | **mkosi** (systemd) | Produce golden root + ESP/UKI candidates from declarative config |
 | Partitioning | **systemd-repart** | Disk layout: ESP + A + B + encrypted data |
 | Boot | **ukify** / systemd-stub | UKI: kernel + initrd + cmdline + optional PCR sigs |
-| Secure Boot | **sbctl** (lab) → OEM/MOK runbook (field) | Sign UKI; enroll Junexis DB keys |
+| Secure Boot | **sbctl** (lab) → OEM/MOK runbook (field) | Sign UKI; enroll NikTiar DB keys |
 | Verity | **systemd-veritysetup** / mkosi verity | Merkle-backed root |
 | Encryption | **cryptsetup LUKS2** + **Clevis/TPM2** (SKU-dependent) | `/var` (logs, lake, secrets) |
 | OTA | **RAUC** (preferred) or systemd-sysupdate | Slot A/B switch + rollback |
@@ -56,7 +56,7 @@ The remaster path blocked true immutability: firstboot **writes** the rootfs (ap
 ┌──────── ESP (FAT) ────────┐  UKI A / UKI B (Secure Boot)
 ├──────── Root slot A ──────┤  dm-verity protected (active or inactive)
 ├──────── Root slot B ──────┤  dm-verity protected (inactive or active)
-├──────── Data (LUKS2) ─────┤  /var/lib/junexis, logs, lake, secrets
+├──────── Data (LUKS2) ─────┤  /var/lib/niktiar, logs, lake, secrets
 └──────── (optional swap) ──┘
 ```
 
@@ -68,24 +68,24 @@ Factory / first power-on: repart grows data partition; generates machine identit
 
 | Artifact | Consumer |
 |----------|----------|
-| `Junexis-Appliance-Immutable-vX.Y.raw` / `.qcow2` | Lab / cloud / imaging |
-| `Junexis-Appliance-Immutable-vX.Y.raucb` (or sysupdate bundle) | Field OTA |
+| `NikTiar-Appliance-Immutable-vX.Y.raw` / `.qcow2` | Lab / cloud / imaging |
+| `NikTiar-Appliance-Immutable-vX.Y.raucb` (or sysupdate bundle) | Field OTA |
 | Optional hybrid **installer USB** that only **dd/reparts** the golden image | Bare metal (not Subiquity) |
 
-Version string continues from `junexis-appliance/VERSION`.
+Version string continues from `niktiar-appliance/VERSION`.
 
 ---
 
 ## 6. Phased delivery (no waiting on “perfect”)
 
 ### Phase N0 — Scaffold (this KB) ✅ in progress
-- Repo layout `junexis-appliance/mkosi/`
+- Repo layout `niktiar-appliance/mkosi/`
 - Deprecate remaster scripts
 - Delete retired `dist-install` ship ISOs from `.cache`
-- **Dedicated factory VM 113** (`junexis-appliance-build`, `192.168.0.223`) for all mkosi builds — **not** VM 100, **not** VM 114
+- **Dedicated factory VM 113** (`niktiar-appliance-build`, `192.168.0.223`) for all mkosi builds — **not** VM 100, **not** VM 114
 
 ### Phase N1 — Golden image boots in lab (first working rebuild)
-- On **VM 113**: mkosi builds Ubuntu 24.04 root with Junexis user, nftables bootstrap, CLI + channel stubs
+- On **VM 113**: mkosi builds Ubuntu 24.04 root with NikTiar user, nftables bootstrap, CLI + channel stubs
 - Engines: stage from existing `iso/offline-packages` **into the image at build time** (idle units)
 - Output: qcow2 bootable on Proxmox **without** Subiquity
 - Validator: `scripts/kb093n_validate_immutable_image_scaffold.sh`
@@ -126,7 +126,7 @@ Track 5 field cutover **pauses** until **N1** lab boot works; then resume regist
 |--------|-------------|
 | `iso/build_install_iso.sh` remaster as ship path | `mkosi/build.sh` |
 | `iso/firstboot/junexis-firstboot.sh` full Ansible mutate | Factory agent (identity/register only) |
-| `.cache/dist-install/Junexis-Appliance-Install-*.iso` | Immutable raw/qcow2 + later installer USB |
+| `.cache/dist-install/NikTiar-Appliance-Install-*.iso` | Immutable raw/qcow2 + later installer USB |
 
 ---
 
@@ -151,8 +151,8 @@ Track 5 field cutover **pauses** until **N1** lab boot works; then resume regist
 ```bash
 cd /opt/mssp-control
 ./scripts/kb093n_validate_immutable_image_scaffold.sh
-./junexis-appliance/mkosi/build.sh
-# → junexis-appliance/.cache/mkosi/Junexis-Appliance-Immutable-*.qcow2
+./niktiar-appliance/mkosi/build.sh
+# → niktiar-appliance/.cache/mkosi/NikTiar-Appliance-Immutable-*.qcow2
 ```
 
 Proxmox: import qcow2 as VM disk; boot; login `junexis`; run Admin **Copy register command** to VM 114.
@@ -173,11 +173,11 @@ Later phases add Secure Boot, verity, RAUC validators.
 
 | VMID | Name | IP | Role |
 |------|------|-----|------|
-| **113** | `junexis-appliance-build` | `192.168.0.223` | **mkosi / UKI / image factory only** |
-| **114** | `junexis-appliance-mgmt` | `192.168.0.224` | Register / heartbeat / channel gateway (keep) |
+| **113** | `niktiar-appliance-build` | `192.168.0.223` | **mkosi / UKI / image factory only** |
+| **114** | `niktiar-appliance-mgmt` | `192.168.0.224` | Register / heartbeat / channel gateway (keep) |
 | 100 | `mssp-control` | `192.168.0.201` | Admin/Customer portals + Postgres (keep) |
 
-Recreate factory: `./junexis-appliance/scripts/b2_proxmox_create_build_vm.sh`
+Recreate factory: `./niktiar-appliance/scripts/b2_proxmox_create_build_vm.sh`
 
 ## 13. Idle engines on a tamper-proof image (compatibility)
 

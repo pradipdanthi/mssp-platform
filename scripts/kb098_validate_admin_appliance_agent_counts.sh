@@ -168,7 +168,7 @@ fi
 
 section "Live Beta appliance spot-check (optional)"
 BETA_ROW="$(curl -sS -H "Authorization: Bearer ${PLATFORM_ADMIN_TOKEN}" \
-  "${API_BASE}/admin/appliances?q=junexis-appliance&page_size=10" \
+  "${API_BASE}/admin/appliances?q=niktiar-appliance&page_size=10" \
   | python3 -c "
 import json, sys
 data = json.load(sys.stdin)
@@ -180,7 +180,7 @@ for a in data.get('appliances') or []:
 if [ -n "$BETA_ROW" ]; then
   echo "Beta-Win-Corp appliance list row: $BETA_ROW"
 else
-  echo "No junexis-appliance row in API (skipped live spot-check)."
+  echo "No niktiar-appliance row in API (skipped live spot-check)."
 fi
 
 echo

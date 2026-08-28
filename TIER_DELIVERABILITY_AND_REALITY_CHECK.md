@@ -3,7 +3,7 @@
 **Product:** Kevantic NikTiar™ MSSP Control Plane  
 **Repository:** `/opt/mssp-control`  
 **Audit date:** 2026-08-28  
-**Marketing reference:** [kevantic.com](https://www.kevantic.com/) tier matrix (`website-junexis/services.html`)  
+**Marketing reference:** [kevantic.com](https://www.kevantic.com/) tier matrix (`website-niktiar/services.html`)  
 **Code baseline:** `fcc60b9` + **Phase 7 tier enforcement** (migration `046_subscription_tier.sql`, `tier_enforcement.py`, `tests/test_tier_enforcement.py`)  
 **Live environment:** VM 100 (`APP_ENV=development`, `mssp-backend-api` container)
 
@@ -283,11 +283,11 @@ Until blockers are cleared, align sales packaging with **what the control plane 
 
 ## 7. Appendix — Audit Methodology
 
-1. **Static code review** — `backend-api/app/`, `frontend-admin/`, `frontend-customer/`, `postgres/init/`, `docker-compose.yml`, `website-junexis/`.
+1. **Static code review** — `backend-api/app/`, `frontend-admin/`, `frontend-customer/`, `postgres/init/`, `docker-compose.yml`, `website-niktiar/`.
 2. **Live DB queries** — `mssp-postgres` container (`security_alerts`, `tenant_ndr_events`, `vulnerabilities`, `tenant_easm_findings`, `retrospective_hunt_jobs`, `edr_action_executions`).
 3. **Runtime probes** — `probe_ollama_health()`, `ClickHouseAnalyticsAdapter.is_configured()`, `_allow_lab_sample_seed()` flags inside `mssp-backend-api`.
 4. **Unit test execution** — `test_identity_telemetry`, `test_ai_triage`, `test_auth_mfa` (37 tests, all OK).
-5. **Marketing cross-check** — [kevantic.com](https://www.kevantic.com/) homepage + `website-junexis/services.html` tier matrix.
+5. **Marketing cross-check** — [kevantic.com](https://www.kevantic.com/) homepage + `website-niktiar/services.html` tier matrix.
 
 ---
 

@@ -65,7 +65,7 @@ volume is expected to be low.
 | `LOCAL_AI_CACHE_TTL_SECONDS` | `86400` | Cache TTL |
 | `LOCAL_AI_SUPPRESS_CONFIDENCE` | `85` | Benign hold threshold |
 
-Set via `/etc/kevantic/appliance.env` (or `/etc/junexis/appliance.env`) and/or
+Set via `/etc/kevantic/appliance.env` (or `/etc/niktiar/appliance.env`) and/or
 systemd unit `Environment=` lines on `kevantic-critical-alert-forwarder.service`.
 
 ## Files
