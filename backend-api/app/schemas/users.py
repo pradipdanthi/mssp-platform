@@ -84,10 +84,30 @@ class UserDetail(BaseModel):
     email: str
     phone: Optional[str] = None
     status: str
+    is_mfa_enabled: bool = False
+    mfa_updated_at: Optional[str] = None
     last_login_at: Optional[str] = None
     created_at: str
     updated_at: str
     # No password / password_hash field - structurally impossible to leak.
+
+
+class MfaUserStatusRow(BaseModel):
+    id: str
+    email: str
+    role: str
+    tenant_id: Optional[str] = None
+    is_mfa_enabled: bool
+    mfa_updated_at: Optional[str] = None
+
+
+class MfaStatusListResponse(BaseModel):
+    users: List[MfaUserStatusRow]
+
+
+class AdminMfaEnforceResponse(BaseModel):
+    secret: str
+    otpauth_url: str
 
 
 class UsersListResponse(BaseModel):

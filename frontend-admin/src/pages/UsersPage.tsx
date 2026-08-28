@@ -6,15 +6,18 @@ import {
   Tenant,
   UserStatus,
   createUser,
+  enforceUserMfa,
   getTenants,
   getUsers,
   postAuditEvent,
+  resetUserMfa,
   updateUser,
   updateUserPassword,
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import ConfirmDangerModal from "../components/ConfirmDangerModal";
+import MfaManageModal from "../components/MfaManageModal";
 import FormSection from "../components/FormSection";
 import ListToolbar from "../components/ListToolbar";
 import RowActionsMenu from "../components/RowActionsMenu";
@@ -127,6 +130,14 @@ export default function UsersPage() {
   const [disableUser, setDisableUser] = useState<AdminUser | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
 
+  const [mfaUser, setMfaUser] = useState<AdminUser | null>(null);
+  const [mfaEnforceResult, setMfaEnforceResult] = useState<{
+    secret: string;
+    otpauth_url: string;
+  } | null>(null);
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     getTenants({ page_size: 200 })
@@ -166,6 +177,59 @@ export default function UsersPage() {
     setNewPassword("");
     setPasswordError(null);
     setPasswordSuccess(null);
+  }
+
+  function openMfa(u: AdminUser) {
+    setMfaUser(u);
+    setMfaEnforceResult(null);
+    setMfaError(null);
+  }
+
+  async function handleMfaReset() {
+    if (!canWrite || !mfaUser) return;
+    setMfaBusy(true);
+    setMfaError(null);
+    try {
+      const updated = await resetUserMfa(mfaUser.id);
+      void postAuditEvent({
+        action: "user.mfa_reset",
+        entity_type: "user",
+        entity_id: updated.id,
+        tenant_id: updated.tenant_id,
+        details: { email: updated.email },
+      }).catch(() => undefined);
+      setMfaUser(updated);
+      setMfaEnforceResult(null);
+      setEditSuccess(`MFA reset for ${updated.email}.`);
+      refetch();
+    } catch (err) {
+      setMfaError(apiErrorMessage(err, "Could not reset MFA."));
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  async function handleMfaEnforce() {
+    if (!canWrite || !mfaUser) return;
+    setMfaBusy(true);
+    setMfaError(null);
+    try {
+      const result = await enforceUserMfa(mfaUser.id);
+      void postAuditEvent({
+        action: "user.mfa_enforced",
+        entity_type: "user",
+        entity_id: mfaUser.id,
+        tenant_id: mfaUser.tenant_id,
+        details: { email: mfaUser.email },
+      }).catch(() => undefined);
+      setMfaEnforceResult(result);
+      setMfaUser({ ...mfaUser, is_mfa_enabled: true });
+      refetch();
+    } catch (err) {
+      setMfaError(apiErrorMessage(err, "Could not enforce MFA."));
+    } finally {
+      setMfaBusy(false);
+    }
   }
 
   async function handleCreate(event: FormEvent) {
@@ -546,6 +610,22 @@ export default function UsersPage() {
         </form>
       )}
 
+      {mfaUser && canWrite && (
+        <MfaManageModal
+          user={mfaUser}
+          enforceResult={mfaEnforceResult}
+          busy={mfaBusy}
+          error={mfaError}
+          onClose={() => {
+            setMfaUser(null);
+            setMfaEnforceResult(null);
+            setMfaError(null);
+          }}
+          onReset={() => void handleMfaReset()}
+          onEnforce={() => void handleMfaEnforce()}
+        />
+      )}
+
       {passwordUser && canWrite && (
         <form className="management-panel" onSubmit={handlePassword}>
           <h2 className="section-title" style={{ marginTop: 0 }}>
@@ -605,6 +685,7 @@ export default function UsersPage() {
                 <th>Type</th>
                 <th>Customer</th>
                 <th>Status</th>
+                <th>MFA</th>
                 <th>Last Login</th>
                 {canWrite && <th>Actions</th>}
               </tr>
@@ -620,6 +701,13 @@ export default function UsersPage() {
                   <td>
                     <span className={`badge badge-${u.status}`}>{u.status}</span>
                   </td>
+                  <td>
+                    <span
+                      className={`badge ${u.is_mfa_enabled ? "badge-active" : "badge-inactive"}`}
+                    >
+                      {u.is_mfa_enabled ? "ENABLED" : "DISABLED"}
+                    </span>
+                  </td>
                   <td>{u.last_login_at ?? "Never"}</td>
                   {canWrite && (
                     <td>
@@ -634,6 +722,11 @@ export default function UsersPage() {
                             id: "password",
                             label: "Reset Password",
                             onClick: () => openPassword(u),
+                          },
+                          {
+                            id: "mfa",
+                            label: "Manage MFA",
+                            onClick: () => openMfa(u),
                           },
                           {
                             id: "disable",

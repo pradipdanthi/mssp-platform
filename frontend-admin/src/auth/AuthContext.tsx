@@ -1,10 +1,14 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { login as apiLogin, me as apiMe, isStaffPortalUser, UserPublic } from "../api/auth";
+import {
+  login as apiLogin,
+  mfaAuthenticate,
+  me as apiMe,
+  isStaffPortalUser,
+  TokenResponse,
+  UserPublic,
+} from "../api/auth";
 import { ApiError, setAuthToken } from "../api/client";
 
-// KB-018 Decision E: sessionStorage only (never localStorage), and the
-// token is never put in a URL or logged to the console anywhere in this
-// file or in api/client.ts.
 const TOKEN_STORAGE_KEY = "mssp_admin_access_token";
 
 interface AuthContextValue {
@@ -12,12 +16,25 @@ interface AuthContextValue {
   user: UserPublic | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ mfaRequired: boolean; mfaToken?: string }>;
+  completeMfaLogin: (mfaToken: string, code: string) => Promise<void>;
   logout: () => void;
   clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+
+function establishSession(result: TokenResponse, setToken: (t: string) => void, setUser: (u: UserPublic) => void) {
+  if (!isStaffPortalUser(result.user)) {
+    sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    setAuthToken(null);
+    throw new ApiError(403, "Wrong portal");
+  }
+  sessionStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
+  setAuthToken(result.access_token);
+  setToken(result.access_token);
+  setUser(result.user);
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
@@ -25,9 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // On first load, re-validate any token already in sessionStorage against
-  // GET /auth/me instead of trusting it blindly - a token can outlive an
-  // account being disabled or the JWT secret rotating server-side.
   useEffect(() => {
     const stored = sessionStorage.getItem(TOKEN_STORAGE_KEY);
     if (!stored) {
@@ -61,21 +75,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setError(null);
     try {
       const result = await apiLogin(email, password);
-      if (!isStaffPortalUser(result.user)) {
-        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
-        setAuthToken(null);
-        setError(
-          "This account is for the customer portal only. Sign in at portal.kevantic.com."
-        );
-        throw new ApiError(403, "Wrong portal");
+      if (result.mfa_required) {
+        if (!result.mfa_token) {
+          throw new ApiError(500, "MFA session token missing");
+        }
+        return { mfaRequired: true, mfaToken: result.mfa_token };
       }
-      sessionStorage.setItem(TOKEN_STORAGE_KEY, result.access_token);
-      setAuthToken(result.access_token);
-      setToken(result.access_token);
-      setUser(result.user);
+      if (!result.access_token || !result.user) {
+        throw new ApiError(500, "Login response incomplete");
+      }
+      establishSession(
+        {
+          access_token: result.access_token,
+          token_type: result.token_type || "bearer",
+          expires_in: result.expires_in || 3600,
+          user: result.user,
+        },
+        setToken,
+        setUser
+      );
+      return { mfaRequired: false };
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(typeof err.detail === "string" ? err.detail : "Invalid email or password.");
+        if (err.status === 403 && err.detail === "Wrong portal") {
+          setError(
+            "This account is for the customer portal only. Sign in at portal.kevantic.com."
+          );
+        } else {
+          setError(typeof err.detail === "string" ? err.detail : "Invalid email or password.");
+        }
+      } else {
+        setError("Unable to reach the server. Please try again.");
+      }
+      throw err;
+    }
+  }, []);
+
+  const completeMfaLogin = useCallback(async (mfaToken: string, code: string) => {
+    setError(null);
+    try {
+      const result = await mfaAuthenticate(mfaToken, code);
+      establishSession(result, setToken, setUser);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(typeof err.detail === "string" ? err.detail : "Invalid MFA code.");
       } else {
         setError("Unable to reach the server. Please try again.");
       }
@@ -94,7 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   return (
-    <AuthContext.Provider value={{ token, user, loading, error, login, logout, clearError }}>
+    <AuthContext.Provider
+      value={{ token, user, loading, error, login, completeMfaLogin, logout, clearError }}
+    >
       {children}
     </AuthContext.Provider>
   );

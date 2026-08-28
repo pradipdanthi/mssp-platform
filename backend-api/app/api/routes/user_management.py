@@ -45,12 +45,16 @@ from app.db.session import fetch_all, fetch_one, fetch_one_write
 from app.schemas.users import (
     ADMIN_ROLES,
     CUSTOMER_ROLES,
+    AdminMfaEnforceResponse,
+    MfaStatusListResponse,
     UserCreateRequest,
     UserDetail,
     UserPasswordUpdateRequest,
     UsersListResponse,
     UserUpdateRequest,
 )
+from app.services.audit_service import audit_from_user
+from app.services.mfa_service import admin_enforce_mfa, admin_reset_mfa, list_mfa_status_rows
 from app.services.list_pagination import clamp_pagination, pagination_meta
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
@@ -69,6 +73,8 @@ _USER_DETAIL_COLUMNS = """
     email,
     phone,
     status,
+    is_mfa_enabled,
+    mfa_updated_at::text,
     last_login_at::text,
     created_at::text,
     updated_at::text
@@ -137,6 +143,63 @@ def list_users(
         tuple(params + [page_size, offset]),
     )
     return {"users": rows, **pagination_meta(total, page, page_size)}
+
+
+@router.get("/mfa-status", response_model=MfaStatusListResponse)
+def get_users_mfa_status(
+    current_user: Dict[str, Any] = Depends(require_roles("platform_admin")),
+) -> Dict[str, Any]:
+    """MFA onboarding status for all users (platform_admin only)."""
+    _ = current_user
+    return {"users": list_mfa_status_rows()}
+
+
+@router.post("/{user_id}/mfa/reset", response_model=UserDetail)
+def reset_user_mfa(
+    user_id: UUID,
+    current_user: Dict[str, Any] = Depends(require_roles("platform_admin")),
+) -> Dict[str, Any]:
+    """Clear MFA lock when a user loses their authenticator device."""
+    user = _fetch_user_detail(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    admin_reset_mfa(str(user_id))
+    audit_from_user(
+        current_user,
+        action="AUTH_MFA_RESET",
+        entity_type="user",
+        entity_id=str(user_id),
+        tenant_id=user.get("tenant_id"),
+        details={"email": user.get("email")},
+    )
+    refreshed = _fetch_user_detail(user_id)
+    if not refreshed:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="MFA reset failed")
+    return refreshed
+
+
+@router.post("/{user_id}/mfa/enforce", response_model=AdminMfaEnforceResponse)
+def enforce_user_mfa(
+    user_id: UUID,
+    current_user: Dict[str, Any] = Depends(require_roles("platform_admin")),
+) -> Dict[str, str]:
+    """Provision MFA secret and enable immediately for administrative onboarding."""
+    user = _fetch_user_detail(user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    try:
+        result = admin_enforce_mfa(str(user_id))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    audit_from_user(
+        current_user,
+        action="AUTH_MFA_ENFORCED",
+        entity_type="user",
+        entity_id=str(user_id),
+        tenant_id=user.get("tenant_id"),
+        details={"email": user.get("email")},
+    )
+    return result
 
 
 @router.get("/{user_id}", response_model=UserDetail)

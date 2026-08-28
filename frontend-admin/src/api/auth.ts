@@ -1,7 +1,5 @@
 import { request } from "./client";
 
-// Mirrors backend-api/app/schemas/auth.py exactly (do not add fields here
-// that the backend does not return - e.g. no password/password_hash).
 export interface UserPublic {
   id: string;
   email: string;
@@ -11,6 +9,16 @@ export interface UserPublic {
   tenant_id: string | null;
   status: string;
   last_login_at: string | null;
+  is_mfa_enabled?: boolean;
+}
+
+export interface LoginResponse {
+  mfa_required: boolean;
+  mfa_token?: string | null;
+  access_token?: string | null;
+  token_type?: string | null;
+  expires_in?: number | null;
+  user?: UserPublic | null;
 }
 
 export interface TokenResponse {
@@ -31,10 +39,17 @@ export interface RolesResponse {
   roles: RoleInfo[];
 }
 
-export function login(email: string, password: string): Promise<TokenResponse> {
-  return request<TokenResponse>("/auth/login", {
+export function login(email: string, password: string): Promise<LoginResponse> {
+  return request<LoginResponse>("/auth/login", {
     method: "POST",
     body: { email, password, portal: "admin" },
+  });
+}
+
+export function mfaAuthenticate(mfaToken: string, code: string): Promise<TokenResponse> {
+  return request<TokenResponse>("/auth/mfa/authenticate", {
+    method: "POST",
+    body: { mfa_token: mfaToken, code },
   });
 }
 

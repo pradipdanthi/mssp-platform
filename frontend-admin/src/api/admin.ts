@@ -90,11 +90,18 @@ export interface AdminUser {
   email: string;
   phone: string | null;
   status: string;
+  is_mfa_enabled?: boolean;
+  mfa_updated_at?: string | null;
   last_login_at: string | null;
   created_at: string;
   updated_at: string;
   // Intentionally no password / password_hash field - the backend never
   // returns one, and this type must not invent a place to render it.
+}
+
+export interface AdminMfaEnforceResponse {
+  secret: string;
+  otpauth_url: string;
 }
 
 export interface UsersListResponse {
@@ -742,6 +749,19 @@ export function updateUserPassword(
     method: "PATCH",
     body: payload,
   });
+}
+
+export function resetUserMfa(userId: string): Promise<AdminUser> {
+  return request<AdminUser>(`/admin/users/${encodeURIComponent(userId)}/mfa/reset`, {
+    method: "POST",
+  });
+}
+
+export function enforceUserMfa(userId: string): Promise<AdminMfaEnforceResponse> {
+  return request<AdminMfaEnforceResponse>(
+    `/admin/users/${encodeURIComponent(userId)}/mfa/enforce`,
+    { method: "POST" }
+  );
 }
 
 export function getAppliances(filters?: TriageListFilters): Promise<AppliancesListResponse> {

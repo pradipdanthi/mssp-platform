@@ -6,7 +6,7 @@ structurally impossible for a password hash to leak through this model,
 because the field simply does not exist on it.
 """
 
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -33,6 +33,51 @@ class UserPublic(BaseModel):
     last_login_at: Optional[str] = None
     # KB-034: optional contact phone; never a secret.
     phone: Optional[str] = None
+    is_mfa_enabled: bool = False
+
+
+class LoginResponse(BaseModel):
+    """Unified login response for password-only, MFA-challenge, and MFA-setup flows."""
+
+    mfa_required: bool = False
+    mfa_setup_required: bool = False
+    mfa_token: Optional[str] = None
+    setup_token: Optional[str] = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
+    expires_in: Optional[int] = None
+    user: Optional[Dict[str, Any]] = None
+
+
+class MfaSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class MfaVerifyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=6, max_length=8)
+
+
+class MfaAuthenticateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mfa_token: str = Field(min_length=10, max_length=4096)
+    code: str = Field(min_length=6, max_length=16)
+
+
+class MfaSetupSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setup_token: str = Field(min_length=10, max_length=4096)
+
+
+class MfaCompleteSetupRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    setup_token: str = Field(min_length=10, max_length=4096)
+    code: str = Field(min_length=6, max_length=8)
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -77,6 +122,10 @@ class TokenResponse(BaseModel):
     token_type: str
     expires_in: int
     user: UserPublic
+
+
+class MfaCompleteSetupResponse(TokenResponse):
+    recovery_codes: List[str]
 
 
 class RoleInfo(BaseModel):

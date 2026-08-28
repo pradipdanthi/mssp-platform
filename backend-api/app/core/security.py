@@ -68,6 +68,58 @@ def create_access_token(subject: str, extra_claims: Dict[str, Any]) -> Dict[str,
     }
 
 
+def create_mfa_pending_token(subject: str) -> str:
+    """Short-lived token gating the second MFA step after password verification."""
+    settings = get_auth_settings()
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=5)
+    payload: Dict[str, Any] = {
+        "sub": subject,
+        "typ": "mfa_pending",
+        "iat": int(now.timestamp()),
+        "exp": int(expires_at.timestamp()),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def create_mfa_setup_token(subject: str) -> str:
+    """10-minute token for mandatory first-login MFA enrollment."""
+    settings = get_auth_settings()
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(minutes=10)
+    payload: Dict[str, Any] = {
+        "sub": subject,
+        "typ": "mfa_setup",
+        "iat": int(now.timestamp()),
+        "exp": int(expires_at.timestamp()),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+
+
+def decode_mfa_setup_token(token: str) -> str:
+    """Decode and validate an MFA setup token; returns user id."""
+    settings = get_auth_settings()
+    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    if payload.get("typ") != "mfa_setup":
+        raise jwt.InvalidTokenError("Not an MFA setup token")
+    subject = payload.get("sub")
+    if not subject:
+        raise jwt.InvalidTokenError("Missing subject")
+    return str(subject)
+
+
+def decode_mfa_pending_token(token: str) -> str:
+    """Decode and validate an MFA pending token; returns user id."""
+    settings = get_auth_settings()
+    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    if payload.get("typ") != "mfa_pending":
+        raise jwt.InvalidTokenError("Not an MFA pending token")
+    subject = payload.get("sub")
+    if not subject:
+        raise jwt.InvalidTokenError("Missing subject")
+    return str(subject)
+
+
 def decode_access_token(token: str) -> Dict[str, Any]:
     """
     Verify and decode a JWT access token.

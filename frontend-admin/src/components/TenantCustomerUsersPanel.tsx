@@ -3,13 +3,17 @@ import {
   AdminUser,
   Tenant,
   createTenantCustomerUser,
+  enforceUserMfa,
   getTenantUsers,
   postAuditEvent,
+  resetUserMfa,
   updateTenantCustomerUser,
   updateTenantCustomerUserPassword,
 } from "../api/admin";
 import { ApiError } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import ConfirmDangerModal from "./ConfirmDangerModal";
+import MfaManageModal from "./MfaManageModal";
 import RowActionsMenu, { RowAction } from "./RowActionsMenu";
 
 type CustomerRole = "customer_admin" | "customer_viewer";
@@ -33,6 +37,7 @@ function rowActionsForUser(
   handlers: {
     openEdit: (user: AdminUser) => void;
     openPassword: (user: AdminUser) => void;
+    openMfa?: (user: AdminUser) => void;
     requestDisable: (user: AdminUser) => void;
     reload: () => void;
     setError: (msg: string) => void;
@@ -46,6 +51,13 @@ function rowActionsForUser(
       onClick: () => handlers.openPassword(u),
     },
   ];
+  if (handlers.openMfa) {
+    actions.push({
+      id: "mfa",
+      label: "Manage MFA",
+      onClick: () => handlers.openMfa!(u),
+    });
+  }
   if (u.status === "active") {
     actions.push({
       id: "lock",
@@ -83,6 +95,8 @@ type Props = {
 };
 
 export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: Props) {
+  const { user: currentUser } = useAuth();
+  const canManageMfa = currentUser?.role === "platform_admin";
   const panelRef = useRef<HTMLDivElement>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -115,6 +129,14 @@ export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: 
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const [disableUser, setDisableUser] = useState<AdminUser | null>(null);
+
+  const [mfaUser, setMfaUser] = useState<AdminUser | null>(null);
+  const [mfaEnforceResult, setMfaEnforceResult] = useState<{
+    secret: string;
+    otpauth_url: string;
+  } | null>(null);
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [mfaError, setMfaError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -149,6 +171,59 @@ export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: 
     setPasswordUser(u);
     setNewPassword("");
     setPasswordError(null);
+  }
+
+  function openMfa(u: AdminUser) {
+    setMfaUser(u);
+    setMfaEnforceResult(null);
+    setMfaError(null);
+  }
+
+  async function handleMfaReset() {
+    if (!canManageMfa || !mfaUser) return;
+    setMfaBusy(true);
+    setMfaError(null);
+    try {
+      const updated = await resetUserMfa(mfaUser.id);
+      void postAuditEvent({
+        action: "tenant_user.mfa_reset",
+        entity_type: "user",
+        entity_id: updated.id,
+        tenant_id: tenant.id,
+        details: { email: updated.email },
+      }).catch(() => undefined);
+      setMfaUser(updated);
+      setMfaEnforceResult(null);
+      setBanner(`MFA reset for ${updated.email}.`);
+      await load();
+    } catch (err) {
+      setMfaError(apiErrorMessage(err, "Could not reset MFA."));
+    } finally {
+      setMfaBusy(false);
+    }
+  }
+
+  async function handleMfaEnforce() {
+    if (!canManageMfa || !mfaUser) return;
+    setMfaBusy(true);
+    setMfaError(null);
+    try {
+      const result = await enforceUserMfa(mfaUser.id);
+      void postAuditEvent({
+        action: "tenant_user.mfa_enforced",
+        entity_type: "user",
+        entity_id: mfaUser.id,
+        tenant_id: tenant.id,
+        details: { email: mfaUser.email },
+      }).catch(() => undefined);
+      setMfaEnforceResult(result);
+      setMfaUser({ ...mfaUser, is_mfa_enabled: true });
+      await load();
+    } catch (err) {
+      setMfaError(apiErrorMessage(err, "Could not enforce MFA."));
+    } finally {
+      setMfaBusy(false);
+    }
   }
 
   async function handleCreate(e: FormEvent) {
@@ -257,6 +332,7 @@ export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: 
   const actionHandlers = {
     openEdit,
     openPassword,
+    ...(canManageMfa ? { openMfa } : {}),
     requestDisable: setDisableUser,
     reload: () => void load(),
     setError: (msg: string) => setLoadError(msg),
@@ -394,6 +470,7 @@ export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: 
             <th>Email</th>
             <th>Role</th>
             <th>Status</th>
+            <th>MFA</th>
             {canWrite ? <th aria-label="Actions" /> : null}
           </tr>
         </thead>
@@ -404,6 +481,13 @@ export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: 
               <td className="cell-mono">{u.email}</td>
               <td>{roleLabel(u.role)}</td>
               <td>{u.status}</td>
+              <td>
+                <span
+                  className={`badge ${u.is_mfa_enabled ? "badge-active" : "badge-inactive"}`}
+                >
+                  {u.is_mfa_enabled ? "ENABLED" : "DISABLED"}
+                </span>
+              </td>
               {canWrite ? (
                 <td>
                   <RowActionsMenu actions={rowActionsForUser(u, tenant.id, actionHandlers)} />
@@ -413,7 +497,7 @@ export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: 
           ))}
           {users.length === 0 ? (
             <tr>
-              <td colSpan={canWrite ? 5 : 4} className="muted">
+              <td colSpan={canWrite ? 6 : 5} className="muted">
                 No customer users for this tenant.
               </td>
             </tr>
@@ -434,6 +518,22 @@ export default function TenantCustomerUsersPanel({ tenant, canWrite, onClose }: 
         onCancel={() => setDisableUser(null)}
         onConfirm={confirmDisable}
       />
+
+      {mfaUser && canManageMfa ? (
+        <MfaManageModal
+          user={mfaUser}
+          enforceResult={mfaEnforceResult}
+          busy={mfaBusy}
+          error={mfaError}
+          onClose={() => {
+            setMfaUser(null);
+            setMfaEnforceResult(null);
+            setMfaError(null);
+          }}
+          onReset={() => void handleMfaReset()}
+          onEnforce={() => void handleMfaEnforce()}
+        />
+      ) : null}
 
       {editing && canWrite ? (
         <div className="modal-root" role="dialog" aria-modal="true" aria-label="Edit user">

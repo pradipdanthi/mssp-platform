@@ -29,6 +29,8 @@ _USER_COLS = """
     email,
     phone,
     status,
+    is_mfa_enabled,
+    mfa_updated_at::text,
     last_login_at::text,
     created_at::text,
     updated_at::text

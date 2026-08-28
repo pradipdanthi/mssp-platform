@@ -4,6 +4,7 @@ import { useBrand } from "./config/BrandContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import EntitlementGate from "./components/EntitlementGate";
 import LoginPage from "./pages/LoginPage";
+import MfaSetupPage from "./pages/MfaSetupPage";
 import DashboardPage from "./pages/DashboardPage";
 import AlertsPage from "./pages/AlertsPage";
 import AlertDetailPage from "./pages/AlertDetailPage";
@@ -44,6 +45,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/mfa-setup" element={<MfaSetupPage />} />
       <Route path="/" element={<RootRedirect />} />
       <Route
         path="/dashboard"

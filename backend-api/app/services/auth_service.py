@@ -33,11 +33,16 @@ def get_user_by_email(email: str) -> Dict[str, Any]:
             u.phone,
             u.status,
             u.password_hash,
+            u.mfa_secret,
+            u.is_mfa_enabled,
+            u.mfa_updated_at,
+            u.mfa_recovery_codes,
             u.last_login_at,
             u.created_at,
             u.updated_at,
             t.short_code AS tenant_short_code,
-            t.name AS tenant_name
+            t.name AS tenant_name,
+            COALESCE(t.enforce_mfa, TRUE) AS tenant_enforce_mfa
         FROM platform_users u
         LEFT JOIN tenants t ON t.id = u.tenant_id
         WHERE lower(u.email) = lower(%s);
@@ -59,11 +64,16 @@ def get_user_by_id(user_id: str) -> Dict[str, Any]:
             u.phone,
             u.status,
             u.password_hash,
+            u.mfa_secret,
+            u.is_mfa_enabled,
+            u.mfa_updated_at,
+            u.mfa_recovery_codes,
             u.last_login_at,
             u.created_at,
             u.updated_at,
             t.short_code AS tenant_short_code,
-            t.name AS tenant_name
+            t.name AS tenant_name,
+            COALESCE(t.enforce_mfa, TRUE) AS tenant_enforce_mfa
         FROM platform_users u
         LEFT JOIN tenants t ON t.id = u.tenant_id
         WHERE u.id = %s;
@@ -79,12 +89,10 @@ def _touch_last_login(user_id: str) -> None:
     )
 
 
-def authenticate_user(email: str, password: str) -> Dict[str, Any]:
+def verify_user_credentials(email: str, password: str) -> Dict[str, Any]:
     """
-    Validate credentials and return the full user row (including
-    password_hash) for internal use only. Raises InvalidCredentialsError or
-    AccountNotActiveError on failure - callers must never reveal which of
-    "email not found" or "wrong password" occurred.
+    Validate email/password without updating last_login_at.
+    Used by login before optional MFA step.
     """
     user = get_user_by_email(email)
 
@@ -94,6 +102,17 @@ def authenticate_user(email: str, password: str) -> Dict[str, Any]:
     if user.get("status") != "active":
         raise AccountNotActiveError("Account is not active")
 
+    return user
+
+
+def authenticate_user(email: str, password: str) -> Dict[str, Any]:
+    """
+    Validate credentials and return the full user row (including
+    password_hash) for internal use only. Raises InvalidCredentialsError or
+    AccountNotActiveError on failure - callers must never reveal which of
+    "email not found" or "wrong password" occurred.
+    """
+    user = verify_user_credentials(email, password)
     _touch_last_login(user["id"])
     return get_user_by_id(user["id"])
 
@@ -114,6 +133,7 @@ def to_public_user(user: Dict[str, Any]) -> Dict[str, Any]:
         "tenant_short_code": user.get("tenant_short_code"),
         "tenant_name": user.get("tenant_name"),
         "status": user["status"],
+        "is_mfa_enabled": bool(user.get("is_mfa_enabled")),
         "last_login_at": last_login_at,
         "phone": user.get("phone"),
     }
