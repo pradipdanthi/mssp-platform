@@ -666,6 +666,7 @@ export async function getCustomerDashboardV2(
 /** KB-071: customer-facing service entitlements (never /admin). */
 export interface CustomerEntitlements {
   tenant_id: string;
+  subscription_tier?: string;
   log_monitoring_enabled: boolean;
   log_retention_days: number;
   incident_response: string;
@@ -1426,6 +1427,9 @@ export type ConsultationServiceKey =
   | "endpoint_forensics_deception"
   | "external_attack_surface"
   | "cloud_identity_protection"
+  | "tier_silver"
+  | "tier_gold"
+  | "tier_platinum"
   | "other";
 
 export type ConsultationRequestStatus =

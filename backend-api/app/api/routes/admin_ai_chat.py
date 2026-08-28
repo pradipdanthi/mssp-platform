@@ -9,8 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.dependencies import require_roles
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.services import ai_admin_chat
+from app.services.subscription_tier_service import (
+    SubscriptionTier,
+    get_tenant_id_from_short_code,
+)
 
 router = APIRouter(prefix="/admin/ai", tags=["admin-ai-chat"])
 
@@ -49,10 +54,15 @@ def admin_ai_chat(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI chat is disabled (AI_CHAT_ENABLED=false)",
         )
+    tenant_id = str(payload.tenant_id) if payload.tenant_id else None
+    if not tenant_id and payload.tenant_short_code:
+        tenant_id = get_tenant_id_from_short_code(payload.tenant_short_code)
+    if tenant_id:
+        enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.GOLD)
     try:
         result = ai_admin_chat.answer_soc_question(
             question=payload.message,
-            tenant_id=str(payload.tenant_id) if payload.tenant_id else None,
+            tenant_id=tenant_id,
             tenant_short_code=payload.tenant_short_code,
         )
     except ValueError as exc:

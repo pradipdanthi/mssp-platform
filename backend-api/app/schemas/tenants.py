@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 StatusLiteral = Literal["onboarding", "active", "inactive", "suspended"]
+SubscriptionTierLiteral = Literal["SILVER", "GOLD", "PLATINUM"]
 SlaLevelLiteral = Literal["standard", "business", "premium", "24x7"]
 CriticalityLiteral = Literal["low", "medium", "high", "critical"]
 DeploymentModeLiteral = Literal[
@@ -103,7 +104,7 @@ class EntitlementsOnCreate(BaseModel):
     wazuh_retention_days: int = Field(default=90, ge=30, le=365)
     thehive_mode: Literal["full", "read_only", "off"] = "full"
     greenbone_enabled: bool = False
-    greenbone_cadence: Literal["weekly", "monthly", "off"] = "monthly"
+    greenbone_cadence: Literal["weekly", "monthly", "daily", "continuous", "off"] = "monthly"
     shuffle_mode: Literal["standard", "custom", "off"] = "off"
     zeek_enabled: bool = False
     misp_enabled: bool = False
@@ -169,6 +170,7 @@ class TenantCreateRequest(BaseModel):
     data_residency: Optional[str] = Field(default=None, max_length=80)
     preferred_language: Optional[str] = Field(default="en", max_length=16)
     company_size: Optional[str] = Field(default=None, max_length=40)
+    subscription_tier: SubscriptionTierLiteral = "SILVER"
 
     entitlements: Optional[EntitlementsOnCreate] = None
     # Required: every new customer gets a portal admin at onboard time (KB-075).
@@ -284,6 +286,7 @@ class TenantUpdateRequest(BaseModel):
     data_residency: Optional[str] = Field(default=None, max_length=80)
     preferred_language: Optional[str] = Field(default=None, max_length=16)
     company_size: Optional[str] = Field(default=None, max_length=40)
+    subscription_tier: Optional[SubscriptionTierLiteral] = None
 
     @field_validator(
         "secondary_contact_email",
@@ -364,6 +367,7 @@ class TenantDetail(BaseModel):
     name: str
     short_code: str
     status: str
+    subscription_tier: str = "SILVER"
     sla_level: str
     business_criticality: str
     timezone: str

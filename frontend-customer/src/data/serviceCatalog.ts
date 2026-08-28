@@ -14,6 +14,9 @@ export type ConsultationServiceKey =
   | "endpoint_forensics_deception"
   | "external_attack_surface"
   | "cloud_identity_protection"
+  | "tier_silver"
+  | "tier_gold"
+  | "tier_platinum"
   | "other";
 
 export type ScopeField = "endpoints" | "domains" | "m365_seats" | "notes";

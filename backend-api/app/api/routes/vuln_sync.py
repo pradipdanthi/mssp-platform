@@ -9,7 +9,12 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, status
 
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.schemas.vulnerabilities import VulnSyncRequest, VulnSyncResponse
+from app.services.subscription_tier_service import (
+    SubscriptionTier,
+    get_tenant_id_from_short_code,
+)
 from app.services.vuln_scan_plan_service import build_scan_plan, mark_tenant_scanned
 from app.services.vuln_sync_service import (
     AssetTenantMismatchError,
@@ -68,6 +73,10 @@ def sync_vuln_findings(
 ) -> VulnSyncResponse:
     """Ingest normalized Greenbone findings. Never customer-facing raw data."""
     _require_sync_key(x_vuln_sync_key)
+    tenant_id = get_tenant_id_from_short_code(payload.tenant_short_code)
+    if not tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.GOLD)
     try:
         result = sync_vulnerabilities(payload)
     except TenantNotFoundError:

@@ -2348,6 +2348,132 @@ button.command-chip {
   color: #94a3b8;
   font-size: 0.82rem;
 }
+
+/* 3-tier subscription matrix */
+.subscription-tier-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+}
+.tier-matrix-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.tier-card {
+  position: relative;
+}
+.tier-card--active {
+  border-color: rgba(34, 211, 238, 0.65);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.25), 0 12px 36px rgba(6, 182, 212, 0.12);
+}
+.tier-card--upgrade {
+  opacity: 0.92;
+}
+.tier-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.tier-card-eyebrow {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #67e8f9;
+}
+.tier-card-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.tier-card-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+.tier-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tier-badge--active {
+  background: rgba(34, 211, 238, 0.18);
+  color: #67e8f9;
+  border: 1px solid rgba(34, 211, 238, 0.45);
+}
+.tier-card-tagline {
+  margin: 0.35rem 0 0;
+  color: #cbd5e1;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.tier-card-inherits {
+  margin: 0.65rem 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+.tier-feature-list {
+  margin: 0.55rem 0 0;
+  padding-left: 1.1rem;
+  color: #94a3b8;
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+.tier-upgrade-badge,
+.tier-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: rgba(251, 191, 36, 0.14);
+  color: #fcd34d;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+}
+.tier-upgrade-cta.btn-sm {
+  font-size: 0.72rem;
+  padding: 0.28rem 0.65rem;
+}
+.tier-matrix-table-wrap {
+  overflow-x: auto;
+}
+.tier-matrix-table th,
+.tier-matrix-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+.tier-matrix-table th[scope="row"] {
+  text-align: left;
+  min-width: 220px;
+}
+.tier-matrix-table .tier-col--active {
+  background: rgba(34, 211, 238, 0.08);
+}
+.tier-matrix-table .cell-yes {
+  color: #67e8f9;
+  font-weight: 700;
+}
+.tier-row--locked th[scope="row"] {
+  color: #94a3b8;
+}
+.tier-row-upgrade {
+  display: inline-block;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
 .service-status {
   flex: 0 0 auto;
   font-size: 0.68rem;

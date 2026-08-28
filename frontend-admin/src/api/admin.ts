@@ -52,6 +52,7 @@ export interface Tenant {
   name: string;
   short_code: string;
   status: string;
+  subscription_tier?: string;
   sla_level: string;
   business_criticality: string;
   timezone: string;
@@ -615,6 +616,7 @@ export interface TenantUpdateRequest {
   data_residency?: string | null;
   preferred_language?: string | null;
   company_size?: string | null;
+  subscription_tier?: string;
 }
 
 export function getTenantDetail(tenantId: string): Promise<TenantDetail> {

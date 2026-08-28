@@ -29,6 +29,7 @@ class UserPublic(BaseModel):
     # paths. Null for platform/SOC users (and any account without a tenant).
     tenant_short_code: Optional[str] = None
     tenant_name: Optional[str] = None
+    subscription_tier: Optional[str] = None
     status: str
     last_login_at: Optional[str] = None
     # KB-034: optional contact phone; never a secret.

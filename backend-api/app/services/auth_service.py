@@ -42,7 +42,8 @@ def get_user_by_email(email: str) -> Dict[str, Any]:
             u.updated_at,
             t.short_code AS tenant_short_code,
             t.name AS tenant_name,
-            COALESCE(t.enforce_mfa, TRUE) AS tenant_enforce_mfa
+            COALESCE(t.enforce_mfa, TRUE) AS tenant_enforce_mfa,
+            COALESCE(t.subscription_tier::text, 'SILVER') AS subscription_tier
         FROM platform_users u
         LEFT JOIN tenants t ON t.id = u.tenant_id
         WHERE lower(u.email) = lower(%s);
@@ -73,7 +74,8 @@ def get_user_by_id(user_id: str) -> Dict[str, Any]:
             u.updated_at,
             t.short_code AS tenant_short_code,
             t.name AS tenant_name,
-            COALESCE(t.enforce_mfa, TRUE) AS tenant_enforce_mfa
+            COALESCE(t.enforce_mfa, TRUE) AS tenant_enforce_mfa,
+            COALESCE(t.subscription_tier::text, 'SILVER') AS subscription_tier
         FROM platform_users u
         LEFT JOIN tenants t ON t.id = u.tenant_id
         WHERE u.id = %s;
@@ -132,6 +134,7 @@ def to_public_user(user: Dict[str, Any]) -> Dict[str, Any]:
         "tenant_id": user.get("tenant_id"),
         "tenant_short_code": user.get("tenant_short_code"),
         "tenant_name": user.get("tenant_name"),
+        "subscription_tier": user.get("subscription_tier"),
         "status": user["status"],
         "is_mfa_enabled": bool(user.get("is_mfa_enabled")),
         "last_login_at": last_login_at,

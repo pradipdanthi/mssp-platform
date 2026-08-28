@@ -11,9 +11,11 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
 from app.services import ndr_service as ndr
+from app.services.subscription_tier_service import SubscriptionTier
 
 router = APIRouter(tags=["ndr-network-detection"])
 
@@ -62,6 +64,7 @@ def customer_ndr_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
     summary = ndr.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -81,6 +84,7 @@ def customer_ndr_events(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
     rows, total = ndr.list_events(
         tenant["id"],
         severity=severity,
@@ -109,6 +113,7 @@ def customer_ndr_sensors(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
     sensors = []
     for row in ndr.list_sensors(tenant["id"]):
         sensors.append(

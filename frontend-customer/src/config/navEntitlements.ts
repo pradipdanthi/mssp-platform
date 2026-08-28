@@ -1,4 +1,6 @@
 import type { CustomerEntitlements } from "../api/customer";
+import type { SubscriptionTier } from "./tierConfig";
+import { MODULE_MIN_TIER, normalizeTier, tierMeetsMinimum } from "./tierConfig";
 
 /** Customer portal nav item. */
 export type CustomerNavItem = {
@@ -6,6 +8,8 @@ export type CustomerNavItem = {
   label: string;
   /** If set, tab is shown only when this entitlement check passes. */
   entitlement?: CustomerEntitlementKey;
+  locked?: boolean;
+  requiredTier?: SubscriptionTier;
 };
 
 export type CustomerEntitlementKey =
@@ -47,12 +51,21 @@ export const ADDON_NAV_ITEMS: CustomerNavItem[] = [
 
 /** Insert add-ons after Assets for a natural reading order. */
 export function buildCustomerNavItems(ent: CustomerEntitlements | null): CustomerNavItem[] {
-  const addons = ADDON_NAV_ITEMS.filter((item) =>
-    item.entitlement ? isEntitlementEnabled(ent, item.entitlement) : true
-  );
-  const head = CORE_NAV_ITEMS.slice(0, 4); // dashboard…assets
-  const tail = CORE_NAV_ITEMS.slice(4); // recommendations…services
-  return [...head, ...addons, ...tail];
+  const tier = normalizeTier(ent?.subscription_tier);
+  const addons = ADDON_NAV_ITEMS.map((item) => {
+    const requiredTier = item.entitlement ? MODULE_MIN_TIER[item.entitlement] : "SILVER";
+    const entitled = item.entitlement ? isEntitlementEnabled(ent, item.entitlement) : true;
+    const tierOk = tierMeetsMinimum(tier, requiredTier);
+    return {
+      ...item,
+      locked: !entitled || !tierOk,
+      requiredTier,
+    };
+  });
+  const visibleAddons = addons;
+  const head = CORE_NAV_ITEMS.slice(0, 4);
+  const tail = CORE_NAV_ITEMS.slice(4);
+  return [...head, ...visibleAddons, ...tail];
 }
 
 export function isEntitlementEnabled(

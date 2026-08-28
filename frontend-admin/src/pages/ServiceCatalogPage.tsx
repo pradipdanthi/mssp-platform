@@ -12,6 +12,7 @@ import {
   type AssetServiceCoverageAsset,
 } from "../api/admin";
 import { getCatalogItem } from "../data/serviceCatalog";
+import SubscriptionTierMatrix from "../components/SubscriptionTierMatrix";
 
 type PriceForm = {
   pricing_display: string;
@@ -242,6 +243,19 @@ export default function ServiceCatalogPage() {
       {loading && <div className="state-message">Loading catalog…</div>}
       {error && <div className="state-message state-error">{error}</div>}
       {success && <div className="state-message state-success">{success}</div>}
+
+      {!loading && (
+        <section className="management-panel" style={{ marginBottom: "1.25rem" }}>
+          <h2 className="section-title" style={{ marginTop: 0 }}>
+            3-Tier Feature Matrix
+          </h2>
+          <p className="page-subtitle" style={{ marginTop: 0 }}>
+            Silver (Identity ITDR), Gold (Core MDR), and Platinum (Full MXDR) — customer-facing
+            packages aligned to <code>subscription_tier</code>.
+          </p>
+          <SubscriptionTierMatrix />
+        </section>
+      )}
 
       {!loading && (
         <div className="services-catalog">

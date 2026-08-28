@@ -71,6 +71,7 @@ class CustomerEntitlementsPublic(BaseModel):
     """Customer portal only — no third-party engine field names."""
 
     tenant_id: str
+    subscription_tier: str = "SILVER"
     log_monitoring_enabled: bool = True
     log_retention_days: int = 30
     incident_response: str = "included"
@@ -141,7 +142,7 @@ def upsert_tenant_entitlements(
         raise ValueError("Invalid wazuh_retention_days")
     if merged["thehive_mode"] not in ("full", "read_only", "off"):
         raise ValueError("Invalid thehive_mode")
-    if merged["greenbone_cadence"] not in ("weekly", "monthly", "off"):
+    if merged["greenbone_cadence"] not in ("weekly", "monthly", "daily", "continuous", "off"):
         raise ValueError("Invalid greenbone_cadence")
     if merged["shuffle_mode"] not in ("standard", "custom", "off"):
         raise ValueError("Invalid shuffle_mode")
@@ -335,7 +336,10 @@ def get_customer_entitlements(
     ),
 ) -> CustomerEntitlementsPublic:
     tenant = fetch_one(
-        "SELECT id::text, short_code FROM tenants WHERE upper(short_code) = upper(%s);",
+        """
+        SELECT id::text, short_code, COALESCE(subscription_tier::text, 'SILVER') AS subscription_tier
+        FROM tenants WHERE upper(short_code) = upper(%s);
+        """,
         (short_code,),
     )
     if not tenant:
@@ -348,7 +352,7 @@ def get_customer_entitlements(
 
     ensure_demo_tenant_full_entitlements(tenant["id"], tenant.get("short_code"))
     row = _fetch_entitlements(UUID(tenant["id"]))
-    base = {**DEFAULTS, "tenant_id": tenant["id"]}
+    base = {**DEFAULTS, "tenant_id": tenant["id"], "subscription_tier": tenant.get("subscription_tier", "SILVER")}
     if row:
         base.update({k: row[k] for k in DEFAULTS if k in row})
         base["tenant_id"] = tenant["id"]
@@ -536,7 +540,7 @@ class AssetCoveragePut(BaseModel):
     ] = "vulnerability_management"
     asset_ids: List[UUID] = Field(default_factory=list)
     enable_entitlement: bool = True
-    greenbone_cadence: Optional[Literal["weekly", "monthly", "off"]] = None
+    greenbone_cadence: Optional[Literal["weekly", "monthly", "daily", "continuous", "off"]] = None
 
 
 def _resolve_customer_tenant(short_code: str, current_user: Dict[str, Any]) -> Dict[str, Any]:

@@ -20,6 +20,8 @@ from app.services.appliance_auth_service import (
     InvalidApplianceCredentialsError,
     verify_appliance_credentials,
 )
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
+from app.services.subscription_tier_service import SubscriptionTier
 from fastapi import Response
 
 logger = logging.getLogger(__name__)
@@ -98,6 +100,8 @@ def telemetry_hunt_results(
 ) -> Dict[str, Any]:
     """Accept retrospective hunt results from the appliance (metadata hits only)."""
     appliance = _auth_appliance(x_appliance_id, x_appliance_api_key)
+    tenant_id = str(appliance.get("tenant_id")) if appliance.get("tenant_id") else None
+    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.PLATINUM)
     from app.services import retrospective_service as retro
 
     updated = retro.apply_hunt_result(

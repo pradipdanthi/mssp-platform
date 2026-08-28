@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 
 from app.api.dependencies import get_current_user, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.db.session import db_transaction, fetch_all, fetch_one
 from app.schemas.edr import (
     EdrActionCallbackRequest,
@@ -43,6 +44,7 @@ from app.services.edr_metrics import (
     merged_mitre_for_incident,
 )
 from app.services.edr_process_tree import build_process_forest
+from app.services.subscription_tier_service import SubscriptionTier
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +227,7 @@ def edr_process_tree(
     if not incident_id and not alert_id:
         raise HTTPException(status_code=400, detail="incident_id or alert_id is required")
     tenant = _resolve_tenant_for_user(current_user, tenant_short_code)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
     raw_events: list = []
     normalized_rows: list = []
     if incident_id:
@@ -282,6 +285,9 @@ async def edr_execute_action(
 
     def _client_ip() -> Optional[str]:
         return _request_ip(request)
+
+    tenant = _resolve_tenant_for_user(current_user, body.tenant_short_code)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD)
 
     try:
         execution_id, st, message, upload_url, artifact_id = await asyncio.to_thread(
@@ -429,6 +435,7 @@ async def edr_forensics_upload(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Artifact not found")
+    enforce_tenant_subscription_tier(row["tenant_id"], SubscriptionTier.PLATINUM)
     if not edr_forensics_storage.verify_signed_token(
         token=token,
         artifact_id=artifact_id,

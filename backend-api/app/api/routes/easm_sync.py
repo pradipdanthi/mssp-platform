@@ -10,7 +10,12 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.services.easm_scan_plan_service import build_easm_scan_plan, ingest_easm_sync
+from app.services.subscription_tier_service import (
+    SubscriptionTier,
+    get_tenant_id_from_short_code,
+)
 
 router = APIRouter(prefix="/integrations/easm", tags=["easm-sync"])
 
@@ -98,6 +103,12 @@ def sync_easm_findings(
     x_easm_sync_key: Optional[str] = Header(default=None, alias="X-Easm-Sync-Key"),
 ) -> Dict[str, Any]:
     _require_sync_key(x_easm_sync_key)
+    tenant_id = payload.tenant_id
+    if not tenant_id and payload.tenant_short_code:
+        tenant_id = get_tenant_id_from_short_code(payload.tenant_short_code)
+    if not tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    enforce_tenant_subscription_tier(str(tenant_id), SubscriptionTier.GOLD)
     try:
         return ingest_easm_sync(payload.model_dump())
     except ValueError as exc:

@@ -83,6 +83,7 @@ def _fetch_tenant_detail(tenant_id: UUID) -> Optional[Dict[str, Any]]:
             t.name,
             t.short_code,
             t.status,
+            COALESCE(t.subscription_tier::text, 'SILVER') AS subscription_tier,
             t.sla_level,
             t.business_criticality,
             t.timezone,
@@ -540,7 +541,7 @@ def create_tenant(
         created = fetch_one_write(
             """
             INSERT INTO tenants (
-                name, short_code, status, sla_level, business_criticality,
+                name, short_code, status, subscription_tier, sla_level, business_criticality,
                 timezone, notes, deployment_mode, cloud_provider,
                 primary_contact_name, primary_contact_email, primary_contact_phone,
                 secondary_contact_name, secondary_contact_email, secondary_contact_phone,
@@ -551,7 +552,7 @@ def create_tenant(
                 data_residency, preferred_language, company_size
             )
             VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s::subscription_tier, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s::date, %s::date, %s, %s, %s, %s
             )
@@ -561,6 +562,7 @@ def create_tenant(
                 payload.name,
                 payload.short_code,
                 payload.status,
+                payload.subscription_tier,
                 payload.sla_level,
                 payload.business_criticality,
                 payload.timezone,
@@ -600,29 +602,35 @@ def create_tenant(
         )
 
     tenant_id = created["id"]
-    from app.services.tenant_entitlement_defaults import (
-        entitlements_for_new_tenant,
-        is_demo_full_entitlement_tenant,
+    from app.services.subscription_tier_service import (
+        set_tenant_subscription_tier,
+        sync_entitlements_for_tier,
     )
+    from app.services.tenant_entitlement_defaults import is_demo_full_entitlement_tenant
 
-    if is_demo_full_entitlement_tenant(payload.short_code):
-        # Alpha-Win / demo QA — always full 10-service catalog
-        ent_payload = entitlements_for_new_tenant(payload.short_code)
-    elif payload.entitlements:
-        # Admin may contract add-ons at create; unset fields stay core-only via DEFAULTS merge
-        ent_payload = payload.entitlements.model_dump()
-    else:
-        ent_payload = entitlements_for_new_tenant(payload.short_code)
+    tier = "PLATINUM" if is_demo_full_entitlement_tenant(payload.short_code) else payload.subscription_tier
+    set_tenant_subscription_tier(
+        tenant_id,
+        tier,
+        sync_entitlements=False,
+        actor_user_id=current_user.get("id"),
+    )
     entitlements_saved = False
     try:
-        upsert_tenant_entitlements(
-            tenant_id,
-            ent_payload,
-            actor_user_id=current_user.get("id"),
-        )
+        if payload.entitlements:
+            upsert_tenant_entitlements(
+                tenant_id,
+                payload.entitlements.model_dump(),
+                actor_user_id=current_user.get("id"),
+            )
+        else:
+            sync_entitlements_for_tier(
+                tenant_id,
+                tier,
+                actor_user_id=current_user.get("id"),
+            )
         entitlements_saved = True
     except Exception:
-        # Tenant remains; operator can set entitlements via Change Subscription
         pass
 
     binding: Optional[Dict[str, Any]] = None
@@ -767,6 +775,7 @@ def update_tenant(
         "data_residency",
         "preferred_language",
         "company_size",
+        "subscription_tier",
     ):
         if field_name in payload.model_fields_set:
             updates[field_name] = getattr(payload, field_name)
@@ -799,14 +808,29 @@ def update_tenant(
             detail="At least one field must be provided",
         )
 
-    fields = [f"{key} = %s" for key in updates]
-    params: list = list(updates.values())
+    fields = []
+    params: list = []
+    for key, value in updates.items():
+        if key == "subscription_tier":
+            fields.append("subscription_tier = %s::subscription_tier")
+        else:
+            fields.append(f"{key} = %s")
+        params.append(value)
     params.append(str(tenant_id))
-    query = f"UPDATE tenants SET {', '.join(fields)} WHERE id = %s RETURNING id::text;"
+    query = f"UPDATE tenants SET {', '.join(fields)}, updated_at = now() WHERE id = %s RETURNING id::text;"
 
     updated = fetch_one_write(query, tuple(params))
     if not updated:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    if "subscription_tier" in updates:
+        from app.services.subscription_tier_service import sync_entitlements_for_tier
+
+        sync_entitlements_for_tier(
+            str(tenant_id),
+            updates["subscription_tier"],
+            actor_user_id=current_user.get("id"),
+        )
 
     tenant = _fetch_tenant_detail(UUID(updated["id"]))
     if not tenant:

@@ -12,9 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
 from app.services import itdr_service as itdr
+from app.services.subscription_tier_service import SubscriptionTier
 
 router = APIRouter(tags=["cloud-itdr-identity"])
 
@@ -67,6 +69,7 @@ def customer_itdr_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
     summary = itdr.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -86,6 +89,7 @@ def customer_itdr_events(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
     rows, total = itdr.list_events(
         tenant["id"],
         severity=severity,
@@ -114,6 +118,7 @@ def customer_itdr_configs(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
     configs = itdr.list_configs(tenant["id"])
     safe = []
     for row in configs:
@@ -151,6 +156,7 @@ def customer_itdr_connect(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
     try:
         cfg = itdr.connect_provider(
             tenant["id"],

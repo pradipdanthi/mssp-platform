@@ -4,6 +4,8 @@ import { useAuth } from "../auth/AuthContext";
 import { useBrand } from "../config/BrandContext";
 import { useCustomerEntitlements } from "../config/EntitlementsContext";
 import { buildCustomerNavItems } from "../config/navEntitlements";
+import { normalizeTier } from "../config/tierConfig";
+import { TierUpgradeBadge } from "./TierUpgradeBadge";
 import KestrelFalconShieldLogo from "./brand/KestrelFalconShieldLogo";
 import KestrelSecurityWatermark from "./brand/KestrelSecurityWatermark";
 import EngineStatusRibbon from "./EngineStatusRibbon";
@@ -15,6 +17,7 @@ export default function Layout({ children }: { children: ReactNode }) {
   const brand = useBrand();
   const { entitlements, loading: entitlementsLoading } = useCustomerEntitlements();
   const navItems = buildCustomerNavItems(entitlementsLoading ? null : entitlements);
+  const tier = normalizeTier(entitlements?.subscription_tier || user?.subscription_tier);
 
   return (
     <div className="app-shell" data-portal="customer">
@@ -31,16 +34,26 @@ export default function Layout({ children }: { children: ReactNode }) {
           </div>
         </div>
         <nav className="sidebar-nav" aria-label="Primary">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => "sidebar-nav-link" + (isActive ? " active" : "")}
-            >
-              <NavIcon to={item.to} />
-              <span className="sidebar-nav-label">{item.label}</span>
-            </NavLink>
-          ))}
+          {navItems.map((item) =>
+            item.locked ? (
+              <div key={item.to} className="sidebar-nav-link sidebar-nav-link-locked">
+                <NavIcon to={item.to} />
+                <span className="sidebar-nav-label">{item.label}</span>
+                {item.requiredTier ? (
+                  <TierUpgradeBadge requiredTier={item.requiredTier} className="tier-nav-badge" />
+                ) : null}
+              </div>
+            ) : (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => "sidebar-nav-link" + (isActive ? " active" : "")}
+              >
+                <NavIcon to={item.to} />
+                <span className="sidebar-nav-label">{item.label}</span>
+              </NavLink>
+            )
+          )}
         </nav>
         <footer className="sidebar-footer">
           <p className="sidebar-footer-legal">{brand.footerCopyright}</p>
@@ -64,6 +77,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <span className="app-header-user-meta">
                   {user.email}
                   {user.tenant_short_code ? ` · ${user.tenant_short_code}` : ""}
+                  {tier ? ` · ${tier}` : ""}
                   {user.role ? ` · ${user.role}` : ""}
                 </span>
               </span>

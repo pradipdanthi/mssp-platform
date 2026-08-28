@@ -3,12 +3,16 @@ import {
   AssetServiceCoverageAsset,
   TenantEntitlements,
   getTenantAssetServiceCoverage,
+  getTenantDetail,
   getTenantEntitlements,
   putTenantAssetServiceCoverage,
   putTenantEntitlements,
+  updateTenant,
 } from "../api/admin";
 import { ApiError } from "../api/client";
 import { catalogDisplayName, catalogShortHint } from "../data/serviceCatalog";
+import type { SubscriptionTier } from "../data/subscriptionTierMatrix";
+import SubscriptionTierMatrix from "./SubscriptionTierMatrix";
 
 type Props = {
   tenantId: string;
@@ -46,17 +50,23 @@ export default function SubscriptionEntitlementsPanel({
   const [selectedAssetIds, setSelectedAssetIds] = useState<string[]>([]);
   const [assetFilter, setAssetFilter] = useState("");
   const [pasteList, setPasteList] = useState("");
+  const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier>("SILVER");
+  const [initialTier, setInitialTier] = useState<SubscriptionTier>("SILVER");
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     Promise.all([
+      getTenantDetail(tenantId),
       getTenantEntitlements(tenantId),
       getTenantAssetServiceCoverage(tenantId, "vulnerability_management"),
     ])
-      .then(([row, cov]) => {
+      .then(([tenant, row, cov]) => {
         if (cancelled) return;
+        const tier = (tenant.subscription_tier || "SILVER").toUpperCase() as SubscriptionTier;
+        setSubscriptionTier(tier === "GOLD" || tier === "PLATINUM" ? tier : "SILVER");
+        setInitialTier(tier === "GOLD" || tier === "PLATINUM" ? tier : "SILVER");
         setForm({
           ...row,
           continuous_compliance_enabled: Boolean(row.continuous_compliance_enabled),
@@ -137,20 +147,33 @@ export default function SubscriptionEntitlementsPanel({
     setError(null);
     setSuccess(null);
     try {
+      let entPayload = form;
+      if (subscriptionTier !== initialTier) {
+        await updateTenant(tenantId, { subscription_tier: subscriptionTier });
+        setInitialTier(subscriptionTier);
+        const synced = await getTenantEntitlements(tenantId);
+        entPayload = {
+          ...synced,
+          continuous_compliance_enabled: Boolean(synced.continuous_compliance_enabled),
+          external_attack_surface_enabled: Boolean(synced.external_attack_surface_enabled),
+          cloud_identity_protection_enabled: Boolean(synced.cloud_identity_protection_enabled),
+        };
+        setForm(entPayload);
+      }
       const saved = await putTenantEntitlements(tenantId, {
-        wazuh_siem: form.wazuh_siem,
-        wazuh_retention_days: form.wazuh_retention_days,
-        thehive_mode: form.thehive_mode,
-        greenbone_enabled: form.greenbone_enabled,
-        greenbone_cadence: form.greenbone_cadence,
-        shuffle_mode: form.shuffle_mode,
-        zeek_enabled: form.zeek_enabled,
-        misp_enabled: form.misp_enabled,
-        velociraptor_enabled: form.velociraptor_enabled,
-        continuous_compliance_enabled: boolField(form, "continuous_compliance_enabled"),
-        external_attack_surface_enabled: boolField(form, "external_attack_surface_enabled"),
-        cloud_identity_protection_enabled: boolField(form, "cloud_identity_protection_enabled"),
-        roadmap_notes: form.roadmap_notes,
+        wazuh_siem: entPayload.wazuh_siem,
+        wazuh_retention_days: entPayload.wazuh_retention_days,
+        thehive_mode: entPayload.thehive_mode,
+        greenbone_enabled: entPayload.greenbone_enabled,
+        greenbone_cadence: entPayload.greenbone_cadence,
+        shuffle_mode: entPayload.shuffle_mode,
+        zeek_enabled: entPayload.zeek_enabled,
+        misp_enabled: entPayload.misp_enabled,
+        velociraptor_enabled: entPayload.velociraptor_enabled,
+        continuous_compliance_enabled: boolField(entPayload, "continuous_compliance_enabled"),
+        external_attack_surface_enabled: boolField(entPayload, "external_attack_surface_enabled"),
+        cloud_identity_protection_enabled: boolField(entPayload, "cloud_identity_protection_enabled"),
+        roadmap_notes: entPayload.roadmap_notes,
       });
       setForm({
         ...saved,
@@ -159,12 +182,12 @@ export default function SubscriptionEntitlementsPanel({
         cloud_identity_protection_enabled: Boolean(saved.cloud_identity_protection_enabled),
       });
 
-      if (form.greenbone_enabled) {
+      if (entPayload.greenbone_enabled) {
         const cov = await putTenantAssetServiceCoverage(tenantId, {
           service_key: "vulnerability_management",
           asset_ids: selectedAssetIds,
           enable_entitlement: true,
-          greenbone_cadence: form.greenbone_cadence,
+          greenbone_cadence: entPayload.greenbone_cadence,
         });
         setCoverageAssets(cov.assets || []);
         setSelectedAssetIds(cov.covered_asset_ids || []);
@@ -198,10 +221,18 @@ export default function SubscriptionEntitlementsPanel({
         Subscription / enable services — {tenantName}
       </h2>
       <p className="page-subtitle" style={{ marginBottom: "12px" }}>
-        Names match the Admin <strong>Service Catalog</strong>. Use this when the customer signed
-        offline and you enable coverage from the MSSP side — they do not need to click Request in
-        their portal.
+        Set the customer&apos;s <strong>subscription tier</strong> (Silver / Gold / Platinum) to
+        apply the bundled entitlement matrix, then fine-tune individual services below if needed.
       </p>
+
+      {!loading && (
+        <SubscriptionTierMatrix
+          activeTier={subscriptionTier}
+          tierEditable
+          onTierChange={setSubscriptionTier}
+          compact
+        />
+      )}
 
       {loading && <div className="state-message">Loading entitlements…</div>}
       {error && <div className="form-error">{error}</div>}
@@ -209,7 +240,7 @@ export default function SubscriptionEntitlementsPanel({
 
       {form && !loading && (
         <div className="entitlement-matrix">
-          <div className="entitlement-section-label">Core (included)</div>
+          <div className="entitlement-section-label">Advanced entitlement overrides</div>
 
           <label className="entitlement-row">
             <input

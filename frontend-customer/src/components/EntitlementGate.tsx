@@ -6,6 +6,8 @@ import {
   entitlementLabel,
   isEntitlementEnabled,
 } from "../config/navEntitlements";
+import { MODULE_MIN_TIER, normalizeTier, tierMeetsMinimum } from "../config/tierConfig";
+import { TierUpgradeBadge } from "./TierUpgradeBadge";
 
 /**
  * Blocks add-on pages when the tenant has not subscribed.
@@ -30,6 +32,24 @@ export default function EntitlementGate({
 
   if (!isEntitlementEnabled(entitlements, require)) {
     const name = entitlementLabel(require);
+    const requiredTier = MODULE_MIN_TIER[require];
+    const tier = normalizeTier(entitlements?.subscription_tier);
+    if (!tierMeetsMinimum(tier, requiredTier)) {
+      return (
+        <div className="entitlement-gate">
+          <h1 className="page-title">{name}</h1>
+          <p className="page-subtitle">
+            This capability requires a {requiredTier} subscription tier or higher.
+          </p>
+          <div className="entitlement-gate-actions">
+            <TierUpgradeBadge requiredTier={requiredTier} className="btn btn-primary" />
+            <Link className="btn btn-ghost" to="/dashboard">
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="entitlement-gate">
         <h1 className="page-title">{name}</h1>

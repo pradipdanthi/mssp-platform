@@ -9,6 +9,7 @@ export interface UserPublic {
   tenant_id: string | null;
   tenant_short_code: string | null;
   tenant_name: string | null;
+  subscription_tier?: string | null;
   status: string;
   last_login_at: string | null;
   phone: string | null;

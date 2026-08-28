@@ -10,7 +10,9 @@ from uuid import UUID
 from fastapi import APIRouter, Header, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.db.session import db_transaction, fetch_one
+from app.services.subscription_tier_service import SubscriptionTier
 from app.services.appliance_auth_service import (
     ApplianceRetiredError,
     InvalidApplianceCredentialsError,
@@ -163,6 +165,7 @@ def ingest_okta_telemetry(
         authorization=authorization,
         x_agent_api_key=x_agent_api_key,
     )
+    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.SILVER)
     events = _normalize_events(payload)
     if not events:
         raise HTTPException(
@@ -206,6 +209,7 @@ def ingest_ad_telemetry(
         authorization=authorization,
         x_agent_api_key=x_agent_api_key,
     )
+    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.SILVER)
     events = _normalize_events(payload)
     if not events:
         raise HTTPException(

@@ -57,6 +57,7 @@ def entitlements_row_to_customer_public(row: Dict[str, Any]) -> Dict[str, Any]:
     """Build customer API entitlements payload without engine brand field names."""
     return {
         "tenant_id": row["tenant_id"],
+        "subscription_tier": row.get("subscription_tier") or "SILVER",
         "log_monitoring_enabled": bool(row.get("wazuh_siem", True)),
         "log_retention_days": int(row.get("wazuh_retention_days") or 30),
         "incident_response": customer_safe_incident_response_mode(row.get("thehive_mode")),
