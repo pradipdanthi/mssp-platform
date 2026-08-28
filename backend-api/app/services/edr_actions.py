@@ -36,22 +36,169 @@ WIN_ISOLATE_AR_COMMAND = (os.getenv("EDR_WAZUH_ISOLATE_COMMAND_WIN") or "mssp-is
 WIN_KILL_AR_COMMAND = (os.getenv("EDR_WAZUH_KILL_COMMAND_WIN") or "mssp-kill-process.cmd").strip()
 WIN_BLOCK_HASH_AR_COMMAND = (os.getenv("EDR_WAZUH_BLOCK_HASH_COMMAND_WIN") or "mssp-block-hash.cmd").strip()
 
+_AGENT_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
-def _resolve_ar_command(base_command: str, win_command: str, agent_id: Optional[str]) -> str:
+
+def validate_agent_tenant_ownership(tenant_id: str, agent_id: str) -> bool:
+    """
+    Return True when agent_id belongs to tenant_id.
+
+    Tier 1: protected_assets inventory (details.wazuh_agent_id).
+    Tier 2: security_alerts raw_event agent id history.
+    Tier 3: Wazuh Manager group membership vs tenant_engine_bindings / tenant short_code.
+    """
+    tid = (tenant_id or "").strip()
+    aid = (agent_id or "").strip()
+    if not tid or not aid or not _AGENT_ID_RE.match(aid):
+        return False
+
+    # Tier 1 — protected assets
+    asset = fetch_one(
+        """
+        SELECT 1
+        FROM protected_assets
+        WHERE tenant_id = %s::uuid
+          AND details->>'wazuh_agent_id' = %s
+        LIMIT 1;
+        """,
+        (tid, aid),
+    )
+    if asset:
+        return True
+
+    # Tier 2 — alert history
+    alert = fetch_one(
+        """
+        SELECT 1
+        FROM security_alerts
+        WHERE tenant_id = %s::uuid
+          AND (
+            raw_event->'agent'->>'id' = %s
+            OR raw_event->'data'->'agent'->>'id' = %s
+          )
+        LIMIT 1;
+        """,
+        (tid, aid, aid),
+    )
+    if alert:
+        return True
+
+    # Tier 3 — Wazuh tenant group membership (new agents before inventory sync)
+    return _validate_agent_wazuh_group_membership(tid, aid)
+
+
+def _tenant_wazuh_agent_group(tenant_id: str) -> Optional[str]:
+    """Resolve expected Wazuh agent group for a tenant (binding row or short_code convention)."""
+    from app.services.tenant_engine_provisioner import wazuh_group_for
+
+    row = fetch_one(
+        """
+        SELECT b.wazuh_agent_group, t.short_code
+        FROM tenants t
+        LEFT JOIN tenant_engine_bindings b ON b.tenant_id = t.id
+        WHERE t.id = %s::uuid;
+        """,
+        (tenant_id,),
+    )
+    if not row:
+        return None
+    group = str(row.get("wazuh_agent_group") or "").strip()
+    if group:
+        return group
+    short_code = str(row.get("short_code") or "").strip()
+    if short_code:
+        return wazuh_group_for(short_code)
+    return None
+
+
+def _validate_agent_wazuh_group_membership(tenant_id: str, agent_id: str) -> bool:
+    """True when Manager API reports agent_id is in the tenant's Wazuh group."""
+    if not wazuh_client.credentials_configured():
+        return False
+    expected_group = _tenant_wazuh_agent_group(tenant_id)
+    if not expected_group:
+        return False
+    try:
+        groups = wazuh_client.get_agent_groups(agent_id)
+    except wazuh_client.WazuhClientError as exc:
+        logger.debug(
+            "Wazuh group membership check failed tenant=%s agent=%s: %s",
+            tenant_id,
+            agent_id,
+            exc,
+        )
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(
+            "Unexpected error during Wazuh group check tenant=%s agent=%s: %s",
+            tenant_id,
+            agent_id,
+            exc,
+        )
+        return False
+    return expected_group in groups
+
+
+def assert_agent_tenant_access(
+    user: Dict[str, Any],
+    *,
+    tenant_id: str,
+    agent_id: Optional[str],
+) -> None:
+    """
+    Reject cross-tenant agent targeting for customer roles.
+
+    SOC roles may target any agent when operating in a tenant context (IR workflow).
+    """
+    role = str(user.get("role") or "")
+    if role in SOC_WRITE_ROLES:
+        return
+    aid = (agent_id or "").strip()
+    if not aid:
+        return
+    tid = (tenant_id or "").strip()
+    if not tid:
+        raise PermissionError("tenant_id is required")
+    if not validate_agent_tenant_ownership(tid, aid):
+        raise PermissionError(
+            f"Access denied: agent '{aid}' does not belong to this tenant."
+        )
+
+
+def _resolve_ar_command(
+    base_command: str,
+    win_command: str,
+    agent_id: Optional[str],
+    *,
+    tenant_id: Optional[str] = None,
+) -> str:
     """Pick the OS-appropriate AR command name. Fail closed if OS is unknown."""
     if not agent_id:
         raise ValueError("agent_id is required to resolve the Active Response command")
-    # Prefer protected_assets OS (works for appliance-local agents not on cloud Manager).
-    asset = fetch_one(
-        """
-        SELECT os_name, details
-        FROM protected_assets
-        WHERE details->>'wazuh_agent_id' = %s
-        ORDER BY updated_at DESC NULLS LAST
-        LIMIT 1;
-        """,
-        (str(agent_id),),
-    )
+    # Prefer protected_assets OS scoped to tenant (prevents cross-tenant script selection).
+    if tenant_id:
+        asset = fetch_one(
+            """
+            SELECT os_name, details
+            FROM protected_assets
+            WHERE tenant_id = %s::uuid
+              AND details->>'wazuh_agent_id' = %s
+            ORDER BY updated_at DESC NULLS LAST
+            LIMIT 1;
+            """,
+            (str(tenant_id), str(agent_id)),
+        )
+    else:
+        asset = fetch_one(
+            """
+            SELECT os_name, details
+            FROM protected_assets
+            WHERE details->>'wazuh_agent_id' = %s
+            ORDER BY updated_at DESC NULLS LAST
+            LIMIT 1;
+            """,
+            (str(agent_id),),
+        )
     if asset:
         blob = f"{asset.get('os_name') or ''} {asset.get('details') or ''}".lower()
         if "windows" in blob:
@@ -730,6 +877,11 @@ def execute_edr_action(
         alert_id=body.alert_id,
         incident=incident,
     )
+    assert_agent_tenant_access(
+        user,
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+    )
 
     execution_id = _insert_execution(
         tenant_id=tenant_id,
@@ -754,7 +906,9 @@ def execute_edr_action(
                 return execution_id, "failed", "Confirmation required for host isolation", None, None
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for isolation")
-            ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
+            ar_cmd = _resolve_ar_command(
+                ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id, tenant_id=tenant_id
+            )
             # Appliance tenants: queue job for local Manager (do not hit cloud Wazuh).
             # extra_args: ["hold", execution_id, callback_url] -- never a number (Wazuh timeout).
             isolate_args = [ISOLATE_HOLD_ARG, execution_id, callback_url]
@@ -818,7 +972,9 @@ def execute_edr_action(
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for un-isolate")
             # Pass "delete" so the AR script restores connectivity.
-            ar_cmd = _resolve_ar_command(ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id)
+            ar_cmd = _resolve_ar_command(
+                ISOLATE_AR_COMMAND, WIN_ISOLATE_AR_COMMAND, agent_id, tenant_id=tenant_id
+            )
             unisolate_args = ["delete", execution_id, callback_url]
             if tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id)):
                 return _queue_appliance_ar_job(
@@ -867,7 +1023,9 @@ def execute_edr_action(
                 raise ValueError("pid or process_name is required for KILL_PROCESS")
             if not agent_id:
                 raise ValueError("Could not resolve endpoint agent for kill")
-            ar_cmd = _resolve_ar_command(KILL_AR_COMMAND, WIN_KILL_AR_COMMAND, agent_id)
+            ar_cmd = _resolve_ar_command(
+                KILL_AR_COMMAND, WIN_KILL_AR_COMMAND, agent_id, tenant_id=tenant_id
+            )
             proc_name = (body.process_name or "").strip()
             if body.list_only:
                 if not proc_name:
@@ -1047,7 +1205,12 @@ def execute_edr_action(
             ar_msg = "Endpoint hash block skipped (no agent)"
             via_appliance = tenant_uses_appliance_manager(_tenant_deployment_mode(tenant_id))
             if agent_id and via_appliance:
-                ar_cmd = _resolve_ar_command(BLOCK_HASH_AR_COMMAND, WIN_BLOCK_HASH_AR_COMMAND, agent_id)
+                ar_cmd = _resolve_ar_command(
+                    BLOCK_HASH_AR_COMMAND,
+                    WIN_BLOCK_HASH_AR_COMMAND,
+                    agent_id,
+                    tenant_id=tenant_id,
+                )
                 cb = (callback_url or "").strip()
                 args = [h, execution_id]
                 if cb:
@@ -1062,7 +1225,12 @@ def execute_edr_action(
                     arguments=args,
                 )
             if agent_id and wazuh_client.credentials_configured():
-                ar_cmd = _resolve_ar_command(BLOCK_HASH_AR_COMMAND, WIN_BLOCK_HASH_AR_COMMAND, agent_id)
+                ar_cmd = _resolve_ar_command(
+                    BLOCK_HASH_AR_COMMAND,
+                    WIN_BLOCK_HASH_AR_COMMAND,
+                    agent_id,
+                    tenant_id=tenant_id,
+                )
                 cb = (callback_url or "").strip()
                 args = [h, execution_id]
                 if cb:

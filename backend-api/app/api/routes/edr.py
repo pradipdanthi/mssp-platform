@@ -29,6 +29,7 @@ from app.schemas.edr import (
 from app.services import edr_forensics_storage
 from app.services.edr_actions import (
     apply_action_callback,
+    assert_agent_tenant_access,
     execute_edr_action,
     lookup_endpoint_from_incident,
     normalize_status,
@@ -180,6 +181,14 @@ def edr_live_processes(
 ) -> LiveProcessesResponse:
     """Ask the endpoint for LIVE matching processes (not stale syscollector)."""
     tenant = _resolve_tenant_for_user(current_user, tenant_short_code)
+    try:
+        assert_agent_tenant_access(
+            current_user,
+            tenant_id=tenant["id"],
+            agent_id=agent_id,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
     try:
         result = request_live_processes(
             current_user,
