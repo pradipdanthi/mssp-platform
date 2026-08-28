@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Enterprise Readiness &amp; Gap Audit Report — 2026-08-28</title>
+<style>
+  @media print { @page { margin: 18mm; } body { font-size: 10pt; } }
+  body { font-family: "Segoe UI", system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1.5rem; color: #1e293b; line-height: 1.5; }
+  h1 { color: #0f172a; border-bottom: 3px solid #0ea5e9; padding-bottom: 0.4rem; font-size: 1.75rem; }
+  h2 { color: #0f172a; margin-top: 2rem; border-bottom: 1px solid #cbd5e1; padding-bottom: 0.25rem; font-size: 1.25rem; }
+  h3 { color: #334155; margin-top: 1.25rem; font-size: 1.05rem; }
+  table.data { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.88rem; }
+  table.data th, table.data td { border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; vertical-align: top; }
+  table.data th { background: #f1f5f9; font-weight: 600; }
+  table.data tr:nth-child(even) td { background: #f8fafc; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.5rem 0; }
+  ul { margin: 0.5rem 0 1rem 1.25rem; }
+  li { margin: 0.25rem 0; }
+  p { margin: 0.5rem 0; }
+  .meta { background: #f0f9ff; border: 1px solid #bae6fd; padding: 12px 16px; border-radius: 6px; margin-bottom: 1.5rem; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<div class="meta"><strong>Report ID:</strong> ERGA-2026-08-28 &nbsp;|&nbsp; <strong>Git:</strong> 2ec0eb0 &nbsp;|&nbsp; Open in browser → <strong>Print → Save as PDF</strong></div>
+<h1>Enterprise Readiness &amp; Gap Audit Report</h1>
+
+<p>**Organization:** Kevantic NikTiar™ MSSP Platform</p>
+<p>**Repository:** `/opt/mssp-control`</p>
+<p>**Audit date:** 2026-08-28</p>
+<p>**Mode:** Read-only architecture discovery — no code or configuration changes were made</p>
+<p>**Scope:** Codebase, `postgres/init` migrations (001–040), FastAPI backend, admin/customer frontends, appliance templates (VM 199), VM 100–115 inventory and live VM 100 resource snapshot</p>
+
+<hr>
+
+<h2>Document control</h2>
+
+<table class="data">
+<thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>
+<tr><td>Report ID</td><td>ERGA-2026-08-28</td></tr>
+<tr><td>Git commit at audit</td><td>`2ec0eb0`</td></tr>
+<tr><td>Golden appliance snapshot</td><td>`kb110-gitreleasesync-202608280309`</td></tr>
+<tr><td>Prepared by</td><td>Architecture discovery audit (automated + manual verification)</td></tr>
+</tbody></table>
+
+<hr>
+
+<h2>Executive summary</h2>
+
+<p>The platform has a **solid multi-tenant product schema** and **consistent customer-route isolation** via `require_tenant_match()`, but **enterprise readiness is not yet complete**. Isolation is application-layer only (no Postgres RLS), upstream engines (Wazuh/TheHive/Shuffle) are largely **shared infrastructure with soft logical separation**, NDR/threat-hunting data fidelity has **known gaps**, and AI SOC assist has **good post-LLM guardrails** but **no pre-LLM deterministic bypass**.</p>
+
+<table class="data">
+<thead><tr><th>Area</th><th>Maturity</th><th>Top risk</th></tr></thead><tbody>
+<tr><td>Multi-tenancy (DB + customer API)</td><td>Medium–High</td><td>No RLS; EDR `agent_id` IDOR on shared Wazuh Manager</td></tr>
+<tr><td>Engine segregation (Wazuh/TheHive/Shuffle)</td><td>Low–Medium</td><td>Shared Manager/webhook/workflow; tag-only TheHive fallback</td></tr>
+<tr><td>IAM / ITDR</td><td>Low–Medium</td><td>JWT-only, no MFA/SSO; ITDR = Entra only; no Okta/GWS/4624 pipeline</td></tr>
+<tr><td>Data pipeline / retention</td><td>Low</td><td>No retention jobs; NDR often seeded; no OLAP on VM 100</td></tr>
+<tr><td>AI SOC assist safety</td><td>Medium</td><td>Good normalization + opt-in auto-close; no pre-LLM hash veto; VM 115 SPOF</td></tr>
+</tbody></table>
+
+<hr>
+
+<h2>1. Multi-tenancy &amp; data isolation</h2>
+
+<h3>1.1 PostgreSQL schema &amp; `tenant_id` enforcement</h3>
+
+<p>#### What exists today</p>
+
+<table class="data">
+<thead><tr><th>Table</th><th>`tenant_id`</th><th>Enforcement</th></tr></thead><tbody>
+<tr><td>`security_alerts`</td><td>`NOT NULL` FK → `tenants`</td><td>Indexed `(tenant_id, status)` — `001_mssp_core_schema.sql`</td></tr>
+<tr><td>`incidents`</td><td>`NOT NULL` FK</td><td>Indexed `(tenant_id, status)`</td></tr>
+<tr><td>`vulnerabilities`</td><td>`NOT NULL` FK</td><td>Unique `(tenant_id, source_platform, external_finding_id)` — `004_kb069_vulnerabilities.sql`</td></tr>
+<tr><td>`alert_ai_triage_cache`</td><td>`NOT NULL` FK</td><td>Unique `(alert_id, content_hash)`; index `(tenant_id, updated_at)` — `038_alert_ai_triage_cache.sql`</td></tr>
+<tr><td>`alert_suppressions`</td><td>Nullable (by design)</td><td>`scope=&#x27;global&#x27;` is cross-tenant; `tenant`/`host` scopes require `tenant_id` — `037_alert_suppressions.sql`</td></tr>
+</tbody></table>
+
+<p>**Isolation model:** Query-level only. Every customer route resolves `tenants.short_code` → `tenant_id`, calls `require_tenant_match()` (`backend-api/app/api/dependencies.py`), then filters `WHERE tenant_id = %s`. SOC roles (`platform_admin`, `soc_manager`, `soc_analyst`) are intentionally cross-tenant.</p>
+
+<p>#### What is missing</p>
+
+<ul>
+<li>No Row Level Security (RLS) anywhere in `postgres/init/` — zero `CREATE POLICY` / `ENABLE ROW LEVEL SECURITY` found.</li>
+<li>Single shared DB role via `psycopg` pool (`app/db/session.py`) — no `SET app.tenant_id` session context.</li>
+<li>Defense-in-depth gap: one missed `WHERE tenant_id` clause = full cross-tenant exposure with no DB backstop.</li>
+</ul>
+
+<h3>1.2 Shared tables / cache leak surfaces</h3>
+
+<table class="data">
+<thead><tr><th>Component</th><th>Risk</th><th>Detail</th></tr></thead><tbody>
+<tr><td>`alert_ai_triage_cache` reads</td><td>Low (today)</td><td>Cache lookup uses `alert_id + content_hash` without `tenant_id` filter (`ai_tier1_triage.py`). Safe only because callers pre-validate alert ownership.</td></tr>
+<tr><td>`alert_suppressions` global scope</td><td>By design</td><td>SOC-managed global suppressions affect all tenants — intentional.</td></tr>
+<tr><td>`ai_tier1_triage` cross-tenant FP signal</td><td>SOC-only</td><td>`global_same_rule` counts FPs across tenants — admin path only.</td></tr>
+<tr><td>Redis AI queue</td><td>Low</td><td>Jobs carry explicit `tenant_id`; no shared keyspace without tenant prefix.</td></tr>
+</tbody></table>
+
+<h3>1.3 Wazuh (VM 101) tenant mapping</h3>
+
+<p><strong>What exists:</strong></p>
+
+<ul>
+<li>Per-tenant agent groups: `tenant_&lt;SHORT_CODE&gt;` via `wazuh_group_for()` — `tenant_engine_provisioner.py`</li>
+<li>Reverse lookup: `resolve_short_code_by_wazuh_group()` joins `tenant_engine_bindings`</li>
+<li>Ingest resolves tenant from Wazuh agent group on webhook/sync paths</li>
+</ul>
+
+<p><strong>Gaps / risks:</strong></p>
+
+<ul>
+<li>Shared Wazuh Manager for cloud-mode tenants — one Manager, many `tenant_*` groups. Group membership is organizational, not enforced at Active Response dispatch time.</li>
+<li>Critical IDOR: `EdrActionExecuteRequest.agent_id` is accepted from `customer_admin` and used verbatim in `_agent_from_context()` (`edr_actions.py:353-354`) without verifying the agent belongs to the caller&#x27;s tenant. A tenant admin who knows another tenant&#x27;s sequential agent ID (e.g. `&quot;042&quot;`) can trigger isolate / kill / block-hash on cloud Manager deployments.</li>
+<li>`_resolve_ar_command()` looks up OS type by `wazuh_agent_id` without `tenant_id` filter — script-selection collision risk across managers.</li>
+</ul>
+
+<h3>1.4 TheHive (VM 102) tenant mapping</h3>
+
+<p><strong>What exists:</strong></p>
+
+<ul>
+<li>Attempts per-tenant org: `MSSP-&lt;SHORT_CODE&gt;` via `thehive_org_for()`</li>
+<li>Fallback: `tag_only` mode → shared default org `THEHIVE_DEFAULT_ORG` (default `&quot;MSSP&quot;`) with tenant tag — `thehive_client.py`</li>
+</ul>
+
+<p>**Gap:** When org creation fails (permissions/license), all tenants&#x27; cases can live in one TheHive org. Separation is a tag, not TheHive RBAC. Any TheHive user with org access sees all tenant cases.</p>
+
+<h3>1.5 Shuffle (VM 102) tenant mapping</h3>
+
+<p><strong>What exists:</strong></p>
+
+<ul>
+<li>Single global `SHUFFLE_WEBHOOK_URL` and workflow name for all tenants — `shuffle_edr_client.py`</li>
+<li>Tenant identity passed only as JSON field `tenant_short_code` in payload</li>
+</ul>
+
+<p>**Gap:** No infrastructure-level isolation. Shuffle workflow logic must filter by field; this codebase cannot enforce Shuffle-side boundaries.</p>
+
+<h3>1.6 Verdict: multi-tenancy</h3>
+
+<table class="data">
+<thead><tr><th>Layer</th><th>True segregation?</th></tr></thead><tbody>
+<tr><td>Customer portal API + Postgres queries</td><td>Yes (with EDR AR exception above)</td></tr>
+<tr><td>Postgres RLS</td><td>No</td></tr>
+<tr><td>Wazuh (cloud mode)</td><td>Partial — groups yes, AR dispatch no</td></tr>
+<tr><td>TheHive</td><td>Partial — degrades to shared org</td></tr>
+<tr><td>Shuffle</td><td>No — payload tagging only</td></tr>
+</tbody></table>
+
+<hr>
+
+<h2>2. Identity &amp; access management (IAM / ITDR)</h2>
+
+<h3>2.1 Platform authentication</h3>
+
+<p><strong>What exists:</strong></p>
+
+<ul>
+<li>JWT (HS256) via `POST /auth/login` — `backend-api/app/api/routes/auth.py`</li>
+<li>Claims: `role`, `user_type`, `tenant_id`; live DB re-fetch on every request (`get_current_user`)</li>
+<li>Portal separation enforced: staff roles → admin portal only; customer roles → customer portal only</li>
+<li>5 roles with Postgres CHECK — `002_kb010_auth_rbac.sql`: `platform_admin`, `soc_manager`, `soc_analyst`, `customer_admin`, `customer_viewer`</li>
+<li>Frontend: `sessionStorage` tokens, `ProtectedRoute`, live `/auth/me` validation — both frontends</li>
+<li>Non-JWT auth for machine paths: appliance API keys, SOC sync keys, install tokens — 9 route files by design</li>
+</ul>
+
+<p><strong>What is missing:</strong></p>
+
+<table class="data">
+<thead><tr><th>Capability</th><th>Status</th></tr></thead><tbody>
+<tr><td>MFA</td><td>Absent</td></tr>
+<tr><td>SSO / SAML / OIDC</td><td>Absent</td></tr>
+<tr><td>Rate limiting on `/auth/login`</td><td>Absent</td></tr>
+</tbody></table>
+
+<h3>2.2 External engine credentials (Wazuh, TheHive, Velociraptor)</h3>
+
+<p>**Finding:** Separate native credentials per engine — no unified SSO.</p>
+
+<ul>
+<li>Wazuh API: server-side `wazuh_api_user` / password secrets</li>
+<li>TheHive: dedicated API user + org context</li>
+<li>Velociraptor: bridge API key (`VELOCIRAPTOR_BRIDGE_API_KEY`) to VM 110 `:8001`</li>
+<li>Customers never receive engine UI logins (by product design)</li>
+</ul>
+
+<p>SOC staff needing raw engine consoles use independent logins per tool.</p>
+
+<h3>2.3 ITDR / identity provider ingestion</h3>
+
+<table class="data">
+<thead><tr><th>Provider</th><th>Status</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>Microsoft Entra ID (M365)</td><td>Live</td><td>`itdr_graph_client.py` — Graph `signIns` + `directoryAudits`; `024_cloud_itdr_identity.sql`</td></tr>
+<tr><td>AWS IAM / CloudTrail</td><td>DB placeholder only</td><td>Provider enum exists; no adapter</td></tr>
+<tr><td>GCP IAM</td><td>DB placeholder only</td><td>No adapter</td></tr>
+<tr><td>Okta</td><td>Absent</td><td>Keyword in taxonomy only</td></tr>
+<tr><td>Google Workspace</td><td>Absent</td><td>No Admin/Reports API collector</td></tr>
+<tr><td>Windows 4624/4625/4720/4728/4732</td><td>Absent</td><td>Only 4688 (process creation) in telemetry scripts; lone 4625 in demo seed</td></tr>
+</tbody></table>
+
+<p>**ITDR event types implemented (Entra):** `IMPOSSIBLE_TRAVEL`, `MFA_BYPASS_ATTEMPT`, `ROGUE_ADMIN_ASSIGNED`, `EXTERNAL_MAIL_FORWARDING`, `SUSPICIOUS_LOGIN`</p>
+
+<p>**Production behavior:** fail-closed — no synthetic events when Graph returns empty (`APP_ENV=production`).</p>
+
+<hr>
+
+<h2>3. High-throughput data pipeline &amp; retention</h2>
+
+<h3>3.1 PostgreSQL design (VM 100)</h3>
+
+<p><strong>What exists:</strong></p>
+
+<ul>
+<li>40 sequential SQL init files — no Alembic/Flyway; applied via Docker `initdb.d`</li>
+<li>JSONB on alerts: `raw_event`, `win_eventdata`, `wazuh_full_log`, `mitre_mapping` — `040_wazuh_telemetry_columns.sql`</li>
+<li>Extracted scalar columns for hot fields: `hash_sha256`, `process_guid`, `parent_process`, etc. with partial btree indexes</li>
+<li>No GIN indexes on JSONB — ad-hoc JSON path hunting is unindexed</li>
+<li>No table partitioning — `security_alerts`, `audit_logs`, `tenant_ndr_events` grow as flat heaps</li>
+</ul>
+
+<p>**Live lab sizing (VM 100):** ~17 MB total DB; `security_alerts` ≈ 1 row post-purge. Schema not battle-tested at production volume.</p>
+
+<h3>3.2 Zeek / Suricata / NDR (VM 106 → 101 → 100)</h3>
+
+<p>**Intended path:** VM 106 (Suricata + Zeek) → Wazuh agent → Wazuh Manager (101) → webhook → `soc_sync.py` → Postgres</p>
+
+<p>**Critical fidelity gap:** `_normalize_wazuh_alert()` hardcodes `source_tool=&quot;wazuh&quot;` (`soc_sync.py:278`) for all webhook alerts. NDR service filters `source_tool IN (&#x27;suricata&#x27;,&#x27;zeek&#x27;)` (`ndr_service.py`) — never matches real ingress.</p>
+
+<p>**Consequence:** `sync_tenant_ndr()` often finds zero real NDR rows and seeds 6 fabricated sample events with synthetic flow/byte metrics. Customer NDR dashboard can show demo data, not live sensor telemetry.</p>
+
+<p>**Appliance-side alternative (not on VM 100):** `kevantic-appliance/appliance/datalake/archiver.py` — ZSTD Parquet + DuckDB + SQLite index, 365-day retention with disk-quota enforcement. Edge-local, not centralized.</p>
+
+<h3>3.3 Retention policies</h3>
+
+<table class="data">
+<thead><tr><th>Policy</th><th>Implemented?</th></tr></thead><tbody>
+<tr><td>Postgres row purge (alerts, audit, NDR)</td><td>No</td></tr>
+<tr><td>`wazuh_retention_days` entitlement</td><td>Display/billing only</td></tr>
+<tr><td>Wazuh Indexer retention</td><td>Not managed by control plane</td></tr>
+<tr><td>Appliance datalake Parquet</td><td>Yes — 365d + 90% disk threshold</td></tr>
+<tr><td>DR backup retention</td><td>Yes — 7 local + GDrive copies</td></tr>
+</tbody></table>
+
+<h3>3.4 Infrastructure feasibility — ClickHouse / OLAP on VM 100</h3>
+
+<p><strong>Live VM 100 resources (measured 2026-08-28):</strong></p>
+
+<table class="data">
+<thead><tr><th>Resource</th><th>Value</th></tr></thead><tbody>
+<tr><td>RAM</td><td>7.7 GB total, ~4.3 GB available</td></tr>
+<tr><td>vCPU</td><td>4</td></tr>
+<tr><td>Disk `/`</td><td>166 GB, 62 GB free (62% used)</td></tr>
+<tr><td>Docker stack</td><td>Postgres ~34 MB, Redis ~6 MB, API ~19 MB</td></tr>
+</tbody></table>
+
+<p><strong>Assessment:</strong></p>
+
+<table class="data">
+<thead><tr><th>Option</th><th>Feasibility</th></tr></thead><tbody>
+<tr><td>ClickHouse colocated on VM 100</td><td>Not recommended — insufficient RAM</td></tr>
+<tr><td>ClickHouse on dedicated VM (≥16–32 GB RAM)</td><td>Feasible architecturally; zero ClickHouse code exists</td></tr>
+<tr><td>DuckDB + Parquet (appliance pattern)</td><td>Feasible for edge; already in KB-093E</td></tr>
+</tbody></table>
+
+<p><strong>Prerequisites before OLAP:</strong></p>
+
+<p>1. Fix `source_tool` tagging at ingest</p>
+<p>2. Implement Postgres retention</p>
+<p>3. Size OLAP host separately or upgrade VM 100 to ≥16 GB RAM</p>
+
+<hr>
+
+<h2>4. AI SOC assist reliability &amp; deterministic guardrails</h2>
+
+<h3>4.1 Architecture</h3>
+
+<table class="data">
+<thead><tr><th>Pipeline</th><th>Host</th><th>Trigger</th><th>Timeout default</th></tr></thead><tbody>
+<tr><td>Tier-1 triage (`ai_tier1_triage.py`)</td><td>VM 115 Ollama</td><td>On-demand (alert detail)</td><td>8s → HTTP 504</td></tr>
+<tr><td>Alert analysis (`ai_alert_analysis.py`)</td><td>VM 115</td><td>Redis queue (KB-092)</td><td>90s; silent skip</td></tr>
+<tr><td>SOC triage draft (`ai_soc_triage.py`)</td><td>VM 115</td><td>Redis queue (KB-096)</td><td>90s; retry up to 4×</td></tr>
+<tr><td>Appliance local filter (`local_ai_filter.py`)</td><td>Appliance Ollama</td><td>Pre-forward gate (KB-108)</td><td>60s; fail-open default</td></tr>
+</tbody></table>
+
+<p>Frontends (`lib/ai-triage.ts`) never call Ollama directly.</p>
+
+<h3>4.2 Failure handling</h3>
+
+<table class="data">
+<thead><tr><th>Failure mode</th><th>Tier-1</th><th>KB-092/096</th><th>Appliance filter</th></tr></thead><tbody>
+<tr><td>Ollama timeout</td><td>HTTP 504</td><td>Log + skip; retry</td><td>Forward (fail-open)</td></tr>
+<tr><td>Invalid JSON</td><td>HTTP 502</td><td>Log + skip</td><td>Forward</td></tr>
+<tr><td>VM 115 down</td><td>User error</td><td>No enrichment</td><td>Forward</td></tr>
+</tbody></table>
+
+<p>**Normalization bias (safe):** unknown verdict → `SUSPICIOUS`; invalid confidence → `50.0`; never auto-executes `ISOLATE_AGENT`.</p>
+
+<h3>4.3 Pre-LLM deterministic checks</h3>
+
+<p><strong>Exists (feeds prompt, does NOT skip LLM):</strong></p>
+
+<ul>
+<li>`compute_pre_score_hints()` — LOLBin names, temp paths, cmdline flags</li>
+<li>`_matches_known_fp_pattern()` — signed-path heuristics, prior FP history</li>
+<li>VirusTotal hash lookup — 2s timeout, enrichment only</li>
+</ul>
+
+<p><strong>Missing:</strong></p>
+
+<ul>
+<li>No hash whitelist / known-good binary database that skips Ollama</li>
+<li>No pre-LLM veto gate — every uncached alert hits the 7B model</li>
+</ul>
+
+<h3>4.4 Auto-close safety</h3>
+
+<ul>
+<li>`ENABLE_AUTO_CLOSE_LOW_RISK` defaults `false`</li>
+<li>When enabled: requires verdict `BENIGN_FALSE_POSITIVE`, confidence ≥ 95, low severity, `_matches_known_fp_pattern()` true</li>
+<li>Writes audit event; never auto-isolates</li>
+</ul>
+
+<h3>4.5 VM 115 (mssp-ai) reliability</h3>
+
+<ul>
+<li>Documented SPOF — prior RAM starvation at 7.6 GB</li>
+<li>No health probe in admin UI for Ollama reachability</li>
+<li>No failover / secondary model host</li>
+</ul>
+
+<hr>
+
+<h2>5. Infrastructure feasibility matrix (VMs 100–115)</h2>
+
+<table class="data">
+<thead><tr><th>VM</th><th>Role</th><th>Enterprise-ready for scale?</th><th>Notes</th></tr></thead><tbody>
+<tr><td>100</td><td>Control plane</td><td>Partial</td><td>7.7 GB RAM tight for OLAP; no retention automation</td></tr>
+<tr><td>101</td><td>Wazuh</td><td>Partial</td><td>Shared Manager for cloud tenants</td></tr>
+<tr><td>102</td><td>TheHive + Shuffle</td><td>Partial</td><td>Shared org/webhook risk</td></tr>
+<tr><td>106</td><td>Suricata + Zeek</td><td>Partial</td><td>`source_tool` collapse breaks NDR</td></tr>
+<tr><td>108</td><td>MISP bridge</td><td>OK for IOC feed</td><td>Not full MISP</td></tr>
+<tr><td>109</td><td>Vuln + EASM scanners</td><td>OK</td><td>Off control plane</td></tr>
+<tr><td>110</td><td>Velociraptor</td><td>OK (Linux)</td><td>Windows client manual</td></tr>
+<tr><td>112</td><td>Ansible</td><td>OK</td><td>DR-included</td></tr>
+<tr><td>114</td><td>Appliance mgmt</td><td>OK</td><td>SSH tunnel to VM 100 DB</td></tr>
+<tr><td>115</td><td>Ollama (mssp-ai)</td><td>Partial</td><td>SPOF</td></tr>
+<tr><td>199</td><td>Golden appliance</td><td>OK</td><td>kb110 bake at `2ec0eb0`</td></tr>
+</tbody></table>
+
+<hr>
+
+<h2>6. Open-source backend engines (reference)</h2>
+
+<table class="data">
+<thead><tr><th>NikTiar™ capability</th><th>Backend engines</th><th>VM</th></tr></thead><tbody>
+<tr><td>Core Telemetry</td><td>Wazuh, Fluent Bit</td><td>101, appliances</td></tr>
+<tr><td>DeepSight NDR</td><td>Suricata, Zeek</td><td>106</td></tr>
+<tr><td>Aegis Scanning</td><td>Nuclei, Vuls, Greenbone GVM</td><td>109</td></tr>
+<tr><td>Apex Orchestrator</td><td>TheHive, Shuffle</td><td>102</td></tr>
+<tr><td>Spectre Forensics</td><td>Velociraptor</td><td>110</td></tr>
+<tr><td>Cloud &amp; Identity (ITDR)</td><td>Microsoft Graph (Entra)</td><td>Control plane adapter</td></tr>
+<tr><td>AI SOC Assist</td><td>Ollama (`qwen2.5:7b`)</td><td>115, appliances</td></tr>
+</tbody></table>
+
+<p>Platform infrastructure: PostgreSQL 16, Redis 7, FastAPI, nginx, Docker Compose (VM 100).</p>
+
+<hr>
+
+<h2>7. Key technical challenges &amp; risks (prioritized)</h2>
+
+<h3>P0 — Security / tenancy</h3>
+
+<p>1. **EDR `agent_id` IDOR** — validate agent belongs to caller&#x27;s tenant before AR dispatch (`edr_actions.py`, `edr.py`).</p>
+<p>2. **No Postgres RLS** — add policies on core tenant tables as defense-in-depth.</p>
+
+<h3>P1 — Data fidelity &amp; compliance</h3>
+
+<p>3. **NDR synthetic data** — fix `source_tool` hardcoding; gate sample seed behind non-production.</p>
+<p>4. **No retention enforcement** — implement purge jobs; document Wazuh Indexer lifecycle.</p>
+<p>5. **TheHive tag-only fallback** — detect and alert on shared-org mode.</p>
+
+<h3>P1 — IAM / ITDR</h3>
+
+<p>6. **No MFA/SSO** — enterprise blocker.</p>
+<p>7. **ITDR single-provider** — Okta, GWS, AWS, Windows logon events missing.</p>
+
+<h3>P2 — Scale &amp; analytics</h3>
+
+<p>8. **JSONB without GIN** — hunting at scale will table-scan.</p>
+<p>9. **ClickHouse on VM 100** — not feasible at current RAM.</p>
+<p>10. **No table partitioning** — archival needed before high volume.</p>
+
+<h3>P2 — AI safety &amp; ops</h3>
+
+<p>11. **No pre-LLM deterministic gate** — add hash/rule short-circuit.</p>
+<p>12. **VM 115 SPOF** — health probe + failover plan.</p>
+<p>13. **`alert_ai_triage_cache`** — add `tenant_id` to cache read WHERE.</p>
+
+<h3>P3 — Engine isolation</h3>
+
+<p>14. **Shuffle single webhook** — per-tenant workflows.</p>
+<p>15. **Wazuh cloud-mode AR** — enforce group membership at execution.</p>
+
+<hr>
+
+<h2>8. What is solid today (strengths)</h2>
+
+<ul>
+<li>Consistent `tenant_id` FK discipline across core tables</li>
+<li>`require_tenant_match()` + 404 anti-enumeration on customer routes</li>
+<li>Machine auth separated from user JWT</li>
+<li>Portal role separation enforced server- and client-side</li>
+<li>AI never auto-isolates; auto-close opt-in with hard gates</li>
+<li>Scanners kept off VM 100</li>
+<li>Golden appliance (VM 199) at `kb110-gitreleasesync-202608280309` / `2ec0eb0`</li>
+<li>Entra ID ITDR is real Graph ingestion in production mode</li>
+</ul>
+
+<hr>
+
+<h2>9. Recommended remediation sequencing</h2>
+
+<table class="data">
+<thead><tr><th>Phase</th><th>Focus</th><th>Effort</th></tr></thead><tbody>
+<tr><td>0</td><td>Fix EDR `agent_id` tenant validation</td><td>Small, critical</td></tr>
+<tr><td>1</td><td>Fix `source_tool` ingest + disable NDR sample seed in prod</td><td>Medium</td></tr>
+<tr><td>2</td><td>Postgres retention jobs + RLS policies</td><td>Medium</td></tr>
+<tr><td>3</td><td>MFA/SSO + login rate limiting</td><td>Large</td></tr>
+<tr><td>4</td><td>Pre-LLM deterministic FP gate + VM 115 health probe</td><td>Medium</td></tr>
+<tr><td>5</td><td>Dedicated OLAP VM or VM 100 RAM upgrade</td><td>Large</td></tr>
+<tr><td>6</td><td>Okta/GWS/Windows identity ingest adapters</td><td>Large</td></tr>
+</tbody></table>
+
+<hr>
+
+<h2>10. Key file references</h2>
+
+<table class="data">
+<thead><tr><th>Area</th><th>Path</th></tr></thead><tbody>
+<tr><td>Core schema</td><td>`postgres/init/001_mssp_core_schema.sql`</td></tr>
+<tr><td>AI triage cache</td><td>`postgres/init/038_alert_ai_triage_cache.sql`</td></tr>
+<tr><td>Telemetry columns</td><td>`postgres/init/040_wazuh_telemetry_columns.sql`</td></tr>
+<tr><td>Tenant match guard</td><td>`backend-api/app/api/dependencies.py`</td></tr>
+<tr><td>EDR actions</td><td>`backend-api/app/services/edr_actions.py`</td></tr>
+<tr><td>SOC sync / ingest</td><td>`backend-api/app/api/routes/soc_sync.py`</td></tr>
+<tr><td>NDR service</td><td>`backend-api/app/services/ndr_service.py`</td></tr>
+<tr><td>Tier-1 AI triage</td><td>`backend-api/app/services/ai_tier1_triage.py`</td></tr>
+<tr><td>ITDR Graph client</td><td>`backend-api/app/services/itdr_graph_client.py`</td></tr>
+<tr><td>Tenant engine mapping</td><td>`backend-api/app/services/tenant_engine_provisioner.py`</td></tr>
+<tr><td>TheHive client</td><td>`backend-api/app/services/thehive_client.py`</td></tr>
+<tr><td>Shuffle EDR client</td><td>`backend-api/app/services/shuffle_edr_client.py`</td></tr>
+<tr><td>Appliance datalake</td><td>`kevantic-appliance/appliance/datalake/archiver.py`</td></tr>
+<tr><td>Attributions</td><td>`ATTRIBUTIONS.md`</td></tr>
+<tr><td>VM inventory</td><td>`docs/MSSP_IP_PROXMOX_INVENTORY.md`</td></tr>
+</tbody></table>
+
+<hr>
+
+<p>*End of report — ERGA-2026-08-28*</p>
+</body>
+</html>
