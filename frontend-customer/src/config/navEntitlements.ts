@@ -1,6 +1,7 @@
 import type { CustomerEntitlements } from "../api/customer";
 import type { SubscriptionTier } from "./tierConfig";
-import { MODULE_MIN_TIER, normalizeTier, tierMeetsMinimum } from "./tierConfig";
+import { MODULE_MIN_TIER } from "./tierConfig";
+import { isModuleAccessible } from "./capabilityAccess";
 
 /** Customer portal nav item. */
 export type CustomerNavItem = {
@@ -37,7 +38,7 @@ export const CORE_NAV_ITEMS: CustomerNavItem[] = [
   { to: "/services", label: "Service Portfolio" },
 ];
 
-/** Add-on service tabs — shown only when subscribed/enabled. */
+/** Capability modules — unlocked by subscription tier. */
 export const ADDON_NAV_ITEMS: CustomerNavItem[] = [
   { to: "/vulnerabilities", label: "Vulnerabilities", entitlement: "vulnerability_management" },
   { to: "/compliance", label: "Compliance", entitlement: "continuous_compliance" },
@@ -51,48 +52,26 @@ export const ADDON_NAV_ITEMS: CustomerNavItem[] = [
 
 /** Insert add-ons after Assets for a natural reading order. */
 export function buildCustomerNavItems(ent: CustomerEntitlements | null): CustomerNavItem[] {
-  const tier = normalizeTier(ent?.subscription_tier);
   const addons = ADDON_NAV_ITEMS.map((item) => {
     const requiredTier = item.entitlement ? MODULE_MIN_TIER[item.entitlement] : "SILVER";
-    const entitled = item.entitlement ? isEntitlementEnabled(ent, item.entitlement) : true;
-    const tierOk = tierMeetsMinimum(tier, requiredTier);
+    const unlocked = item.entitlement ? isModuleAccessible(ent, item.entitlement) : true;
     return {
       ...item,
-      locked: !entitled || !tierOk,
+      locked: !unlocked,
       requiredTier,
     };
   });
-  const visibleAddons = addons;
   const head = CORE_NAV_ITEMS.slice(0, 4);
   const tail = CORE_NAV_ITEMS.slice(4);
-  return [...head, ...visibleAddons, ...tail];
+  return [...head, ...addons, ...tail];
 }
 
+/** Tier + entitlement flags — same contract on cloud SOC and NikTiar Edge. */
 export function isEntitlementEnabled(
   ent: CustomerEntitlements | null | undefined,
   key: CustomerEntitlementKey
 ): boolean {
-  if (!ent) return false;
-  switch (key) {
-    case "vulnerability_management":
-      return Boolean(ent.vulnerability_management_enabled);
-    case "continuous_compliance":
-      return Boolean(ent.continuous_compliance_enabled);
-    case "external_attack_surface":
-      return Boolean(ent.external_attack_surface_enabled);
-    case "cloud_identity_protection":
-      return Boolean(ent.cloud_identity_protection_enabled);
-    case "network_detection":
-      return Boolean(ent.network_traffic_analysis_enabled);
-    case "threat_intelligence":
-      return Boolean(ent.threat_intelligence_enabled);
-    case "endpoint_forensics":
-      return Boolean(ent.endpoint_forensics_enabled);
-    case "threatlens":
-      return Boolean(ent.threat_intelligence_enabled || ent.endpoint_forensics_enabled);
-    default:
-      return false;
-  }
+  return isModuleAccessible(ent, key);
 }
 
 export function entitlementLabel(key: CustomerEntitlementKey): string {

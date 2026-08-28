@@ -50,6 +50,9 @@ ServiceKey = Literal[
     "endpoint_forensics_deception",
     "external_attack_surface",
     "cloud_identity_protection",
+    "tier_silver",
+    "tier_gold",
+    "tier_platinum",
     "other",
 ]
 
@@ -723,6 +726,17 @@ def admin_service_catalog(
                     "threat_intelligence",
                     "endpoint_forensics_deception",
                 ),
+                "rollout_break_glass_only": key
+                in (
+                    "security_automation",
+                    "vulnerability_management",
+                    "continuous_compliance",
+                    "external_attack_surface",
+                    "cloud_identity_protection",
+                    "network_detection_response",
+                    "threat_intelligence",
+                    "endpoint_forensics_deception",
+                ),
             }
         )
 
@@ -827,7 +841,16 @@ def admin_patch_catalog_pricing(
     return dict(row or {})
 
 
-@router.post("/admin/service-catalog/{service_key}/rollout")
+@router.post(
+    "/admin/service-catalog/{service_key}/rollout",
+    summary="Break-glass per-module rollout (MSSP exception only)",
+    description=(
+        "Break-glass API — not the primary commercial workflow. "
+        "Use POST /admin/tenants/tier-rollout or /admin/tenants/custom-tier-provision "
+        "for standard tier changes. This endpoint enables/disables a single catalog module "
+        "outside the tier bundle (asset-scoped rollout, legacy exceptions)."
+    ),
+)
 def admin_rollout_catalog_service(
     service_key: str,
     body: CatalogRolloutRequest,
@@ -1048,6 +1071,9 @@ def admin_rollout_catalog_service(
     return {
         "service_key": service_key,
         "action": body.action,
+        "break_glass": True,
+        "workflow": "mssp_exception_only",
+        "primary_workflow": "POST /admin/tenants/tier-rollout",
         "rolled_out": sum(1 for r in results if r.get("ok")),
         "failed": sum(1 for r in results if not r.get("ok")),
         "results": results,

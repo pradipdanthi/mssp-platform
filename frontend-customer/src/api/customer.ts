@@ -667,6 +667,7 @@ export async function getCustomerDashboardV2(
 export interface CustomerEntitlements {
   tenant_id: string;
   subscription_tier?: string;
+  service_delivery_label?: string;
   log_monitoring_enabled: boolean;
   log_retention_days: number;
   incident_response: string;

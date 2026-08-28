@@ -97,14 +97,17 @@ export function ApplianceServicesCell({
   if (showInactive) {
     const rows = catalogueServiceStatus(services);
     return (
-      <div className="appliance-services-cell appliance-services-cell--full" title={rows.map((r) => `${r.full}: ${r.active ? "active" : "inactive"}`).join(" · ")}>
+      <div
+        className="appliance-services-cell appliance-services-cell--full"
+        title="Local engines mapped to the same capability catalog as Tier Operations"
+      >
         {rows.map((row) => (
           <span
             key={row.id}
             className={`appliance-service-badge${row.active ? "" : " appliance-service-badge--inactive"}`}
-            title={`${row.full} — ${row.active ? "active" : "inactive"}`}
+            title={row.full}
           >
-            {row.label}
+            {row.catalogName.length > 18 ? row.label : row.catalogName}
           </span>
         ))}
       </div>

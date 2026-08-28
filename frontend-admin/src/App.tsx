@@ -20,6 +20,8 @@ import AssetsPage from "./pages/AssetsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import AuditLogDetailPage from "./pages/AuditLogDetailPage";
 import ServiceCatalogPage from "./pages/ServiceCatalogPage";
+import TierRolloutPage from "./pages/TierRolloutPage";
+import CustomTierProvisionPage from "./pages/CustomTierProvisionPage";
 import ServiceRequestsPage from "./pages/ServiceRequestsPage";
 import RetrospectiveHuntsPage from "./pages/RetrospectiveHuntsPage";
 import ThreatIntelAdminPage from "./pages/ThreatIntelAdminPage";
@@ -181,6 +183,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ServiceCatalogPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/services/tier-rollout"
+        element={
+          <ProtectedRoute>
+            <TierRolloutPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/services/custom-tier"
+        element={
+          <ProtectedRoute>
+            <CustomTierProvisionPage />
           </ProtectedRoute>
         }
       />

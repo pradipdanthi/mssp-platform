@@ -12,6 +12,7 @@ import {
 import { ApiError } from "../api/client";
 import { catalogDisplayName, catalogShortHint } from "../data/serviceCatalog";
 import type { SubscriptionTier } from "../data/subscriptionTierMatrix";
+import { isCustomTier, normalizeTier } from "../data/subscriptionTierMatrix";
 import SubscriptionTierMatrix from "./SubscriptionTierMatrix";
 
 type Props = {
@@ -64,9 +65,9 @@ export default function SubscriptionEntitlementsPanel({
     ])
       .then(([tenant, row, cov]) => {
         if (cancelled) return;
-        const tier = (tenant.subscription_tier || "SILVER").toUpperCase() as SubscriptionTier;
-        setSubscriptionTier(tier === "GOLD" || tier === "PLATINUM" ? tier : "SILVER");
-        setInitialTier(tier === "GOLD" || tier === "PLATINUM" ? tier : "SILVER");
+        const tier = normalizeTier(tenant.subscription_tier);
+        setSubscriptionTier(tier);
+        setInitialTier(tier);
         setForm({
           ...row,
           continuous_compliance_enabled: Boolean(row.continuous_compliance_enabled),
@@ -151,14 +152,16 @@ export default function SubscriptionEntitlementsPanel({
       if (subscriptionTier !== initialTier) {
         await updateTenant(tenantId, { subscription_tier: subscriptionTier });
         setInitialTier(subscriptionTier);
-        const synced = await getTenantEntitlements(tenantId);
-        entPayload = {
-          ...synced,
-          continuous_compliance_enabled: Boolean(synced.continuous_compliance_enabled),
-          external_attack_surface_enabled: Boolean(synced.external_attack_surface_enabled),
-          cloud_identity_protection_enabled: Boolean(synced.cloud_identity_protection_enabled),
-        };
-        setForm(entPayload);
+        if (!isCustomTier(subscriptionTier)) {
+          const synced = await getTenantEntitlements(tenantId);
+          entPayload = {
+            ...synced,
+            continuous_compliance_enabled: Boolean(synced.continuous_compliance_enabled),
+            external_attack_surface_enabled: Boolean(synced.external_attack_surface_enabled),
+            cloud_identity_protection_enabled: Boolean(synced.cloud_identity_protection_enabled),
+          };
+          setForm(entPayload);
+        }
       }
       const saved = await putTenantEntitlements(tenantId, {
         wazuh_siem: entPayload.wazuh_siem,
@@ -221,8 +224,8 @@ export default function SubscriptionEntitlementsPanel({
         Subscription / enable services — {tenantName}
       </h2>
       <p className="page-subtitle" style={{ marginBottom: "12px" }}>
-        Set the customer&apos;s <strong>subscription tier</strong> (Silver / Gold / Platinum) to
-        apply the bundled entitlement matrix, then fine-tune individual services below if needed.
+        Set the customer&apos;s <strong>subscription tier</strong> (Silver / Gold / Platinum / Custom).
+        Standard tiers apply the bundled entitlement matrix; Custom uses per-module flags only.
       </p>
 
       {!loading && (

@@ -53,11 +53,47 @@ def customer_safe_automation_mode(mode: Optional[str]) -> str:
     return "not_included"
 
 
+def customer_service_delivery_label(deployment_mode: Optional[str], subscription_tier: Optional[str] = None) -> str:
+    """
+    Customer-safe description of how NikTiar delivers the contracted tier.
+    Same Silver/Gold/Platinum modules — different telemetry path when Edge is used.
+    """
+    if (subscription_tier or "").strip().upper() == "CUSTOM":
+        return (
+            "Custom enterprise agreement — your contracted capabilities are listed below. "
+            "Contact your account manager to change modules or upgrade to a standard tier."
+        )
+    mode = (deployment_mode or "cloud").strip().lower()
+    if mode in ("on_prem_appliance", "cloud_appliance"):
+        return (
+            "NikTiar Edge — detection runs locally; raw logs stay on your network. "
+            "High-fidelity alerts reach our SOC over an encrypted channel."
+        )
+    if mode == "hybrid":
+        return (
+            "Hybrid delivery — cloud SOC for cloud workloads plus NikTiar Edge where deployed. "
+            "Same subscription tier and portal modules across both paths."
+        )
+    if mode == "on_prem_direct":
+        return (
+            "Cloud SOC — endpoints report to NikTiar managed infrastructure. "
+            "Same subscription tier and portal modules as Edge customers."
+        )
+    return (
+        "Cloud SOC — workloads connect to NikTiar managed infrastructure. "
+        "Same subscription tier and portal modules as Edge customers."
+    )
+
+
 def entitlements_row_to_customer_public(row: Dict[str, Any]) -> Dict[str, Any]:
     """Build customer API entitlements payload without engine brand field names."""
     return {
         "tenant_id": row["tenant_id"],
         "subscription_tier": row.get("subscription_tier") or "SILVER",
+        "service_delivery_label": customer_service_delivery_label(
+            row.get("deployment_mode"),
+            row.get("subscription_tier"),
+        ),
         "log_monitoring_enabled": bool(row.get("wazuh_siem", True)),
         "log_retention_days": int(row.get("wazuh_retention_days") or 30),
         "incident_response": customer_safe_incident_response_mode(row.get("thehive_mode")),

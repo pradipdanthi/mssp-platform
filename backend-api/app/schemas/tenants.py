@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 StatusLiteral = Literal["onboarding", "active", "inactive", "suspended"]
-SubscriptionTierLiteral = Literal["SILVER", "GOLD", "PLATINUM"]
+SubscriptionTierLiteral = Literal["SILVER", "GOLD", "PLATINUM", "CUSTOM"]
 SlaLevelLiteral = Literal["standard", "business", "premium", "24x7"]
 CriticalityLiteral = Literal["low", "medium", "high", "critical"]
 DeploymentModeLiteral = Literal[

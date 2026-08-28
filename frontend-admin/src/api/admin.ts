@@ -579,6 +579,7 @@ export interface TenantCreateRequest {
   preferred_language?: string | null;
   company_size?: string | null;
   entitlements?: TenantEntitlementsOnCreate;
+  subscription_tier?: "SILVER" | "GOLD" | "PLATINUM" | "CUSTOM";
   /** Required for every new customer onboard. */
   portal_admin: PortalAdminOnCreate;
 }
@@ -1932,6 +1933,70 @@ export function rolloutCatalogService(
     method: "POST",
     body: payload,
   });
+}
+
+export function rolloutTenantTier(payload: {
+  tenant_ids: string[];
+  target_tier: "SILVER" | "GOLD" | "PLATINUM";
+  admin_notes?: string | null;
+  mark_requests_approved?: boolean;
+  customer_order_number: string;
+  confirmation_email: string;
+}): Promise<{
+  target_tier: string;
+  rolled_out: number;
+  failed: number;
+  results: Array<{
+    tenant_id: string;
+    tenant_name?: string;
+    short_code?: string;
+    ok: boolean;
+    error?: string;
+    previous_tier?: string;
+    target_tier?: string;
+    approved_open_requests?: number;
+    email_ok?: boolean;
+    deployment_mode?: string;
+    fulfillment?: {
+      adapter_sync_count?: number;
+      adapter_sync_ok?: number;
+      appliance_entitlement_push?: { jobs_queued?: number; appliances?: number };
+    };
+  }>;
+}> {
+  return request("/admin/tenants/tier-rollout", { method: "POST", body: payload });
+}
+
+export type CustomTierCatalogModule = {
+  catalog_key: string;
+  min_standard_tier: string;
+};
+
+export function getCustomTierCatalog(): Promise<{ modules: CustomTierCatalogModule[] }> {
+  return request("/admin/tenants/custom-tier/catalog");
+}
+
+export function provisionCustomTier(payload: {
+  tenant_ids: string[];
+  catalog_keys: string[];
+  customer_order_number: string;
+  admin_notes?: string | null;
+}): Promise<{
+  target_tier: string;
+  catalog_keys: string[];
+  provisioned: number;
+  failed: number;
+  results: Array<{
+    tenant_id: string;
+    tenant_name?: string;
+    short_code?: string;
+    ok: boolean;
+    error?: string;
+    selected_catalog_keys?: string[];
+    fulfillment?: Record<string, unknown>;
+  }>;
+}> {
+  return request("/admin/tenants/custom-tier-provision", { method: "POST", body: payload });
 }
 
 export function patchConsultationRequest(

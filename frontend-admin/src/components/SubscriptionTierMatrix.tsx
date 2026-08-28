@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import {
   TIER_CATALOG,
   TIER_FEATURE_MATRIX,
@@ -39,10 +40,21 @@ export default function SubscriptionTierMatrix({
             <option value="SILVER">Silver — Identity ITDR</option>
             <option value="GOLD">Gold — Core MDR</option>
             <option value="PLATINUM">Platinum — Full MXDR</option>
+            <option value="CUSTOM">Custom — admin bespoke bundle</option>
           </select>
         </label>
       )}
 
+      {tierEditable && onTierChange && normalizeTier(activeTier) === "CUSTOM" && (
+        <p className="page-subtitle" style={{ marginTop: 0 }}>
+          CUSTOM tier uses per-module entitlement flags. Use{" "}
+          <Link to="/services/custom-tier">Tier Operations → Provision custom tier</Link> to select
+          modules and push fulfillment.
+        </p>
+      )}
+
+      {normalizeTier(activeTier) !== "CUSTOM" && (
+      <>
       <div className="tier-matrix-cards">
         {TIER_CATALOG.map((entry) => {
           const isActive = entry.tier === current;
@@ -110,6 +122,8 @@ export default function SubscriptionTierMatrix({
             </tbody>
           </table>
         </div>
+      )}
+      </>
       )}
     </div>
   );

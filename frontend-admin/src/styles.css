@@ -2127,6 +2127,32 @@ a.badge:focus-visible {
   font-weight: 700;
 }
 
+.tier-ops-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+  margin: 0.75rem 0 1.25rem;
+}
+.tier-ops-stat {
+  border: 1px solid rgba(103, 232, 249, 0.2);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+.tier-ops-stat-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #67e8f9;
+  margin-bottom: 0.25rem;
+}
+.tier-ops-stat strong {
+  font-size: 1.5rem;
+  display: block;
+}
+
 .entitlement-row {
   display: flex;
   align-items: center;
@@ -3709,6 +3735,64 @@ img.kevantic-brand-logo.sidebar-brand-logo {
 }
 .rollout-tenant-row:hover {
   background: rgba(58, 80, 107, 0.25);
+}
+
+.tier-provision-page {
+  max-width: 960px;
+}
+
+.page-back-link {
+  margin: 0 0 0.75rem;
+}
+
+.page-back-link a {
+  color: var(--text-muted, #94a3b8);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.page-back-link a:hover {
+  color: var(--accent, #38bdf8);
+}
+
+.tier-provision-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.tier-provision-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tier-provision-section .section-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.tier-provision-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+@media (max-width: 900px) {
+  .tier-provision-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rollout-tenant-list--page {
+  max-height: min(420px, 50vh);
+  background: var(--panel-bg, rgba(11, 19, 43, 0.85));
+}
+
+.tier-provision-actions {
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(58, 80, 107, 0.45);
 }
 
 /* =============================================================================

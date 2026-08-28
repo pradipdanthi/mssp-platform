@@ -69,7 +69,7 @@ def customer_itdr_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER, catalog_key="cloud_identity_protection")
     summary = itdr.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -89,7 +89,7 @@ def customer_itdr_events(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER, catalog_key="cloud_identity_protection")
     rows, total = itdr.list_events(
         tenant["id"],
         severity=severity,
@@ -118,7 +118,7 @@ def customer_itdr_configs(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER, catalog_key="cloud_identity_protection")
     configs = itdr.list_configs(tenant["id"])
     safe = []
     for row in configs:
@@ -156,7 +156,7 @@ def customer_itdr_connect(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER, catalog_key="cloud_identity_protection")
     try:
         cfg = itdr.connect_provider(
             tenant["id"],

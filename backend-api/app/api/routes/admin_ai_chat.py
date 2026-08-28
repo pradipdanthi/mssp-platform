@@ -58,7 +58,7 @@ def admin_ai_chat(
     if not tenant_id and payload.tenant_short_code:
         tenant_id = get_tenant_id_from_short_code(payload.tenant_short_code)
     if tenant_id:
-        enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.GOLD)
+        enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.GOLD, catalog_key="security_automation")
     try:
         result = ai_admin_chat.answer_soc_question(
             question=payload.message,

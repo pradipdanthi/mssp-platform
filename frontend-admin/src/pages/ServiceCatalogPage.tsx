@@ -5,13 +5,12 @@ import {
   AdminCatalogService,
   Tenant,
   getAdminServiceCatalog,
-  getTenantAssetServiceCoverage,
   getTenants,
   patchCatalogPricing,
-  rolloutCatalogService,
-  type AssetServiceCoverageAsset,
 } from "../api/admin";
 import { getCatalogItem } from "../data/serviceCatalog";
+import { includedInTierLabel, SERVICE_KEY_MIN_TIER } from "../data/tierCapabilityMap";
+import { normalizeTier, tierDisplayName } from "../data/subscriptionTierMatrix";
 import SubscriptionTierMatrix from "../components/SubscriptionTierMatrix";
 
 type PriceForm = {
@@ -26,7 +25,7 @@ export default function ServiceCatalogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "core" | "addons" | "requests">("all");
+  const [filter, setFilter] = useState<"all" | "silver" | "gold" | "platinum" | "requests">("all");
 
   const [priceItem, setPriceItem] = useState<AdminCatalogService | null>(null);
   const [priceForm, setPriceForm] = useState<PriceForm>({
@@ -36,18 +35,6 @@ export default function ServiceCatalogPage() {
   });
   const [priceSaving, setPriceSaving] = useState(false);
   const [priceError, setPriceError] = useState<string | null>(null);
-
-  const [rolloutItem, setRolloutItem] = useState<AdminCatalogService | null>(null);
-  const [selectedTenantIds, setSelectedTenantIds] = useState<string[]>([]);
-  const [rolloutNotes, setRolloutNotes] = useState("");
-  const [rolloutBusy, setRolloutBusy] = useState(false);
-  const [rolloutError, setRolloutError] = useState<string | null>(null);
-  const [rolloutAction, setRolloutAction] = useState<"enable" | "disable">("enable");
-  const [orderNumber, setOrderNumber] = useState("");
-  const [confirmEmail, setConfirmEmail] = useState("");
-  const [assetIds, setAssetIds] = useState<string[]>([]);
-  const [assetOptions, setAssetOptions] = useState<AssetServiceCoverageAsset[]>([]);
-  const [assetsLoading, setAssetsLoading] = useState(false);
 
   function refresh() {
     setLoading(true);
@@ -70,12 +57,23 @@ export default function ServiceCatalogPage() {
 
   const filtered = useMemo(() => {
     return services.filter((s) => {
-      if (filter === "core") return s.is_core;
-      if (filter === "addons") return !s.is_core;
+      const minTier = SERVICE_KEY_MIN_TIER[s.service_key as keyof typeof SERVICE_KEY_MIN_TIER];
+      if (filter === "silver") return minTier === "SILVER";
+      if (filter === "gold") return minTier === "GOLD";
+      if (filter === "platinum") return minTier === "PLATINUM";
       if (filter === "requests") return s.open_request_count > 0;
       return true;
     });
   }, [services, filter]);
+
+  const tierCounts = useMemo(() => {
+    const counts = { SILVER: 0, GOLD: 0, PLATINUM: 0, CUSTOM: 0 };
+    for (const t of tenants) {
+      const tier = normalizeTier(t.subscription_tier);
+      counts[tier] += 1;
+    }
+    return counts;
+  }, [tenants]);
 
   const openTotal = useMemo(
     () => services.reduce((n, s) => n + (s.open_request_count || 0), 0),
@@ -118,107 +116,26 @@ export default function ServiceCatalogPage() {
     }
   }
 
-  function openRollout(item: AdminCatalogService) {
-    setRolloutItem(item);
-    setSelectedTenantIds([]);
-    setRolloutNotes("");
-    setRolloutError(null);
-    setRolloutAction("enable");
-    setOrderNumber("");
-    setConfirmEmail("");
-    setAssetIds([]);
-    setAssetOptions([]);
-  }
-
-  useEffect(() => {
-    if (!rolloutItem || selectedTenantIds.length !== 1) {
-      setAssetOptions([]);
-      setAssetIds([]);
-      return;
-    }
-    let cancelled = false;
-    setAssetsLoading(true);
-    getTenantAssetServiceCoverage(selectedTenantIds[0], rolloutItem.service_key)
-      .then((res) => {
-        if (cancelled) return;
-        setAssetOptions(res.assets || []);
-        setAssetIds(res.covered_asset_ids || []);
-      })
-      .catch(() => {
-        if (!cancelled) setAssetOptions([]);
-      })
-      .finally(() => {
-        if (!cancelled) setAssetsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [rolloutItem, selectedTenantIds]);
-
-  function toggleTenant(id: string) {
-    setSelectedTenantIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  }
-
-  async function submitRollout(e: FormEvent) {
-    e.preventDefault();
-    if (!rolloutItem) return;
-    if (!selectedTenantIds.length) {
-      setRolloutError("Select at least one customer.");
-      return;
-    }
-    if (!orderNumber.trim()) {
-      setRolloutError("Customer order number is required.");
-      return;
-    }
-    if (!confirmEmail.trim() || !confirmEmail.includes("@")) {
-      setRolloutError("Confirmation email is required.");
-      return;
-    }
-    setRolloutBusy(true);
-    setRolloutError(null);
-    try {
-      const res = await rolloutCatalogService(rolloutItem.service_key, {
-        tenant_ids: selectedTenantIds,
-        admin_notes: rolloutNotes.trim() || null,
-        mark_requests_approved: rolloutAction === "enable",
-        action: rolloutAction,
-        customer_order_number: orderNumber.trim(),
-        confirmation_email: confirmEmail.trim(),
-        asset_ids: selectedTenantIds.length === 1 ? assetIds : [],
-      });
-      setSuccess(
-        `${rolloutAction === "disable" ? "Disabled" : "Rolled out"} ${rolloutItem.service_name} for ${res.rolled_out} customer(s)` +
-          (res.failed ? ` (${res.failed} failed)` : "") +
-          ` · order ${orderNumber.trim()}.`
-      );
-      setRolloutItem(null);
-      refresh();
-    } catch (err) {
-      if (err instanceof ApiError && typeof err.detail === "string") setRolloutError(err.detail);
-      else setRolloutError("Rollout failed.");
-    } finally {
-      setRolloutBusy(false);
-    }
-  }
-
   return (
     <div>
-      <h1 className="page-title">Service Catalog</h1>
+      <h1 className="page-title">Tier Operations</h1>
       <p className="page-subtitle">
-        MSSP portfolio control — review offerings, edit list pricing, roll services out to customers,
-        and act on consultation demand. Customer self-service consulting requests stay in the
-        customer portal. Global queue: <Link to="/service-requests">Service Requests</Link>.
+        MSSP tier control — provision Silver / Gold / Platinum upgrades (or downgrades) and custom
+        bundles via the provision pages above. Tier rollout syncs entitlements, cloud adapters, and
+        NikTiar Edge licenses automatically. Per-module{" "}
+        <code>POST /admin/service-catalog/&#123;key&#125;/rollout</code> is break-glass only (MSSP
+        exceptions) — not shown in this UI. Customer tier upgrade requests:{" "}
+        <Link to="/service-requests">Service Requests</Link>.
       </p>
 
       <div className="catalog-toolbar">
         <div className="catalog-filters">
           {(
             [
-              ["all", "All services"],
-              ["core", "Core"],
-              ["addons", "Add-ons"],
+              ["all", "All modules"],
+              ["silver", "Silver tier"],
+              ["gold", "Gold tier"],
+              ["platinum", "Platinum tier"],
               ["requests", "Has open requests"],
             ] as const
           ).map(([key, label]) => (
@@ -246,18 +163,46 @@ export default function ServiceCatalogPage() {
 
       {!loading && (
         <section className="management-panel" style={{ marginBottom: "1.25rem" }}>
-          <h2 className="section-title" style={{ marginTop: 0 }}>
-            3-Tier Feature Matrix
-          </h2>
-          <p className="page-subtitle" style={{ marginTop: 0 }}>
-            Silver (Identity ITDR), Gold (Core MDR), and Platinum (Full MXDR) — customer-facing
-            packages aligned to <code>subscription_tier</code>.
-          </p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
+            <div>
+              <h2 className="section-title" style={{ marginTop: 0 }}>
+                Subscription tiers
+              </h2>
+              <p className="page-subtitle" style={{ marginTop: 0 }}>
+                Silver (Identity ITDR), Gold (Core MDR), Platinum (Full MXDR). Custom is admin-only —
+                pick modules à la carte without a public SKU.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              <Link className="btn btn-primary" to="/services/tier-rollout">
+                Provision tier upgrade
+              </Link>
+              <Link className="btn btn-ghost" to="/services/custom-tier">
+                Provision custom tier
+              </Link>
+            </div>
+          </div>
+          <div className="tier-ops-stats">
+            {(["SILVER", "GOLD", "PLATINUM", "CUSTOM"] as const).map((tier) => (
+              <div key={tier} className="tier-ops-stat">
+                <span className="tier-ops-stat-label">{tierDisplayName(tier)}</span>
+                <strong>{tierCounts[tier]}</strong>
+                <span className="muted-text">active customers</span>
+              </div>
+            ))}
+          </div>
           <SubscriptionTierMatrix />
         </section>
       )}
 
       {!loading && (
+        <>
+          <h2 className="section-title">Capability modules (internal ops)</h2>
+          <p className="page-subtitle">
+            Same catalog as customer-facing tiers — not separate SKUs. Provision the tier above to
+            enable all included modules. For NikTiar Edge tenants, check{" "}
+            <Link to="/appliances">Appliances → Local engines</Link> for on-box license status.
+          </p>
         <div className="services-catalog">
           {filtered.map((item) => {
             const meta = getCatalogItem(item.service_key as never);
@@ -274,8 +219,8 @@ export default function ServiceCatalogPage() {
                 <div className="service-card-top">
                   <h2 className="service-card-title">{item.service_name}</h2>
                   <div className="service-card-badges">
-                    <span className={"service-status service-status--" + (item.is_core ? "included" : "available")}>
-                      {item.is_core ? "Core" : "Add-on"}
+                    <span className="tier-badge tier-badge--active">
+                      {includedInTierLabel(item.service_key as never)}
                     </span>
                     {item.open_request_count > 0 && (
                       <Link
@@ -334,15 +279,6 @@ export default function ServiceCatalogPage() {
                   >
                     Edit price
                   </button>
-                  {item.rollout_supported && (
-                    <button
-                      className="btn btn-primary"
-                      type="button"
-                      onClick={() => openRollout(item)}
-                    >
-                      Roll out to customers
-                    </button>
-                  )}
                   {item.open_request_count > 0 && (
                     <Link
                       className="btn btn-ghost"
@@ -356,9 +292,10 @@ export default function ServiceCatalogPage() {
             );
           })}
           {filtered.length === 0 && (
-            <div className="state-message">No services match this filter.</div>
+            <div className="state-message">No capability modules match this filter.</div>
           )}
         </div>
+        </>
       )}
 
       {priceItem && (
@@ -418,126 +355,6 @@ export default function ServiceCatalogPage() {
         </div>
       )}
 
-      {rolloutItem && (
-        <div className="modal-backdrop" onClick={() => !rolloutBusy && setRolloutItem(null)}>
-          <form
-            className="modal-panel modal-panel--wide"
-            onSubmit={submitRollout}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="section-title" style={{ marginTop: 0 }}>
-              Roll out — {rolloutItem.service_name}
-            </h2>
-            <p className="page-subtitle">
-              Controlled change: customer order number and confirmation email are required. Leave
-              assets unchecked for the whole account, or pick hosts when one customer is selected.
-            </p>
-            <label className="form-label">
-              Action
-              <select
-                className="form-input"
-                value={rolloutAction}
-                onChange={(e) => setRolloutAction(e.target.value as "enable" | "disable")}
-              >
-                <option value="enable">Enable / roll out</option>
-                <option value="disable">Disable / remove</option>
-              </select>
-            </label>
-            <label className="form-label">
-              Customer order number
-              <input
-                className="form-input"
-                value={orderNumber}
-                onChange={(e) => setOrderNumber(e.target.value)}
-                placeholder="PO-10482 / SO-…"
-                required
-              />
-            </label>
-            <label className="form-label">
-              Confirmation email
-              <input
-                className="form-input"
-                type="email"
-                value={confirmEmail}
-                onChange={(e) => setConfirmEmail(e.target.value)}
-                placeholder="customer.admin@example.com"
-                required
-              />
-            </label>
-            <div className="rollout-tenant-list">
-              {tenants.map((t) => (
-                <label key={t.id} className="rollout-tenant-row">
-                  <input
-                    type="checkbox"
-                    checked={selectedTenantIds.includes(t.id)}
-                    onChange={() => toggleTenant(t.id)}
-                  />
-                  <span>
-                    {t.name} <span className="cell-mono">({t.short_code})</span>
-                  </span>
-                </label>
-              ))}
-              {tenants.length === 0 && <div className="state-message">No tenants found.</div>}
-            </div>
-            {selectedTenantIds.length === 1 ? (
-              <div className="rollout-tenant-list" style={{ marginTop: "0.75rem" }}>
-                <div className="form-label">Assets (optional — empty = whole account)</div>
-                {assetsLoading && <div className="state-message">Loading assets…</div>}
-                {!assetsLoading && assetOptions.length === 0 && (
-                  <div className="state-message">No assets for this customer yet.</div>
-                )}
-                {assetOptions.map((a) => (
-                  <label key={a.id} className="rollout-tenant-row">
-                    <input
-                      type="checkbox"
-                      checked={assetIds.includes(a.id)}
-                      onChange={() =>
-                        setAssetIds((prev) =>
-                          prev.includes(a.id) ? prev.filter((x) => x !== a.id) : [...prev, a.id]
-                        )
-                      }
-                    />
-                    <span>
-                      {a.hostname || a.id}
-                      {a.asset_type ? ` · ${a.asset_type}` : ""}
-                    </span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p className="page-subtitle" style={{ marginTop: "0.75rem" }}>
-                Select a single customer to target individual assets. Multiple customers apply at
-                account level.
-              </p>
-            )}
-            <label className="form-label" style={{ display: "block", marginTop: "0.75rem" }}>
-              Notes (optional)
-              <textarea
-                className="form-input"
-                rows={3}
-                value={rolloutNotes}
-                onChange={(e) => setRolloutNotes(e.target.value)}
-              />
-            </label>
-            {rolloutError && <div className="form-error">{rolloutError}</div>}
-            <div className="confirm-actions">
-              <button className="btn btn-primary" type="submit" disabled={rolloutBusy}>
-                  {rolloutBusy
-                    ? "Saving…"
-                    : `${rolloutAction === "disable" ? "Disable" : "Enable"} for ${selectedTenantIds.length || 0} customer(s)`}
-              </button>
-              <button
-                className="btn btn-ghost"
-                type="button"
-                disabled={rolloutBusy}
-                onClick={() => setRolloutItem(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   );
 }

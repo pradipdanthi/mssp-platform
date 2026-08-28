@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Set
 
 from app.api.routes.entitlements import DEFAULTS, upsert_tenant_entitlements
 from app.db.session import execute, fetch_one
 
-TIER_RANK: Dict[str, int] = {
+# Demo / QA tenants — always provisioned at PLATINUM with full entitlements.
+DEMO_TENANT_SHORT_CODES: Set[str] = {"ALPHAWINCORP-6VS2"}
+
+STANDARD_TIER_RANK: Dict[str, int] = {
     "SILVER": 1,
     "GOLD": 2,
     "PLATINUM": 3,
+}
+
+TIER_RANK: Dict[str, int] = {
+    **STANDARD_TIER_RANK,
+    "CUSTOM": 0,
 }
 
 SILVER_ENTITLEMENTS: Dict[str, Any] = {
@@ -61,21 +69,38 @@ class SubscriptionTier(str, Enum):
     SILVER = "SILVER"
     GOLD = "GOLD"
     PLATINUM = "PLATINUM"
+    CUSTOM = "CUSTOM"
+
+
+def is_custom_tier(value: Optional[str]) -> bool:
+    return (value or "").strip().upper() == "CUSTOM"
+
+
+def is_standard_tier(value: Optional[str]) -> bool:
+    return normalize_subscription_tier(value) in STANDARD_TIER_RANK
 
 
 def normalize_subscription_tier(value: Optional[str]) -> str:
     tier = (value or "SILVER").strip().upper()
-    if tier not in TIER_RANK:
+    if tier == "CUSTOM":
+        return "CUSTOM"
+    if tier not in STANDARD_TIER_RANK:
         raise ValueError(f"Invalid subscription_tier: {value}")
     return tier
 
 
 def tier_rank(tier: str) -> int:
-    return TIER_RANK.get(normalize_subscription_tier(tier), 0)
+    normalized = (tier or "SILVER").strip().upper()
+    if normalized == "CUSTOM":
+        return TIER_RANK["CUSTOM"]
+    return STANDARD_TIER_RANK.get(normalize_subscription_tier(normalized), 0)
 
 
 def entitlements_for_tier(tier: str) -> Dict[str, Any]:
-    return dict(TIER_ENTITLEMENT_BUNDLES[normalize_subscription_tier(tier)])
+    normalized = normalize_subscription_tier(tier)
+    if is_custom_tier(normalized):
+        raise ValueError("CUSTOM tier has no fixed bundle — use custom_tier_service.provision_custom_tier")
+    return dict(TIER_ENTITLEMENT_BUNDLES[normalized])
 
 
 def get_tenant_subscription_tier(tenant_id: str) -> str:
@@ -85,7 +110,10 @@ def get_tenant_subscription_tier(tenant_id: str) -> str:
     )
     if not row:
         return SubscriptionTier.SILVER.value
-    return normalize_subscription_tier(row.get("subscription_tier"))
+    raw = (row.get("subscription_tier") or "SILVER").strip().upper()
+    if raw == "CUSTOM":
+        return "CUSTOM"
+    return normalize_subscription_tier(raw)
 
 
 def get_tenant_id_from_short_code(short_code: str) -> Optional[str]:
@@ -112,7 +140,7 @@ def set_tenant_subscription_tier(
         """,
         (normalized, tenant_id),
     )
-    if sync_entitlements:
+    if sync_entitlements and not is_custom_tier(normalized):
         sync_entitlements_for_tier(tenant_id, normalized, actor_user_id=actor_user_id)
     return normalized
 
@@ -123,12 +151,36 @@ def sync_entitlements_for_tier(
     *,
     actor_user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Apply the entitlement bundle for a tenant tier."""
-    resolved = normalize_subscription_tier(tier or get_tenant_subscription_tier(tenant_id))
+    """Apply the entitlement bundle for a standard tenant tier."""
+    resolved_raw = tier or get_tenant_subscription_tier(tenant_id)
+    if is_custom_tier(resolved_raw):
+        row = fetch_one(
+            "SELECT tenant_id::text FROM tenant_entitlements WHERE tenant_id = %s::uuid;",
+            (tenant_id,),
+        )
+        if not row:
+            raise ValueError(
+                "CUSTOM tier requires explicit entitlement provisioning — use custom tier provision API."
+            )
+        return {
+            **DEFAULTS,
+            "tenant_id": tenant_id,
+            "subscription_tier": "CUSTOM",
+            "skipped": "custom_tier_no_bundle_sync",
+        }
+    resolved = normalize_subscription_tier(resolved_raw)
     bundle = entitlements_for_tier(resolved)
     upsert_tenant_entitlements(tenant_id, bundle, actor_user_id=actor_user_id)
     return {**DEFAULTS, **bundle, "tenant_id": tenant_id, "subscription_tier": resolved}
 
 
 def tier_meets_minimum(tenant_tier: str, min_tier: SubscriptionTier) -> bool:
+    if is_custom_tier(tenant_tier):
+        return False
     return tier_rank(tenant_tier) >= tier_rank(min_tier.value)
+
+
+def is_demo_tenant(short_code: Optional[str]) -> bool:
+    if not short_code:
+        return False
+    return short_code.strip().upper() in DEMO_TENANT_SHORT_CODES

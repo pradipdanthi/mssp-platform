@@ -32,6 +32,7 @@ import {
   ApplianceServicesCell,
   ApplianceVersionCell,
 } from "../components/appliance/ApplianceFleetCells";
+import { formatEnabledServicesList } from "../utils/applianceFleet";
 import { useAdminQuery } from "../hooks/useAdminQuery";
 import { useCustomerScope } from "../hooks/useCustomerScope";
 import { APPLIANCE_GATEWAY_URL, applianceRegisterCommand } from "../config/applianceGateway";
@@ -102,8 +103,9 @@ export default function AppliancesPage() {
       <h1 className="page-title">Appliances</h1>
       <CustomerScopeBanner />
       <p className="page-subtitle">
-        Appliance list with credential visibility/rotation, plus tenant activation-token
-        management. Search by name, site, or tenant; filter and paginate as the fleet grows.
+        NikTiar Edge fleet — local engine status for the same Silver / Gold / Platinum capabilities
+        provisioned in Tier Operations. Case management (TheHive) and SOAR (Shuffle) stay in cloud
+        SOC; badges here show which on-box engines are licensed.
       </p>
 
       <ListToolbar
@@ -146,7 +148,7 @@ export default function AppliancesPage() {
                 <th>Seats</th>
                 <th>Jobs</th>
                 <th>Health</th>
-                <th>Services</th>
+                <th>Local engines</th>
                 <th>Credential</th>
                 <th>Actions</th>
               </tr>
@@ -445,12 +447,8 @@ function ApplianceRow({
                   <CredentialField label="Last seen" value={credential.last_seen_at ?? "Never"} />
                   <CredentialField label="Local IP (Manager)" value={appliance.local_ip ?? "—"} />
                   <CredentialField
-                    label="Enabled services"
-                    value={
-                      appliance.enabled_services && appliance.enabled_services.length > 0
-                        ? appliance.enabled_services.join(", ")
-                        : "None reported"
-                    }
+                    label="Licensed local engines"
+                    value={formatEnabledServicesList(appliance.enabled_services)}
                   />
                 </div>
 

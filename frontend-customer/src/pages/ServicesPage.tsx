@@ -10,6 +10,7 @@ import {
 } from "../api/customer";
 import { useAuth } from "../auth/AuthContext";
 import type { SubscriptionTier } from "../config/tierConfig";
+import { isCustomTier } from "../config/tierConfig";
 import { tierDisplayName } from "../data/subscriptionTierMatrix";
 import SubscriptionTierMatrix from "../components/SubscriptionTierMatrix";
 import { formatScopeSummary } from "../data/serviceCatalog";
@@ -118,9 +119,18 @@ export default function ServicesPage() {
     <div>
       <h1 className="page-title">Service Portfolio</h1>
       <p className="page-subtitle">
-        Silver, Gold, and Platinum packages aligned to your <code>subscription_tier</code>. Your
-        active plan is highlighted — request a consultation to upgrade to higher tiers.
+        {isCustomTier(ent?.subscription_tier)
+          ? "Your custom subscription includes the capability modules listed below. Contact your account manager to change your contract."
+          : "Your contracted tier is highlighted below. The same Silver / Gold / Platinum modules apply whether you use cloud SOC or NikTiar Edge — only the telemetry path differs. Request a tier upgrade and your MSSP team will review after commercial agreement."}
       </p>
+
+      {!loading && !error && ent?.service_delivery_label && (
+        <div className="management-panel" style={{ marginBottom: "1rem" }}>
+          <p className="page-subtitle" style={{ margin: 0 }}>
+            <strong>Service delivery:</strong> {ent.service_delivery_label}
+          </p>
+        </div>
+      )}
 
       {loading && <div className="state-message">Loading portfolio…</div>}
       {error && <div className="state-message state-error">{error}</div>}
@@ -129,7 +139,8 @@ export default function ServicesPage() {
       {!loading && !error && (
         <SubscriptionTierMatrix
           activeTier={ent?.subscription_tier}
-          onRequestUpgrade={openUpgrade}
+          entitlements={ent}
+          onRequestUpgrade={isCustomTier(ent?.subscription_tier) ? undefined : openUpgrade}
         />
       )}
 

@@ -101,7 +101,7 @@ def telemetry_hunt_results(
     """Accept retrospective hunt results from the appliance (metadata hits only)."""
     appliance = _auth_appliance(x_appliance_id, x_appliance_api_key)
     tenant_id = str(appliance.get("tenant_id")) if appliance.get("tenant_id") else None
-    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.PLATINUM)
+    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.PLATINUM, catalog_key="threat_intelligence")
     from app.services import retrospective_service as retro
 
     updated = retro.apply_hunt_result(

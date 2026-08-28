@@ -12,9 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
 from app.services import easm_service as easm
+from app.services.subscription_tier_service import SubscriptionTier
 
 router = APIRouter(tags=["easm-attack-surface"])
 
@@ -68,6 +70,7 @@ def customer_easm_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="external_attack_surface")
     summary = easm.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -82,6 +85,7 @@ def customer_easm_assets(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="external_attack_surface")
     assets = easm.list_assets(tenant["id"])
     # Customer-safe discovery labels
     safe: List[Dict[str, Any]] = []
@@ -121,6 +125,7 @@ def customer_easm_findings(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="external_attack_surface")
     rows, total = easm.list_findings(
         tenant["id"],
         severity=severity,
@@ -149,6 +154,7 @@ def customer_register_domain(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="external_attack_surface")
     try:
         asset = easm.register_primary_target(
             tenant["id"], body.domain_or_ip, notes=body.notes

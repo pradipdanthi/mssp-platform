@@ -165,7 +165,7 @@ def ingest_okta_telemetry(
         authorization=authorization,
         x_agent_api_key=x_agent_api_key,
     )
-    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.SILVER)
+    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.SILVER, catalog_key="cloud_identity_protection")
     events = _normalize_events(payload)
     if not events:
         raise HTTPException(
@@ -209,7 +209,7 @@ def ingest_ad_telemetry(
         authorization=authorization,
         x_agent_api_key=x_agent_api_key,
     )
-    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.SILVER)
+    enforce_tenant_subscription_tier(tenant_id, SubscriptionTier.SILVER, catalog_key="cloud_identity_protection")
     events = _normalize_events(payload)
     if not events:
         raise HTTPException(

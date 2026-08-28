@@ -13,9 +13,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
 from app.services import threat_intel_service as ti
+from app.services.subscription_tier_service import SubscriptionTier
 
 router = APIRouter(tags=["threat-intelligence"])
 
@@ -63,6 +65,7 @@ def customer_threat_intel_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="threat_intelligence")
     summary = ti.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -83,6 +86,7 @@ def customer_threat_intel_iocs(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="threat_intelligence")
     rows, total = ti.list_iocs(
         tenant["id"],
         ioc_type=ioc_type,
@@ -112,6 +116,7 @@ def customer_threat_intel_campaigns(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="threat_intelligence")
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
         "campaigns": ti.list_campaigns(tenant["id"]),
@@ -234,8 +239,8 @@ def admin_threat_intel_taxii_pull(
 ) -> Dict[str, Any]:
     """
     Pull a STIX bundle from a TAXII 2.x collection and ingest into the tenant.
-    Optional env defaults: JUNEXIS_TAXII_API_ROOT, JUNEXIS_TAXII_COLLECTION_ID,
-    JUNEXIS_TAXII_USERNAME, JUNEXIS_TAXII_PASSWORD (never logged).
+    Optional env defaults: NIKTIAR_TAXII_API_ROOT, NIKTIAR_TAXII_COLLECTION_ID,
+    NIKTIAR_TAXII_USERNAME, NIKTIAR_TAXII_PASSWORD (never logged).
     """
     _ = current_user
     tenant = _resolve_tenant_ref(tenant_ref)
@@ -246,19 +251,27 @@ def admin_threat_intel_taxii_pull(
     password = body.password
 
     if body.use_configured_feed or not api_root or not collection_id:
-        api_root = api_root or os.getenv("JUNEXIS_TAXII_API_ROOT", "").strip()
-        collection_id = collection_id or os.getenv("JUNEXIS_TAXII_COLLECTION_ID", "").strip()
+        api_root = (
+            api_root
+            or os.getenv("NIKTIAR_TAXII_API_ROOT", "").strip()
+            or os.getenv("JUNEXIS_TAXII_API_ROOT", "").strip()
+        )
+        collection_id = (
+            collection_id
+            or os.getenv("NIKTIAR_TAXII_COLLECTION_ID", "").strip()
+            or os.getenv("JUNEXIS_TAXII_COLLECTION_ID", "").strip()
+        )
         if username is None:
-            username = os.getenv("JUNEXIS_TAXII_USERNAME") or None
+            username = os.getenv("NIKTIAR_TAXII_USERNAME") or os.getenv("JUNEXIS_TAXII_USERNAME") or None
         if password is None:
-            password = os.getenv("JUNEXIS_TAXII_PASSWORD") or None
+            password = os.getenv("NIKTIAR_TAXII_PASSWORD") or os.getenv("JUNEXIS_TAXII_PASSWORD") or None
 
     if not api_root or not collection_id:
         raise HTTPException(
             status_code=400,
             detail=(
                 "TAXII api_root and collection_id are required "
-                "(or set JUNEXIS_TAXII_API_ROOT / JUNEXIS_TAXII_COLLECTION_ID)."
+                "(or set NIKTIAR_TAXII_API_ROOT / NIKTIAR_TAXII_COLLECTION_ID)."
             ),
         )
 

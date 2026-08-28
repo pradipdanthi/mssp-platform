@@ -3,19 +3,24 @@ Default tenant entitlements for onboarding.
 
 New tenants start core-only (log monitoring + incident response).
 Add-on services stay AVAILABLE until Admin approves a consulting request.
-Demo tenant ALPHAWINCORP-6VS2 keeps the full 10-service catalog for testing.
+Demo tenant ALPHAWINCORP-6VS2 is tagged for QA scripts; tier starts at SILVER like all tenants.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, Set
+from typing import Any, Dict, Optional
 
 from app.db.session import fetch_one
+from app.services.subscription_tier_service import (
+    DEMO_TENANT_SHORT_CODES,
+    PLATINUM_ENTITLEMENTS,
+    is_demo_tenant,
+)
 
 logger = logging.getLogger("uvicorn.error")
 
-# Customer short_code(s) that always receive the full demo catalog.
-DEMO_FULL_ENTITLEMENT_SHORT_CODES: Set[str] = {"ALPHAWINCORP-6VS2"}
+# Back-compat alias for scripts/docs that import the old name.
+DEMO_FULL_ENTITLEMENT_SHORT_CODES = DEMO_TENANT_SHORT_CODES
 
 # Core MSSP package — enabled at tenant create (INCLUDED).
 # Maps to catalog: log_monitoring + incident_response only.
@@ -35,21 +40,10 @@ CORE_ONLY_CREATE_ENTITLEMENTS: Dict[str, Any] = {
     "roadmap_notes": None,
 }
 
-# Full 10-card catalog for Alpha-Win / demos (all ACTIVE / INCLUDED).
+# Full PLATINUM catalog for Alpha-Win / demos (all ACTIVE / INCLUDED).
 DEMO_FULL_ENTITLEMENTS: Dict[str, Any] = {
-    "wazuh_siem": True,
-    "wazuh_retention_days": 90,
-    "thehive_mode": "full",
-    "greenbone_enabled": True,
-    "greenbone_cadence": "monthly",
-    "shuffle_mode": "standard",
-    "zeek_enabled": True,
-    "misp_enabled": True,
-    "velociraptor_enabled": True,
-    "continuous_compliance_enabled": True,
-    "external_attack_surface_enabled": True,
-    "cloud_identity_protection_enabled": True,
-    "roadmap_notes": "Demo / QA tenant — full Service Catalog entitlements",
+    **PLATINUM_ENTITLEMENTS,
+    "roadmap_notes": "Demo / QA tenant — full Service Catalog entitlements (PLATINUM)",
 }
 
 # service_catalog.key → entitlement column updates when consulting is APPROVED
@@ -68,22 +62,19 @@ CATALOG_KEY_TO_ENTITLEMENT_UPDATES: Dict[str, Dict[str, Any]] = {
 
 
 def is_demo_full_entitlement_tenant(short_code: Optional[str]) -> bool:
-    if not short_code:
-        return False
-    return short_code.strip().upper() in DEMO_FULL_ENTITLEMENT_SHORT_CODES
+    return is_demo_tenant(short_code)
 
 
 def entitlements_for_new_tenant(short_code: Optional[str]) -> Dict[str, Any]:
     """Initial entitlements payload for tenant create / registration."""
-    if is_demo_full_entitlement_tenant(short_code):
-        return dict(DEMO_FULL_ENTITLEMENTS)
+    _ = short_code  # demo short codes no longer bypass tier bundles
     return dict(CORE_ONLY_CREATE_ENTITLEMENTS)
 
 
 def ensure_demo_tenant_full_entitlements(tenant_id: str, short_code: Optional[str] = None) -> bool:
     """
-    Force-upsert full entitlements for Alpha-Win (and other demo short codes).
-    Returns True when this tenant was treated as a demo-full tenant.
+    Legacy hook — demo tenants now follow subscription_tier like all others.
+    Returns True when the tenant is a known demo short code (no entitlement override).
     """
     code = (short_code or "").strip().upper()
     if not code:
@@ -97,10 +88,7 @@ def ensure_demo_tenant_full_entitlements(tenant_id: str, short_code: Optional[st
     if not is_demo_full_entitlement_tenant(code):
         return False
 
-    from app.api.routes.entitlements import upsert_tenant_entitlements
-
-    upsert_tenant_entitlements(tenant_id, DEMO_FULL_ENTITLEMENTS)
-    logger.info("Ensured full demo entitlements for tenant %s (%s)", tenant_id, code)
+    logger.debug("Demo tenant %s (%s) — entitlements follow subscription_tier", tenant_id, code)
     return True
 
 
@@ -173,6 +161,55 @@ def trigger_post_enable_sync(tenant_id: str, catalog_key: str) -> Dict[str, Any]
             catalog_key,
             exc,
         )
+        result["error"] = str(exc)
+    return result
+
+
+def trigger_post_disable_sync(tenant_id: str, catalog_key: str) -> Dict[str, Any]:
+    """Best-effort stop for cloud schedulers when a capability is revoked on tier downgrade."""
+    result: Dict[str, Any] = {"catalog_key": catalog_key, "stopped": True}
+    try:
+        if catalog_key == "vulnerability_management":
+            rows = fetch_all(
+                """
+                UPDATE tenant_vulnerability_scans
+                SET status = 'CANCELLED',
+                    error_message = 'Cancelled — subscription tier downgrade',
+                    completed_at = COALESCE(completed_at, now())
+                WHERE tenant_id = %s::uuid
+                  AND status = 'RUNNING'
+                RETURNING id::text;
+                """,
+                (tenant_id,),
+            )
+            result["detail"] = {"cancelled_running_scans": len(rows or [])}
+        elif catalog_key == "external_attack_surface":
+            try:
+                execute(
+                    """
+                    UPDATE tenant_easm_scans
+                    SET scan_status = 'CANCELLED',
+                        completed_at = COALESCE(completed_at, now())
+                    WHERE tenant_id = %s::uuid
+                      AND scan_status IN ('PENDING', 'RUNNING');
+                    """,
+                    (tenant_id,),
+                )
+                result["detail"] = {"note": "pending_easm_scans_cancelled"}
+            except Exception:
+                result["detail"] = {"note": "easm_scan_cancel_skipped"}
+        else:
+            result["detail"] = {
+                "note": "entitlement flags gate future syncs; no persistent scheduler row"
+            }
+    except Exception as exc:
+        logger.warning(
+            "Post-disable sync failed for tenant %s key %s: %s",
+            tenant_id,
+            catalog_key,
+            exc,
+        )
+        result["stopped"] = False
         result["error"] = str(exc)
     return result
 

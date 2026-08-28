@@ -227,7 +227,7 @@ def edr_process_tree(
     if not incident_id and not alert_id:
         raise HTTPException(status_code=400, detail="incident_id or alert_id is required")
     tenant = _resolve_tenant_for_user(current_user, tenant_short_code)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="endpoint_forensics_deception")
     raw_events: list = []
     normalized_rows: list = []
     if incident_id:
@@ -287,7 +287,7 @@ async def edr_execute_action(
         return _request_ip(request)
 
     tenant = _resolve_tenant_for_user(current_user, body.tenant_short_code)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="security_automation")
 
     try:
         execution_id, st, message, upload_url, artifact_id = await asyncio.to_thread(
@@ -435,7 +435,7 @@ async def edr_forensics_upload(
     )
     if not row:
         raise HTTPException(status_code=404, detail="Artifact not found")
-    enforce_tenant_subscription_tier(row["tenant_id"], SubscriptionTier.PLATINUM)
+    enforce_tenant_subscription_tier(row["tenant_id"], SubscriptionTier.PLATINUM, catalog_key="endpoint_forensics_deception")
     if not edr_forensics_storage.verify_signed_token(
         token=token,
         artifact_id=artifact_id,

@@ -14,9 +14,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
 
 from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
 from app.services import sca_compliance_service as sca
+from app.services.subscription_tier_service import SubscriptionTier
 
 router = APIRouter(tags=["continuous-compliance-sca"])
 
@@ -43,6 +45,7 @@ def customer_compliance_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="continuous_compliance")
     if refresh:
         try:
             sca.sync_tenant_sca(tenant["id"])
@@ -81,6 +84,7 @@ def customer_compliance_evaluations(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="continuous_compliance")
     try:
         sca.maybe_refresh_tenant(tenant["id"])
     except Exception:  # noqa: BLE001
@@ -119,6 +123,7 @@ def customer_compliance_checks(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="continuous_compliance")
     rows, total = sca.list_checks(
         tenant["id"],
         status=status,
@@ -164,6 +169,7 @@ def customer_compliance_report(
     """HTML audit pack — print / Save as PDF from the browser."""
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="continuous_compliance")
     summary = sca.get_summary(tenant["id"])
     evaluations = sca.list_evaluations(tenant["id"])
     failed, _ = sca.list_checks(tenant["id"], status="FAILED", page=1, page_size=100)

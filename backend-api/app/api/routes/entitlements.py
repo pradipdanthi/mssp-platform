@@ -72,6 +72,7 @@ class CustomerEntitlementsPublic(BaseModel):
 
     tenant_id: str
     subscription_tier: str = "SILVER"
+    service_delivery_label: str = ""
     log_monitoring_enabled: bool = True
     log_retention_days: int = 30
     incident_response: str = "included"
@@ -283,9 +284,6 @@ def get_tenant_entitlements(
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> EntitlementsOut:
     _ensure_tenant(tenant_id)
-    from app.services.tenant_entitlement_defaults import ensure_demo_tenant_full_entitlements
-
-    ensure_demo_tenant_full_entitlements(str(tenant_id))
     row = _fetch_entitlements(tenant_id)
     if not row:
         return EntitlementsOut(tenant_id=str(tenant_id), **DEFAULTS)
@@ -337,7 +335,8 @@ def get_customer_entitlements(
 ) -> CustomerEntitlementsPublic:
     tenant = fetch_one(
         """
-        SELECT id::text, short_code, COALESCE(subscription_tier::text, 'SILVER') AS subscription_tier
+        SELECT id::text, short_code, deployment_mode::text AS deployment_mode,
+               COALESCE(subscription_tier::text, 'SILVER') AS subscription_tier
         FROM tenants WHERE upper(short_code) = upper(%s);
         """,
         (short_code,),
@@ -348,11 +347,13 @@ def get_customer_entitlements(
         user_tenant = current_user.get("tenant_id")
         if not user_tenant or str(user_tenant) != tenant["id"]:
             raise HTTPException(status_code=404, detail="Not found")
-    from app.services.tenant_entitlement_defaults import ensure_demo_tenant_full_entitlements
-
-    ensure_demo_tenant_full_entitlements(tenant["id"], tenant.get("short_code"))
     row = _fetch_entitlements(UUID(tenant["id"]))
-    base = {**DEFAULTS, "tenant_id": tenant["id"], "subscription_tier": tenant.get("subscription_tier", "SILVER")}
+    base = {
+        **DEFAULTS,
+        "tenant_id": tenant["id"],
+        "subscription_tier": tenant.get("subscription_tier", "SILVER"),
+        "deployment_mode": tenant.get("deployment_mode"),
+    }
     if row:
         base.update({k: row[k] for k in DEFAULTS if k in row})
         base["tenant_id"] = tenant["id"]
@@ -1320,7 +1321,7 @@ def mint_appliance_license(
         if not ap:
             raise HTTPException(status_code=404, detail="Appliance not found for tenant")
 
-    from app.services.junexis_license import LicenseSigningError, mint_license
+    from app.services.niktiar_license import LicenseSigningError, mint_license
 
     try:
         minted = mint_license(

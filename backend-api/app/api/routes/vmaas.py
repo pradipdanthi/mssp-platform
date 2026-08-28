@@ -12,9 +12,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
 from app.services import vmaas_service as vmaas
+from app.services.subscription_tier_service import SubscriptionTier
 
 router = APIRouter(tags=["vmaas-vulnerability-management"])
 
@@ -59,6 +61,7 @@ def customer_vmaas_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="vulnerability_management")
     summary = vmaas.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -78,6 +81,7 @@ def customer_vmaas_findings(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="vulnerability_management")
     rows, total = vmaas.list_findings(
         tenant["id"],
         severity=severity,
@@ -106,6 +110,7 @@ def customer_vmaas_scans(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="vulnerability_management")
     # Customer-safe: omit scan_engine vendor codes — map to generic label.
     scans = []
     for row in vmaas.list_scans(tenant["id"]):
@@ -139,6 +144,7 @@ def customer_vmaas_scan(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.GOLD, catalog_key="vulnerability_management")
     body = body or ScanRequestBody()
     # Force generic engine path for customers (never echo vendor choice).
     result = vmaas.run_tenant_vmaas_sync(

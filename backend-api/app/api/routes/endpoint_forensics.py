@@ -11,9 +11,11 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.api.dependencies import get_current_user, require_roles, require_tenant_match
+from app.api.middleware.tier_enforcement import enforce_tenant_subscription_tier
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
 from app.services import endpoint_forensics_service as efd
+from app.services.subscription_tier_service import SubscriptionTier
 
 router = APIRouter(tags=["endpoint-forensics-deception"])
 
@@ -51,6 +53,7 @@ def customer_forensics_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="endpoint_forensics_deception")
     summary = efd.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -65,6 +68,7 @@ def customer_forensics_tripwires(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="endpoint_forensics_deception")
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
         "tripwires": efd.list_tripwires(tenant["id"]),
@@ -81,6 +85,7 @@ def customer_forensics_events(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="endpoint_forensics_deception")
     rows, total = efd.list_events(
         tenant["id"], severity=severity, page=page, page_size=page_size
     )
@@ -104,6 +109,7 @@ def customer_forensics_collections(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="endpoint_forensics_deception")
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
         "collections": efd.list_collections(tenant["id"]),

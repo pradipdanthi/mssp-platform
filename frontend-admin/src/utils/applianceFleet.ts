@@ -1,32 +1,12 @@
 /** Admin appliance fleet list - relative heartbeat, version, resources, service labels. */
 
+import {
+  formatSvcEngineLabel,
+  formatSvcEngineTitle,
+  svcCatalogMeta,
+} from "../data/applianceCapabilityMap";
+
 export type HeartbeatFreshness = "never" | "fresh" | "warn" | "stale";
-
-const SERVICE_SHORT_LABELS: Record<string, string> = {
-  "svc-01": "Log",
-  "svc-02": "IR",
-  "svc-03": "Auto",
-  "svc-04": "VMaaS",
-  "svc-05": "CaaS",
-  "svc-06": "NDR",
-  "svc-07": "Intel",
-  "svc-08": "DFIR",
-  "svc-09": "EASM",
-  "svc-10": "ITDR",
-};
-
-const SERVICE_FULL_LABELS: Record<string, string> = {
-  "svc-01": "Log & Event Monitoring",
-  "svc-02": "Incident Response (local worker)",
-  "svc-03": "Security Automation",
-  "svc-04": "Vulnerability Management",
-  "svc-05": "Continuous Compliance",
-  "svc-06": "Network Detection",
-  "svc-07": "Threat Intelligence",
-  "svc-08": "Forensics & Deception",
-  "svc-09": "External Attack Surface",
-  "svc-10": "Identity Threat Detection",
-};
 
 export function pickHeartbeatTimestamp(
   lastSeenAt: string | null | undefined,
@@ -99,14 +79,23 @@ export function resourceStressClass(value: number | null | undefined): string {
   return "";
 }
 
+/** Short badge label — catalog capability name abbreviated where needed. */
 export function serviceShortLabel(serviceId: string): string {
-  const key = serviceId.trim().toLowerCase();
-  return SERVICE_SHORT_LABELS[key] || serviceId.replace(/^svc-/i, "");
+  const name = formatSvcEngineLabel(serviceId);
+  if (name.length <= 14) return name;
+  const words = name.split(/\s+/);
+  if (words.length >= 2) {
+    return words
+      .slice(0, 3)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase();
+  }
+  return name.slice(0, 8);
 }
 
 export function serviceFullLabel(serviceId: string): string {
-  const key = serviceId.trim().toLowerCase();
-  return SERVICE_FULL_LABELS[key] || serviceId;
+  return formatSvcEngineLabel(serviceId);
 }
 
 export const CATALOGUE_SERVICE_IDS = [
@@ -130,13 +119,27 @@ export function catalogueServiceStatus(enabled: string[] | null | undefined): Ar
   id: string;
   label: string;
   full: string;
+  catalogName: string;
+  minTierLabel: string | null;
   active: boolean;
 }> {
   const on = new Set((enabled || []).map((s) => s.trim().toLowerCase()));
-  return CATALOGUE_SERVICE_IDS.map((id) => ({
-    id,
-    label: serviceShortLabel(id),
-    full: serviceFullLabel(id),
-    active: on.has(id),
-  }));
+  return CATALOGUE_SERVICE_IDS.map((id) => {
+    const meta = svcCatalogMeta(id);
+    const active = on.has(id);
+    return {
+      id,
+      label: serviceShortLabel(id),
+      full: formatSvcEngineTitle(id, active),
+      catalogName: meta.catalogName,
+      minTierLabel: meta.minTierLabel,
+      active,
+    };
+  });
+}
+
+export function formatEnabledServicesList(services: string[] | null | undefined): string {
+  const sorted = sortServiceIds(services);
+  if (!sorted.length) return "None reported";
+  return sorted.map((id) => formatSvcEngineLabel(id)).join(", ");
 }

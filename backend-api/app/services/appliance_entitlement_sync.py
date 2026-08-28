@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from app.db.session import fetch_all
 from app.services import appliance_jobs as appliance_jobs_service
-from app.services.junexis_license import LicenseSigningError, mint_license
+from app.services.niktiar_license import LicenseSigningError, mint_license
 from app.services.tenant_entitlement_defaults import current_tenant_service_ids
 
 logger = logging.getLogger(__name__)

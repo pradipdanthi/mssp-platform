@@ -66,6 +66,9 @@ def _fetch_entitlements_row(tenant_id: str) -> Optional[Dict[str, Any]]:
             COALESCE(zeek_enabled, FALSE) AS zeek_enabled,
             COALESCE(misp_enabled, FALSE) AS misp_enabled,
             COALESCE(velociraptor_enabled, FALSE) AS velociraptor_enabled,
+            COALESCE(continuous_compliance_enabled, FALSE) AS continuous_compliance_enabled,
+            COALESCE(external_attack_surface_enabled, FALSE) AS external_attack_surface_enabled,
+            COALESCE(cloud_identity_protection_enabled, FALSE) AS cloud_identity_protection_enabled,
             roadmap_notes,
             updated_at::text
         FROM tenant_entitlements
@@ -166,6 +169,15 @@ def _build_service_readiness(
     )
     readiness["endpoint_forensics"] = (
         "queued" if entitlements.get("velociraptor_enabled") else "not_contracted"
+    )
+    readiness["continuous_compliance"] = (
+        "queued" if entitlements.get("continuous_compliance_enabled") else "not_contracted"
+    )
+    readiness["external_attack_surface"] = (
+        "queued" if entitlements.get("external_attack_surface_enabled") else "not_contracted"
+    )
+    readiness["cloud_identity_protection"] = (
+        "queued" if entitlements.get("cloud_identity_protection_enabled") else "not_contracted"
     )
     return readiness
 
@@ -606,9 +618,8 @@ def create_tenant(
         set_tenant_subscription_tier,
         sync_entitlements_for_tier,
     )
-    from app.services.tenant_entitlement_defaults import is_demo_full_entitlement_tenant
 
-    tier = "PLATINUM" if is_demo_full_entitlement_tenant(payload.short_code) else payload.subscription_tier
+    tier = payload.subscription_tier or "SILVER"
     set_tenant_subscription_tier(
         tenant_id,
         tier,
@@ -696,7 +707,7 @@ def create_tenant(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Tenant creation failed"
         )
 
-    ents = tenant.get("entitlements") or ent_payload
+    ents = tenant.get("entitlements") or {}
     readiness = _build_service_readiness(ents, binding or tenant.get("engine_binding"))
     next_steps: List[str] = []
     if not portal_created:
@@ -734,7 +745,7 @@ def update_tenant(
 ) -> Dict[str, Any]:
     existing = fetch_one(
         """
-        SELECT deployment_mode, cloud_provider
+        SELECT deployment_mode, cloud_provider, subscription_tier::text AS subscription_tier
         FROM tenants
         WHERE id = %s::uuid;
         """,
@@ -824,13 +835,44 @@ def update_tenant(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     if "subscription_tier" in updates:
-        from app.services.subscription_tier_service import sync_entitlements_for_tier
-
-        sync_entitlements_for_tier(
-            str(tenant_id),
-            updates["subscription_tier"],
-            actor_user_id=current_user.get("id"),
+        from app.services.subscription_tier_service import (
+            is_custom_tier,
+            is_standard_tier,
+            set_tenant_subscription_tier,
+            sync_entitlements_for_tier,
         )
+        from app.services.tier_rollout_service import fulfill_tier_rollout
+
+        previous_tier = existing.get("subscription_tier") or "SILVER"
+        new_tier = updates["subscription_tier"]
+        try:
+            if is_custom_tier(new_tier):
+                set_tenant_subscription_tier(
+                    str(tenant_id),
+                    "CUSTOM",
+                    sync_entitlements=False,
+                    actor_user_id=current_user.get("id"),
+                )
+            else:
+                sync_entitlements_for_tier(
+                    str(tenant_id),
+                    new_tier,
+                    actor_user_id=current_user.get("id"),
+                )
+                prev_norm = (previous_tier or "SILVER").strip().upper()
+                new_norm = (new_tier or "SILVER").strip().upper()
+                if prev_norm != new_norm and is_standard_tier(new_tier):
+                    fulfill_tier_rollout(
+                        str(tenant_id),
+                        target_tier=new_tier,
+                        previous_tier=previous_tier,
+                        actor_user_id=current_user.get("id"),
+                    )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Subscription tier saved but entitlement sync failed: {exc}",
+            ) from exc
 
     tenant = _fetch_tenant_detail(UUID(updated["id"]))
     if not tenant:
@@ -838,3 +880,246 @@ def update_tenant(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Tenant update failed"
         )
     return tenant
+
+
+class TierRolloutRequest(BaseModel):
+    tenant_ids: List[UUID] = Field(min_length=1, max_length=200)
+    target_tier: Literal["SILVER", "GOLD", "PLATINUM"]
+    admin_notes: Optional[str] = Field(default=None, max_length=2000)
+    mark_requests_approved: bool = True
+    customer_order_number: str = Field(min_length=1, max_length=80)
+    confirmation_email: str = Field(min_length=5, max_length=200)
+
+
+@router.post("/tier-rollout")
+def admin_tier_rollout(
+    body: TierRolloutRequest,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_TENANT_WRITE_ROLES)),
+) -> Dict[str, Any]:
+    """Provision subscription tier upgrades for one or more tenants (commercial workflow)."""
+    from app.db.session import db_transaction
+    from app.services.resend_mailer import send_resend_email
+    from app.services.subscription_tier_service import set_tenant_subscription_tier
+
+    confirm_email = body.confirmation_email.strip()
+    if "@" not in confirm_email or "." not in confirm_email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="confirmation_email is not a valid email.")
+    order_number = body.customer_order_number.strip()
+
+    results: List[Dict[str, Any]] = []
+    rolled_out = 0
+    failed = 0
+
+    for tid in body.tenant_ids:
+        tenant = fetch_one(
+            """
+            SELECT id::text, name, short_code, subscription_tier::text AS subscription_tier,
+                   deployment_mode::text AS deployment_mode
+            FROM tenants WHERE id = %s::uuid;
+            """,
+            (str(tid),),
+        )
+        if not tenant:
+            failed += 1
+            results.append({"tenant_id": str(tid), "ok": False, "error": "tenant_not_found"})
+            continue
+        try:
+            previous = tenant.get("subscription_tier") or "SILVER"
+            set_tenant_subscription_tier(
+                tenant["id"],
+                body.target_tier,
+                sync_entitlements=True,
+                actor_user_id=current_user.get("id"),
+            )
+            from app.services.tier_rollout_service import fulfill_tier_rollout
+            from app.services.capability_fulfillment_service import is_tier_downgrade
+
+            fulfillment = fulfill_tier_rollout(
+                tenant["id"],
+                target_tier=body.target_tier,
+                previous_tier=previous,
+                actor_user_id=current_user.get("id"),
+                order_number=order_number,
+            )
+            approved = 0
+            if body.mark_requests_approved:
+                with db_transaction() as cur:
+                    cur.execute(
+                        """
+                        UPDATE service_consultation_requests
+                        SET status = 'APPROVED',
+                            admin_notes = COALESCE(%s, admin_notes),
+                            updated_at = now()
+                        WHERE tenant_id = %s::uuid
+                          AND service_key LIKE 'tier_%%'
+                          AND status IN ('PENDING_CONSULTATION', 'UNDER_REVIEW');
+                        """,
+                        (body.admin_notes, tenant["id"]),
+                    )
+                    approved = cur.rowcount or 0
+
+            downgrade = is_tier_downgrade(previous, body.target_tier)
+            change_label = "downgrade" if downgrade else "upgrade"
+            html = (
+                f"<p>This confirms a subscription tier {change_label} on your MSSP account.</p>"
+                f"<p><strong>Order:</strong> {order_number}<br>"
+                f"<strong>Customer:</strong> {tenant.get('name')} ({tenant.get('short_code')})<br>"
+                f"<strong>Previous tier:</strong> {previous}<br>"
+                f"<strong>New tier:</strong> {body.target_tier}</p>"
+            )
+            mail = send_resend_email(
+                subject=f"[TIER {change_label.upper()}] {body.target_tier} · {order_number}",
+                html=html,
+                to=[confirm_email],
+            )
+            rolled_out += 1
+            results.append(
+                {
+                    "tenant_id": tenant["id"],
+                    "tenant_name": tenant.get("name"),
+                    "short_code": tenant.get("short_code"),
+                    "ok": True,
+                    "previous_tier": previous,
+                    "target_tier": body.target_tier,
+                    "approved_open_requests": approved,
+                    "email_ok": bool(mail.get("ok")),
+                    "deployment_mode": tenant.get("deployment_mode"),
+                    "fulfillment": fulfillment,
+                }
+            )
+        except Exception as exc:
+            failed += 1
+            results.append(
+                {
+                    "tenant_id": tenant["id"],
+                    "tenant_name": tenant.get("name"),
+                    "short_code": tenant.get("short_code"),
+                    "ok": False,
+                    "error": str(exc)[:200],
+                }
+            )
+
+    audit_from_user(
+        current_user,
+        action="TENANT_TIER_ROLLOUT",
+        entity_type="subscription_tier",
+        entity_id=body.target_tier,
+        details={
+            "target_tier": body.target_tier,
+            "order_number": order_number,
+            "rolled_out": rolled_out,
+            "failed": failed,
+        },
+    )
+
+    return {
+        "target_tier": body.target_tier,
+        "rolled_out": rolled_out,
+        "failed": failed,
+        "results": results,
+    }
+
+
+class CustomTierProvisionRequest(BaseModel):
+    tenant_ids: List[UUID] = Field(min_length=1, max_length=50)
+    catalog_keys: List[str] = Field(min_length=1, max_length=20)
+    customer_order_number: str = Field(min_length=1, max_length=80)
+    admin_notes: Optional[str] = Field(default=None, max_length=2000)
+
+
+@router.get("/custom-tier/catalog")
+def admin_custom_tier_catalog(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_TENANT_WRITE_ROLES)),
+) -> Dict[str, Any]:
+    """Selectable capability modules for admin-only CUSTOM tier provisioning."""
+    from app.services.custom_tier_service import custom_tier_catalog_metadata
+
+    _ = current_user
+    return {"modules": custom_tier_catalog_metadata()}
+
+
+@router.post("/custom-tier-provision")
+def admin_custom_tier_provision(
+    body: CustomTierProvisionRequest,
+    current_user: Dict[str, Any] = Depends(require_roles("platform_admin", "soc_manager")),
+) -> Dict[str, Any]:
+    """Provision CUSTOM tier — à-la-carte capability bundle (admin only, not public SKU)."""
+    from app.services.custom_tier_service import normalize_custom_catalog_keys, provision_custom_tier
+
+    order_number = body.customer_order_number.strip()
+    try:
+        catalog_keys = normalize_custom_catalog_keys(body.catalog_keys)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not catalog_keys:
+        raise HTTPException(status_code=400, detail="Select at least one capability module.")
+
+    results: List[Dict[str, Any]] = []
+    provisioned = 0
+    failed = 0
+
+    for tid in body.tenant_ids:
+        tenant = fetch_one(
+            """
+            SELECT id::text, name, short_code, subscription_tier::text AS subscription_tier,
+                   deployment_mode::text AS deployment_mode
+            FROM tenants WHERE id = %s::uuid;
+            """,
+            (str(tid),),
+        )
+        if not tenant:
+            failed += 1
+            results.append({"tenant_id": str(tid), "ok": False, "error": "tenant_not_found"})
+            continue
+        try:
+            outcome = provision_custom_tier(
+                tenant["id"],
+                catalog_keys=catalog_keys,
+                actor_user_id=current_user.get("id"),
+                order_number=order_number,
+            )
+            provisioned += 1
+            results.append(
+                {
+                    "tenant_id": tenant["id"],
+                    "tenant_name": tenant.get("name"),
+                    "short_code": tenant.get("short_code"),
+                    "ok": True,
+                    "previous_tier": tenant.get("subscription_tier"),
+                    "target_tier": "CUSTOM",
+                    "selected_catalog_keys": catalog_keys,
+                    "deployment_mode": tenant.get("deployment_mode"),
+                    "fulfillment": outcome.get("fulfillment"),
+                }
+            )
+        except Exception as exc:
+            failed += 1
+            results.append(
+                {
+                    "tenant_id": tenant.get("id") or str(tid),
+                    "ok": False,
+                    "error": str(exc)[:200],
+                }
+            )
+
+    audit_from_user(
+        current_user,
+        action="TENANT_CUSTOM_TIER_PROVISION",
+        entity_type="subscription_tier",
+        entity_id="CUSTOM",
+        details={
+            "catalog_keys": catalog_keys,
+            "order_number": order_number,
+            "admin_notes": body.admin_notes,
+            "provisioned": provisioned,
+            "failed": failed,
+        },
+    )
+
+    return {
+        "target_tier": "CUSTOM",
+        "catalog_keys": catalog_keys,
+        "provisioned": provisioned,
+        "failed": failed,
+        "results": results,
+    }

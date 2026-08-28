@@ -1,24 +1,66 @@
 import { TIER_CATALOG, TIER_FEATURE_MATRIX } from "../data/subscriptionTierMatrix";
+import type { CustomerEntitlements } from "../api/customer";
+import { capabilityFlagEnabled } from "../config/capabilityAccess";
 import {
+  ADDON_NAV_ITEMS,
+} from "../config/navEntitlements";
+import {
+  isCustomTier,
   normalizeTier,
   tierMeetsMinimum,
   upgradeLabel,
+  upgradeShortLabel,
+  TIER_RANK,
   type SubscriptionTier,
 } from "../config/tierConfig";
 import { TierUpgradeBadge } from "./TierUpgradeBadge";
 
 type Props = {
   activeTier?: string | null;
+  entitlements?: CustomerEntitlements | null;
   onRequestUpgrade?: (targetTier: SubscriptionTier) => void;
   compact?: boolean;
 };
 
 export default function SubscriptionTierMatrix({
   activeTier,
+  entitlements,
   onRequestUpgrade,
   compact = false,
 }: Props) {
   const current = normalizeTier(activeTier);
+
+  if (isCustomTier(current)) {
+    const contracted = ADDON_NAV_ITEMS.filter(
+      (item) => item.entitlement && capabilityFlagEnabled(entitlements, item.entitlement)
+    );
+    return (
+      <div className={"subscription-tier-matrix" + (compact ? " subscription-tier-matrix--compact" : "")}>
+        <article className="tier-card glass-card tier-card--active">
+          <header className="tier-card-header">
+            <div>
+              <p className="tier-card-eyebrow">Bespoke agreement</p>
+              <h2 className="tier-card-title">Custom</h2>
+            </div>
+            <span className="tier-badge tier-badge--active">Your plan</span>
+          </header>
+          <p className="tier-card-tagline">
+            Your contract includes a tailored mix of capability modules — not a standard Silver /
+            Gold / Platinum bundle. Contact your account manager to add or change modules.
+          </p>
+          {contracted.length > 0 ? (
+            <ul className="tier-feature-list">
+              {contracted.map((item) => (
+                <li key={item.to}>{item.label}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="page-subtitle">No add-on modules are enabled yet.</p>
+          )}
+        </article>
+      </div>
+    );
+  }
 
   return (
     <div className={"subscription-tier-matrix" + (compact ? " subscription-tier-matrix--compact" : "")}>
@@ -97,12 +139,12 @@ export default function SubscriptionTierMatrix({
                 return (
                   <tr key={row.id} className={locked ? "tier-row--locked" : ""}>
                     <th scope="row">
-                      {row.label}
-                      {locked && (
-                        <span className="tier-row-upgrade">
-                          <TierUpgradeBadge requiredTier={row.minTier} />
+                      <span className="tier-row-label">{row.label}</span>
+                      {locked ? (
+                        <span className="tier-row-tier-hint">
+                          {upgradeShortLabel(row.minTier)} tier
                         </span>
-                      )}
+                      ) : null}
                     </th>
                     <td className={tierMeetsMinimum("SILVER", row.minTier) ? "cell-yes" : ""}>
                       {tierMeetsMinimum("SILVER", row.minTier) ? "✓" : "—"}
@@ -123,12 +165,6 @@ export default function SubscriptionTierMatrix({
     </div>
   );
 }
-
-const TIER_RANK: Record<SubscriptionTier, number> = {
-  SILVER: 1,
-  GOLD: 2,
-  PLATINUM: 3,
-};
 
 function tierName(tier: SubscriptionTier): string {
   return TIER_CATALOG.find((t) => t.tier === tier)?.name ?? tier;

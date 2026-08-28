@@ -64,7 +64,7 @@ def customer_ndr_summary(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="network_detection_response")
     summary = ndr.get_summary(tenant["id"])
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
@@ -84,7 +84,7 @@ def customer_ndr_events(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="network_detection_response")
     rows, total = ndr.list_events(
         tenant["id"],
         severity=severity,
@@ -113,7 +113,7 @@ def customer_ndr_sensors(
 ) -> Dict[str, Any]:
     tenant = _resolve_tenant(short_code)
     require_tenant_match(tenant["id"], current_user)
-    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.PLATINUM, catalog_key="network_detection_response")
     sensors = []
     for row in ndr.list_sensors(tenant["id"]):
         sensors.append(

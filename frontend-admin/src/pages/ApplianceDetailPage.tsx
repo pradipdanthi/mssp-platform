@@ -49,7 +49,10 @@ export default function ApplianceDetailPage() {
         <Link to="/appliances">← Back to appliances</Link>
       </p>
       <h1 className="page-title">Appliance detail</h1>
-      <p className="page-subtitle">Fleet posture, entitlements, and resource health for this edge appliance.</p>
+      <p className="page-subtitle">
+        Local engine posture for this NikTiar Edge box. Capability names match Tier Operations;
+        cloud SOC handles cases, SOAR, and customer dashboards.
+      </p>
 
       {status === "loading" && <div className="state-message">Loading appliance...</div>}
       {status === "forbidden" && (
@@ -128,7 +131,7 @@ export default function ApplianceDetailPage() {
               </td>
             </tr>
             <tr>
-              <th>Services</th>
+              <th>Local engines</th>
               <td>
                 <ApplianceServicesCell services={data.enabled_services} showInactive />
               </td>

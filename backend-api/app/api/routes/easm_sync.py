@@ -108,7 +108,7 @@ def sync_easm_findings(
         tenant_id = get_tenant_id_from_short_code(payload.tenant_short_code)
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    enforce_tenant_subscription_tier(str(tenant_id), SubscriptionTier.GOLD)
+    enforce_tenant_subscription_tier(str(tenant_id), SubscriptionTier.GOLD, catalog_key="external_attack_surface")
     try:
         return ingest_easm_sync(payload.model_dump())
     except ValueError as exc:
