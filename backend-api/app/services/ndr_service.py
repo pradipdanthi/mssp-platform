@@ -2,8 +2,8 @@
 Network Detection & Response (NDR).
 
 Normalizes network threat telemetry into tenant_ndr_* tables for the customer
-portal. Prefers live Suricata/Zeek-tagged alerts from ``security_alerts`` when
-present; otherwise a controlled analysis adapter seeds prioritized samples.
+portal. Imports live Suricata/Zeek-tagged alerts from ``security_alerts``;
+synthetic demo events are lab-only (never seeded when ``APP_ENV=production``).
 
 Customer APIs never expose raw IPs, vendor names, or raw_details.
 Public label: ``MSSP Network Detection & Response Engine``.
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -23,6 +24,17 @@ from app.db.session import execute, fetch_all, fetch_one, fetch_one_write
 logger = logging.getLogger(__name__)
 
 ENGINE_LABEL = "MSSP Network Detection & Response Engine"
+
+
+def _allow_lab_sample_seed() -> bool:
+    """Synthetic NDR rows are lab-only. Production fail-closes on empty alerts."""
+    app_env = (os.getenv("APP_ENV") or "").strip().lower()
+    if app_env == "production":
+        return False
+    flag = (os.getenv("NDR_ALLOW_SAMPLE_ADAPTER") or "").strip().lower()
+    if flag in ("1", "true", "yes", "on"):
+        return True
+    return app_env == "lab"
 
 EVENT_COPY = {
     "LATERAL_MOVEMENT": {
@@ -307,7 +319,7 @@ def _insert_event(
 
 
 def _import_from_alerts(tenant_id: str, sensor_id: str) -> int:
-    """Pull network-ish alerts if Suricata/Zeek (or network keywords) already exist."""
+    """Pull NDR alerts tagged with Suricata or Zeek source_tool only."""
     rows = fetch_all(
         """
         SELECT
@@ -319,13 +331,7 @@ def _import_from_alerts(tenant_id: str, sensor_id: str) -> int:
             event_time AS detected_at
         FROM security_alerts
         WHERE tenant_id = %s::uuid
-          AND (
-            lower(coalesce(source_tool, '')) IN ('suricata', 'zeek')
-            OR lower(coalesce(alert_title, '')) LIKE '%%dns%%'
-            OR lower(coalesce(alert_title, '')) LIKE '%%lateral%%'
-            OR lower(coalesce(alert_title, '')) LIKE '%%port scan%%'
-            OR lower(coalesce(alert_title, '')) LIKE '%%tls%%'
-          )
+          AND lower(coalesce(source_tool, '')) IN ('suricata', 'zeek')
         ORDER BY event_time DESC
         LIMIT 100;
         """,
@@ -535,7 +541,7 @@ def sync_tenant_ndr(tenant_id: str) -> Dict[str, Any]:
     try:
         imported = _import_from_alerts(tid, sensor_id)
         source = "live_alerts"
-        if imported == 0:
+        if imported == 0 and _allow_lab_sample_seed():
             imported = _seed_sample_events(tid, sensor_id)
             source = "analysis_adapter"
 

@@ -182,6 +182,55 @@ def _build_wazuh_technical_summary(raw: Dict[str, Any]) -> str:
     return "; ".join(p for p in parts if p)[:4000]
 
 
+def detect_ingress_source_tool(raw: Dict[str, Any]) -> str:
+    """
+    Infer the originating sensor/integration for a Wazuh webhook payload.
+
+    Suricata and Zeek alerts are often forwarded through Wazuh Manager; inspect
+    rule groups, integration fields, decoder/location, and log text before
+    defaulting to ``wazuh``.
+    """
+    if not isinstance(raw, dict):
+        return "wazuh"
+
+    parts: list[str] = []
+
+    rule = raw.get("rule") if isinstance(raw.get("rule"), dict) else {}
+    groups = rule.get("groups") or []
+    if isinstance(groups, str):
+        groups = [groups]
+    for group in groups:
+        parts.append(str(group))
+
+    data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+    for key in ("integration", "source", "type", "decoder", "program"):
+        val = data.get(key)
+        if val:
+            parts.append(str(val))
+
+    decoder = raw.get("decoder") if isinstance(raw.get("decoder"), dict) else {}
+    decoder_name = decoder.get("name")
+    if decoder_name:
+        parts.append(str(decoder_name))
+
+    for key in ("location", "full_log", "predecoder", "manager", "cluster"):
+        val = raw.get(key)
+        if val:
+            parts.append(str(val))
+
+    for key in ("source", "integration"):
+        val = raw.get(key)
+        if val:
+            parts.append(str(val))
+
+    blob = " ".join(parts).lower()
+    if "suricata" in blob:
+        return "suricata"
+    if "zeek" in blob:
+        return "zeek"
+    return "wazuh"
+
+
 def is_known_noise_file_drop(raw: Dict[str, Any]) -> bool:
     """
     Phase-1 known noise: PowerShell policy-test temp scripts.
@@ -275,7 +324,7 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
         )
 
     return SocSyncRequest(
-        source_tool="wazuh",
+        source_tool=detect_ingress_source_tool(raw),
         external_alert_id=external_id[:255],
         severity=severity,  # type: ignore[arg-type]
         alert_title=title,
