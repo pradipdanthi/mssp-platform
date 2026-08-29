@@ -64,6 +64,11 @@ def customer_service_delivery_label(deployment_mode: Optional[str], subscription
             "Contact your account manager to change modules or upgrade to a standard tier."
         )
     mode = (deployment_mode or "cloud").strip().lower()
+    if mode == "sovereign_edge":
+        return (
+            "NikTiar Sovereign Edge — full SOC stack on your network with no cloud telemetry "
+            "by default. Your MSSP team manages the platform onsite or via your secure VPN."
+        )
     if mode in ("on_prem_appliance", "cloud_appliance"):
         return (
             "NikTiar Edge — detection runs locally; raw logs stay on your network. "

@@ -6,10 +6,9 @@ from typing import Any, Dict, Optional
 
 from app.db.session import fetch_one
 from app.services.agent_package_builder import manager_address as cloud_manager_address
+from app.services.sovereign_edge import LOCAL_APPLIANCE_DEPLOYMENT_MODES
 
-APPLIANCE_DEPLOYMENT_MODES = frozenset(
-    {"cloud_appliance", "on_prem_appliance", "hybrid"}
-)
+APPLIANCE_DEPLOYMENT_MODES = LOCAL_APPLIANCE_DEPLOYMENT_MODES
 
 
 def tenant_uses_appliance_manager(deployment_mode: Optional[str]) -> bool:

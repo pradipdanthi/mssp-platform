@@ -20,6 +20,7 @@ DeploymentModeLiteral = Literal[
     "on_prem_direct",
     "on_prem_appliance",
     "hybrid",
+    "sovereign_edge",
 ]
 CloudProviderLiteral = Literal["aws", "azure", "gcp", "other"]
 

@@ -16,6 +16,10 @@ from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 from app.db.session import execute, fetch_one
 from app.services.appliance_manager_resolver import tenant_uses_appliance_manager
+from app.services.sovereign_edge import (
+    is_sovereign_edge,
+    offline_license_delivery,
+)
 from app.services.subscription_tier_service import normalize_subscription_tier, tier_rank
 from app.services.tenant_entitlement_defaults import (
     CATALOG_KEY_TO_SVC_ID,
@@ -115,10 +119,13 @@ def get_tenant_fulfillment_context(tenant_id: str) -> Dict[str, Any]:
             "found": False,
         }
     mode = (row.get("deployment_mode") or "cloud").strip().lower()
+    sovereign = is_sovereign_edge(mode)
     return {
         "tenant_id": row["id"],
         "deployment_mode": mode,
         "uses_appliance": tenant_uses_appliance_manager(mode),
+        "is_sovereign_edge": sovereign,
+        "offline_license": offline_license_delivery(mode),
         "subscription_tier": row.get("subscription_tier") or "SILVER",
         "found": True,
     }
@@ -133,11 +140,12 @@ def plan_capability_fulfillment(
     """Build per-capability fulfillment plan for a tenant."""
     context = ctx or get_tenant_fulfillment_context(tenant_id)
     uses_appliance = bool(context.get("uses_appliance"))
+    sovereign = bool(context.get("is_sovereign_edge"))
     plans: List[CapabilityFulfillmentPlan] = []
 
     for key in catalog_keys:
         svc_id = CATALOG_KEY_TO_SVC_ID.get(key)
-        skip_cloud = uses_appliance and key in CLOUD_ENGINE_SYNC_SKIPPED_ON_APPLIANCE
+        skip_cloud = sovereign or (uses_appliance and key in CLOUD_ENGINE_SYNC_SKIPPED_ON_APPLIANCE)
         cloud_sync = not skip_cloud
         plans.append(
             CapabilityFulfillmentPlan(
@@ -147,9 +155,13 @@ def plan_capability_fulfillment(
                 cloud_sync=cloud_sync,
                 appliance_license=uses_appliance and bool(svc_id),
                 skip_reason=(
-                    "local_appliance_engine"
-                    if skip_cloud
-                    else None
+                    "sovereign_local_stack"
+                    if sovereign
+                    else (
+                        "local_appliance_engine"
+                        if skip_cloud
+                        else None
+                    )
                 ),
             )
         )
@@ -206,6 +218,14 @@ def push_appliance_license(
             "jobs_queued": 0,
             "skipped": "not_appliance_deployment",
             "deployment_mode": context.get("deployment_mode"),
+        }
+    if context.get("offline_license") or offline_license_delivery(context.get("deployment_mode")):
+        return {
+            "appliances": 0,
+            "jobs_queued": 0,
+            "skipped": "offline_license_manual",
+            "deployment_mode": context.get("deployment_mode"),
+            "note": "Export license JWS for onsite engineer apply — no cloud channel push.",
         }
 
     return enqueue_tenant_entitlement_jobs(

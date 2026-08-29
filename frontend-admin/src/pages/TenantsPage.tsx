@@ -75,6 +75,11 @@ const DEPLOYMENT_MODE_OPTIONS: { value: TenantDeploymentMode; label: string; hin
     label: "Hybrid",
     hint: "Mix of cloud path and on-prem appliance under one customer.",
   },
+  {
+    value: "sovereign_edge",
+    label: "NikTiar Sovereign Edge (air-gapped)",
+    hint: "Full on-prem SOC stack — local engines, cases, SOAR, and unified portal. No cloud telemetry by default; offline license delivery.",
+  },
 ];
 const CLOUD_PROVIDER_OPTIONS: TenantCloudProvider[] = ["aws", "azure", "gcp", "other"];
 

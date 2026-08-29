@@ -26,6 +26,7 @@ from app.schemas.tenants import (
     TenantUpdateRequest,
 )
 from app.services.audit_service import audit_from_user
+from app.services.sovereign_edge import sovereign_onboard_next_steps
 from app.services.tenant_engine_provisioner import (
     backfill_all_tenants,
     get_binding,
@@ -714,7 +715,9 @@ def create_tenant(
         next_steps.append(
             "Portal admin was not created — fix the error above, then Users → Add User for this customer."
         )
-    if payload.deployment_mode in ("cloud_appliance", "on_prem_appliance", "hybrid"):
+    if payload.deployment_mode == "sovereign_edge":
+        next_steps.extend(sovereign_onboard_next_steps())
+    elif payload.deployment_mode in ("cloud_appliance", "on_prem_appliance", "hybrid"):
         next_steps.append("Issue an Appliances activation token for the edge/onsite appliance.")
     else:
         next_steps.append(

@@ -521,7 +521,8 @@ export type TenantDeploymentMode =
   | "cloud_appliance"
   | "on_prem_direct"
   | "on_prem_appliance"
-  | "hybrid";
+  | "hybrid"
+  | "sovereign_edge";
 export type TenantCloudProvider = "aws" | "azure" | "gcp" | "other";
 
 export interface TenantEntitlementsOnCreate {
