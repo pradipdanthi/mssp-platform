@@ -33,6 +33,9 @@ backend-api/app/endpoint_configs/Sysmon.exe
 deploy/windows-endpoint-telemetry/Sysmon64.exe
 deploy/windows-endpoint-telemetry/Sysmon.exe
 
+# Sovereign Edge pytest/runtime temp bus fixtures (KB-112+)
+backend-api/.tmp_test_*/
+
 # Playwright E2E artifacts
 e2e/node_modules/
 e2e/test-results/

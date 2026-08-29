@@ -38,8 +38,11 @@ Mapping flags → `svc-*`: `tenant_entitlement_defaults.entitlements_to_service_
 | `cloud_appliance` | Agents → local appliance Manager | Scrubbed high-fidelity alerts only (KB-093P) | Local + cloud as matrix below |
 | `on_prem_appliance` | Agents → local appliance Manager | Scrubbed high-fidelity alerts only | Local engines when licensed |
 | `hybrid` | Mix per site | Appliance path for edge sites | Both targets per capability rules |
+| `sovereign_edge` | Agents → local Sovereign cluster | **None by default** (optional toggle → cloud SOC) | **All local** — TheHive, Shuffle, unified portal on-box |
 
-**Future:** `on_prem_full_stack` (entire stack on customer site; onsite or VPN remote SOC) — same tiers and flags; fulfillment target becomes customer cluster. Prompt TBD.
+**Sovereign Edge** (`sovereign_edge`): NikTiar Sovereign Edge — air-gapped full stack on VM199+ lineage. Offline license delivery; no cloud fleet visibility. See `docs/KB112_SOVEREIGN_EDGE_TEST_PLAN.md`.
+
+**Legacy note:** `on_prem_full_stack` in earlier drafts is renamed to `sovereign_edge`.
 
 ---
 
