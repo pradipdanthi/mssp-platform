@@ -49,7 +49,7 @@ cp "$ROOT/scripts/enable_sovereign_full_stack_on_appliance.sh" "$TMP/enable_sove
 "${SSH[@]}" "bash -s" <<REMOTE
 set -euo pipefail
 sudo install -d -m 0755 /opt/kevantic/appliance-src/appliance/sovereign/compose /opt/niktiar/appliance-src/appliance/sovereign/compose
-for f in full_stack.py unified_portal.py rbac.py profile.py cluster.py node_agent.py renewal_reminder.py; do
+for f in full_stack.py unified_portal.py portal_auth.py rbac.py profile.py cluster.py node_agent.py renewal_reminder.py; do
   [[ -f /tmp/sovereign/\$f ]] && sudo install -m 0644 "/tmp/sovereign/\$f" "/opt/kevantic/appliance-src/appliance/sovereign/\$f"
   [[ -f /tmp/sovereign/\$f ]] && sudo install -m 0644 "/tmp/sovereign/\$f" "/opt/niktiar/appliance-src/appliance/sovereign/\$f"
 done

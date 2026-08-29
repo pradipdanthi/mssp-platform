@@ -1,0 +1,14 @@
+{
+  "users": [
+    {
+      "username": "soc_engineer",
+      "role": "soc_analyst",
+      "password_hash": "REPLACE_WITH_pbkdf2_sha256_HASH"
+    },
+    {
+      "username": "customer_viewer",
+      "role": "customer_viewer",
+      "password_hash": "REPLACE_WITH_pbkdf2_sha256_HASH"
+    }
+  ]
+}

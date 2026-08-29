@@ -15,6 +15,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 cp "$ROOT/appliance/sovereign/full_stack.py" "$TMP/full_stack.py"
 cp "$ROOT/appliance/sovereign/unified_portal.py" "$TMP/unified_portal.py"
+cp "$ROOT/appliance/sovereign/portal_auth.py" "$TMP/portal_auth.py"
 cp "$ROOT/appliance/sovereign/rbac.py" "$TMP/rbac.py"
 cp -r "$ROOT/appliance/sovereign/compose" "$TMP/compose"
 cp "$ROOT/scripts/sovereign_full_stack.sh" "$TMP/sovereign_full_stack.sh"
@@ -28,6 +29,7 @@ for base in /opt/kevantic/appliance-src /opt/junexis/appliance-src; do
     install -d -m 0755 "\$base/appliance/sovereign/compose"
     install -m 0644 /tmp/full_stack.py "\$base/appliance/sovereign/full_stack.py"
     install -m 0644 /tmp/unified_portal.py "\$base/appliance/sovereign/unified_portal.py"
+    install -m 0644 /tmp/portal_auth.py "\$base/appliance/sovereign/portal_auth.py"
     install -m 0644 /tmp/rbac.py "\$base/appliance/sovereign/rbac.py"
     install -m 0644 /tmp/compose/*.yml "\$base/appliance/sovereign/compose/"
     touch "\$base/appliance/sovereign/__init__.py" 2>/dev/null || true
@@ -46,7 +48,7 @@ chmod +x "$TMP/install_full_stack_remote.sh"
 
 if [[ -n "$HOST" ]]; then
   scp -i "$SSH_KEY" -o StrictHostKeyChecking=no -r \
-    "$TMP/full_stack.py" "$TMP/unified_portal.py" "$TMP/rbac.py" "$TMP/compose" \
+    "$TMP/full_stack.py" "$TMP/unified_portal.py" "$TMP/portal_auth.py" "$TMP/rbac.py" "$TMP/compose" \
     "$TMP/sovereign_full_stack.sh" "$TMP/sovereign_full_stack_stub.sh" "$TMP/install_full_stack_remote.sh" \
     "${USER}@${HOST}:/tmp/"
   ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes \

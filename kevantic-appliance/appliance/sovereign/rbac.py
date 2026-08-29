@@ -38,6 +38,7 @@ ALLOWED_CUSTOMER_ROUTE_PREFIXES: Tuple[str, ...] = (
     "/customer",
     "/api/v1/customer",
     "/v1/customer",
+    "/portal",
     "/",
 )
 

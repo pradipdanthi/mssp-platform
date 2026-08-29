@@ -66,6 +66,16 @@ start_portal() {
     echo "unified portal already running (pid $(cat "$PORTAL_PID"))"
     return 0
   fi
+  for envfile in /etc/junexis/sovereign-portal-lab.env /etc/kevantic/sovereign-portal-lab.env; do
+    if [[ -f "$envfile" ]]; then
+      set -a
+      # shellcheck disable=SC1090
+      source "$envfile"
+      set +a
+      break
+    fi
+  done
+  export SOVEREIGN_PORTAL_LAB_BOOTSTRAP="${SOVEREIGN_PORTAL_LAB_BOOTSTRAP:-1}"
   nohup python3 -m appliance.sovereign.unified_portal >/var/log/sovereign-unified-portal.log 2>&1 &
   echo $! >"$PORTAL_PID"
   sleep 1
