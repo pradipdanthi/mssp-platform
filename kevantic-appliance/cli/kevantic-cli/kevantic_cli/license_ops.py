@@ -28,9 +28,16 @@ CATALOGUE_SERVICE_IDS = {
 
 
 def _state_root() -> Path:
+    for mod_name in ("kevantic_cli.state", "niktiar_cli.state", "junexis_cli.state"):
+        try:
+            mod = __import__(mod_name, fromlist=["state_root"])
+            return mod.state_root()
+        except (ImportError, AttributeError):
+            continue
     return Path(
-        os.environ.get("KEVANTIC_STATE_DIR")
-        or os.environ.get("NIKTIAR_STATE_DIR")
+        os.environ.get("NIKTIAR_STATE_DIR")
+        or os.environ.get("KEVANTIC_STATE_DIR")
+        or os.environ.get("JUNEXIS_STATE_DIR")
         or "/var/lib/kevantic"
     )
 
@@ -144,6 +151,26 @@ def _write_entitlements(ents: dict[str, Any]) -> Path:
     return ents_path
 
 
+def _refresh_renewal_reminder(ents: dict[str, Any]) -> Optional[dict[str, Any]]:
+    try:
+        import sys
+        from pathlib import Path as _Path
+
+        for base in (
+            _Path("/opt/kevantic/appliance-src"),
+            _Path("/opt/niktiar/appliance-src"),
+            _Path("/opt/junexis/appliance-src"),
+        ):
+            sovereign = base / "appliance" / "sovereign"
+            if sovereign.is_dir() and str(base) not in sys.path:
+                sys.path.insert(0, str(base))
+        from appliance.sovereign.renewal_reminder import refresh_renewal_reminder_from_entitlements
+
+        return refresh_renewal_reminder_from_entitlements(ents)
+    except Exception:
+        return None
+
+
 def entitlements_from_claims(claims: dict[str, Any], *, expired: bool = False) -> dict[str, Any]:
     raw_ids = list(claims.get("svc") or [])
     service_ids: list[str] = []
@@ -182,6 +209,7 @@ def apply_license_token(token: str, fingerprint: str = "") -> dict[str, Any]:
     (state / "license.jws").write_text(token.strip() + "\n", encoding="utf-8")
     ents = entitlements_from_claims(claims, expired=bool(claims.get("_expired")))
     _write_entitlements(ents)
+    _refresh_renewal_reminder(ents)
     return {"ok": True, "entitlements": ents, "reconcile": _run_reconcile()}
 
 
@@ -244,10 +272,12 @@ def enforce_license(fingerprint: str = "") -> dict[str, Any]:
 
     ents = entitlements_from_claims(claims, expired=False)
     _write_entitlements(ents)
+    reminder = _refresh_renewal_reminder(ents)
     return {
         "ok": True,
         "status": "active",
         "entitlements": ents,
+        "renewal_reminder": reminder,
         "reconcile": _run_reconcile(),
     }
 
@@ -259,6 +289,7 @@ def show_license() -> dict[str, Any]:
     ents: dict[str, Any] = {}
     if ents_path.is_file():
         ents = json.loads(ents_path.read_text(encoding="utf-8"))
+    reminder = _refresh_renewal_reminder(ents) if ents else None
     return {
         "entitlements_path": str(ents_path),
         "license_present": lic_path.is_file(),
@@ -272,4 +303,15 @@ def show_license() -> dict[str, Any]:
         "expired": ents.get("expired"),
         "signed": ents.get("signed"),
         "jti": ents.get("jti"),
+        "renewal_reminder": reminder,
     }
+
+
+def renewal_status() -> dict[str, Any]:
+    state = _state_root()
+    ents: dict[str, Any] = {}
+    ents_path = state / "entitlements.json"
+    if ents_path.is_file():
+        ents = json.loads(ents_path.read_text(encoding="utf-8"))
+    reminder = _refresh_renewal_reminder(ents) if ents else _refresh_renewal_reminder({})
+    return reminder or {}

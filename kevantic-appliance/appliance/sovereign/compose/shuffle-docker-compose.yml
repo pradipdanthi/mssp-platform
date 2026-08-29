@@ -1,0 +1,53 @@
+# MSSP sovereign edge — Shuffle lean stack (OpenSearch + backend + frontend)
+# Pin images for reproducible golden bakes; heap sized for 12GB+ appliances.
+services:
+  opensearch:
+    image: opensearchproject/opensearch:2.11.1
+    environment:
+      - discovery.type=single-node
+      - plugins.security.disabled=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - sovereign-shuffle-os:/usr/share/opensearch/data
+    restart: unless-stopped
+    mem_limit: 1024m
+
+  shuffle-backend:
+    image: ghcr.io/shuffle/shuffle-backend:1.4.0
+    depends_on:
+      - opensearch
+    environment:
+      - SHUFFLE_OPENSEARCH_URL=http://opensearch:9200
+      - SHUFFLE_APP_HOTLOAD_FOLDER=/shuffle-apps
+      - SHUFFLE_FILE_LOCATION=/shuffle-files
+      - SHUFFLE_ELASTIC=true
+      - SHUFFLE_OPENSEARCH_SKIPSSL_VERIFY=true
+      - SHUFFLE_OPENSEARCH_USERNAME=
+      - SHUFFLE_OPENSEARCH_PASSWORD=
+      - SHUFFLE_ENCRYPTION_MODIFIER=${SHUFFLE_ENCRYPTION_MODIFIER:-sovereign-edge-lab}
+    volumes:
+      - sovereign-shuffle-apps:/shuffle-apps
+      - sovereign-shuffle-files:/shuffle-files
+    restart: unless-stopped
+    mem_limit: 512m
+
+  shuffle-frontend:
+    image: ghcr.io/shuffle/shuffle-frontend:1.4.0
+    depends_on:
+      - shuffle-backend
+    ports:
+      - "127.0.0.1:3001:80"
+    environment:
+      - BACKEND_HOSTNAME=shuffle-backend:5001
+    restart: unless-stopped
+    mem_limit: 256m
+
+volumes:
+  sovereign-shuffle-os:
+  sovereign-shuffle-apps:
+  sovereign-shuffle-files:

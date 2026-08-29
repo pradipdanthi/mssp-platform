@@ -1,0 +1,35 @@
+# MSSP sovereign edge — lean TheHive 4 stack (local only, loopback publish)
+services:
+  cassandra:
+    image: cassandra:3.11
+    environment:
+      - MAX_HEAP_SIZE=512M
+      - HEAP_NEWSIZE=128M
+      - CASSANDRA_CLUSTER_NAME=sovereign-thp
+    volumes:
+      - sovereign-thehive-cass:/var/lib/cassandra
+    restart: unless-stopped
+    mem_limit: 768m
+
+  thehive:
+    image: thehiveproject/thehive4:4.1.24
+    depends_on:
+      - cassandra
+    ports:
+      - "127.0.0.1:9000:9000"
+    env_file:
+      - thehive.secret.env
+    environment:
+      - JVM_OPTS=-Xms512m -Xmx512m
+    command:
+      - --cql-hostnames
+      - cassandra
+      - --no-config-cortex
+    volumes:
+      - sovereign-thehive-data:/data
+    restart: unless-stopped
+    mem_limit: 768m
+
+volumes:
+  sovereign-thehive-cass:
+  sovereign-thehive-data:
