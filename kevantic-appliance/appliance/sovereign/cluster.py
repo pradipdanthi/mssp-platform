@@ -187,6 +187,10 @@ def bootstrap_pair(
     join_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Initialize a 2-node logical cluster on one host."""
+    # Logical pair replaces any prior multihost metadata on the shared cluster bus.
+    meta_path = _meta_path()
+    if meta_path.is_file():
+        meta_path.unlink()
     a, b = node_ids
     token = join_token or secrets.token_urlsafe(24)
     meta = {
@@ -195,12 +199,12 @@ def bootstrap_pair(
         "profile": "sovereign_edge_logical_ha",
         "nodes": {
             a: {
-                "state_dir": str(node_state_dir(a)),
+                "state_dir": str(Path(f"/var/lib/niktiar-{a}")),
                 "api_port": node_api_port(a),
                 "role": "active",
             },
             b: {
-                "state_dir": str(node_state_dir(b)),
+                "state_dir": str(Path(f"/var/lib/niktiar-{b}")),
                 "api_port": node_api_port(b),
                 "role": "active",
             },

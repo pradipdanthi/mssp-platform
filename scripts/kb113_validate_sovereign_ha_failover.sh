@@ -26,6 +26,35 @@ if ! remote 'echo ok' >/dev/null 2>&1; then
 fi
 ok "appliance ${APPLIANCE_HOST} reachable"
 
+section "0.5 Preflight — logical topology and node agents"
+remote 'for nid in a b; do sudo env SOVEREIGN_NODE_ID="$nid" sovereign-multihost-cluster stop 2>/dev/null || true; done'
+TOPOLOGY="$(remote 'sudo -n sovereign-logical-cluster status 2>/dev/null' | jq -r '.topology // empty' || true)"
+if [[ "$TOPOLOGY" != "logical_single_host" ]]; then
+  remote 'sudo -n sovereign-logical-cluster stop-all 2>/dev/null || true'
+  remote 'pkill -f "appliance.sovereign.node_agent" 2>/dev/null || true'
+  sleep 1
+  if ! remote 'sudo -n sovereign-logical-cluster pair >/dev/null 2>&1'; then
+    echo "FAIL: preflight logical pair failed (topology was ${TOPOLOGY:-unset})"
+    exit 1
+  fi
+  echo "preflight: re-paired logical cluster (was topology=${TOPOLOGY:-unset})"
+else
+  echo "preflight: logical_single_host topology present"
+fi
+remote 'sudo -n sovereign-logical-cluster start-all'
+sleep 2
+A_PREFLIGHT="$(remote 'curl -s --connect-timeout 3 http://127.0.0.1:8443/health || true')"
+B_PREFLIGHT="$(remote 'curl -s --connect-timeout 3 http://127.0.0.1:8444/health || true')"
+if ! echo "$A_PREFLIGHT" | jq -e '.ok == true and .node_id == "a"' >/dev/null 2>&1; then
+  echo "FAIL: preflight node-a /health"
+  exit 1
+fi
+if ! echo "$B_PREFLIGHT" | jq -e '.ok == true and .node_id == "b"' >/dev/null 2>&1; then
+  echo "FAIL: preflight node-b /health"
+  exit 1
+fi
+echo "preflight: node agents healthy on 8443/8444"
+
 section "1. Cluster paired"
 PAIR_JSON="$(remote 'sudo -n sovereign-logical-cluster status')"
 if echo "$PAIR_JSON" | jq -e '.paired == true and .cluster_id != null' >/dev/null 2>&1; then

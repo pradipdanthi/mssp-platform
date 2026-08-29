@@ -12,6 +12,10 @@ ssh -i "$APPLIANCE_KEY" -o StrictHostKeyChecking=no -o BatchMode=yes \
   "${APPLIANCE_USER}@${BETA_HOST}" \
   "sudo -n bash -s" <<REMOTE
 set -euo pipefail
+for nid in a b; do
+  env SOVEREIGN_NODE_ID="\${nid}" sovereign-multihost-cluster stop 2>/dev/null || true
+done
+pkill -f "appliance.sovereign.node_agent --node-id" 2>/dev/null || true
 for ip in ${NODE_A_IP} ${NODE_B_IP}; do
   ip addr del "\${ip}/24" dev \$(ip -o -4 addr show | awk -v ip="\${ip}" '\$0 ~ ip {print \$2; exit}') 2>/dev/null || true
   ip addr del "\${ip}/32" dev lo 2>/dev/null || true
