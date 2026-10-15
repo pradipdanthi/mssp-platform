@@ -111,7 +111,7 @@ JSON_SCHEMA: Dict[str, Any] = {
 # Strict wall-clock for Ollama — never block dashboard list paths.
 DEFAULT_TIMEOUT_SECONDS = 8
 DEFAULT_NUM_THREAD = 6
-DEFAULT_NUM_PREDICT = 128
+DEFAULT_NUM_PREDICT = 384
 DEFAULT_NUM_CTX = 4096
 OLLAMA_HEALTH_PROBE_TIMEOUT_SECONDS = 3.0
 
@@ -1957,13 +1957,17 @@ def _normalize_result(parsed: Dict[str, Any], fallback_rule: str = "") -> Dict[s
 
 
 def _call_ollama_chat(
-    user_prompt: str, *, alert_id: str = "", cache_status: str = "miss"
+    user_prompt: str,
+    *,
+    alert_id: str = "",
+    cache_status: str = "miss",
+    timeout_seconds: Optional[float] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     import time
 
     root = _ollama_root()
     model = (os.getenv("AI_ALERT_MODEL") or "qwen2.5:7b").strip()
-    timeout = _timeout_seconds()
+    timeout = timeout_seconds if timeout_seconds else _timeout_seconds()
     url = f"{root}/api/chat"
     num_thread = _num_thread()
     num_predict = _num_predict()
@@ -2147,12 +2151,16 @@ def run_tier1_triage(
     alert: Dict[str, Any],
     customer_safe: bool = False,
     force: bool = False,
+    llm_timeout_seconds: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Return cached or freshly computed Tier-1 triage for one alert.
 
     Phase 4: pre-LLM whitelist veto bypasses Ollama; unhealthy VM 115 falls back
     to rule-based scoring without raising HTTP errors to callers.
+
+    ``llm_timeout_seconds`` lets background callers wait longer than the 8s
+    dashboard budget (AI_TIER1_TRIAGE_TIMEOUT_SECONDS).
     """
     # Ensure tenant/id available for enrichment queries even if caller omitted them.
     alert_for_enrich = dict(alert)
@@ -2220,6 +2228,7 @@ def run_tier1_triage(
                 build_user_prompt(payload, enrichment),
                 alert_id=alert_id,
                 cache_status="miss",
+                timeout_seconds=llm_timeout_seconds,
             )
             result = _normalize_result(
                 parsed, fallback_rule=str(payload.get("wazuh_rule_id") or "")

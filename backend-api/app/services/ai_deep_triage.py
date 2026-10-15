@@ -63,6 +63,30 @@ def _escalate_confidence_floor() -> float:
         return 60.0
 
 
+def _benign_silence_confidence() -> float:
+    """A BENIGN verdict on a critical alert stays silent only at or above this.
+
+    Default matches ai_tier1_triage LOW_PRIORITY_CONFIDENCE_MIN (85.0).
+    """
+    try:
+        return float(os.getenv("AI_DEEP_TRIAGE_BENIGN_SILENCE_CONFIDENCE") or "85")
+    except ValueError:
+        return 85.0
+
+
+def _llm_timeout_seconds() -> float:
+    """Background budget for the model call.
+
+    The dashboard path keeps its 8s budget; this stage runs off the request path
+    and may queue behind KB-092/KB-096 calls on a single-slot CPU Ollama.
+    """
+    try:
+        val = float(os.getenv("AI_DEEP_TRIAGE_TIMEOUT_SECONDS") or "180")
+    except ValueError:
+        val = 180.0
+    return max(10.0, min(val, 600.0))
+
+
 def load_alert_for_triage(alert_id: str, tenant_id: str) -> Optional[Dict[str, Any]]:
     """Load the same enriched alert shape the on-demand triage endpoint uses.
 
@@ -203,9 +227,18 @@ def decide_escalation(
         reasons.append("AI degraded (model unavailable) on a critical alert")
 
     if verdict == "BENIGN_FALSE_POSITIVE" and not degraded and action != "ISOLATE_AGENT":
-        escalate = False
-        urgency = "normal"
-        reasons = ["AI assessed benign false positive — no human wake"]
+        silence_floor = _benign_silence_confidence()
+        if severity_rank >= _SEVERITY_RANKS["critical"] and confidence < silence_floor:
+            escalate = True
+            urgency = "normal"
+            reasons = [
+                f"AI leans benign at {confidence:.0f}% on a critical alert — "
+                f"below the {silence_floor:.0f}% bar to stay silent; human confirms"
+            ]
+        else:
+            escalate = False
+            urgency = "normal"
+            reasons = ["AI assessed benign false positive — no human wake"]
 
     return {
         "escalate": escalate,
@@ -320,6 +353,7 @@ def process_deep_triage_job(*, alert_id: str, tenant_id: str) -> bool:
     if (alert.get("ai_triage_status") or "").strip() == "accepted":
         return True
 
+    timeout = _llm_timeout_seconds()
     try:
         triage = run_tier1_triage(
             alert_id=alert_id,
@@ -327,7 +361,19 @@ def process_deep_triage_job(*, alert_id: str, tenant_id: str) -> bool:
             alert=alert,
             customer_safe=False,
             force=False,
+            llm_timeout_seconds=timeout,
         )
+        # A rule-based result cached by an 8s dashboard timeout must not stand in
+        # for a real model verdict here.
+        if triage.get("cached") and triage.get("model") == "rule_based_fallback":
+            triage = run_tier1_triage(
+                alert_id=alert_id,
+                tenant_id=tenant_id,
+                alert=alert,
+                customer_safe=False,
+                force=True,
+                llm_timeout_seconds=timeout,
+            )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Deep triage failed id=%s: %s", alert_id, exc)
         return False
