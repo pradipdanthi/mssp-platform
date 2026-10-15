@@ -23,6 +23,10 @@ KEY_FILE = os.environ.get(
     "VULN_SYNC_API_KEY_FILE", "/opt/mssp-vuln-free/secrets/vuln_sync_api_key"
 )
 SEVERITIES = os.environ.get("NUCLEI_SEVERITIES", "critical,high,medium")
+# -nmhe: endpoints commonly filter 80/443; nuclei's default 30-error host cutoff
+# otherwise drops the host before RDP/WinRM/SMB templates run (false "0 findings").
+SCAN_ARGS = os.environ.get("NUCLEI_SCAN_ARGS", "-nmhe -timeout 4 -retries 0 -c 50").split()
+SCAN_TIMEOUT = int(os.environ.get("NUCLEI_SCAN_TIMEOUT_SECONDS", "3600"))
 
 
 def _key() -> str:
@@ -152,9 +156,19 @@ def main() -> int:
                 "-no-color",
                 "-o",
                 str(jsonl_file),
+                *SCAN_ARGS,
             ]
-            subprocess.run(cmd, check=False, timeout=3600)
-            raw = jsonl_file.read_text(encoding="utf-8", errors="replace")
+            try:
+                proc = subprocess.run(
+                    cmd, check=False, timeout=SCAN_TIMEOUT, stdout=subprocess.DEVNULL
+                )
+            except subprocess.TimeoutExpired:
+                print(f"tenant={short} nuclei timed out after {SCAN_TIMEOUT}s; retry next cycle", file=sys.stderr)
+                continue
+            if proc.returncode != 0:
+                print(f"tenant={short} nuclei exit={proc.returncode}; retry next cycle", file=sys.stderr)
+                continue
+            raw = jsonl_file.read_text(encoding="utf-8", errors="replace") if jsonl_file.exists() else ""
         findings = _normalize_jsonl(raw, short, targets)
         if findings:
             _post_findings(short, findings)
