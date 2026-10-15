@@ -104,8 +104,8 @@ export default function AppliancesPage() {
       <CustomerScopeBanner />
       <p className="page-subtitle">
         NikTiar Edge fleet — local engine status for the same Silver / Gold / Platinum capabilities
-        provisioned in Tier Operations. Case management (TheHive) and SOAR (Shuffle) stay in cloud
-        SOC; badges here show which on-box engines are licensed.
+        provisioned in Tier Operations. Case management and SOAR automation stay in the cloud SOC;
+        badges here show which on-box engines are licensed.
       </p>
 
       <ListToolbar

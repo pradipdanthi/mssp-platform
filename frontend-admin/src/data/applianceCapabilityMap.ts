@@ -30,9 +30,9 @@ export type SvcCatalogMeta = {
 };
 
 const LOCAL_ROLE: Record<string, string> = {
-  "svc-01": "Local Wazuh Manager + collectors",
-  "svc-02": "Local IR worker (cloud TheHive cases)",
-  "svc-03": "Local automation worker (cloud Shuffle)",
+  "svc-01": "Local log & event manager + collectors",
+  "svc-02": "Local IR worker (cloud SOC cases)",
+  "svc-03": "Local automation worker (cloud SOAR)",
   "svc-04": "On-box vulnerability scanning",
   "svc-05": "On-box compliance / SCA",
   "svc-06": "On-box NDR sensors",

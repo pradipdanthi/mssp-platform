@@ -1162,7 +1162,10 @@ FORBIDDEN_UI_ENGINE_NAMES = re.compile(
 
 def _tsx_line_exposes_engine_brand(line: str) -> bool:
     stripped = line.strip()
-    if stripped.startswith("//") or stripped.startswith("*"):
+    if stripped.startswith(("//", "*", "/*")):
+        return False
+    # Raw engine key → NikTiar brand lookup (niktiairBrands.ts): the key is never rendered.
+    if re.match(r"""^["']?[a-z]+["']?\s*:\s*NIKTIAR\.""", stripped):
         return False
     # Internal API/filter enum keys — not rendered UI copy.
     if re.search(
@@ -1254,7 +1257,7 @@ def check_open_source_compliance() -> CheckResult:
     for ui_root in ui_roots:
         if not ui_root.is_dir():
             continue
-        for path in sorted(ui_root.rglob("*.tsx")):
+        for path in sorted([*ui_root.rglob("*.tsx"), *ui_root.rglob("*.ts")]):
             rel = path.relative_to(ROOT)
             for idx, line in enumerate(read(path).splitlines(), start=1):
                 if _tsx_line_exposes_engine_brand(line):
@@ -1262,7 +1265,7 @@ def check_open_source_compliance() -> CheckResult:
     expect(
         f,
         not violations,
-        "customer/admin .tsx UI files contain no upstream engine product names",
+        "customer/admin UI source (.ts/.tsx) contains no upstream engine product names",
         detail="; ".join(violations[:8]) + (" …" if len(violations) > 8 else ""),
         status_if_false="FAILED",
     )
@@ -1270,7 +1273,7 @@ def check_open_source_compliance() -> CheckResult:
         f.append(
             Finding(
                 "PASSED",
-                "customer/admin .tsx UI files contain no upstream engine product names",
+                "customer/admin UI source (.ts/.tsx) contains no upstream engine product names",
                 path=ui_roots[0],
             )
         )
