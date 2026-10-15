@@ -6,6 +6,11 @@
 #   ./scripts/kb049_configure_wazuh_shuffle_integration.sh
 #
 # Secrets: webhook URL is runtime-only — never commit it.
+#
+# RETIRED: production ingress uses <name>custom-mssp-ingress</name> posting to
+# backend /integrations/soc/hooks/wazuh/<token> (see
+# deploy/wazuh-manager/install_custom_mssp_ingress.sh). The stock `shuffle`
+# integration writes the hook URL, token included, to integrations.log.
 set -euo pipefail
 
 if [[ -z "${SHUFFLE_WEBHOOK_URL:-}" ]]; then
