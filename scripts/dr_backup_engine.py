@@ -29,6 +29,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -546,26 +547,36 @@ def stream_remote_capture(
         f"{sudo}tar -czf - {excl_flags} $paths"
     )
 
-    with open(out_file, "wb") as out:
-        proc = subprocess.run(
-            [
-                "ssh",
-                "-i",
-                key,
-                "-o",
-                "BatchMode=yes",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                "ConnectTimeout=12",
-                f"{user}@{ip}",
-                # ssh joins argv with spaces — quote the entire -c payload
-                f"bash --noprofile --norc -c {shlex.quote(remote_script)}",
-            ],
-            stdout=out,
-            stderr=subprocess.PIPE,
-            check=False,
-        )
+    # Live data dirs (e.g. Shuffle's OpenSearch indices on VM 102) can be written
+    # mid-read; GNU tar then exits 1 with "file changed as we read it". Retry so a
+    # quiet window is captured instead of failing the whole backup.
+    attempts = 4
+    for attempt in range(1, attempts + 1):
+        with open(out_file, "wb") as out:
+            proc = subprocess.run(
+                [
+                    "ssh",
+                    "-i",
+                    key,
+                    "-o",
+                    "BatchMode=yes",
+                    "-o",
+                    "StrictHostKeyChecking=accept-new",
+                    "-o",
+                    "ConnectTimeout=12",
+                    f"{user}@{ip}",
+                    # ssh joins argv with spaces — quote the entire -c payload
+                    f"bash --noprofile --norc -c {shlex.quote(remote_script)}",
+                ],
+                stdout=out,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+        changed = b"file changed as we read it" in (proc.stderr or b"")
+        if proc.returncode == 0 or not changed or attempt == attempts:
+            break
+        _log(f"Remote capture for {ip}: live file changed during read — retry {attempt + 1}/{attempts} in 20s")
+        time.sleep(20)
     if proc.returncode != 0:
         err = proc.stderr.decode("utf-8", errors="replace")[:400]
         out_file.unlink(missing_ok=True)

@@ -33,6 +33,14 @@ LOG_FILE="$LOG_DIR/backup_${TS}.log"
 
 mkdir -p "$LOCAL_ROOT" "$LOG_DIR" "$DEST"
 
+# The timer is Persistent=true, so a missed run fires right at boot while engine
+# VMs are still starting (live DBs churning, SSH not up). Let the lab settle first.
+BOOT_SETTLE_SECONDS="${MSSP_DR_BOOT_SETTLE_SECONDS:-900}"
+UPTIME_S="$(awk '{print int($1)}' /proc/uptime 2>/dev/null || echo "$BOOT_SETTLE_SECONDS")"
+if (( UPTIME_S < BOOT_SETTLE_SECONDS )); then
+  sleep $(( BOOT_SETTLE_SECONDS - UPTIME_S ))
+fi
+
 write_status() {
   local state="$1"
   local message="${2:-}"
