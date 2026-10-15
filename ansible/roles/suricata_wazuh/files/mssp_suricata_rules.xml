@@ -1,0 +1,30 @@
+<!--
+  MSSP NDR: lift Suricata alerts above the Wazuh -> control-plane forward threshold
+  (integration level >= 10). Stock Wazuh rule 86601 files every Suricata alert at
+  level 3, so no NDR detection ever reached the platform.
+
+  Suricata alert.severity: 1 = high (malware, exploit), 2 = medium (scan, PUP),
+  3 = low (informational). ET INFO / ET POLICY and protocol-anomaly events stay at
+  level 3: they fire on ordinary traffic and would bury real detections.
+-->
+<group name="suricata,ids,mssp_ndr,">
+
+  <rule id="100610" level="12">
+    <if_sid>86601</if_sid>
+    <field name="alert.severity">^1$</field>
+    <description>Suricata: Alert - $(alert.signature)</description>
+  </rule>
+
+  <rule id="100611" level="10">
+    <if_sid>86601</if_sid>
+    <field name="alert.severity">^2$</field>
+    <description>Suricata: Alert - $(alert.signature)</description>
+  </rule>
+
+  <rule id="100612" level="3">
+    <if_sid>100610, 100611</if_sid>
+    <field name="alert.signature">^ET INFO |^ET POLICY |^SURICATA |^GPL ICMP_INFO </field>
+    <description>Suricata: Informational - $(alert.signature)</description>
+  </rule>
+
+</group>

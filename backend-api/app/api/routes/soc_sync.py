@@ -14,7 +14,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Header, HTTPException, Request, Response, status
 
 from app.schemas.soc_sync import SocSyncRequest, SocSyncResponse
-from app.db.session import fetch_one
+from app.db.session import fetch_all, fetch_one
 from app.services.soc_sync_service import TenantNotFoundError, sync_soc_alert
 
 logger = logging.getLogger(__name__)
@@ -231,6 +231,45 @@ def detect_ingress_source_tool(raw: Dict[str, Any]) -> str:
     return "wazuh"
 
 
+def resolve_tenant_by_asset_ip(*ips: Optional[str]) -> Optional[Dict[str, str]]:
+    """
+    NDR attribution: map a network alert to the tenant that owns the monitored IP.
+
+    A sensor watches a network segment, not a tenant, so its Wazuh agent is not
+    tenant-bound. Fail-closed: an IP registered to more than one tenant (private
+    ranges overlap across customers) is ambiguous and is not attributed.
+    """
+    for ip in ips:
+        ip = (ip or "").strip()
+        if not ip:
+            continue
+        try:
+            rows = fetch_all(
+                """
+                SELECT DISTINCT t.short_code, p.hostname
+                FROM protected_assets p
+                JOIN tenants t ON t.id = p.tenant_id
+                WHERE p.ip_address = %s::inet
+                  AND coalesce(lower(p.status), 'active')
+                      NOT IN ('retired', 'decommissioned', 'deleted');
+                """,
+                (ip,),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("NDR asset-IP tenant lookup failed ip=%s", ip)
+            return None
+        tenants = {str(r["short_code"]) for r in rows}
+        if len(tenants) == 1:
+            return {
+                "tenant_short_code": tenants.pop(),
+                "hostname": str(rows[0].get("hostname") or ""),
+                "ip": ip,
+            }
+        if len(tenants) > 1:
+            logger.warning("NDR asset IP %s is registered to %d tenants; not attributing", ip, len(tenants))
+    return None
+
+
 def is_known_noise_file_drop(raw: Dict[str, Any]) -> bool:
     """
     Phase-1 known noise: PowerShell policy-test temp scripts.
@@ -307,6 +346,25 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
             tenant_code = g[len("tenant_") :].upper()
             break
 
+    source_tool = detect_ingress_source_tool(raw)
+    net_src: Optional[str] = None
+    net_dst: Optional[str] = None
+    if source_tool in ("suricata", "zeek"):
+        data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+        net_src = str(data.get("src_ip") or "").strip() or None
+        net_dst = str(data.get("dest_ip") or "").strip() or None
+        asset = resolve_tenant_by_asset_ip(net_src, net_dst)
+        if asset:
+            if not tenant_code:
+                tenant_code = asset["tenant_short_code"]
+            if tenant_code == asset["tenant_short_code"]:
+                host = asset["hostname"] or asset["ip"]
+        if net_src:
+            desc_parts.append(f"src_ip={net_src}")
+        if net_dst:
+            desc_parts.append(f"dest_ip={net_dst}")
+        description = "; ".join(desc_parts)[:4000]
+
     if not tenant_code:
         raise ValueError(
             "Unmapped Wazuh agent: no tenant group binding and no WAZUH_DEFAULT_TENANT_SHORT_CODE"
@@ -324,14 +382,14 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
         )
 
     return SocSyncRequest(
-        source_tool=detect_ingress_source_tool(raw),
+        source_tool=source_tool,
         external_alert_id=external_id[:255],
         severity=severity,  # type: ignore[arg-type]
         alert_title=title,
         alert_description=description,
         destination_host=host,
-        destination_ip=agent_ip,
-        source_ip=agent_ip,
+        destination_ip=net_dst or agent_ip,
+        source_ip=net_src or agent_ip,
         source_user=source_user,
         wazuh_agent_id=agent_id,
         technical_summary=_build_wazuh_technical_summary(raw),

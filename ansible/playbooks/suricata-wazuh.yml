@@ -11,3 +11,21 @@
   any_errors_fatal: true
   roles:
     - role: suricata_wazuh
+
+- name: MSSP NDR Suricata severity rules on Wazuh Manager
+  hosts: wazuh_stack
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Install Suricata severity rules (100610-100612)
+      ansible.builtin.copy:
+        src: ../roles/suricata_wazuh/files/mssp_suricata_rules.xml
+        dest: /var/ossec/etc/rules/mssp_suricata_rules.xml
+        owner: root
+        group: wazuh
+        mode: "0660"
+      notify: Restart wazuh-manager
+  handlers:
+    - name: Restart wazuh-manager
+      ansible.builtin.command:
+        argv: [timeout, "60", /var/ossec/bin/wazuh-control, restart]

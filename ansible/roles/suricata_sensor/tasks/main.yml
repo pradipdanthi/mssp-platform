@@ -179,6 +179,14 @@
         regexp: '^( *)HOME_NET:.*$'
         replace: '\1HOME_NET: "{{ suricata_home_net }}"'
 
+    - name: Keep stats records out of eve.json (Wazuh cannot decode ~540-field stats; stats.log keeps them)
+      ansible.builtin.replace:
+        path: /etc/suricata/suricata.yaml
+        regexp: '^(\s{8,})(- stats:|totals:|threads:|deltas:)'
+        replace: '\1# \2'
+        after: 'eve-log:'
+        before: '^  - stats:'
+
     - name: Set Suricata AF_PACKET interface to the capture NIC
       ansible.builtin.replace:
         path: /etc/suricata/suricata.yaml

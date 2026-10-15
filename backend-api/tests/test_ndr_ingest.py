@@ -6,6 +6,7 @@ import os
 import unittest
 from unittest.mock import patch
 
+from app.api.routes import soc_sync
 from app.api.routes.soc_sync import detect_ingress_source_tool
 from app.services import ndr_service
 
@@ -128,6 +129,60 @@ class ImportFromAlertsQueryTests(unittest.TestCase):
         sql = mock_fetch.call_args[0][0]
         self.assertIn("lower(coalesce(source_tool, '')) IN ('suricata', 'zeek')", sql)
         self.assertNotIn("LIKE '%%dns%%'", sql)
+
+
+SURICATA_ALERT = {
+    "id": "1792042795.123",
+    "rule": {
+        "id": "100611",
+        "level": 10,
+        "groups": ["ids", "suricata"],
+        "description": "Suricata: ET ADWARE_PUP W32/SpeedRunner User-Agent SRRemove",
+    },
+    "agent": {"id": "002", "name": "suricata-sensor", "ip": "192.168.0.216"},
+    "data": {"src_ip": "192.168.0.215", "dest_ip": "172.66.147.243", "alert": {"severity": 2}},
+    "location": "/var/log/suricata/eve.json",
+}
+
+
+@patch.dict(os.environ, {"WAZUH_DEFAULT_TENANT_SHORT_CODE": ""}, clear=False)
+@patch("app.services.wazuh_client.credentials_configured", return_value=False)
+@patch("app.services.tenant_engine_provisioner.resolve_short_code_by_wazuh_group", return_value=None)
+class NdrAssetIpAttributionTests(unittest.TestCase):
+    @patch("app.api.routes.soc_sync.fetch_all")
+    def test_unbound_sensor_attributed_by_monitored_asset_ip(self, mock_fetch, *_):
+        mock_fetch.side_effect = [[{"short_code": "BETAWINCORP-J3FW", "hostname": "linux-endpoint-lab"}]]
+        req = soc_sync._normalize_wazuh_alert(SURICATA_ALERT)
+        self.assertEqual(req.tenant_short_code, "BETAWINCORP-J3FW")
+        self.assertEqual(req.source_tool, "suricata")
+        self.assertEqual(req.destination_host, "linux-endpoint-lab")
+        self.assertEqual(req.source_ip, "192.168.0.215")
+        self.assertEqual(req.destination_ip, "172.66.147.243")
+
+    @patch("app.api.routes.soc_sync.fetch_all")
+    def test_ip_owned_by_two_tenants_fails_closed(self, mock_fetch, *_):
+        mock_fetch.side_effect = [
+            [{"short_code": "A-1", "hostname": "h1"}, {"short_code": "B-2", "hostname": "h2"}],
+            [],
+        ]
+        with self.assertRaises(ValueError):
+            soc_sync._normalize_wazuh_alert(SURICATA_ALERT)
+
+    @patch("app.api.routes.soc_sync.fetch_all", return_value=[])
+    def test_unknown_ip_fails_closed(self, *_):
+        with self.assertRaises(ValueError):
+            soc_sync._normalize_wazuh_alert(SURICATA_ALERT)
+
+    @patch("app.api.routes.soc_sync.fetch_all")
+    def test_endpoint_alerts_never_use_ip_attribution(self, mock_fetch, *_):
+        raw = {
+            "rule": {"id": "5712", "level": 10, "groups": ["sshd"], "description": "sshd brute force"},
+            "agent": {"id": "000", "name": "wazuh-stack"},
+            "data": {"src_ip": "192.168.0.215"},
+        }
+        with self.assertRaises(ValueError):
+            soc_sync._normalize_wazuh_alert(raw)
+        mock_fetch.assert_not_called()
 
 
 if __name__ == "__main__":
