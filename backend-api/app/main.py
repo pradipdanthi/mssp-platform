@@ -204,6 +204,7 @@ from app.services.edr_sweeper import edr_sweeper_loop
 from app.services.log_archiver import start_log_archiver_worker
 from app.services.shuffle_retry_queue import start_shuffle_retry_worker
 from app.services.ai_alert_queue import start_ai_alert_worker
+from app.services.soc_notifier import start_soc_notifier
 from app.services.wazuh_client import validate_production_tls
 
 _sweeper_task = None
@@ -215,6 +216,7 @@ async def _start_background_tasks():
     _sweeper_task = asyncio.create_task(edr_sweeper_loop())
     start_shuffle_retry_worker()
     start_ai_alert_worker()
+    start_soc_notifier()
     start_log_archiver_worker()
 
 @app.on_event("shutdown")

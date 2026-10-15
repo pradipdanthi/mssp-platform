@@ -14,6 +14,7 @@ from app.services.ai_alert_analysis import (
     process_alert_job,
     severity_meets_threshold,
 )
+from app.services.ai_deep_triage import deep_triage_enabled, process_deep_triage_job
 from app.services.ai_soc_triage import ai_soc_triage_enabled, process_soc_triage_job
 
 logger = logging.getLogger(__name__)
@@ -44,11 +45,14 @@ def _redis():
 
 
 def _ai_pipeline_enabled() -> bool:
-    return ai_alert_enabled() or ai_soc_triage_enabled()
+    return ai_alert_enabled() or ai_soc_triage_enabled() or deep_triage_enabled()
 
 
 def _run_ai_pipeline(alert_id: str, tenant_id: str) -> bool:
-    """Explain (KB-092) then triage assist (KB-096). Soft-fail per stage."""
+    """Explain (KB-092), triage assist (KB-096), deep triage + escalation (KB-116).
+
+    Soft-fail per stage so one unhealthy stage never blocks the others.
+    """
     ok_any = False
     if ai_alert_enabled():
         try:
@@ -60,6 +64,11 @@ def _run_ai_pipeline(alert_id: str, tenant_id: str) -> bool:
             ok_any = bool(process_soc_triage_job(alert_id=alert_id, tenant_id=tenant_id)) or ok_any
         except Exception:  # noqa: BLE001
             logger.exception("AI SOC triage stage failed id=%s", alert_id)
+    if deep_triage_enabled():
+        try:
+            ok_any = bool(process_deep_triage_job(alert_id=alert_id, tenant_id=tenant_id)) or ok_any
+        except Exception:  # noqa: BLE001
+            logger.exception("AI deep triage stage failed id=%s", alert_id)
     return ok_any
 
 
@@ -165,11 +174,13 @@ def start_ai_alert_worker() -> None:
     if _ai_pipeline_enabled():
         _ensure_worker()
         logger.info(
-            "AI pipeline worker starting (explain=%s triage=%s)",
+            "AI pipeline worker starting (explain=%s triage=%s deep=%s)",
             ai_alert_enabled(),
             ai_soc_triage_enabled(),
+            deep_triage_enabled(),
         )
     else:
         logger.info(
-            "AI pipeline worker not started (AI_ALERT_ENABLED=false, AI_SOC_TRIAGE_ENABLED=false)"
+            "AI pipeline worker not started (AI_ALERT_ENABLED=false, "
+            "AI_SOC_TRIAGE_ENABLED=false, AI_DEEP_TRIAGE_ENABLED=false)"
         )
