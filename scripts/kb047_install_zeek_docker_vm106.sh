@@ -5,7 +5,7 @@ set -euo pipefail
 
 HOST="${ZEEK_SENSOR_HOST:-192.168.0.216}"
 SSH_KEY="${ZEEK_SENSOR_SSH_KEY:-/home/secadmin/.ssh/id_ed25519_suricata}"
-ZEEK_IF="${ZEEK_CAPTURE_IF:-enp6s20}"
+ZEEK_IF="${ZEEK_CAPTURE_IF:-enp6s19}"
 
 ssh -i "$SSH_KEY" "secadmin@${HOST}" "bash -s" <<REMOTE
 set -euo pipefail
@@ -41,14 +41,26 @@ Restart=always
 RestartSec=15
 ExecStartPre=-/usr/bin/docker rm -f mssp-zeek
 ExecStart=/usr/bin/docker run --name mssp-zeek --rm --net=host --cap-add=NET_ADMIN --cap-add=NET_RAW \\
-  -v /opt/zeek-logs:/usr/local/zeek/spool/zeek \\
-  zeek/zeek:7.0.7 zeek -i \${ZEEK_IF} local
+  -v /opt/zeek-logs:/usr/local/zeek/spool/zeek -w /usr/local/zeek/spool/zeek/current \\
+  zeek/zeek:7.0.7 zeek -i \${ZEEK_IF} local LogAscii::use_json=T
 ExecStop=/usr/bin/docker stop mssp-zeek
 Environment=ZEEK_IF=\${ZEEK_IF}
 
 [Install]
 WantedBy=multi-user.target
 UNIT
+
+sudo tee /etc/logrotate.d/mssp-zeek >/dev/null <<'ROT'
+/opt/zeek-logs/current/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}
+ROT
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now mssp-zeek-docker.service

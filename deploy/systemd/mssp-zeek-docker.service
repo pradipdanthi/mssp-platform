@@ -8,18 +8,21 @@ Requires=docker.service
 Type=simple
 Restart=always
 RestartSec=15
-Environment=ZEEK_CAPTURE_IF=enp6s20
+Environment=ZEEK_CAPTURE_IF=enp6s19
 Environment=ZEEK_IMAGE=zeek/zeek:7.0.7
 Environment=ZEEK_LOG_DIR=/opt/zeek-logs
 ExecStartPre=-/usr/bin/docker rm -f mssp-zeek
-ExecStartPre=/usr/bin/docker pull ${ZEEK_IMAGE}
+ExecStartPre=-/usr/bin/docker pull ${ZEEK_IMAGE}
+# Bare `zeek` writes logs to its cwd: -w puts them on the mounted volume at
+# ${ZEEK_LOG_DIR}/current (the path the Wazuh agent / backend expect).
 ExecStart=/usr/bin/docker run --name mssp-zeek --rm \
   --net=host \
   --cap-add=NET_ADMIN \
   --cap-add=NET_RAW \
   -v ${ZEEK_LOG_DIR}:/usr/local/zeek/spool/zeek \
+  -w /usr/local/zeek/spool/zeek/current \
   ${ZEEK_IMAGE} \
-  zeek -i ${ZEEK_CAPTURE_IF} local
+  zeek -i ${ZEEK_CAPTURE_IF} local LogAscii::use_json=T
 ExecStop=/usr/bin/docker stop mssp-zeek
 
 [Install]
