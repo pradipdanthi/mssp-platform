@@ -8,12 +8,13 @@
 | Resource | Minimum for `qwen2.5:7b` | Lab observed issue |
 |----------|--------------------------|---------------------|
 | **RAM** | **16 GiB** (32 GiB recommended) | **7.6 GiB** → runner evicted every request (~80–90s reload, 100% CPU spikes) |
-| **vCPU** | 8 | OK at 8 cores with `taskset -c 0-5` + `num_thread=2` |
+| **vCPU** | 8 | `taskset -c 0-5` pins Ollama to 6 cores, so **every** caller must run 6 threads / 4096 ctx. 2026-10-15: `/v1/chat/completions` can't pass `num_thread`, so the runner loaded with 8 threads on 6 cores and generation collapsed to 0.4 tok/s (every request hit the 90s timeout). Fixed by baking `PARAMETER num_thread 6` + `num_ctx 4096` into `qwen2.5:7b` on VM 115 → 13.6 tok/s, ~25s per call. |
 | **Swap** | 8 GiB emergency buffer | Added `/swapfile` — prevents OOM kill but **does not** replace RAM |
 
 Proxmox: `qm set 115 --memory 16384` then reboot guest or `systemctl restart ollama`.
 
 Systemd template: `scripts/mssp-ai/ollama.service.override.conf.example` + `ollama-warmup.sh`.  
+Model defaults (run on VM 115 after `ollama pull qwen2.5:7b`): `ollama create qwen2.5:7b -f scripts/mssp-ai/qwen2.5-7b.Modelfile`.  
 **Brand context:** Supports “AI-ready” → “AI-assisted plain-English alerts” after live proof  
 
 ---

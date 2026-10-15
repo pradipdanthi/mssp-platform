@@ -3,8 +3,10 @@
 set -euo pipefail
 MODEL="${OLLAMA_WARMUP_MODEL:-qwen2.5:7b}"
 URL="${OLLAMA_WARMUP_URL:-http://127.0.0.1:11434}"
-THREADS="${OLLAMA_NUM_THREADS:-2}"
-CTX="${OLLAMA_WARMUP_NUM_CTX:-2048}"
+# Must match the model's num_thread/num_ctx and the taskset core count; a mismatch
+# reloads the runner, and threads > pinned cores collapses generation (~0.4 tok/s).
+THREADS="${OLLAMA_NUM_THREADS:-6}"
+CTX="${OLLAMA_WARMUP_NUM_CTX:-4096}"
 PREDICT="${OLLAMA_WARMUP_NUM_PREDICT:-8}"
 
 for _ in $(seq 1 60); do

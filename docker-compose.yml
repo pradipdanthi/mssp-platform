@@ -106,10 +106,11 @@ services:
       AI_ALERT_TIMEOUT_SECONDS: ${AI_ALERT_TIMEOUT_SECONDS:-90}
       # Tier-1 on-demand triage (default 8s per product requirement; raise if Ollama host is slow)
       AI_TIER1_TRIAGE_TIMEOUT_SECONDS: ${AI_TIER1_TRIAGE_TIMEOUT_SECONDS:-8}
-      AI_TIER1_NUM_THREAD: ${AI_TIER1_NUM_THREAD:-2}
+      # Must match VM 115 qwen2.5:7b Modelfile (num_thread 6 / num_ctx 4096) or Ollama reloads the runner
+      AI_TIER1_NUM_THREAD: ${AI_TIER1_NUM_THREAD:-6}
       AI_TIER1_NUM_PREDICT: ${AI_TIER1_NUM_PREDICT:-128}
-      AI_TIER1_NUM_CTX: ${AI_TIER1_NUM_CTX:-2048}
-      OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-2}
+      AI_TIER1_NUM_CTX: ${AI_TIER1_NUM_CTX:-4096}
+      OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-6}
       OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-30m}
       # Optional VirusTotal hash lookup for Tier-1 triage (2s timeout; soft-fail).
       # Operator must set VT_API_KEY or mount VT_API_KEY_FILE — never expose to browsers.

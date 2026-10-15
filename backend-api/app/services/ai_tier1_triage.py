@@ -110,9 +110,9 @@ JSON_SCHEMA: Dict[str, Any] = {
 
 # Strict wall-clock for Ollama — never block dashboard list paths.
 DEFAULT_TIMEOUT_SECONDS = 8
-DEFAULT_NUM_THREAD = 2
+DEFAULT_NUM_THREAD = 6
 DEFAULT_NUM_PREDICT = 128
-DEFAULT_NUM_CTX = 2048
+DEFAULT_NUM_CTX = 4096
 OLLAMA_HEALTH_PROBE_TIMEOUT_SECONDS = 3.0
 
 # Extend via AI_TIER1_TRUSTED_SHA256 env (comma-separated lowercase hex).
