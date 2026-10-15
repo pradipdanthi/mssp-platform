@@ -142,6 +142,7 @@ for svc in junexis-channeld.service kevantic-channeld.service; do
 done
 for t in niktiar-heartbeat.timer kevantic-heartbeat.timer; do
   if systemctl list-unit-files "\$t" --no-legend 2>/dev/null | grep -q .; then
+    sudo systemctl enable "\$t" >/dev/null
     sudo systemctl restart "\$t"
     sudo systemctl start "\${t%.timer}.service" || true
   fi

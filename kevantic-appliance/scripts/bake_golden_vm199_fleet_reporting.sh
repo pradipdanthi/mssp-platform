@@ -49,6 +49,8 @@ WATCHER="$ROOT/appliance/telemetry/critical_alert_watcher.py"
 [[ -f "$WATCHER" ]] || die "missing $WATCHER"
 PRIVACY="$ROOT/appliance/common/privacy.py"
 [[ -f "$PRIVACY" ]] || die "missing $PRIVACY"
+ENGINE_UNIT="$ROOT/configs/systemd/kevantic-appliance-engine.service"
+grep -q '^RuntimeDirectory=kevantic' "$ENGINE_UNIT" || die "engine unit missing RuntimeDirectory"
 FWD_UNIT="$ROOT/configs/systemd/kevantic-critical-alert-forwarder.service"
 [[ -f "$FWD_UNIT" ]] || die "missing $FWD_UNIT"
 JFWD_UNIT="$ROOT/configs/systemd/niktiar-critical-alert-forwarder.service"
@@ -154,6 +156,7 @@ cp "$API_PATCH" "$TMP/patch_wazuh_api_request_timeout.sh"
 cp "$LOCAL_AI_FILTER" "$TMP/local_ai_filter.py"
 cp "$WATCHER" "$TMP/critical_alert_watcher.py"
 cp "$PRIVACY" "$TMP/privacy.py"
+cp "$ENGINE_UNIT" "$TMP/kevantic-appliance-engine.service"
 cp "$FWD_UNIT" "$TMP/kevantic-critical-alert-forwarder.service"
 cp "$JFWD_UNIT" "$TMP/niktiar-critical-alert-forwarder.service"
 cp "$OLLAMA_UNIT" "$TMP/ollama.service"
@@ -216,6 +219,7 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/local_ai_filter.py" \
   "$TMP/critical_alert_watcher.py" \
   "$TMP/privacy.py" \
+  "$TMP/kevantic-appliance-engine.service" \
   "$TMP/kevantic-critical-alert-forwarder.service" \
   "$TMP/niktiar-critical-alert-forwarder.service" \
   "$TMP/ollama.service" \
@@ -288,6 +292,7 @@ if [[ -d /opt/niktiar/appliance-src/appliance ]]; then
   sudo install -m 0644 /tmp/critical_alert_watcher.py /opt/niktiar/appliance-src/appliance/telemetry/critical_alert_watcher.py
   sudo install -m 0644 /tmp/privacy.py /opt/niktiar/appliance-src/appliance/common/privacy.py
 fi
+sudo install -m 0644 /tmp/kevantic-appliance-engine.service /etc/systemd/system/kevantic-appliance-engine.service
 sudo install -m 0644 /tmp/kevantic-critical-alert-forwarder.service /etc/systemd/system/kevantic-critical-alert-forwarder.service
 sudo install -m 0644 /tmp/niktiar-critical-alert-forwarder.service /etc/systemd/system/niktiar-critical-alert-forwarder.service
 sudo install -d -m 0755 /etc/systemd/system/ollama.service.d
@@ -336,6 +341,9 @@ sudo systemctl enable kevantic-heartbeat.timer >/dev/null
 sudo systemctl restart kevantic-heartbeat.timer || true
 sudo systemctl enable kevantic-license-enforce.timer >/dev/null
 sudo systemctl restart kevantic-license-enforce.timer || true
+sudo systemctl enable kevantic-appliance-engine.service >/dev/null
+sudo systemctl reset-failed kevantic-appliance-engine.service 2>/dev/null || true
+sudo systemctl restart kevantic-appliance-engine.service
 
 echo "== verify =="
 grep -F 'python3 -m kevantic_cli heartbeat' /etc/systemd/system/kevantic-heartbeat.service
@@ -343,6 +351,15 @@ grep -F 'python3 -m kevantic_cli license enforce' /etc/systemd/system/kevantic-l
 grep -F 'OnUnitActiveSec=1h' /etc/systemd/system/kevantic-license-enforce.timer
 grep -F 'OnBootSec=3min' /etc/systemd/system/kevantic-license-enforce.timer
 sudo systemctl is-enabled kevantic-license-enforce.timer | grep -qx enabled
+sudo systemctl is-enabled kevantic-heartbeat.timer | grep -qx enabled
+sudo systemctl is-enabled kevantic-appliance-engine.service | grep -qx enabled
+engine_ok=0
+for _ in \$(seq 1 15); do
+  if curl -fsS -m 3 http://127.0.0.1:8787/appliance/v1/health | grep -q '"status": "ok"'; then engine_ok=1; break; fi
+  sleep 2
+done
+[[ "\$engine_ok" -eq 1 ]] || { sudo journalctl -u kevantic-appliance-engine -n 20 --no-pager >&2; echo 'engine API not healthy' >&2; exit 4; }
+! ss -ltn | grep -E '0\.0\.0\.0:8787|:::8787|\*:8787' || { echo 'engine API WAN bind' >&2; exit 3; }
 grep -E '_collect_resource_metrics|_read_enabled_services|_read_image_metadata|apply_entitlements|license_jws|_authenticate_local_wazuh|_ensure_local_edr_ar_commands|_publish_linux_midlayer_shared' "\$CLI/register_ops.py" >/dev/null
 grep -q 'not confirmed for agent' "\$CLI/register_ops.py"
 sudo test -f /etc/kevantic/trust/keys/licensing-ed25519-v1.pub

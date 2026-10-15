@@ -5,16 +5,21 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=kevantic
-Group=kevantic
+# Root: shares root-owned /var/lib/kevantic (appliance_local.db job queue, ready
+# marker) with the heartbeat CLI. The `kevantic` account is an interactive login
+# user and must not get write access to state (entitlements.json, secrets/).
 Environment=PYTHONPATH=/opt/kevantic/appliance-src
 Environment=KEVANTIC_STATE_DIR=/var/lib/kevantic
 Environment=KEVANTIC_LOG_DIR=/var/log/kevantic
 ExecStart=/usr/bin/python3 -m appliance.api.local_app
 Restart=on-failure
 RestartSec=5
+# /run is tmpfs: recreate on every start or the ReadWritePaths mount fails (226/NAMESPACE).
+RuntimeDirectory=kevantic
+RuntimeDirectoryMode=0750
 NoNewPrivileges=true
 ProtectSystem=strict
+ProtectHome=true
 ReadWritePaths=/var/lib/kevantic /var/log/kevantic /run/kevantic
 PrivateTmp=true
 

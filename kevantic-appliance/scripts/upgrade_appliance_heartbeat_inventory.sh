@@ -56,6 +56,7 @@ fi
 sudo systemctl daemon-reload
 for t in kevantic-heartbeat.timer niktiar-heartbeat.timer; do
   if systemctl list-unit-files "$t" --no-legend 2>/dev/null | grep -q .; then
+    sudo systemctl enable "$t" >/dev/null
     sudo systemctl restart "$t"
     sudo systemctl start "${t%.timer}.service" || true
   fi
