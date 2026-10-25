@@ -113,14 +113,23 @@ export default function DashboardPage() {
     return Object.entries(map).map(([severity, count]) => ({ severity, count }));
   }, [data]);
 
-  const heatSpots = useMemo(
-    () =>
-      hubsFromActivity(
-        (data?.kpis.open_incidents ?? 0) + (data?.kpis.high_critical_alerts ?? 0) * 2,
-        liveTick
-      ),
-    [data, liveTick]
-  );
+  const heatSpots = useMemo(() => {
+    const edrSignal = Math.min(
+      40,
+      Math.floor((edrMetrics?.telemetry_events_processed ?? 0) / 25)
+    );
+    const score =
+      (data?.kpis.open_incidents ?? 0) +
+      (data?.kpis.high_critical_alerts ?? 0) * 2 +
+      edrSignal +
+      (edrMetrics?.isolated_endpoints_count ?? 0) * 3;
+    return hubsFromActivity(score, liveTick);
+  }, [
+    data,
+    liveTick,
+    edrMetrics?.telemetry_events_processed,
+    edrMetrics?.isolated_endpoints_count,
+  ]);
 
   if (!shortCode) {
     return (

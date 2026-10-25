@@ -1969,12 +1969,30 @@ a.severity-donut-legend-link {
   padding: 14px 16px;
 }
 .geo-heatmap-stage {
+  position: relative;
   flex: 1;
   min-height: 220px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid #3A506B;
   background: #0B132B;
+}
+.geo-heatmap-empty {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 280px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(58, 80, 107, 0.85);
+  background: rgba(11, 19, 43, 0.88);
+  color: #B8ECFA;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: center;
+  pointer-events: none;
 }
 .geo-heatmap-svg {
   width: 100%;
@@ -2076,9 +2094,21 @@ button.command-chip {
   display: inline-block;
   box-shadow: 0 0 10px currentColor;
 }
-.geo-legend-swatch--low { background: #D6E2E9; color: #D6E2E9; box-shadow: 0 0 8px rgba(214, 226, 233, 0.35); }
-.geo-legend-swatch--mid { background: #D6E2E9; color: #D6E2E9; }
-.geo-legend-swatch--high { background: #D6E2E9; color: #D6E2E9; box-shadow: 0 0 8px rgba(212, 175, 55, 0.35); }
+.geo-legend-swatch--low {
+  background: #3A506B;
+  color: #3A506B;
+  box-shadow: 0 0 8px rgba(58, 80, 107, 0.45);
+}
+.geo-legend-swatch--mid {
+  background: #00AEEF;
+  color: #00AEEF;
+  box-shadow: 0 0 10px rgba(0, 174, 239, 0.55);
+}
+.geo-legend-swatch--high {
+  background: #D4AF37;
+  color: #D4AF37;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.55);
+}
 .geo-legend-peak {
   color: #D6E2E9;
   font-size: 0.7rem;

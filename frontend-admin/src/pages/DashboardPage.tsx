@@ -216,16 +216,27 @@ export default function DashboardPage() {
             100
         )
     : 0;
-  const heatSpots = useMemo(
-    () =>
-      hubsFromActivity(
-        (overview?.open_incidents ?? 0) +
-          (overview?.high_or_critical_alerts ?? 0) * 2 +
-          scopedIncidents.length,
-        liveTick
-      ),
-    [overview, scopedIncidents.length, liveTick]
-  );
+  // Heatmap previously used only incidents/alerts — so Peak stayed 0% while EDR
+  // still showed hundreds of endpoint events (looked like a "broken" empty map).
+  const heatSpots = useMemo(() => {
+    const edrSignal = Math.min(
+      40,
+      Math.floor((edrMetrics?.telemetry_events_processed ?? 0) / 25)
+    );
+    const score =
+      (overview?.open_incidents ?? 0) +
+      (overview?.high_or_critical_alerts ?? 0) * 2 +
+      scopedIncidents.length +
+      edrSignal +
+      (edrMetrics?.isolated_endpoints_count ?? 0) * 3;
+    return hubsFromActivity(score, liveTick);
+  }, [
+    overview,
+    scopedIncidents.length,
+    liveTick,
+    edrMetrics?.telemetry_events_processed,
+    edrMetrics?.isolated_endpoints_count,
+  ]);
 
   const loading = dash.status === "loading" || incidentsQ.status === "loading";
   const forbidden = dash.status === "forbidden" || incidentsQ.status === "forbidden";

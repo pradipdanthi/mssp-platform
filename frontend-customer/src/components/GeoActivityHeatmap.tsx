@@ -140,15 +140,15 @@ function WorldLand() {
       <rect
         width={WORLD_MAP_WIDTH}
         height={WORLD_MAP_HEIGHT}
-        fill="#081120"
+        fill="#07101F"
       />
       {WORLD_LAND_PATHS.map((d, i) => (
         <path
           key={i}
           d={d}
-          fill="#101b2d"
-          stroke="#23344D"
-          strokeWidth={0.5}
+          fill="#1A2A44"
+          stroke="#3A506B"
+          strokeWidth={0.55}
           strokeLinejoin="round"
           vectorEffect="non-scaling-stroke"
         />
@@ -174,6 +174,7 @@ export default function GeoActivityHeatmap({
     [spots, liveTick]
   );
   const peak = Math.round(Math.max(...spots.map((s) => s.intensity), 0) * 100);
+  const empty = spots.length === 0;
 
   return (
     <div className="geo-heatmap card-surface viz-panel">
@@ -195,6 +196,12 @@ export default function GeoActivityHeatmap({
         </div>
       </div>
       <div className="geo-heatmap-stage">
+        {empty ? (
+          <div className="geo-heatmap-empty" role="status">
+            No anomaly volume in this scope yet — map lights up from endpoint
+            telemetry, alerts, and incidents.
+          </div>
+        ) : null}
         <svg
           className="geo-heatmap-svg"
           viewBox={WORLD_MAP_VIEWBOX}
