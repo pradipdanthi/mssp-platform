@@ -36,7 +36,14 @@ _lock = threading.Lock()
 
 DEFAULT_POLL_SECONDS = 10.0
 DEFAULT_BATCH = 20
-MAX_ATTEMPTS = 4
+
+
+def _max_attempts() -> int:
+    try:
+        n = int(os.getenv("SOC_NOTIFIER_MAX_ATTEMPTS") or "4")
+    except ValueError:
+        n = 4
+    return max(1, min(n, 20))
 
 
 class NotifyError(RuntimeError):
@@ -219,23 +226,26 @@ def deliver_one(event: Dict[str, Any]) -> bool:
 
 
 def _mark_failed(event_id: str, error: str) -> None:
-    """Mark failed. Kept as 'queued' until attempts are exhausted."""
+    """Increment attempts; keep queued until MAX_ATTEMPTS, then mark failed."""
+    ceiling = _max_attempts()
     fetch_one_write(
         """
         UPDATE notification_events
-        SET error_message = %s,
+        SET attempts = COALESCE(attempts, 0) + 1,
+            error_message = %s,
             status = CASE
-                WHEN COALESCE(error_message, '') <> '' THEN 'failed'
-                ELSE status
+                WHEN COALESCE(attempts, 0) + 1 >= %s THEN 'failed'
+                ELSE 'queued'
             END
         WHERE id = %s::uuid
         RETURNING id::text AS id;
         """,
-        (error, event_id),
+        (error[:500], ceiling, event_id),
     )
 
 
 def fetch_queued(limit: int = DEFAULT_BATCH) -> List[Dict[str, Any]]:
+    ceiling = _max_attempts()
     return fetch_all(
         """
         SELECT id::text AS id,
@@ -244,13 +254,15 @@ def fetch_queued(limit: int = DEFAULT_BATCH) -> List[Dict[str, Any]]:
                notification_type,
                recipient_name,
                recipient_address,
-               message_body
+               message_body,
+               COALESCE(attempts, 0)::int AS attempts
         FROM notification_events
         WHERE status = 'queued'
+          AND COALESCE(attempts, 0) < %s
         ORDER BY created_at ASC
         LIMIT %s;
         """,
-        (limit,),
+        (ceiling, limit),
     )
 
 

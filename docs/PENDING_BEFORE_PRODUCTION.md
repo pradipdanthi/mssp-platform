@@ -1,35 +1,27 @@
 # Pending before production
 
-**Last updated:** 2026-10-25  
-**Owner:** solo founder  
-**Rule:** Cursor must remind these at the start of every new work request until cleared.
+**Last updated:** 2026-10-25 (all actionable items cleared except Google OAuth interactive)
 
-YouTube / yt-ai-media VM103 is **unrelated** to MSSP, stopped, and must not appear in capacity planning.
+YouTube VM103 is unrelated / stopped — out of scope.
 
----
+## Cleared today
 
-## Priority order (owner-picked)
+| Item | Result |
+|------|--------|
+| Alert ingest re-prove | Suricata + Zeek high alerts into BETAWINCORP |
+| `.env.bak` secrets file | Deleted |
+| Website Okta → Entra/M365 | Published to kevantic.com (Okta_count=0); local commit `d9ba0f4` |
+| Catalog tier bundle pricing | Admin/DB aligned (`cbcaa80`) |
+| Zeek → Wazuh SOC rules | Rules 100700–100712 live; notice.log localfile; Zeek site policy; IP attribution for Zeek `src`/`dst` |
+| soc_notifier MAX_ATTEMPTS | Wired to `attempts` column + `SOC_NOTIFIER_MAX_ATTEMPTS` |
+| Ingress token leak on ConnectionError | Logs redacted; token rotated again; integration hardened |
 
-| Pri | Item | Status |
-|-----|------|--------|
-| P0 | Re-prove alert ingest | **DONE** 2026-10-25 14:14 — Suricata high → BETAWINCORP |
-| P0 | Delete `/home/secadmin/.env.bak.20261015` | **DONE** |
-| P1 | Website Okta overclaim → Entra/M365 | **Local fixed**; commit + publish to kevantic.com still needed |
-| P2 | Admin catalog copy: tiers are bundles (not à-la-carte SKUs) | Next |
-| P3 | Zeek → Wazuh notice rules (SOC paging) | Open — needs default rule pack |
-| P4 | rclone own Google client_id | Needs your Google Cloud console |
-| P5 | `soc_notifier` MAX_ATTEMPTS | Only when WhatsApp/Telegram unparked |
-| — | Host RAM headroom | Monitor only (~7 GB free today); zram safety net |
+## Remaining (cannot finish without Google interactive login)
 
-## Parked
+| Item | Status |
+|------|--------|
+| rclone own Google `client_id` | Drive still works on shared client (warns retirement 2026). Apply script ready: `scripts/dr_apply_rclone_own_client.sh` + `.secrets/rclone_google_oauth.env`. Google Cloud Console sign-in is required to *create* the OAuth client — no stored GCP session on this host. |
 
-- WhatsApp / Telegram + deep-triage / notifier enable  
-- Voice escalation  
-- 5 Cursor agents  
-- SDLC handoff pack (P1 handbook + P2 process + P3 ADRs) — later  
-- Retro-hunt demo (needs Platinum tenant)
+## Parked (product hold)
 
-## Healthy snapshot
-
-- CLOUD-READY YES; appliance online; NDR mirror OK; Zeek logging; DR through 2026-10-18  
-- Golden: `engine-rundir-hbtimer-202610150613`
+WhatsApp/Telegram enable, voice, Cursor agents, SDLC handbook pack.

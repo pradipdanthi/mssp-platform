@@ -1,0 +1,53 @@
+<!--
+  MSSP KB-047: Zeek notice.log → SOC-pageable Wazuh rules.
+  Sensor tails /opt/zeek-logs/current/notice.log (JSON).
+  Level >=10 matches the custom-mssp-ingress forwarder.
+-->
+<group name="zeek,ids,mssp_ndr,">
+
+  <!-- Base: any Zeek JSON notice -->
+  <rule id="100700" level="3">
+    <decoded_as>json</decoded_as>
+    <field name="note">\.+</field>
+    <description>Zeek notice: $(note)</description>
+    <group>zeek_notice,</group>
+  </rule>
+
+  <!-- Noise / health — keep below forward threshold -->
+  <rule id="100701" level="3">
+    <if_sid>100700</if_sid>
+    <field name="note">^CaptureLoss::</field>
+    <description>Zeek capture-loss health: $(note)</description>
+    <group>zeek_health,</group>
+  </rule>
+
+  <rule id="100702" level="5">
+    <if_sid>100700</if_sid>
+    <field name="note">^Weird::|^PacketFilter::</field>
+    <description>Zeek protocol anomaly: $(note) — $(msg)</description>
+    <group>zeek_weird,</group>
+  </rule>
+
+  <!-- SOC page (level >= 10) -->
+  <rule id="100710" level="12">
+    <if_sid>100700</if_sid>
+    <field name="note">^Scan::|^SSH::Password_Guessing|^SSH::Interesting_Hostname_Login|^SSH::Login_By_Key_Guessing</field>
+    <description>Zeek high: scan / SSH brute — $(note) — $(msg)</description>
+    <group>zeek_attack,pci_dss_11.4,</group>
+  </rule>
+
+  <rule id="100711" level="10">
+    <if_sid>100700</if_sid>
+    <field name="note">^SSL::Invalid_Server_Cert|^SSL::Old_Version|^HTTP::SQL_Injection_Attacker|^HTTP::SQL_Injection_Victim|^TeamCymruMalwareHashRegistry::Match|^Trw::</field>
+    <description>Zeek medium-high: $(note) — $(msg)</description>
+    <group>zeek_attack,</group>
+  </rule>
+
+  <rule id="100712" level="10">
+    <if_sid>100700</if_sid>
+    <field name="note">^Scan::Port_Scan|^Scan::Address_Scan|^Scan::Port_Seen</field>
+    <description>Zeek port/address scan: $(msg)</description>
+    <group>zeek_attack,</group>
+  </rule>
+
+</group>

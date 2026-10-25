@@ -351,8 +351,27 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
     net_dst: Optional[str] = None
     if source_tool in ("suricata", "zeek"):
         data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
-        net_src = str(data.get("src_ip") or "").strip() or None
-        net_dst = str(data.get("dest_ip") or "").strip() or None
+        # Suricata eve uses src_ip/dest_ip; Zeek notices often use src/dst or id.orig_h/id.resp_h.
+        net_src = (
+            str(
+                data.get("src_ip")
+                or data.get("src")
+                or data.get("id.orig_h")
+                or data.get("id_orig_h")
+                or ""
+            ).strip()
+            or None
+        )
+        net_dst = (
+            str(
+                data.get("dest_ip")
+                or data.get("dst")
+                or data.get("id.resp_h")
+                or data.get("id_resp_h")
+                or ""
+            ).strip()
+            or None
+        )
         asset = resolve_tenant_by_asset_ip(net_src, net_dst)
         if asset:
             if not tenant_code:

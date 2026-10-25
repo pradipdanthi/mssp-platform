@@ -174,6 +174,35 @@ class NdrAssetIpAttributionTests(unittest.TestCase):
             soc_sync._normalize_wazuh_alert(SURICATA_ALERT)
 
     @patch("app.api.routes.soc_sync.fetch_all")
+    def test_zeek_notice_src_dst_fields_attribute_tenant(self, mock_fetch, *_):
+        mock_fetch.side_effect = [
+            [],  # src 192.168.0.1 unknown
+            [{"short_code": "BETAWINCORP-J3FW", "hostname": "linux-endpoint-lab", "ip": "192.168.0.215"}],
+        ]
+        raw = {
+            "rule": {
+                "id": "100710",
+                "level": 12,
+                "groups": ["zeek", "ids", "mssp_ndr"],
+                "description": "Zeek high: SSH::Password_Guessing",
+            },
+            "agent": {"id": "002", "name": "suricata-sensor", "ip": "192.168.0.216"},
+            "location": "/opt/zeek-logs/current/notice.log",
+            "data": {
+                "note": "SSH::Password_Guessing",
+                "msg": "lab",
+                "src": "192.168.0.1",
+                "dst": "192.168.0.215",
+            },
+        }
+        req = soc_sync._normalize_wazuh_alert(raw)
+        self.assertEqual(req.tenant_short_code, "BETAWINCORP-J3FW")
+        self.assertEqual(req.source_tool, "zeek")
+        self.assertEqual(req.source_ip, "192.168.0.1")
+        self.assertEqual(req.destination_ip, "192.168.0.215")
+        self.assertEqual(req.destination_host, "linux-endpoint-lab")
+
+    @patch("app.api.routes.soc_sync.fetch_all")
     def test_endpoint_alerts_never_use_ip_attribution(self, mock_fetch, *_):
         raw = {
             "rule": {"id": "5712", "level": 10, "groups": ["sshd"], "description": "sshd brute force"},

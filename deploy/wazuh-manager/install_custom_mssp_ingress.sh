@@ -32,6 +32,8 @@ helper = (
     "\n\ndef _redact_hook(url: str) -> str:\n"
     "    \"\"\"MSSP: never write the ingress token (last path segment) to integrations.log.\"\"\"\n"
     "    return re.sub(r'(/hooks/[^/]+/)[^/?#]+', r'\\1<redacted>', url)\n"
+    "\n\ndef _safe_exc(exc: BaseException) -> str:\n"
+    "    return _redact_hook(str(exc))\n"
 )
 anchor = "\n\ndef main(args):"
 if anchor not in text:

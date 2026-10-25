@@ -11,18 +11,20 @@ RestartSec=15
 Environment=ZEEK_CAPTURE_IF=enp6s19
 Environment=ZEEK_IMAGE=zeek/zeek:7.0.7
 Environment=ZEEK_LOG_DIR=/opt/zeek-logs
+Environment=ZEEK_SITE_POLICY=/etc/zeek/site/local-mssp.zeek
 ExecStartPre=-/usr/bin/docker rm -f mssp-zeek
 ExecStartPre=-/usr/bin/docker pull ${ZEEK_IMAGE}
-# Bare `zeek` writes logs to its cwd: -w puts them on the mounted volume at
-# ${ZEEK_LOG_DIR}/current (the path the Wazuh agent / backend expect).
+# Logs land on the mounted volume at ${ZEEK_LOG_DIR}/current (Wazuh localfile path).
+# Site policy enables scan/SSH notices that mssp_zeek_rules.xml pages at level >=10.
 ExecStart=/usr/bin/docker run --name mssp-zeek --rm \
   --net=host \
   --cap-add=NET_ADMIN \
   --cap-add=NET_RAW \
   -v ${ZEEK_LOG_DIR}:/usr/local/zeek/spool/zeek \
+  -v ${ZEEK_SITE_POLICY}:/usr/local/zeek/share/zeek/site/local-mssp.zeek:ro \
   -w /usr/local/zeek/spool/zeek/current \
   ${ZEEK_IMAGE} \
-  zeek -i ${ZEEK_CAPTURE_IF} local LogAscii::use_json=T
+  zeek -i ${ZEEK_CAPTURE_IF} local local-mssp LogAscii::use_json=T
 ExecStop=/usr/bin/docker stop mssp-zeek
 
 [Install]
