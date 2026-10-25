@@ -50,7 +50,7 @@
 	}
 
 	log {
-		output file /var/log/caddy/access.log
+		output file /runtime/niktiar-access.log
 		format json
 	}
 }

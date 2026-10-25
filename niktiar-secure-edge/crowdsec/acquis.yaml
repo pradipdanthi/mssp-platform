@@ -1,10 +1,4 @@
 filenames:
-  - /var/log/caddy/*.log
-  - /var/log/caddy/access.log
+  - /runtime/niktiar-access.log
 labels:
   type: caddy
----
-filenames:
-  - /var/log/caddy/coraza*.log
-labels:
-  type: syslog

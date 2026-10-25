@@ -52,7 +52,7 @@ services:
       - crowdsec_data:/var/lib/crowdsec/data
       - crowdsec_config:/etc/crowdsec
       - ../crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
-      - waf_logs:/var/log/caddy:ro
+      - ../runtime:/runtime:ro
     networks:
       - edge
 

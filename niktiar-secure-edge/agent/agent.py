@@ -23,7 +23,7 @@ POLL = int(CFG.get("poll_seconds") or 30)
 RUNTIME = Path(os.getenv("RUNTIME_DIR") or "/runtime")
 CADDY_CFG = Path(os.getenv("CADDY_CONFIG_DIR") or "/config/caddy")
 WAF_CONTAINER = os.getenv("WAF_CONTAINER") or "niktiar-se-waf"
-ACCESS_LOG = Path("/var/log/caddy/access.log")
+ACCESS_LOG = Path(os.getenv("ACCESS_LOG") or "/runtime/niktiar-access.log")
 VERSION = "0.2.0"
 _last_config_version = -1
 _log_offset = 0
@@ -176,11 +176,13 @@ def tail_access_blocks() -> None:
         return
     try:
         # Prefer tail via subprocess — reliable on docker bind/volume files
+        if not ACCESS_LOG.is_file() or ACCESS_LOG.is_symlink():
+            return
         r = subprocess.run(
             ["tail", "-n", "120", str(ACCESS_LOG)],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=3,
         )
         chunk = r.stdout or ""
         # Dedup by hashing last shipped offset surrogate
