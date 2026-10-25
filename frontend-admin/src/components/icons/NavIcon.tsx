@@ -183,6 +183,7 @@ const ROUTE_ICON: Record<string, keyof typeof ICONS> = {
   "/tenants": "users",
   "/users": "user",
   "/appliances": "monitor",
+  "/secure-edge": "shield",
   "/retrospective-hunts": "search",
   "/threat-intel": "shield",
   "/ai-assistant": "lens",

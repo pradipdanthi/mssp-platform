@@ -31,6 +31,7 @@ import ThreatIntelPage from "./pages/ThreatIntelPage";
 import ThreatLensPage from "./pages/ThreatLensPage";
 import ForensicsPage from "./pages/ForensicsPage";
 import ServicesPage from "./pages/ServicesPage";
+import SecureEdgePage from "./pages/SecureEdgePage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -208,6 +209,14 @@ export default function App() {
             <EntitlementGate require="network_detection">
               <NdrPage />
             </EntitlementGate>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/secure-edge"
+        element={
+          <ProtectedRoute>
+            <SecureEdgePage />
           </ProtectedRoute>
         }
       />

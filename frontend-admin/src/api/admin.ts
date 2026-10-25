@@ -2218,4 +2218,80 @@ export function remediateAdminItdrIdentity(
   });
 }
 
+/** NikTiar Secure Edge (self-hosted WAF) */
+export type SecureEdgeNode = {
+  hostname: string;
+  tenant_short_code?: string | null;
+  status: string;
+  version?: string;
+  deployment_mode?: string;
+  last_config_version?: number;
+  last_heartbeat_at?: string | null;
+  token_set?: boolean;
+};
+
+export type SecureEdgeSite = {
+  id?: string;
+  tenant_short_code: string;
+  public_hostname: string;
+  origin_url: string;
+  edge_node_hostname?: string | null;
+  waf_profile?: string;
+  tls_mode?: string;
+  enabled?: boolean;
+};
+
+export type SecureEdgeEvent = {
+  id: number | string;
+  tenant_short_code?: string | null;
+  edge_hostname?: string;
+  public_hostname?: string | null;
+  event_type: string;
+  severity: string;
+  summary: string;
+  created_at?: string;
+};
+
+export type SecureEdgeSummary = {
+  nodes: SecureEdgeNode[];
+  enabled_sites: number;
+  events_24h: number;
+  recent_events: SecureEdgeEvent[];
+  dashboard_hint?: string;
+};
+
+export function getSecureEdgeSummary(): Promise<SecureEdgeSummary> {
+  return request<SecureEdgeSummary>("/admin/secure-edge/summary");
+}
+
+export function getSecureEdgeNodes(): Promise<{ nodes: SecureEdgeNode[]; count: number }> {
+  return request("/admin/secure-edge/nodes");
+}
+
+export function getSecureEdgeSites(
+  tenantShortCode?: string
+): Promise<{ sites: SecureEdgeSite[]; count: number }> {
+  const q = tenantShortCode
+    ? `?tenant_short_code=${encodeURIComponent(tenantShortCode)}`
+    : "";
+  return request(`/admin/secure-edge/sites${q}`);
+}
+
+export function getSecureEdgeEvents(
+  limit = 50
+): Promise<{ events: SecureEdgeEvent[]; count: number }> {
+  return request(`/admin/secure-edge/events?limit=${limit}`);
+}
+
+export function createSecureEdgeSite(payload: {
+  tenant_short_code: string;
+  public_hostname: string;
+  origin_url: string;
+  edge_node_hostname?: string | null;
+  tls_mode?: string;
+  waf_profile?: string;
+}): Promise<{ ok: boolean; site: SecureEdgeSite }> {
+  return request("/admin/secure-edge/sites", { method: "POST", body: payload });
+}
+
 

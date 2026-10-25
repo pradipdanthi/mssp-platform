@@ -689,6 +689,31 @@ export function getCustomerEntitlements(shortCode: string): Promise<CustomerEnti
   );
 }
 
+export type SecureEdgeCustomerSummary = {
+  tenant: { short_code: string; name: string };
+  enabled: boolean;
+  sites: Array<{
+    public_hostname: string;
+    origin_url?: string;
+    tls_mode?: string;
+    enabled?: boolean;
+    edge_node_hostname?: string | null;
+  }>;
+  events: Array<{
+    event_type: string;
+    severity: string;
+    summary: string;
+    public_hostname?: string | null;
+    created_at?: string;
+  }>;
+  site_count: number;
+  event_count: number;
+};
+
+export function getSecureEdgeSummary(shortCode: string): Promise<SecureEdgeCustomerSummary> {
+  return request(`/customer/secure-edge/${encodeURIComponent(shortCode)}/summary`);
+}
+
 /** KB-079: customer-safe vulnerability service summary (no raw scanner output). */
 export interface VulnerabilityServiceSummary {
   tenant: { short_code: string; name: string };

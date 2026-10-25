@@ -36,6 +36,7 @@ export const CORE_NAV_ITEMS: CustomerNavItem[] = [
   { to: "/audit", label: "Audit" },
   { to: "/account", label: "Account" },
   { to: "/services", label: "Service Portfolio" },
+  { to: "/secure-edge", label: "Secure Edge" },
 ];
 
 /** Capability modules — unlocked by subscription tier. */

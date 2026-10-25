@@ -64,6 +64,35 @@ def render_sites_caddy(sites: List[Dict[str, Any]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_sites_tls_caddy(sites: List[Dict[str, Any]]) -> str:
+    """Dedicated host blocks with automatic HTTPS for tls_mode=acme."""
+    lines = [
+        "# Auto-generated TLS/ACME site blocks",
+        f"# mode={MODE} host={HOST}",
+    ]
+    any_tls = False
+    for site in sites:
+        if (site.get("tls_mode") or "").lower() != "acme":
+            continue
+        public_host = (site.get("public_hostname") or "").strip().lower()
+        origin = (site.get("origin_url") or "").strip()
+        if not public_host or not origin:
+            continue
+        any_tls = True
+        lines.append(f"{public_host} {{")
+        lines.append("\ttls")
+        lines.append("\timport coraza_block")
+        lines.append(f"\treverse_proxy {origin} {{")
+        lines.append("\t\ttrusted_proxies private_ranges")
+        lines.append("\t\theader_up X-NikTiar-Tenant {http.request.host}")
+        lines.append("\t}")
+        lines.append("}")
+        lines.append("")
+    if not any_tls:
+        lines.append("# (no ACME sites)")
+    return "\n".join(lines) + "\n"
+
+
 def reload_caddy() -> bool:
     """Copy generated Caddyfile into container config path and ask Caddy to reload."""
     try:
@@ -142,7 +171,7 @@ def sync_config() -> None:
         RUNTIME.mkdir(parents=True, exist_ok=True)
         (RUNTIME / "sites.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
         (RUNTIME / "sites.caddy").write_text(render_sites_caddy(sites), encoding="utf-8")
-        # Keep base Caddyfile present
+        (RUNTIME / "sites_tls.caddy").write_text(render_sites_tls_caddy(sites), encoding="utf-8")
         base = CADDY_CFG / "Caddyfile"
         if not base.exists():
             print("warning: base Caddyfile missing at /config/caddy/Caddyfile", flush=True)

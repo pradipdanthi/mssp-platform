@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NikTiar Secure Edge</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --line: #243049;
+      --text: #e8eef7;
+      --muted: #93a0b8;
+      --accent: #3d9cf0;
+      --ok: #3ecf8e;
+      --warn: #f0b429;
+      --bad: #f07178;
+      --radius: 12px;
+      font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(1200px 600px at 10% -10%, #152238, var(--bg)); color: var(--text); min-height: 100vh; }
+    a { color: var(--accent); }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 1.25rem; }
+    header.app { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
+    .brand { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
+    .brand span { color: var(--accent); font-weight: 500; font-size: 0.9rem; margin-left: .5rem; }
+    .card { background: color-mix(in srgb, var(--panel) 92%, black); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.1rem; }
+    .grid { display: grid; gap: 1rem; }
+    .grid.kpi { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 1rem; }
+    .kpi .v { font-size: 1.6rem; font-weight: 700; }
+    .kpi .l { color: var(--muted); font-size: .85rem; margin-top: .2rem; }
+    .tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; }
+    .tabs button, button.btn, .login button {
+      background: #1a2740; color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+      padding: .55rem .9rem; cursor: pointer; font-weight: 600;
+    }
+    .tabs button.active, button.btn.primary { background: var(--accent); border-color: var(--accent); color: #041018; }
+    button.btn.danger { background: #3a1d24; border-color: #6b3038; color: #ffd0d4; }
+    table { width: 100%; border-collapse: collapse; font-size: .92rem; }
+    th, td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
+    .muted { color: var(--muted); }
+    .pill { display: inline-block; padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+    .pill.ok { background: #163528; color: var(--ok); }
+    .pill.bad { background: #3a1d24; color: var(--bad); }
+    .pill.warn { background: #3a3014; color: var(--warn); }
+    .login { max-width: 380px; margin: 12vh auto; }
+    .login input, .form input, .form select, .form textarea {
+      width: 100%; margin: .35rem 0 .75rem; padding: .65rem .7rem; border-radius: 8px;
+      border: 1px solid var(--line); background: #0e1626; color: var(--text);
+    }
+    .form label { font-size: .85rem; color: var(--muted); }
+    .row { display: flex; gap: .75rem; flex-wrap: wrap; }
+    .row > * { flex: 1; min-width: 160px; }
+    .err { color: var(--bad); margin: .5rem 0; }
+    .okmsg { color: var(--ok); margin: .5rem 0; }
+    .hidden { display: none !important; }
+    code { background: #0e1626; padding: .1rem .35rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div id="loginView" class="wrap login card">
+    <div class="brand">NikTiar <span>Secure Edge</span></div>
+    <p class="muted">Appliance management dashboard</p>
+    <label>Username</label>
+    <input id="user" value="admin" autocomplete="username" />
+    <label>Password</label>
+    <input id="pass" type="password" autocomplete="current-password" />
+    <div id="loginErr" class="err hidden"></div>
+    <button onclick="doLogin()">Sign in</button>
+    <p class="muted" style="margin-top:1rem;font-size:.8rem">Default lab password is in <code>docker/.env</code> → <code>EDGE_DASHBOARD_PASSWORD</code></p>
+  </div>
+
+  <div id="appView" class="wrap hidden">
+    <header class="app">
+      <div class="brand">NikTiar Secure Edge <span id="hostLabel"></span></div>
+      <div>
+        <button class="btn" onclick="logout()">Logout</button>
+      </div>
+    </header>
+
+    <div class="grid kpi" id="kpis"></div>
+    <div class="tabs">
+      <button class="active" data-tab="overview" onclick="tab('overview')">Overview</button>
+      <button data-tab="sites" onclick="tab('sites')">Sites</button>
+      <button data-tab="blocks" onclick="tab('blocks')">WAF / Blocks</button>
+      <button data-tab="crowdsec" onclick="tab('crowdsec')">CrowdSec</button>
+      <button data-tab="system" onclick="tab('system')">System</button>
+    </div>
+
+    <section id="tab-overview" class="card"></section>
+    <section id="tab-sites" class="card hidden"></section>
+    <section id="tab-blocks" class="card hidden"></section>
+    <section id="tab-crowdsec" class="card hidden"></section>
+    <section id="tab-system" class="card hidden"></section>
+  </div>
+
+<script>
+const S = { token: localStorage.getItem('se_tok') || '', data: null };
+
+async function api(path, opts={}) {
+  const headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
+  if (S.token) headers.Authorization = 'Bearer ' + S.token;
+  const r = await fetch(path, Object.assign({}, opts, { headers }));
+  if (r.status === 401) { logout(false); throw new Error('Unauthorized'); }
+  const j = await r.json().catch(()=>({}));
+  if (!r.ok) throw new Error(j.detail || j.error || ('HTTP '+r.status));
+  return j;
+}
+
+async function doLogin() {
+  const err = document.getElementById('loginErr');
+  err.classList.add('hidden');
+  try {
+    const j = await api('/api/login', { method:'POST', body: JSON.stringify({
+      username: document.getElementById('user').value,
+      password: document.getElementById('pass').value
+    })});
+    S.token = j.token; localStorage.setItem('se_tok', S.token);
+    showApp(); await refresh();
+  } catch (e) {
+    err.textContent = e.message; err.classList.remove('hidden');
+  }
+}
+
+function logout(clear=true) {
+  if (clear) localStorage.removeItem('se_tok');
+  S.token = '';
+  document.getElementById('appView').classList.add('hidden');
+  document.getElementById('loginView').classList.remove('hidden');
+}
+
+function showApp() {
+  document.getElementById('loginView').classList.add('hidden');
+  document.getElementById('appView').classList.remove('hidden');
+}
+
+function tab(name) {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab===name));
+  ['overview','sites','blocks','crowdsec','system'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t!==name);
+  });
+}
+
+function pill(status) {
+  const s = (status||'').toLowerCase();
+  if (s.includes('up') || s==='ok') return '<span class="pill ok">'+status+'</span>';
+  if (s.includes('restart') || s.includes('unhealthy')) return '<span class="pill warn">'+status+'</span>';
+  return '<span class="pill bad">'+status+'</span>';
+}
+
+async function refresh() {
+  S.data = await api('/api/overview');
+  const d = S.data;
+  document.getElementById('hostLabel').textContent = d.hostname + ' · ' + d.deployment_mode;
+  document.getElementById('kpis').innerHTML = `
+    <div class="card kpi"><div class="v">${d.sites_count}</div><div class="l">Protected sites</div></div>
+    <div class="card kpi"><div class="v">${d.access.waf_blocks_403||0}</div><div class="l">WAF blocks (sample)</div></div>
+    <div class="card kpi"><div class="v">${d.crowdsec_decision_count||0}</div><div class="l">CrowdSec decisions</div></div>
+    <div class="card kpi"><div class="v">${(d.containers||[]).filter(c=> (c.status||'').toLowerCase().startsWith('up')).length}/${(d.containers||[]).length}</div><div class="l">Containers up</div></div>
+  `;
+  document.getElementById('tab-overview').innerHTML = `
+    <h3>Edge status</h3>
+    <p class="muted">Control plane: <code>${d.control_url||'offline / unset'}</code></p>
+    <p>Features: ${(d.features||[]).map(f=>'<code>'+f+'</code>').join(' ')}</p>
+    <p><button class="btn primary" onclick="reloadEdge()">Reload WAF config</button>
+       <button class="btn" onclick="refresh()">Refresh</button></p>
+    <h4>Containers</h4>
+    <table><thead><tr><th>Name</th><th>Status</th><th>Image</th></tr></thead>
+    <tbody>${(d.containers||[]).map(c=>`<tr><td>${c.name}</td><td>${pill(c.status)}</td><td class="muted">${c.image}</td></tr>`).join('')}</tbody></table>
+  `;
+  renderSites(d.sites||[]);
+  renderBlocks(d.access||{});
+  document.getElementById('tab-crowdsec').innerHTML = `<p class="muted">Loading CrowdSec…</p>`;
+  loadCrowdsec();
+  document.getElementById('tab-system').innerHTML = `
+    <h3>Operations</h3>
+    <ul>
+      <li>WAF edge: <code>http://${location.hostname}/</code> (port 80)</li>
+      <li>This dashboard: <code>http://${location.hostname}:9080/</code></li>
+      <li>Health: <code>/healthz</code> on edge</li>
+      <li>Hybrid mode: <b>${d.deployment_mode}</b> — shared hosts many tenants by Host header; dedicated pins one tenant.</li>
+    </ul>
+    <p><button class="btn primary" onclick="bootstrapBouncer()">Bootstrap CrowdSec firewall bouncer key</button></p>
+    <div id="sysMsg"></div>
+  `;
+}
+
+function renderSites(sites) {
+  document.getElementById('tab-sites').innerHTML = `
+    <h3>Protected sites</h3>
+    <p class="muted">Hybrid routing: DNS/CNAME to this edge, traffic matched by hostname.</p>
+    <table><thead><tr><th>Hostname</th><th>Origin</th><th>Tenant</th><th>TLS</th><th></th></tr></thead>
+    <tbody>${sites.map(s=>`<tr>
+      <td><code>${s.public_hostname}</code></td>
+      <td class="muted">${s.origin_url}</td>
+      <td>${s.tenant_short_code||'—'}</td>
+      <td>${s.tls_mode||'http_only'}</td>
+      <td><button class="btn danger" onclick="delSite('${s.public_hostname}')">Remove local</button></td>
+    </tr>`).join('') || '<tr><td colspan="5" class="muted">No sites yet</td></tr>'}</tbody></table>
+    <h4>Add site (local + live reload)</h4>
+    <div class="form">
+      <div class="row">
+        <div><label>Public hostname</label><input id="s_host" placeholder="app.customer.com" /></div>
+        <div><label>Origin URL</label><input id="s_origin" placeholder="http://10.0.0.20:8080" /></div>
+      </div>
+      <div class="row">
+        <div><label>Tenant code</label><input id="s_tenant" placeholder="ACME" /></div>
+        <div><label>TLS mode</label>
+          <select id="s_tls"><option value="http_only">http_only</option><option value="acme">acme</option><option value="off">off</option></select>
+        </div>
+      </div>
+      <button class="btn primary" onclick="addSite()">Add & apply</button>
+      <div id="siteMsg"></div>
+    </div>
+  `;
+}
+
+function renderBlocks(access) {
+  const rows = (access.recent||[]).filter(r => r.status===403 || r.status>=500).slice(0,40);
+  document.getElementById('tab-blocks').innerHTML = `
+    <h3>Recent WAF / error traffic</h3>
+    <p class="muted">Sampled from JSON access log · blocks=${access.waf_blocks_403||0}</p>
+    <table><thead><tr><th>Status</th><th>Host</th><th>URI</th><th>Client</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td>${r.status===403?'<span class="pill bad">403</span>':r.status}</td>
+      <td>${r.host||''}</td><td><code>${r.uri||''}</code></td><td class="muted">${r.client_ip||''}</td>
+    </tr>`).join('') || '<tr><td colspan="4" class="muted">No blocked requests in sample</td></tr>'}</tbody></table>
+  `;
+}
+
+async function loadCrowdsec() {
+  try {
+    const j = await api('/api/crowdsec');
+    const dec = j.decisions||[];
+    document.getElementById('tab-crowdsec').innerHTML = `
+      <h3>CrowdSec decisions</h3>
+      <table><thead><tr><th>Type</th><th>Value</th><th>Duration</th><th>Reason</th></tr></thead>
+      <tbody>${dec.map(d=>`<tr>
+        <td>${d.type||d.Type||''}</td>
+        <td><code>${d.value||d.Value||''}</code></td>
+        <td>${d.duration||d.Duration||''}</td>
+        <td class="muted">${d.scenario||d.Scenario||d.reason||''}</td>
+      </tr>`).join('') || '<tr><td colspan="4" class="muted">No active decisions</td></tr>'}</tbody></table>
+    `;
+  } catch (e) {
+    document.getElementById('tab-crowdsec').innerHTML = `<div class="err">${e.message}</div>`;
+  }
+}
+
+async function addSite() {
+  const msg = document.getElementById('siteMsg');
+  try {
+    await api('/api/sites', { method:'POST', body: JSON.stringify({
+      public_hostname: document.getElementById('s_host').value.trim(),
+      origin_url: document.getElementById('s_origin').value.trim(),
+      tenant_short_code: document.getElementById('s_tenant').value.trim() || 'LOCAL',
+      tls_mode: document.getElementById('s_tls').value
+    })});
+    msg.innerHTML = '<div class="okmsg">Site applied.</div>';
+    await refresh(); tab('sites');
+  } catch (e) { msg.innerHTML = '<div class="err">'+e.message+'</div>'; }
+}
+
+async function delSite(h) {
+  if (!confirm('Remove local site '+h+'?')) return;
+  await api('/api/sites/'+encodeURIComponent(h), { method:'DELETE' });
+  await refresh(); tab('sites');
+}
+
+async function reloadEdge() {
+  await api('/api/reload', { method:'POST' });
+  await refresh();
+}
+
+async function bootstrapBouncer() {
+  const el = document.getElementById('sysMsg');
+  try {
+    const j = await api('/api/crowdsec/bootstrap-bouncer', { method:'POST' });
+    el.innerHTML = `<div class="okmsg">Bouncer key created for <code>${j.bouncer}</code>. ${j.hint||''}</div>`;
+  } catch (e) { el.innerHTML = `<div class="err">${e.message}</div>`; }
+}
+
+if (S.token) { showApp(); refresh().catch(()=>logout()); }
+document.getElementById('pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>

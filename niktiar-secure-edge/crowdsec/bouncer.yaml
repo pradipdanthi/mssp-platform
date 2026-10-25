@@ -3,7 +3,6 @@ update_frequency: 10s
 log_mode: stdout
 log_level: info
 api_url: http://127.0.0.1:7422/
-# Create key: docker exec niktiar-se-crowdsec cscli bouncers add firewall -o raw
 api_key: changeme-lab-bouncer-key
 iptables_chains:
   - INPUT

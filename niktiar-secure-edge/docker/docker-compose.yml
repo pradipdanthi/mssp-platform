@@ -1,4 +1,5 @@
-# NikTiar Secure Edge — Coraza CRS (Caddy) + CrowdSec + hybrid multi-tenant agent
+# NikTiar Secure Edge — complete appliance
+# Dashboard: http://<edge-ip>:9080/
 services:
   origin:
     image: nginx:1.27-alpine
@@ -28,6 +29,7 @@ services:
       ANOMALY_OUTBOUND: "4"
       PROXY_TIMEOUT: 60s
       KEEPALIVE_TIMEOUT: 60s
+      ACME_EMAIL: ${ACME_EMAIL:-ops@niktiar.local}
     volumes:
       - waf_logs:/var/log/caddy
       - ../runtime/caddy:/config/caddy
@@ -42,7 +44,6 @@ services:
     container_name: niktiar-se-crowdsec
     restart: unless-stopped
     ports:
-      # LAPI for optional host-network firewall bouncer
       - "127.0.0.1:7422:8080"
     environment:
       COLLECTIONS: "crowdsecurity/linux crowdsecurity/http-cve crowdsecurity/base-http-scenarios crowdsecurity/http-dos crowdsecurity/caddy"
@@ -53,6 +54,48 @@ services:
       - crowdsec_config:/etc/crowdsec
       - ../crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
       - ../runtime:/runtime:ro
+    networks:
+      - edge
+
+  crowdsec-firewall-bouncer:
+    image: ghcr.io/shgew/cs-firewall-bouncer-docker:latest
+    container_name: niktiar-se-cs-fw
+    restart: unless-stopped
+    depends_on:
+      - crowdsec
+    volumes:
+      - ../crowdsec/bouncer.yaml:/config/crowdsec-firewall-bouncer.yaml:ro
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+  dashboard:
+    build:
+      context: ../dashboard
+    container_name: niktiar-se-dashboard
+    restart: unless-stopped
+    ports:
+      - "9080:9080"
+    environment:
+      NIKTIAR_CONTROL_URL: ${NIKTIAR_CONTROL_URL:-http://192.168.0.201:8000}
+      NIKTIAR_APPLIANCE_TOKEN: ${NIKTIAR_APPLIANCE_TOKEN:-}
+      SECURE_EDGE_HOSTNAME: ${SECURE_EDGE_HOSTNAME:-niktiar-secure-edge}
+      SECURE_EDGE_MODE: ${SECURE_EDGE_MODE:-shared}
+      EDGE_DASHBOARD_USER: ${EDGE_DASHBOARD_USER:-admin}
+      EDGE_DASHBOARD_PASSWORD: ${EDGE_DASHBOARD_PASSWORD:-NikTiarEdge!ChangeMe}
+      RUNTIME_DIR: /runtime
+      WAF_CONTAINER: niktiar-se-waf
+      CROWDSEC_CONTAINER: niktiar-se-crowdsec
+      ACCESS_LOG: /runtime/niktiar-access.log
+    volumes:
+      - ../runtime:/runtime
+      - ../runtime/caddy:/config/caddy
+      - ../crowdsec:/opt/niktiar-secure-edge/crowdsec
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - waf
+      - crowdsec
     networks:
       - edge
 
@@ -70,8 +113,8 @@ services:
       WAF_CONTAINER: niktiar-se-waf
       RUNTIME_DIR: /runtime
       CADDY_CONFIG_DIR: /config/caddy
+      ACCESS_LOG: /runtime/niktiar-access.log
     volumes:
-      - waf_logs:/var/log/caddy:ro
       - ../runtime:/runtime
       - ../runtime/caddy:/config/caddy
       - ../agent/config.yaml:/app/config.yaml:ro
@@ -79,23 +122,9 @@ services:
     depends_on:
       - waf
       - crowdsec
+      - dashboard
     networks:
       - edge
-
-  # Optional enforce path: docker compose --profile enforce up -d
-  crowdsec-firewall-bouncer:
-    profiles: ["enforce"]
-    image: crowdsecurity/firewall-bouncer:v0.0.28
-    container_name: niktiar-se-cs-fw
-    restart: unless-stopped
-    depends_on:
-      - crowdsec
-    volumes:
-      - ../crowdsec/bouncer.yaml:/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml:ro
-    network_mode: host
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
 
 volumes:
   waf_logs:

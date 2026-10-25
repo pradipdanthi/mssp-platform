@@ -195,6 +195,7 @@ const ROUTE_ICON: Record<string, keyof typeof ICONS> = {
   "/audit": "clipboard",
   "/service-requests": "file",
   "/services": "book",
+  "/secure-edge": "shield",
   "/compliance": "clipboard",
   "/easm": "globe",
   "/itdr": "cloud",

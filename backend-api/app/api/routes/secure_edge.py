@@ -240,6 +240,43 @@ def secure_edge_events(
     return {"ok": True, "accepted": accepted}
 
 
+@router.get("/admin/secure-edge/summary")
+def admin_secure_edge_summary(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    _ = current_user
+    nodes = fetch_all(
+        """
+        SELECT hostname, deployment_mode, status, version, last_heartbeat_at, last_config_version
+        FROM secure_edge_nodes
+        ORDER BY last_heartbeat_at DESC NULLS LAST;
+        """
+    )
+    site_count = fetch_one("SELECT COUNT(*)::int AS n FROM secure_edge_sites WHERE enabled = TRUE;")
+    event_count = fetch_one(
+        """
+        SELECT COUNT(*)::int AS n FROM secure_edge_events
+        WHERE created_at > NOW() - INTERVAL '24 hours';
+        """
+    )
+    recent = fetch_all(
+        """
+        SELECT id, tenant_short_code, edge_hostname, public_hostname,
+               event_type, severity, summary, created_at
+        FROM secure_edge_events
+        ORDER BY created_at DESC
+        LIMIT 25;
+        """
+    )
+    return {
+        "nodes": nodes or [],
+        "enabled_sites": (site_count or {}).get("n") or 0,
+        "events_24h": (event_count or {}).get("n") or 0,
+        "recent_events": recent or [],
+        "dashboard_hint": "Appliance UI: http://<edge-ip>:9080/ (default user admin)",
+    }
+
+
 @router.get("/admin/secure-edge/nodes")
 def admin_secure_edge_nodes(
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
@@ -462,4 +499,56 @@ def customer_list_sites(
             "Hybrid: unpinned sites land on shared SMB edges; "
             "set edge_node_hostname for dedicated enterprise appliances."
         ),
+    }
+
+
+@router.get("/customer/secure-edge/{short_code}/summary")
+def customer_secure_edge_summary(
+    short_code: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    tenant = fetch_one(
+        "SELECT id::text, name, short_code FROM tenants WHERE short_code = %s;",
+        (short_code.upper(),),
+    )
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    require_tenant_match(tenant["id"], current_user)
+    ent = fetch_one(
+        """
+        SELECT COALESCE(secure_edge_enabled, FALSE) AS secure_edge_enabled
+        FROM tenant_entitlements WHERE tenant_id = %s::uuid;
+        """,
+        (tenant["id"],),
+    )
+    sites = fetch_all(
+        """
+        SELECT public_hostname, origin_url, tls_mode, enabled, edge_node_hostname, updated_at
+        FROM secure_edge_sites
+        WHERE UPPER(tenant_short_code) = %s
+        ORDER BY public_hostname;
+        """,
+        (short_code.upper(),),
+    )
+    events = fetch_all(
+        """
+        SELECT event_type, severity, summary, public_hostname, created_at
+        FROM secure_edge_events
+        WHERE UPPER(COALESCE(tenant_short_code, '')) = %s
+           OR public_hostname IN (
+                SELECT public_hostname FROM secure_edge_sites
+                WHERE UPPER(tenant_short_code) = %s
+           )
+        ORDER BY created_at DESC
+        LIMIT 50;
+        """,
+        (short_code.upper(), short_code.upper()),
+    )
+    return {
+        "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
+        "enabled": bool((ent or {}).get("secure_edge_enabled")) or bool(sites),
+        "sites": sites or [],
+        "events": events or [],
+        "site_count": len(sites or []),
+        "event_count": len(events or []),
     }

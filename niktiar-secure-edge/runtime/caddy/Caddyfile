@@ -1,13 +1,12 @@
-# NikTiar Secure Edge — Coraza WAF + hybrid multi-tenant Host routing
-# Regenerated sites snippet: /runtime/sites.caddy (written by agent)
-
+# NikTiar Secure Edge — Coraza WAF + hybrid multi-tenant + rate shields
 {
 	order coraza_waf first
 	log {
 		level WARN
 	}
-	# Admin only on loopback inside container (reload uses `caddy reload` via docker exec)
 	admin 127.0.0.1:2019
+	# Optional email for ACME (set via env in future bake)
+	email {$ACME_EMAIL:ops@niktiar.local}
 }
 
 (coraza_block) {
@@ -28,25 +27,55 @@
 	}
 }
 
+(security_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options SAMEORIGIN
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
 :8080 {
 	import coraza_block
+	import security_headers
 
 	handle /healthz {
 		respond "niktiar-secure-edge-ok" 200
 	}
 
 	handle /edge-info {
-		respond "NikTiar Secure Edge (Coraza CRS + Caddy) — hybrid multi-tenant ready" 200
+		respond "NikTiar Secure Edge — Coraza CRS · CrowdSec · hybrid multi-tenant · dashboard :9080" 200
 	}
 
-	# Tenant / site routes — agent maintains /runtime/sites.caddy
+	# Basic abuse shield: huge URI / obvious scanners still hit CRS; soft request ceiling
+	@abuse path_regexp (?i)(wp-login|xmlrpc\.php|\.env|phpmyadmin)
+	handle @abuse {
+		respond "Blocked" 403
+	}
+
 	import /runtime/sites.caddy
 
-	# Default catch-all → lab demo origin
 	handle {
 		reverse_proxy http://origin:80 {
 			trusted_proxies private_ranges
 		}
+	}
+
+	log {
+		output file /runtime/niktiar-access.log
+		format json
+	}
+}
+
+# TLS listener (host maps 443→8443). ACME sites imported from sites_tls.caddy
+:8443 {
+	import coraza_block
+	import security_headers
+	import /runtime/sites_tls.caddy
+
+	handle {
+		respond "NikTiar Secure Edge TLS — configure site tls_mode=acme + public DNS" 200
 	}
 
 	log {

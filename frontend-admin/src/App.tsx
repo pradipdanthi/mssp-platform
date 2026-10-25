@@ -27,6 +27,7 @@ import RetrospectiveHuntsPage from "./pages/RetrospectiveHuntsPage";
 import ThreatIntelAdminPage from "./pages/ThreatIntelAdminPage";
 import AiAssistantPage from "./pages/AiAssistantPage";
 import CompliancePage from "./pages/CompliancePage";
+import SecureEdgePage from "./pages/SecureEdgePage";
 
 function RootRedirect() {
   const { token, loading } = useAuth();
@@ -79,6 +80,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <ApplianceDetailPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/secure-edge"
+        element={
+          <ProtectedRoute>
+            <SecureEdgePage />
           </ProtectedRoute>
         }
       />
