@@ -3,93 +3,196 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NikTiar Secure Edge</title>
+  <title>NikTiar Secure Edge — WAF</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
+    /* Security-ops palette: crimson + white + charcoal (CrowdStrike / Fortinet style) */
     :root {
-      --bg:#0b1220; --panel:#121a2b; --line:#243049; --text:#e8eef7; --muted:#93a0b8;
-      --accent:#f48120; --accent2:#3d9cf0; --ok:#3ecf8e; --warn:#f0b429; --bad:#f07178;
-      --radius:10px; font-family:Inter,Segoe UI,system-ui,sans-serif;
+      --red:#C8102E;
+      --red-dark:#9B0C24;
+      --red-soft:#FEF2F2;
+      --ink:#141414;
+      --muted:#5C6570;
+      --line:#E2E5EA;
+      --bg:#F3F4F6;
+      --panel:#FFFFFF;
+      --side:#161616;
+      --side-hover:#242424;
+      --ok:#15803D;
+      --ok-bg:#DCFCE7;
+      --warn:#B45309;
+      --warn-bg:#FEF3C7;
+      --bad:#C8102E;
+      --bad-bg:#FEE2E2;
+      --accent2:#1F2937;
+      --radius:6px;
+      --font:"IBM Plex Sans",Segoe UI,sans-serif;
+      --display:"Barlow Condensed",Impact,sans-serif;
     }
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--text);min-height:100vh}
-    a{color:var(--accent2)}
-    .shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
-    .side{background:#0e1626;border-right:1px solid var(--line);padding:1rem .75rem}
-    .brand{font-weight:800;font-size:1.05rem;padding:.5rem .6rem 1rem;letter-spacing:-.02em}
-    .brand small{display:block;color:var(--muted);font-weight:500;font-size:.75rem;margin-top:.2rem}
-    .nav button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--muted);
-      padding:.65rem .7rem;border-radius:8px;cursor:pointer;font-weight:600;margin-bottom:.15rem}
-    .nav button.active,.nav button:hover{background:#1a2740;color:var(--text)}
-    .main{padding:1.25rem 1.5rem}
-    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1rem}
+    body{
+      margin:0;min-height:100vh;color:var(--ink);font-family:var(--font);
+      background:
+        radial-gradient(1200px 500px at 100% -10%, rgba(200,16,46,.08), transparent 55%),
+        linear-gradient(180deg, #FAFAFA 0%, var(--bg) 40%, #ECEEF2 100%);
+    }
+    a{color:var(--red-dark);font-weight:600}
+    .shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+    .side{
+      background:var(--side);color:#F5F5F5;padding:0;
+      border-right:3px solid var(--red);
+      display:flex;flex-direction:column;
+    }
+    .brand{
+      font-family:var(--display);font-weight:800;font-size:1.35rem;
+      letter-spacing:.04em;text-transform:uppercase;
+      padding:1.15rem 1rem 1rem;border-bottom:1px solid #2A2A2A;
+      background:linear-gradient(180deg,#1C1C1C,#161616);
+    }
+    .brand .mark{
+      display:inline-block;width:.55rem;height:1.1rem;background:var(--red);
+      margin-right:.45rem;vertical-align:-.1rem;border-radius:1px;
+    }
+    .brand small{
+      display:block;color:#9CA3AF;font-family:var(--font);font-weight:500;
+      font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;margin-top:.35rem;
+    }
+    .nav{padding:.75rem .55rem;flex:1}
+    .nav .nav-label{
+      color:#6B7280;font-size:.65rem;font-weight:700;letter-spacing:.14em;
+      text-transform:uppercase;padding:.55rem .65rem .25rem;
+    }
+    .nav button{
+      display:block;width:100%;text-align:left;background:transparent;border:0;
+      color:#C4C9CE;padding:.58rem .7rem;border-radius:4px;cursor:pointer;
+      font-weight:600;font-size:.88rem;margin-bottom:.12rem;border-left:3px solid transparent;
+    }
+    .nav button.active,.nav button:hover{
+      background:var(--side-hover);color:#fff;border-left-color:var(--red);
+    }
+    .side-foot{padding:.75rem;border-top:1px solid #2A2A2A}
+    .main{padding:1.35rem 1.75rem 2rem}
+    .top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.15rem;gap:1rem}
+    .top h2{
+      margin:0;font-family:var(--display);font-size:1.75rem;font-weight:800;
+      letter-spacing:.02em;text-transform:uppercase;color:var(--ink);
+    }
+    .ribbon{
+      display:inline-flex;align-items:center;gap:.4rem;font-size:.68rem;font-weight:700;
+      letter-spacing:.1em;text-transform:uppercase;color:var(--red);
+      background:var(--red-soft);border:1px solid #FECACA;padding:.2rem .55rem;border-radius:3px;
+      margin-bottom:.35rem;
+    }
+    .card{
+      background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+      padding:1.05rem 1.15rem;box-shadow:0 1px 2px rgba(20,20,20,.04);
+      border-top:3px solid var(--red);
+    }
+    .card.flat{border-top-color:var(--line)}
     .grid{display:grid;gap:1rem}
     .kpi{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
-    .kpi .v{font-size:1.55rem;font-weight:800}
-    .kpi .l{color:var(--muted);font-size:.82rem}
+    .kpi .card{border-top-color:var(--red)}
+    .kpi .v{font-family:var(--display);font-size:1.85rem;font-weight:800;letter-spacing:.02em;color:var(--ink)}
+    .kpi .l{color:var(--muted);font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-top:.15rem}
     table{width:100%;border-collapse:collapse;font-size:.9rem}
-    th,td{padding:.55rem .4rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-    th{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
-    label{display:block;color:var(--muted);font-size:.8rem;margin:.4rem 0 .2rem}
-    input,select,textarea{width:100%;background:#0e1626;border:1px solid var(--line);color:var(--text);
-      border-radius:8px;padding:.55rem .65rem}
+    th,td{padding:.6rem .45rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+    th{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+    label{display:block;color:var(--muted);font-size:.78rem;font-weight:600;margin:.45rem 0 .2rem;text-transform:uppercase;letter-spacing:.04em}
+    input,select,textarea{
+      width:100%;background:#fff;border:1px solid var(--line);color:var(--ink);
+      border-radius:4px;padding:.58rem .7rem;font-family:var(--font);font-size:.92rem;
+    }
+    input:focus,select:focus,textarea:focus{outline:2px solid rgba(200,16,46,.25);border-color:var(--red)}
     .row{display:flex;gap:.75rem;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
-    .btn{background:#1a2740;border:1px solid var(--line);color:var(--text);border-radius:8px;
-      padding:.55rem .9rem;cursor:pointer;font-weight:700}
-    .btn.primary{background:var(--accent);border-color:var(--accent);color:#1a0d00}
-    .btn.danger{background:#3a1d24;border-color:#6b3038;color:#ffd0d4}
-    .btn.blue{background:var(--accent2);border-color:var(--accent2);color:#041018}
-    .pill{display:inline-block;padding:.12rem .45rem;border-radius:999px;font-size:.72rem;font-weight:700}
-    .pill.ok{background:#163528;color:var(--ok)}.pill.bad{background:#3a1d24;color:var(--bad)}
-    .pill.warn{background:#3a3014;color:var(--warn)}
-    .muted{color:var(--muted)}.err{color:var(--bad)}.okmsg{color:var(--ok)}
+    .btn{
+      background:#fff;border:1px solid var(--line);color:var(--ink);border-radius:4px;
+      padding:.55rem .95rem;cursor:pointer;font-weight:700;font-family:var(--font);font-size:.88rem;
+    }
+    .btn:hover{border-color:#C4C9CE}
+    .btn.primary{background:var(--red);border-color:var(--red);color:#fff}
+    .btn.primary:hover{background:var(--red-dark)}
+    .btn.danger{background:var(--bad-bg);border-color:#FECACA;color:var(--red-dark)}
+    .btn.blue{background:var(--ink);border-color:var(--ink);color:#fff}
+    .pill{display:inline-block;padding:.14rem .5rem;border-radius:3px;font-size:.7rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+    .pill.ok{background:var(--ok-bg);color:var(--ok)}
+    .pill.bad{background:var(--bad-bg);color:var(--bad)}
+    .pill.warn{background:var(--warn-bg);color:var(--warn)}
+    .muted{color:var(--muted)}.err{color:var(--bad);font-weight:600}.okmsg{color:var(--ok);font-weight:600}
     .hidden{display:none!important}
-    .login{max-width:400px;margin:12vh auto}
+    .login-wrap{
+      min-height:100vh;display:grid;place-items:center;padding:1.5rem;
+      background:
+        linear-gradient(135deg, rgba(200,16,46,.92) 0%, rgba(155,12,36,.95) 42%, rgba(22,22,22,.97) 42.2%, #161616 100%);
+    }
+    .login{
+      width:min(420px,100%);background:#fff;border-radius:8px;padding:1.75rem 1.6rem 1.5rem;
+      box-shadow:0 24px 60px rgba(0,0,0,.35);border-top:4px solid var(--red);
+    }
+    .login .brand{background:transparent;border:0;padding:0 0 1rem;color:var(--ink)}
+    .login .brand small{color:var(--muted);letter-spacing:.08em}
     .hint{font-size:.8rem;color:var(--muted);margin-top:.35rem}
     .seg{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0}
-    .seg button{padding:.4rem .65rem;border-radius:999px;border:1px solid var(--line);background:#0e1626;color:var(--muted);cursor:pointer;font-weight:600;font-size:.8rem}
-    .seg button.on{background:var(--accent);color:#1a0d00;border-color:var(--accent)}
-    h2{margin:.2rem 0 .8rem;font-size:1.15rem}
-    h3{margin:1rem 0 .5rem;font-size:1rem}
-    code{background:#0e1626;padding:.1rem .35rem;border-radius:4px;font-size:.85rem}
+    .seg button{
+      padding:.4rem .7rem;border-radius:3px;border:1px solid var(--line);background:#fff;
+      color:var(--muted);cursor:pointer;font-weight:700;font-size:.78rem;font-family:var(--font);
+    }
+    .seg button.on{background:var(--red);color:#fff;border-color:var(--red)}
+    h3{margin:1rem 0 .5rem;font-size:.95rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink)}
+    code{background:var(--red-soft);color:var(--red-dark);padding:.12rem .4rem;border-radius:3px;font-size:.82rem;border:1px solid #FECACA}
+    #flash .okmsg,#flash .err{padding:.55rem .75rem;border-radius:4px;margin-bottom:.75rem}
+    #flash .okmsg{background:var(--ok-bg);border:1px solid #BBF7D0}
+    #flash .err{background:var(--bad-bg);border:1px solid #FECACA}
+    @media (max-width:860px){
+      .shell{grid-template-columns:1fr}
+      .side{border-right:0;border-bottom:3px solid var(--red)}
+    }
   </style>
 </head>
 <body>
-  <div id="loginView" class="login card">
-    <div class="brand">NikTiar Secure Edge<small>Cloudflare-class edge control</small></div>
-    <label>Username</label><input id="user" value="admin" />
-    <label>Password</label><input id="pass" type="password" />
-    <div id="loginErr" class="err hidden"></div>
-    <p style="margin-top:1rem"><button class="btn primary" onclick="doLogin()">Sign in</button></p>
+  <div id="loginView" class="login-wrap">
+    <div class="login">
+      <div class="brand"><span class="mark"></span>NikTiar Secure Edge<small>Web Application Firewall · Edge Control</small></div>
+      <label>Username</label><input id="user" value="admin" autocomplete="username" />
+      <label>Password</label><input id="pass" type="password" autocomplete="current-password" />
+      <div id="loginErr" class="err hidden"></div>
+      <p style="margin-top:1.15rem"><button class="btn primary" onclick="doLogin()" style="width:100%">Sign in to WAF console</button></p>
+      <p class="hint">Authorized MSSP operators only. All actions are audited.</p>
+    </div>
   </div>
 
   <div id="appView" class="shell hidden">
     <aside class="side">
-      <div class="brand">NikTiar Edge<small id="hostLabel">—</small></div>
+      <div class="brand"><span class="mark"></span>NikTiar WAF<small id="hostLabel">—</small></div>
       <nav class="nav" id="nav">
+        <div class="nav-label">Monitor</div>
         <button data-t="overview" class="active" onclick="go('overview')">Overview</button>
+        <button data-t="analytics" onclick="go('analytics')">Analytics</button>
+        <button data-t="isolation" onclick="go('isolation')">Isolation</button>
+        <div class="nav-label">Protect</div>
         <button data-t="zones" onclick="go('zones')">Zones / Sites</button>
         <button data-t="waf" onclick="go('waf')">WAF</button>
         <button data-t="firewall" onclick="go('firewall')">Firewall</button>
         <button data-t="ratelimit" onclick="go('ratelimit')">Rate limiting</button>
-        <button data-t="ssl" onclick="go('ssl')">SSL / TLS</button>
-        <button data-t="cache" onclick="go('cache')">Caching</button>
         <button data-t="rules" onclick="go('rules')">Custom rules</button>
         <button data-t="enterprise" onclick="go('enterprise')">Enterprise</button>
-        <button data-t="isolation" onclick="go('isolation')">Isolation</button>
-        <button data-t="analytics" onclick="go('analytics')">Analytics</button>
+        <div class="nav-label">Edge</div>
+        <button data-t="ssl" onclick="go('ssl')">SSL / TLS</button>
+        <button data-t="cache" onclick="go('cache')">Caching</button>
         <button data-t="system" onclick="go('system')">System</button>
       </nav>
-      <p style="padding:.75rem"><button class="btn" onclick="logout()">Logout</button></p>
+      <div class="side-foot"><button class="btn" onclick="logout()" style="width:100%;background:#242424;color:#fff;border-color:#333">Logout</button></div>
     </aside>
     <main class="main">
       <div class="top">
         <div>
+          <div class="ribbon">Secure Edge · WAF Console</div>
           <h2 id="pageTitle">Overview</h2>
           <div class="muted" id="pageSub">Security configuration for your edge</div>
         </div>
-        <div>
-          <button class="btn blue" onclick="applyNow()">Apply changes</button>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <button class="btn primary" onclick="applyNow()">Apply changes</button>
           <button class="btn" onclick="refresh()">Refresh</button>
         </div>
       </div>
