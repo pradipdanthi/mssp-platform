@@ -11,11 +11,12 @@
    ========================================================= */
 
 .kevantic-login {
-  --cyan: #52f4ff;
-  --cyan-bright: #7cfaff;
-  --blue: #63bfff;
-  --violet: #9a7cff;
-  --magenta: #ff42d0;
+  /* Security ops: crimson / white / charcoal (aligned with WAF console) */
+  --cyan: #C8102E;
+  --cyan-bright: #EF4444;
+  --blue: #9B0C24;
+  --violet: #7F1D1D;
+  --magenta: #BE123C;
 
   position: relative;
 
@@ -30,7 +31,7 @@
 
   isolation: isolate;
 
-  background: #020914;
+  background: #161616;
 
   font-family:
     Inter,
@@ -76,21 +77,22 @@
 
   background:
     radial-gradient(
-      ellipse at 50% 45%,
-      rgba(18, 185, 225, 0.07) 0%,
-      rgba(8, 57, 84, 0.04) 32%,
-      rgba(1, 8, 18, 0.12) 68%,
-      rgba(1, 5, 12, 0.32) 100%
+      ellipse at 50% 40%,
+      rgba(200, 16, 46, 0.22) 0%,
+      rgba(155, 12, 36, 0.10) 34%,
+      rgba(22, 22, 22, 0.55) 70%,
+      rgba(10, 10, 10, 0.85) 100%
     ),
     linear-gradient(
-      180deg,
-      rgba(1, 8, 18, 0.06) 0%,
-      rgba(1, 7, 17, 0.02) 45%,
-      rgba(1, 7, 16, 0.14) 100%
+      135deg,
+      rgba(200, 16, 46, 0.35) 0%,
+      transparent 42%,
+      transparent 58%,
+      rgba(22, 22, 22, 0.9) 100%
     );
 
   box-shadow:
-    inset 0 0 180px rgba(0, 4, 12, 0.28);
+    inset 0 0 180px rgba(0, 0, 0, 0.35);
 }
 
 
@@ -112,23 +114,16 @@
   background:
     linear-gradient(
       135deg,
-      var(--cyan-bright) 0%,
-      var(--cyan) 24%,
-      var(--blue) 45%,
-      var(--violet) 70%,
-      var(--magenta) 100%
+      #EF4444 0%,
+      #C8102E 40%,
+      #9B0C24 75%,
+      #7F1D1D 100%
     );
 
   box-shadow:
-    0 25px 70px rgba(0, 3, 12, 0.58),
-
-    -5px -3px 18px rgba(61, 237, 255, 0.28),
-
-    5px 5px 20px rgba(255, 56, 210, 0.20),
-
-    0 0 34px rgba(86, 226, 255, 0.10),
-
-    0 0 42px rgba(255, 62, 212, 0.08);
+    0 25px 70px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(200, 16, 46, 0.35),
+    0 0 40px rgba(200, 16, 46, 0.18);
 }
 
 
@@ -150,10 +145,10 @@
   background:
     linear-gradient(
       135deg,
-      rgba(64, 240, 255, 0.14),
+      rgba(200, 16, 46, 0.18),
       transparent 37%,
       transparent 62%,
-      rgba(255, 55, 208, 0.12)
+      rgba(155, 12, 36, 0.12)
     );
 
   filter: blur(13px);
@@ -174,25 +169,14 @@
     clamp(22px, 1.7vw, 28px)
     clamp(18px, 1.5vw, 24px);
 
-  background:
-    linear-gradient(
-      145deg,
-      rgba(7, 21, 38, 0.87),
-      rgba(5, 16, 31, 0.91),
-      rgba(10, 14, 36, 0.92)
-    );
+  background: #FFFFFF;
 
-  backdrop-filter:
-    blur(18px)
-    saturate(125%);
-
-  -webkit-backdrop-filter:
-    blur(18px)
-    saturate(125%);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.045),
-    inset 0 0 40px rgba(39, 159, 210, 0.025);
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    0 1px 0 rgba(200, 16, 46, 0.08);
 }
 
 
@@ -210,10 +194,10 @@
   background:
     linear-gradient(
       135deg,
-      rgba(107, 238, 255, 0.045),
+      rgba(200, 16, 46, 0.04),
       transparent 25%,
       transparent 72%,
-      rgba(255, 72, 214, 0.025)
+      rgba(155, 12, 36, 0.03)
     );
 }
 
@@ -250,7 +234,7 @@
 .kevantic-login__title {
   margin: 0;
 
-  color: #f7fbff;
+  color: #141414;
 
   font-size: clamp(14px, 1.05vw, 17px);
 
@@ -275,7 +259,7 @@
     0
     0;
 
-  color: rgba(224, 239, 248, 0.88);
+  color: rgba(20, 20, 20, 0.62);
 
   font-size: clamp(10px, 0.76vw, 13px);
 
@@ -319,7 +303,7 @@
   margin-bottom:
     clamp(6px, 0.42vw, 8px);
 
-  color: rgba(237, 247, 253, 0.94);
+  color: rgba(20, 20, 20, 0.7);
 
   font-size: clamp(10px, 0.77vw, 13px);
 
@@ -341,20 +325,15 @@
     clamp(12px, 1vw, 16px);
 
   border:
-    1px solid rgba(116, 184, 220, 0.25);
+    1px solid #E2E5EA;
 
   border-radius: 7px;
 
   outline: none;
 
-  background:
-    linear-gradient(
-      180deg,
-      rgba(6, 22, 40, 0.92),
-      rgba(6, 19, 35, 0.96)
-    );
+  background: #FFFFFF;
 
-  color: #f6fbff;
+  color: #141414;
 
   font-family: inherit;
 
@@ -364,11 +343,9 @@
 
   caret-color: var(--cyan);
 
-  color-scheme: dark;
+  color-scheme: light;
 
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.025),
-    inset 0 0 15px rgba(25, 123, 166, 0.025);
+  box-shadow: none;
 
   transition:
     border-color 150ms ease,
@@ -378,22 +355,17 @@
 
 
 .kevantic-login__field input:hover {
-  border-color:
-    rgba(114, 207, 235, 0.36);
+  border-color: #C4C9CE;
 }
 
 
 .kevantic-login__field input:focus {
-  border-color:
-    rgba(92, 235, 255, 0.72);
+  border-color: #C8102E;
 
-  background:
-    rgba(6, 22, 40, 0.98);
+  background: #FFFFFF;
 
   box-shadow:
-    0 0 0 1px rgba(72, 225, 255, 0.08),
-    0 0 13px rgba(55, 220, 255, 0.11),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    0 0 0 2px rgba(200, 16, 46, 0.15);
 }
 
 
@@ -408,10 +380,10 @@
 .kevantic-login__field input:-webkit-autofill,
 .kevantic-login__field input:-webkit-autofill:hover,
 .kevantic-login__field input:-webkit-autofill:focus {
-  -webkit-text-fill-color: #f6fbff;
+  -webkit-text-fill-color: #141414;
 
   -webkit-box-shadow:
-    0 0 0 1000px #07172a inset;
+    0 0 0 1000px #FFFFFF inset;
 
   transition:
     background-color 9999s ease-in-out 0s;
