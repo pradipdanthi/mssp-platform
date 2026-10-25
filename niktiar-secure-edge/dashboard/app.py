@@ -41,6 +41,14 @@ ec.SITES_TLS = RUNTIME / "sites_tls.caddy"
 ec.FIREWALL_CADDY = RUNTIME / "firewall.caddy"
 ec.WAF_CONTAINER = WAF_CONTAINER
 
+try:
+    import enterprise_features as ef
+
+    ef.RULES_D = RUNTIME / "coraza-rules.d"
+    ef.ENTERPRISE_CADDY = RUNTIME / "enterprise.caddy"
+except Exception:  # noqa: BLE001
+    ef = None  # type: ignore
+
 app = FastAPI(title="NikTiar Secure Edge", version="2.0.0")
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
@@ -254,7 +262,7 @@ def overview(_: str = Depends(_auth)):
         "hostname": HOST,
         "deployment_mode": MODE,
         "control_url": CONTROL or None,
-        "version": "2.0.0",
+        "version": "3.0.0",
         "global": cfg.get("global"),
         "zones_count": len(cfg.get("zones") or []),
         "custom_rules_count": len(cfg.get("custom_waf_rules") or []),
@@ -273,6 +281,18 @@ def overview(_: str = Depends(_auth)):
             "caching",
             "analytics",
             "hybrid_multitenant",
+            "api_shield",
+            "graphql_guard",
+            "page_shield",
+            "waiting_room",
+            "virtual_patching",
+            "auth_hardening",
+            "sensitive_data_egress",
+            "honeypot",
+            "advanced_bot_pow",
+            "leaked_credentials_hibp",
+            "logpush",
+            "mtls_stub",
         ],
     }
 
@@ -386,3 +406,91 @@ def crowdsec_view(_: str = Depends(_auth)):
 @app.post("/api/reload")
 def reload_only(_: str = Depends(_auth)):
     return ec.reload_caddy()
+
+
+@app.get("/api/enterprise")
+def get_enterprise(_: str = Depends(_auth)):
+    cfg = ec.load_config()
+    return {
+        "enterprise": (cfg.get("global") or {}).get("enterprise") or {},
+        "catalog": [
+            {"id": "api_shield", "name": "API Shield", "cf": "API Shield"},
+            {"id": "graphql_guard", "name": "GraphQL Guard", "cf": "API abuse / GraphQL"},
+            {"id": "page_shield", "name": "Page Shield", "cf": "Page Shield / CSP"},
+            {"id": "waiting_room", "name": "Waiting Room", "cf": "Waiting Room"},
+            {"id": "virtual_patching", "name": "Virtual Patching", "cf": "WAF Managed + CVE paths"},
+            {"id": "auth_hardening", "name": "Auth Hardening", "cf": "Credential stuffing defenses"},
+            {"id": "sensitive_data_egress", "name": "Sensitive Data Detection", "cf": "DLP / API Shield SDS"},
+            {"id": "honeypot", "name": "Honeypot Paths", "cf": "Deception"},
+            {"id": "advanced_bot", "name": "Advanced Bot / PoW", "cf": "Bot Management"},
+            {"id": "leaked_credentials", "name": "Leaked Credentials", "cf": "Leaked credential checks"},
+            {"id": "logpush", "name": "Logpush", "cf": "Logpush / SIEM"},
+            {"id": "mtls", "name": "mTLS", "cf": "API Shield mTLS"},
+        ],
+    }
+
+
+@app.put("/api/enterprise")
+def put_enterprise(body: Dict[str, Any], _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    g = cfg.setdefault("global", {})
+    ent = g.setdefault("enterprise", {})
+    # shallow+one-level merge
+    for k, v in (body or {}).items():
+        if isinstance(v, dict) and isinstance(ent.get(k), dict):
+            ent[k] = {**ent[k], **v}
+        else:
+            ent[k] = v
+    result = ec.apply_all(cfg)
+    return {"ok": True, "enterprise": ent, "apply": result}
+
+
+@app.post("/api/enterprise/hibp-check")
+async def hibp_check(payload: Dict[str, Any], _: str = Depends(_auth)):
+    """Have I Been Pwned k-anonymity check for a password (enterprise leaked-cred)."""
+    import hashlib
+
+    import httpx
+
+    password = str(payload.get("password") or "")
+    if len(password) < 6:
+        raise HTTPException(400, detail="password too short")
+    sha1 = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+    prefix, suffix = sha1[:5], sha1[5:]
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                f"https://api.pwnedpasswords.com/range/{prefix}",
+                headers={"Add-Padding": "true", "User-Agent": "NikTiar-SecureEdge"},
+            )
+            r.raise_for_status()
+        count = 0
+        for line in r.text.splitlines():
+            parts = line.split(":")
+            if len(parts) == 2 and parts[0].upper() == suffix:
+                count = int(parts[1].strip())
+                break
+        return {"pwned": count > 0, "count": count, "mode": "k-anonymity"}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(502, detail=f"HIBP unreachable: {exc}") from exc
+
+
+@app.post("/api/enterprise/logpush/test")
+async def logpush_test(_: str = Depends(_auth)):
+    cfg = ec.load_config()
+    lp = ((cfg.get("global") or {}).get("enterprise") or {}).get("logpush") or {}
+    url = (lp.get("webhook_url") or "").strip()
+    if not url:
+        raise HTTPException(400, detail="logpush.webhook_url not set")
+    import httpx
+
+    sample = {
+        "source": "niktiar-secure-edge",
+        "hostname": HOST,
+        "event_type": "logpush_test",
+        "severity": "info",
+        "summary": "NikTiar Logpush test event",
+    }
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        r = await client.post(url, json=sample)
+    return {"ok": r.status_code < 300, "status": r.status_code}

@@ -75,6 +75,7 @@
         <button data-t="ssl" onclick="go('ssl')">SSL / TLS</button>
         <button data-t="cache" onclick="go('cache')">Caching</button>
         <button data-t="rules" onclick="go('rules')">Custom rules</button>
+        <button data-t="enterprise" onclick="go('enterprise')">Enterprise</button>
         <button data-t="analytics" onclick="go('analytics')">Analytics</button>
         <button data-t="system" onclick="go('system')">System</button>
       </nav>
@@ -145,6 +146,7 @@ function go(t){
     ssl:['SSL / TLS','Flexible / Full / Strict'],
     cache:['Caching','Edge cache controls'],
     rules:['Custom rules','Expression → block / log / allow'],
+    enterprise:['Enterprise','API Shield, Page Shield, Waiting Room, DLP, bots'],
     analytics:['Analytics','Requests & threats'],
     system:['System','Containers & ops']
   };
@@ -311,6 +313,46 @@ function render(){
       <p><button class="btn primary" onclick="addRule()">Deploy rule</button></p>
     </div>`;
   }
+  if(t==='enterprise'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading enterprise pack…</p></div>`;
+    api('/api/enterprise').then(j=>{
+      const e=j.enterprise||{};
+      const on=(k)=>((e[k]||{}).enabled!==false);
+      const row=(id,title,hint,extra='')=>`<div class="card" style="margin-bottom:.75rem">
+        <div class="row" style="align-items:center">
+          <div style="flex:2"><strong>${title}</strong><div class="hint">${hint}</div>${extra}</div>
+          <div style="flex:0"><label><input type="checkbox" id="ent_${id}" ${on(id)?'checked':''}/> Enabled</label></div>
+        </div></div>`;
+      c.innerHTML=`
+        <p class="hint">Next-gen controls mapped to Cloudflare Advantage / API Shield / Bot / Page Shield / Waiting Room / Logpush.</p>
+        ${row('api_shield','API Shield','JSON-required on /api, block TRACE/TRACK, body size caps')}
+        ${row('graphql_guard','GraphQL Guard','Block batch arrays, deep nesting, alias abuse')}
+        ${row('page_shield','Page Shield','CSP + Referrer-Policy + Permissions-Policy headers')}
+        ${row('virtual_patching','Virtual Patching','Block .env, actuators, phpMyAdmin, WP probes')}
+        ${row('auth_hardening','Auth Hardening','Rate-limit login / token / oauth paths')}
+        ${row('sensitive_data_egress','Sensitive Data Detection','PAN/SSN patterns in responses (default: log)')}
+        ${row('honeypot','Honeypot Paths','Fake 404 traps for scanners')}
+        ${row('advanced_bot','Advanced Bot / PoW','Block headless UAs + /cdn-cgi PoW challenge')}
+        ${row('leaked_credentials','Leaked Credentials','HIBP k-anonymity check API')}
+        ${row('waiting_room','Waiting Room','Queue visitors until cookie pass (CF Waiting Room)')}
+        ${row('logpush','Logpush','Webhook SIEM export',
+          `<div class="row" style="margin-top:.5rem"><div><label>Webhook URL</label>
+          <input id="ent_logpush_url" value="${(e.logpush||{}).webhook_url||''}" placeholder="https://siem.example/hooks/edge"/></div></div>`)}
+        ${row('mtls','mTLS (stub)','Request client certs — wire CA on dedicated edges')}
+        <div class="card">
+          <h3>HIBP password check</h3>
+          <div class="row">
+            <div><label>Password</label><input id="hibp_pw" type="password" placeholder="test password"/></div>
+          </div>
+          <p style="margin-top:.75rem">
+            <button class="btn primary" onclick="saveEnterprise()">Save & apply enterprise pack</button>
+            <button class="btn blue" onclick="testLogpush()">Test Logpush</button>
+            <button class="btn" onclick="checkHibp()">Check HIBP</button>
+          </p>
+          <div id="entExtra" class="hint"></div>
+        </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
+  }
   if(t==='analytics'){
     c.innerHTML=`<div class="card"><p class="muted">Loading…</p></div>`;
     api('/api/analytics').then(a=>{
@@ -402,6 +444,33 @@ async function addRule(){
   flash('Custom rule deployed'); await refresh(); go('rules');
 }
 async function delRule(id){ await api('/api/waf/rules/'+id,{method:'DELETE'}); flash('Rule removed'); await refresh(); go('rules'); }
+
+async function saveEnterprise(){
+  const ids=['api_shield','graphql_guard','page_shield','virtual_patching','auth_hardening',
+    'sensitive_data_egress','honeypot','advanced_bot','leaked_credentials','waiting_room','logpush','mtls'];
+  const body={};
+  ids.forEach(id=>{
+    const el=document.getElementById('ent_'+id);
+    if(el) body[id]={enabled:el.checked};
+  });
+  const urlEl=document.getElementById('ent_logpush_url');
+  if(urlEl) body.logpush=Object.assign(body.logpush||{},{enabled:!!document.getElementById('ent_logpush')?.checked, webhook_url:urlEl.value.trim()});
+  try{
+    await api('/api/enterprise',{method:'PUT',body:JSON.stringify(body)});
+    flash('Enterprise pack applied'); await refresh(); go('enterprise');
+  }catch(e){ flash(e.message,false); }
+}
+async function testLogpush(){
+  try{ const j=await api('/api/enterprise/logpush/test',{method:'POST'}); flash('Logpush test HTTP '+j.status+(j.ok?' OK':' FAIL'), j.ok); }
+  catch(e){ flash(e.message,false); }
+}
+async function checkHibp(){
+  try{
+    const j=await api('/api/enterprise/hibp-check',{method:'POST',body:JSON.stringify({password:hibp_pw.value})});
+    entExtra.textContent = j.pwned ? ('Pwned — seen '+j.count+' times') : 'Not found in HIBP corpus';
+    flash(j.pwned?'Password is compromised':'Password not in HIBP', !j.pwned);
+  }catch(e){ flash(e.message,false); }
+}
 
 if(S.token){ showApp(); refresh().then(()=>go('overview')).catch(()=>logout()); }
 pass.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });

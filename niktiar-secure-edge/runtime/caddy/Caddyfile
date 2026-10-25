@@ -55,6 +55,9 @@
 	# IP firewall + Under Attack Mode (generated)
 	import /runtime/firewall.caddy
 
+	# Enterprise: Page Shield, Waiting Room, honeypots, PoW (generated)
+	import /runtime/enterprise.caddy
+
 	# Per-zone Host routing (generated)
 	import /runtime/sites.caddy
 

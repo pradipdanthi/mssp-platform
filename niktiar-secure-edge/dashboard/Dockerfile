@@ -7,7 +7,7 @@ RUN apt-get update -y && apt-get install -y --no-install-recommends curl ca-cert
     && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py edge_config.py ./
+COPY app.py edge_config.py enterprise_features.py ./
 COPY static ./static
 EXPOSE 9080
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "9080"]

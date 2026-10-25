@@ -28,6 +28,7 @@ DEFAULT_GLOBAL = {
     "always_use_https": False,
     "challenge_passage_seconds": 1800,
     "managed_ruleset": "owasp_crs",
+    "enterprise": None,  # filled by enterprise_features.merge_enterprise
 }
 
 DEFAULT_ZONE_WAF = {
@@ -73,10 +74,16 @@ def load_config() -> Dict[str, Any]:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except Exception:  # noqa: BLE001
         data = default_config()
-    data.setdefault("version", 2)
+    data.setdefault("version", 3)
     data.setdefault("global", deepcopy(DEFAULT_GLOBAL))
     data.setdefault("zones", [])
     data.setdefault("custom_waf_rules", [])
+    try:
+        from enterprise_features import merge_enterprise
+
+        merge_enterprise(data)
+    except Exception:  # noqa: BLE001
+        pass
     return data
 
 
@@ -460,6 +467,14 @@ def reload_caddy(container: str = WAF_CONTAINER) -> Dict[str, Any]:
 
 def apply_all(cfg: Optional[Dict[str, Any]] = None, container: str = WAF_CONTAINER) -> Dict[str, Any]:
     cfg = cfg or load_config()
+    try:
+        from enterprise_features import apply_enterprise, merge_enterprise
+
+        merge_enterprise(cfg)
+        apply_enterprise(cfg)
+    except Exception as exc:  # noqa: BLE001
+        # keep applying core even if enterprise module missing
+        cfg.setdefault("_enterprise_error", str(exc))
     save_config(cfg)
     _write_coraza_overrides(cfg)
     _write_caddy_sites(cfg)
