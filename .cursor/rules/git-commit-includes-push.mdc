@@ -1,0 +1,15 @@
+---
+description: When the user asks to commit, also push to GitHub remote
+alwaysApply: true
+---
+
+# Commit includes GitHub push
+
+When the user says **commit** (or equivalent: "commit all", "commit pending", "save to git"):
+
+1. Follow the normal git safety protocol (status/diff/log, HEREDOC message, no force to main/master, no config changes, no secrets).
+2. **Also push to the remote** in the same turn — do **not** wait for a separate "push" ask.
+3. Use `git push -u origin HEAD` (or the tracked upstream) after a successful commit.
+4. Report both the commit hash **and** that the push succeeded (or the exact push error).
+
+This overrides the default "do not push unless asked" habit **for this user only** when they request a commit.
