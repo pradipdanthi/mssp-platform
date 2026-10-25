@@ -23,7 +23,7 @@ YouTube VM103 is unrelated / stopped — out of scope.
 |------|--------|
 | rclone own Google `client_id` | **HOLD** until user decides. Drive still works on shared client (retirement warn 2026). Script ready: `scripts/dr_apply_rclone_own_client.sh` + `.secrets/rclone_google_oauth.env`. |
 | ITDR one-click Entra contain (trial M365) | **Code shipped** (KB-113). Live Graph secrets + disposable-user test **deferred** until owner returns. |
-| NikTiar Secure Edge (CF alternative) | **Lab feature-rich** — VM 116 Coraza CRS Caddy + CrowdSec + hybrid multi-tenant site map (shared/dedicated). Portal UI + ACME TLS + enforce bouncer key bootstrap = follow-ups. Distinct from Edge Node. |
+| NikTiar Secure Edge (CF alternative) | **Lab complete** — VM 116 dashboard `:9080`, Coraza+CrowdSec+bouncer, hybrid multi-tenant, Admin/Customer portal pages (`bab682f`). Public ACME DNS + password rotate for prod. Distinct from Edge Node. |
 
 ## Parked (product hold — do not start until asked)
 
