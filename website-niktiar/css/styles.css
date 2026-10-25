@@ -274,6 +274,9 @@ select {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem 1.5rem;
 }
+.mega-grid.mega-grid--4 {
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+}
 
 .mega-col h4 {
   margin: 0 0 0.85rem;

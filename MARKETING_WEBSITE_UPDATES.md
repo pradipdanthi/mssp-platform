@@ -262,3 +262,16 @@ Add-on edge SKU page live at [`website-niktiar/services/secure-edge.html`](websi
 - Features: CRS WAF, bots / PoW, API Shield, GraphQL guard, Page Shield, Waiting Room, virtual patches, shared vs dedicated isolation
 - Wired into mega nav, homepage Edge block, `services.html`, `solutions.html`, sitemap, and capability snippet
 - Lab preview: `website-niktiar/lab-serve.sh` → `http://127.0.0.1:8080/services/secure-edge.html`
+
+## NikTiar SecureEdge navigation (2026-10-25)
+
+Public product name: **NikTiar SecureEdge**.
+
+Discoverability on https://kevantic.com/ (no deep URL required):
+
+1. **Platform & Services** mega menu → **Platform · Edge** → NikTiar SecureEdge
+2. **Solutions** → NikTiar SecureEdge section (`#secureedge`) → Read full page
+3. Homepage capabilities → **Platform · NikTiar SecureEdge** card
+
+Detail page covers how it works, applications supported, capabilities, SKUs, and who should buy.
+
