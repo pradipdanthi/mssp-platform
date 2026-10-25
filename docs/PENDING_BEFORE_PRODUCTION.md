@@ -23,7 +23,7 @@ YouTube VM103 is unrelated / stopped — out of scope.
 |------|--------|
 | rclone own Google `client_id` | **HOLD** until user decides. Drive still works on shared client (retirement warn 2026). Script ready: `scripts/dr_apply_rclone_own_client.sh` + `.secrets/rclone_google_oauth.env`. |
 | ITDR one-click Entra contain (trial M365) | **Code shipped** (KB-113). Live Graph secrets + disposable-user test **deferred** until owner returns. |
-| NikTiar Secure Edge (CF alternative) | Architecture agreed; **not started** (add-on for any tier). Distinct from sovereign Edge Node. |
+| NikTiar Secure Edge (CF alternative) | **Lab MVP live** — Proxmox VM 116 `192.168.0.217` (ModSecurity CRS + CrowdSec + agent); control-plane heartbeat/catalog/KB-114 (`1d2313e`). Coraza/Caddy + portal UI + hardened auth = follow-ups. Distinct from sovereign Edge Node. |
 
 ## Parked (product hold — do not start until asked)
 
