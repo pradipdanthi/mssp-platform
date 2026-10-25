@@ -181,7 +181,7 @@ class NdrAssetIpAttributionTests(unittest.TestCase):
         ]
         raw = {
             "rule": {
-                "id": "100710",
+                "id": "110110",
                 "level": 12,
                 "groups": ["zeek", "ids", "mssp_ndr"],
                 "description": "Zeek high: SSH::Password_Guessing",

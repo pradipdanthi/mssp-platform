@@ -1348,6 +1348,33 @@ export function connectItdrProvider(
   });
 }
 
+export type ItdrRemediateResult = {
+  upn: string;
+  entra_user_id: string;
+  steps: Array<{ action: string; status: string }>;
+  temporary_password?: string | null;
+  password_note?: string | null;
+  next_steps?: string[];
+};
+
+/** One-click Entra containment (customer_admin only). Requires confirm: true. */
+export function remediateItdrIdentity(
+  shortCode: string,
+  payload: {
+    user_principal_name: string;
+    event_id?: string;
+    revoke_sessions?: boolean;
+    reset_password?: boolean;
+    disable_account?: boolean;
+    confirm: boolean;
+  }
+): Promise<ItdrRemediateResult> {
+  return request(`/customer/itdr/${encodeURIComponent(shortCode)}/remediate`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
 /** KB-076: customer service upgrade / interest request. */
 export type ServiceUpgradeServiceKey =
   | "vulnerability_management"

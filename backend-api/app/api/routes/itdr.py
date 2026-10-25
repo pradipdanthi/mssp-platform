@@ -62,6 +62,17 @@ class ConnectBody(BaseModel):
     run_sync: bool = True
 
 
+class RemediateBody(BaseModel):
+    """One-click Entra containment. confirm must be true."""
+
+    user_principal_name: str = Field(min_length=3, max_length=320)
+    event_id: Optional[str] = Field(default=None, max_length=36)
+    revoke_sessions: bool = True
+    reset_password: bool = True
+    disable_account: bool = True
+    confirm: bool = False
+
+
 @router.get("/customer/itdr/{short_code}/summary")
 def customer_itdr_summary(
     short_code: str,
@@ -197,6 +208,64 @@ def admin_itdr_sync(
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
         **result,
     }
+
+
+def _run_remediate(
+    tenant: Dict[str, Any],
+    body: RemediateBody,
+    current_user: Dict[str, Any],
+) -> Dict[str, Any]:
+    try:
+        result = itdr.remediate_identity_account(
+            tenant["id"],
+            user_principal_name=body.user_principal_name,
+            event_id=body.event_id,
+            revoke_sessions=body.revoke_sessions,
+            reset_password=body.reset_password,
+            disable_account=body.disable_account,
+            actor_user_id=str(current_user.get("id") or "") or None,
+            actor_email=str(current_user.get("email") or "") or None,
+            actor_role=str(current_user.get("role") or "") or None,
+            confirm=body.confirm,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        from app.services.itdr_graph_client import ItdrGraphError
+
+        if isinstance(exc, ItdrGraphError):
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(status_code=500, detail=f"Remediation failed: {exc}") from exc
+    return {
+        "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
+        **result,
+    }
+
+
+@router.post("/customer/itdr/{short_code}/remediate")
+def customer_itdr_remediate(
+    short_code: str,
+    body: RemediateBody,
+    current_user: Dict[str, Any] = Depends(require_roles(*CUSTOMER_ADMIN)),
+) -> Dict[str, Any]:
+    """Customer IT admin one-click: revoke sessions, reset+force change, disable."""
+    tenant = _resolve_tenant(short_code)
+    require_tenant_match(tenant["id"], current_user)
+    enforce_tenant_subscription_tier(tenant["id"], SubscriptionTier.SILVER, catalog_key="cloud_identity_protection")
+    return _run_remediate(tenant, body, current_user)
+
+
+@router.post("/admin/itdr/{tenant_ref}/remediate")
+def admin_itdr_remediate(
+    tenant_ref: str,
+    body: RemediateBody,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """SOC admin one-click Entra containment for a tenant user."""
+    tenant = _resolve_tenant_ref(tenant_ref)
+    return _run_remediate(tenant, body, current_user)
 
 
 @router.get("/admin/itdr/summary")

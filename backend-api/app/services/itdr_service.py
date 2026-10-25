@@ -19,6 +19,8 @@ import hashlib
 import logging
 import os
 import re
+import secrets
+import string
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -567,3 +569,150 @@ def tenant_has_itdr_data(tenant_id: str) -> bool:
         (tenant_id,),
     )
     return bool(row)
+
+
+def _generate_temporary_password(length: int = 20) -> str:
+    """Entra-friendly temp password: upper, lower, digit, symbol."""
+    length = max(16, min(int(length), 40))
+    alphabet = string.ascii_letters + string.digits + "!@#$%*-_"
+    while True:
+        pwd = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (
+            any(c.islower() for c in pwd)
+            and any(c.isupper() for c in pwd)
+            and any(c.isdigit() for c in pwd)
+            and any(c in "!@#$%*-_" for c in pwd)
+        ):
+            return pwd
+
+
+def remediate_identity_account(
+    tenant_id: str,
+    *,
+    user_principal_name: str,
+    event_id: Optional[str] = None,
+    revoke_sessions: bool = True,
+    reset_password: bool = True,
+    disable_account: bool = True,
+    actor_user_id: Optional[str] = None,
+    actor_email: Optional[str] = None,
+    actor_role: Optional[str] = None,
+    source_ip: Optional[str] = None,
+    confirm: bool = False,
+) -> Dict[str, Any]:
+    """
+    One-click Entra containment via Microsoft Graph:
+      1) revokeSignInSessions
+      2) temporary password + forceChangePasswordNextSignIn
+      3) accountEnabled=false
+
+    Requires Graph app permissions (write) consented on the monitored tenant.
+    Temporary password is returned once to the actor — never persisted.
+    """
+    if not confirm:
+        raise ValueError("confirm=true is required to execute identity remediation")
+
+    upn = (user_principal_name or "").strip()
+    if not upn or "@" not in upn:
+        raise ValueError("user_principal_name must be a valid UPN")
+
+    from app.services import itdr_graph_client as graph
+    from app.services.audit_service import write_audit_event
+
+    if not graph.configured():
+        raise RuntimeError(
+            "Microsoft Graph credentials are not configured "
+            "(AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET)"
+        )
+
+    steps: List[Dict[str, Any]] = []
+    temp_password: Optional[str] = None
+    user = graph.resolve_user_id(upn)
+    user_id = str(user.get("id") or "")
+    resolved_upn = str(user.get("userPrincipalName") or upn)
+
+    try:
+        if revoke_sessions:
+            graph.revoke_sign_in_sessions(user_id)
+            steps.append({"action": "revoke_sessions", "status": "ok"})
+        if reset_password:
+            temp_password = _generate_temporary_password()
+            graph.force_password_change(user_id, temporary_password=temp_password)
+            steps.append({"action": "reset_password_force_change", "status": "ok"})
+        if disable_account:
+            graph.set_account_enabled(user_id, enabled=False)
+            steps.append({"action": "disable_account", "status": "ok"})
+    except Exception as exc:  # noqa: BLE001
+        write_audit_event(
+            action="itdr.remediate_identity",
+            entity_type="cloud_identity_user",
+            actor_user_id=actor_user_id,
+            tenant_id=tenant_id,
+            entity_id=event_id,
+            source_ip=source_ip,
+            actor_email=actor_email,
+            actor_role=actor_role,
+            action_status="FAILED",
+            details={
+                "upn": resolved_upn,
+                "steps": steps,
+                "error": str(exc)[:400],
+            },
+        )
+        raise
+
+    if event_id:
+        execute(
+            """
+            UPDATE tenant_cloud_identity_events
+            SET
+                status = 'acknowledged',
+                remediation = %s,
+                updated_at = now()
+            WHERE id = %s::uuid AND tenant_id = %s::uuid;
+            """,
+            (
+                "Containment executed from NikTiar: sessions revoked; "
+                "temporary password set with force-change on next sign-in; "
+                "account disabled until re-enabled by admin.",
+                event_id,
+                tenant_id,
+            ),
+        )
+
+    write_audit_event(
+        action="itdr.remediate_identity",
+        entity_type="cloud_identity_user",
+        actor_user_id=actor_user_id,
+        tenant_id=tenant_id,
+        entity_id=event_id,
+        source_ip=source_ip,
+        actor_email=actor_email,
+        actor_role=actor_role,
+        action_status="SUCCESS",
+        details={
+            "upn": resolved_upn,
+            "entra_user_id": user_id,
+            "steps": [s["action"] for s in steps],
+            "password_returned_to_actor": bool(temp_password),
+        },
+    )
+
+    return {
+        "upn": resolved_upn,
+        "entra_user_id": user_id,
+        "steps": steps,
+        "temporary_password": temp_password,
+        "password_note": (
+            "Share this temporary password out-of-band only after you re-enable the account. "
+            "User must change it at next sign-in. NikTiar does not store this password."
+            if temp_password
+            else None
+        ),
+        "next_steps": [
+            "Contact the real user via a known phone/email channel.",
+            "Re-enable the account in Entra when ready.",
+            "User signs in with the temporary password and is forced to set a new one.",
+            "Review authentication methods for attacker-registered MFA devices.",
+        ],
+    }

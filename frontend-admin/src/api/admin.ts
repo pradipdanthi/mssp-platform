@@ -2195,3 +2195,27 @@ export function syncAdminCompliance(shortCode: string): Promise<Record<string, u
   });
 }
 
+/** SOC one-click Entra containment (revoke sessions + temp password + disable). */
+export function remediateAdminItdrIdentity(
+  tenantRef: string,
+  payload: {
+    user_principal_name: string;
+    event_id?: string;
+    revoke_sessions?: boolean;
+    reset_password?: boolean;
+    disable_account?: boolean;
+    confirm: boolean;
+  }
+): Promise<{
+  upn: string;
+  temporary_password?: string | null;
+  steps: Array<{ action: string; status: string }>;
+  next_steps?: string[];
+}> {
+  return request(`/admin/itdr/${encodeURIComponent(tenantRef)}/remediate`, {
+    method: "POST",
+    body: payload,
+  });
+}
+
+

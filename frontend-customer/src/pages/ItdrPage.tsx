@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import {
   ItdrConfig,
   ItdrEvent,
+  ItdrRemediateResult,
   ItdrSummary,
   connectItdrProvider,
   getCustomerEntitlements,
   getItdrConfigs,
   getItdrEvents,
   getItdrSummary,
+  remediateItdrIdentity,
 } from "../api/customer";
 import { ApiError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -40,6 +42,8 @@ export default function ItdrPage() {
   const [seats, setSeats] = useState("25");
   const [submitting, setSubmitting] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [remediatingId, setRemediatingId] = useState<string | null>(null);
+  const [remediateResult, setRemediateResult] = useState<ItdrRemediateResult | null>(null);
 
   function loadAll() {
     if (!shortCode) {
@@ -81,6 +85,38 @@ export default function ItdrPage() {
       .then((res) => setEvents(res.events || []))
       .catch(() => undefined);
   }, [shortCode, severity, enabled]);
+
+  async function onContainIdentity(ev: ItdrEvent) {
+    if (!shortCode || !isAdmin) return;
+    const ok = window.confirm(
+      `Contain identity for ${ev.user_principal_name}?\n\n` +
+        "This will in Microsoft Entra:\n" +
+        "1) Revoke all sessions\n" +
+        "2) Set a temporary password (force change at next sign-in)\n" +
+        "3) Disable the account\n\n" +
+        "Only your designated admin should do this. Continue?"
+    );
+    if (!ok) return;
+    setRemediatingId(ev.id);
+    setError(null);
+    setRemediateResult(null);
+    try {
+      const res = await remediateItdrIdentity(shortCode, {
+        user_principal_name: ev.user_principal_name,
+        event_id: ev.id,
+        revoke_sessions: true,
+        reset_password: true,
+        disable_account: true,
+        confirm: true,
+      });
+      setRemediateResult(res);
+      loadAll();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Identity containment failed.");
+    } finally {
+      setRemediatingId(null);
+    }
+  }
 
   async function onConnect(e: FormEvent) {
     e.preventDefault();
@@ -213,6 +249,45 @@ export default function ItdrPage() {
       </div>
 
       {error && <p className="form-error">{error}</p>}
+      {remediateResult && (
+        <div className="panel" style={{ borderColor: "rgba(16, 185, 129, 0.45)" }}>
+          <h2 className="panel-title">Identity containment completed</h2>
+          <p>
+            User <strong>{remediateResult.upn}</strong> — steps:{" "}
+            {(remediateResult.steps || []).map((s) => s.action).join(", ")}
+          </p>
+          {remediateResult.temporary_password && (
+            <>
+              <p>
+                <strong>Temporary password</strong> (shown once — copy now, share out-of-band only after
+                re-enabling the account):
+              </p>
+              <code
+                style={{
+                  display: "block",
+                  padding: "0.75rem",
+                  background: "rgba(15, 23, 42, 0.8)",
+                  borderRadius: 8,
+                  userSelect: "all",
+                }}
+              >
+                {remediateResult.temporary_password}
+              </code>
+              <p className="muted">{remediateResult.password_note}</p>
+            </>
+          )}
+          {remediateResult.next_steps && (
+            <ul>
+              {remediateResult.next_steps.map((n) => (
+                <li key={n}>{n}</li>
+              ))}
+            </ul>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={() => setRemediateResult(null)}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <section className="compliance-hero panel">
         <div className="compliance-hero-gauge">
@@ -335,6 +410,27 @@ export default function ItdrPage() {
                               <p>{ev.summary}</p>
                               <strong>Remediation</strong>
                               <p>{ev.remediation}</p>
+                              {isAdmin && (
+                                <div style={{ marginTop: "0.75rem" }}>
+                                  <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    disabled={remediatingId === ev.id}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void onContainIdentity(ev);
+                                    }}
+                                  >
+                                    {remediatingId === ev.id
+                                      ? "Containing in Entra…"
+                                      : "Contain identity (revoke · reset · disable)"}
+                                  </button>
+                                  <p className="muted" style={{ marginTop: "0.35rem" }}>
+                                    Runs in your Microsoft Entra tenant via consented Graph permissions.
+                                    Your admin keeps control — this button is for designated customer admins.
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           </td>
                         </tr>

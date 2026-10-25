@@ -149,6 +149,90 @@ def fetch_directory_audits(top: int = 50) -> List[Dict[str, Any]]:
     return list(data.get("value") or [])
 
 
+def _request(
+    method: str,
+    path: str,
+    *,
+    body: Optional[Dict[str, Any]] = None,
+    timeout: int = 45,
+) -> Optional[Dict[str, Any]]:
+    token = _token()
+    url = f"https://graph.microsoft.com/v1.0{path}"
+    data = None
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+    if body is not None:
+        data = json.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+            if not raw:
+                return None
+            return json.loads(raw.decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")[:600]
+        raise ItdrGraphError(f"Graph HTTP {exc.code}: {detail}") from exc
+
+
+def resolve_user_id(upn_or_id: str) -> Dict[str, Any]:
+    """Resolve Entra user by UPN or object id. Returns id + userPrincipalName."""
+    key = (upn_or_id or "").strip()
+    if not key:
+        raise ItdrGraphError("User principal name is required")
+    # Direct lookup works for UPN and GUID.
+    encoded = urllib.parse.quote(key, safe="@")
+    try:
+        user = _request("GET", f"/users/{encoded}?$select=id,userPrincipalName,displayName,accountEnabled")
+        if user and user.get("id"):
+            return user
+    except ItdrGraphError:
+        pass
+    filt = urllib.parse.quote(f"userPrincipalName eq '{key.replace(chr(39), chr(39)+chr(39))}'")
+    data = _request("GET", f"/users?$filter={filt}&$select=id,userPrincipalName,displayName,accountEnabled&$top=1")
+    rows = list((data or {}).get("value") or [])
+    if not rows:
+        raise ItdrGraphError(f"Entra user not found: {key}")
+    return rows[0]
+
+
+def revoke_sign_in_sessions(user_id: str) -> None:
+    """Invalidate refresh tokens / sessions for the user (session kill)."""
+    uid = urllib.parse.quote((user_id or "").strip(), safe="")
+    # Graph expects POST with empty body → 204 No Content
+    _request("POST", f"/users/{uid}/revokeSignInSessions")
+
+
+def set_account_enabled(user_id: str, *, enabled: bool) -> None:
+    uid = urllib.parse.quote((user_id or "").strip(), safe="")
+    _request("PATCH", f"/users/{uid}", body={"accountEnabled": bool(enabled)})
+
+
+def force_password_change(user_id: str, *, temporary_password: str) -> None:
+    """
+    Set a temporary password and require change at next successful sign-in.
+    Caller should revoke sessions and may disable the account afterward.
+    """
+    pwd = (temporary_password or "").strip()
+    if len(pwd) < 12:
+        raise ItdrGraphError("Temporary password must be at least 12 characters")
+    uid = urllib.parse.quote((user_id or "").strip(), safe="")
+    _request(
+        "PATCH",
+        f"/users/{uid}",
+        body={
+            "passwordProfile": {
+                "password": pwd,
+                "forceChangePasswordNextSignIn": True,
+                "forceChangePasswordNextSignInWithMfa": False,
+            }
+        },
+    )
+
+
 def normalize_graph_events(
     *,
     domain: str,
