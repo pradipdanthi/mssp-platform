@@ -1,0 +1,78 @@
+# NikTiar Secure Edge MVP
+# WAF: OWASP ModSecurity CRS (nginx) — Coraza/Caddy swap when GHCR image available
+# Abuse: CrowdSec
+# Control plane: NikTiar agent
+services:
+  origin:
+    image: nginx:1.27-alpine
+    container_name: niktiar-se-origin
+    restart: unless-stopped
+    volumes:
+      - ./origin.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - edge
+
+  waf:
+    image: owasp/modsecurity-crs:nginx-alpine
+    container_name: niktiar-se-waf
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+      - "443:8443"
+    environment:
+      TZ: UTC
+      MODSEC_RULE_ENGINE: On
+      BLOCKING_PARANOIA: "1"
+      DETECTION_PARANOIA: "1"
+      ANOMALY_INBOUND: "5"
+      ANOMALY_OUTBOUND: "4"
+      BACKEND: http://origin:80
+      PORT: "8080"
+      SSL_PORT: "8443"
+    volumes:
+      - waf_logs:/var/log/nginx
+    depends_on:
+      - origin
+    networks:
+      - edge
+
+  crowdsec:
+    image: crowdsecurity/crowdsec:v1.6.4
+    container_name: niktiar-se-crowdsec
+    restart: unless-stopped
+    environment:
+      COLLECTIONS: "crowdsecurity/linux crowdsecurity/http-cve crowdsecurity/base-http-scenarios crowdsecurity/http-dos crowdsecurity/nginx"
+      TZ: UTC
+      CUSTOM_HOSTNAME: niktiar-secure-edge
+    volumes:
+      - crowdsec_data:/var/lib/crowdsec/data
+      - crowdsec_config:/etc/crowdsec
+      - ../crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
+      - waf_logs:/var/log/nginx:ro
+    networks:
+      - edge
+
+  agent:
+    build:
+      context: ../agent
+    container_name: niktiar-se-agent
+    restart: unless-stopped
+    environment:
+      NIKTIAR_CONTROL_URL: ${NIKTIAR_CONTROL_URL:-http://192.168.0.201:8000}
+      NIKTIAR_TENANT_CODE: ${NIKTIAR_TENANT_CODE:-}
+      NIKTIAR_APPLIANCE_TOKEN: ${NIKTIAR_APPLIANCE_TOKEN:-}
+      SECURE_EDGE_HOSTNAME: ${SECURE_EDGE_HOSTNAME:-niktiar-secure-edge}
+    volumes:
+      - waf_logs:/var/log/nginx:ro
+      - ../agent/config.yaml:/app/config.yaml:ro
+    networks:
+      - edge
+
+volumes:
+  waf_logs:
+  crowdsec_data:
+  crowdsec_config:
+
+networks:
+  edge:
+    driver: bridge

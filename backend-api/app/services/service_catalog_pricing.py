@@ -96,6 +96,15 @@ CATALOG_DEFAULTS: List[Dict[str, Any]] = [
         "requestable": True,
         "sort_order": 100,
     },
+    {
+        "service_key": "secure_edge_waf",
+        "service_name": "NikTiar Secure Edge (WAF / bot protection)",
+        "pricing_display": "Add-on — any tier",
+        "competitor_value": "Self-hosted Cloudflare-class edge",
+        "is_core": False,
+        "requestable": True,
+        "sort_order": 110,
+    },
 ]
 
 # SQL predicate fragment for "service is active for tenant" adoption counts.
@@ -110,6 +119,7 @@ ADOPTION_SQL: Dict[str, Tuple[str, Tuple[Any, ...]]] = {
     "endpoint_forensics_deception": ("COALESCE(e.velociraptor_enabled, FALSE) = TRUE", ()),
     "external_attack_surface": ("COALESCE(e.external_attack_surface_enabled, FALSE) = TRUE", ()),
     "cloud_identity_protection": ("COALESCE(e.cloud_identity_protection_enabled, FALSE) = TRUE", ()),
+    "secure_edge_waf": ("COALESCE(e.secure_edge_enabled, FALSE) = TRUE", ()),
 }
 
 

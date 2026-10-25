@@ -1,0 +1,35 @@
+{
+  order coraza_waf first
+  auto_https disable_redirects
+}
+
+# Default catch-all — replace hostnames via portal/agent later
+:80 {
+  coraza_waf {
+    load_owasp_crs
+    directives `
+      Include @coraza.conf-recommended
+      Include @crs-setup.conf.example
+      Include @owasp_crs/*.conf
+      SecRuleEngine On
+    `
+  }
+  log {
+    output file /var/log/coraza/access.log
+  }
+  respond "NikTiar Secure Edge online — configure upstream origins" 200
+}
+
+# Example site block (enable by editing / assigning origins)
+# app.example.com {
+#   coraza_waf {
+#     load_owasp_crs
+#     directives `
+#       Include @coraza.conf-recommended
+#       Include @crs-setup.conf.example
+#       Include @owasp_crs/*.conf
+#       SecRuleEngine On
+#     `
+#   }
+#   reverse_proxy 192.168.0.50:8080
+# }

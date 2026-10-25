@@ -42,6 +42,7 @@ from app.api.routes.customer_agent_packages import router as customer_agent_pack
 from app.api.routes.public_agent_install import router as public_agent_install_router
 from app.api.routes.customer_users import router as customer_users_router
 from app.api.routes.edr import router as edr_router
+from app.api.routes.secure_edge import router as secure_edge_router
 from app.api.routes.entitlements import router as entitlements_router
 from app.api.routes.service_catalog import router as service_catalog_router
 from app.api.routes.compliance import router as compliance_router
@@ -174,6 +175,9 @@ app.include_router(threat_intel_router)
 app.include_router(threatlens_router)
 app.include_router(endpoint_forensics_router)
 app.include_router(edr_router)
+
+# KB-114: NikTiar Secure Edge (self-hosted WAF) heartbeat + admin inventory.
+app.include_router(secure_edge_router)
 
 # KB-096: Admin AI chat (SOC Q&A; dark behind AI_CHAT_ENABLED).
 app.include_router(admin_ai_chat_router)
