@@ -42,7 +42,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "log_event_monitoring",
     name: "Log & Event Monitoring",
     statusHint: "included",
-    pricing: "Included in Core Plan",
+    pricing: "Included in Silver",
     competitorValue: "Competitor value: ~$4.00 / endpoint / month",
     achieves:
       "Ingests, normalizes, and analyzes 24/7 endpoint, server, and system event logs across your infrastructure — with Kevantic Data Lake retention.",
@@ -64,7 +64,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "incident_response",
     name: "Incident Response & Casework",
     statusHint: "included",
-    pricing: "Included in Core Plan",
+    pricing: "Included in Silver",
     competitorValue: "Competitor value: ~$1,500 / month SOC retainer",
     achieves:
       "Delivers end-to-end incident investigation, forensic timeline tracking, and SOC casework management with AI executive summaries.",
@@ -86,7 +86,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "security_automation",
     name: "Security Automation & Containment",
     statusHint: "available",
-    pricing: "Available — request consulting",
+    pricing: "Included in Gold",
     competitorValue: "Competitor value: ~$2,000 / month SOAR engine",
     achieves:
       "Executes automated active-response playbooks to isolate infected hosts and stop malicious processes within milliseconds.",
@@ -106,7 +106,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "vulnerability_management",
     name: "Vulnerability Management (VMaaS)",
     statusHint: "available",
-    pricing: "$4.00 / device / month",
+    pricing: "Included in Gold",
     competitorValue: "Competitor avg: $6.50–$9.00 / device / month",
     achieves:
       "Continuously scans internal networks and assets for software flaws, outdated packages, and unpatched CVEs.",
@@ -127,7 +127,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "continuous_compliance",
     name: "Continuous Compliance & Hardening (CaaS)",
     statusHint: "available",
-    pricing: "$3.50 / device / month",
+    pricing: "Included in Platinum",
     competitorValue: "Competitor avg: $5.00–$8.00 / device / month",
     achieves:
       "Audits operating-system configurations against gold-standard security benchmarks and regulatory frameworks.",
@@ -148,7 +148,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "network_detection_response",
     name: "Network Detection & Response (NDR)",
     statusHint: "available",
-    pricing: "$250.00 / network sensor / month",
+    pricing: "Included in Platinum",
     competitorValue: "Uncapped data ingestion — no per-GB fees",
     achieves:
       "Provides deep packet inspection and network behavioral monitoring across local subnets and boundary choke points.",
@@ -169,7 +169,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "threat_intelligence",
     name: "Threat Intelligence & Enrichment",
     statusHint: "available",
-    pricing: "$150.00 / tenant / month",
+    pricing: "Included in Platinum",
     competitorValue: "Flat tenant fee",
     achieves:
       "Contextualizes alerts with live threat feeds and enables 90-day Kevantic Retrospective Engine sweeps when new IOCs appear.",
@@ -192,7 +192,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "endpoint_forensics_deception",
     name: "Endpoint Forensics & Deception Hunting",
     statusHint: "available",
-    pricing: "$5.00 / endpoint / month",
+    pricing: "Included in Platinum",
     competitorValue: "Per-endpoint advanced response",
     achieves:
       "Combines deception tripwires, deep forensic triage, and Kevantic ThreatLens AI-assisted IOC extraction from advisories.",
@@ -215,7 +215,7 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "external_attack_surface",
     name: "External Attack Surface Management (EASM)",
     statusHint: "available",
-    pricing: "$199.00 / primary domain / month",
+    pricing: "Included in Gold",
     competitorValue: "Zero agents required",
     achieves:
       "Continuously monitors your public internet perimeter (domains, subdomains, public IPs) through the eyes of an external attacker.",
@@ -236,8 +236,8 @@ export const SERVICE_CATALOG: ServiceCatalogItem[] = [
     serviceKey: "cloud_identity_protection",
     name: "Cloud & Identity Protection (ITDR)",
     statusHint: "available",
-    pricing: "$3.00 / user seat / month",
-    competitorValue: "Microsoft 365 / Entra ID / AWS",
+    pricing: "Included in Silver",
+    competitorValue: "Microsoft 365 / Entra ID",
     achieves:
       "Extends threat monitoring into SaaS identity providers to help prevent cloud account takeovers.",
     whereItFits:

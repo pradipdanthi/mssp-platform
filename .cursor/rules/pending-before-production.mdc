@@ -1,0 +1,27 @@
+---
+description: On every new user request, remind production-pending work before diving in
+alwaysApply: true
+---
+
+# Pending-before-production reminder
+
+## When to remind
+
+At the **start of every new user request** (after a break, new chat, or a fresh “do X” ask), **before** starting the requested work:
+
+1. Read `docs/PENDING_BEFORE_PRODUCTION.md`.
+2. Open a short **Pending before production** block (3–8 bullets max) listing still-open **Must clear** items.
+3. Note **Parked** items only if the user’s ask would collide with them (do not nag parked work otherwise).
+4. Then proceed with what the user asked — unless they explicitly say to clear pending items first.
+
+## When to skip the reminder
+
+- User says “skip pending reminder” / “no status” for this turn.
+- Pure follow-up in the same continuous turn (same task, same session, no context loss).
+- User is already working on an item from that list.
+
+## Keeping the list honest
+
+- When an item is verified done, update `docs/PENDING_BEFORE_PRODUCTION.md` in the same change set (or immediately after).
+- When new production blockers appear, add them there — do not rely on chat memory alone.
+- Do not invent urgency; keep wording factual and short.
