@@ -1,21 +1,22 @@
-"""NikTiar Secure Edge — local appliance management dashboard + API."""
+"""NikTiar Secure Edge — Cloudflare-parity appliance dashboard."""
 from __future__ import annotations
 
 import json
 import os
-import re
 import secrets
 import subprocess
 import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
-import yaml
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+import edge_config as ec
 
 RUNTIME = Path(os.getenv("RUNTIME_DIR") or "/runtime")
 CONTROL = (os.getenv("NIKTIAR_CONTROL_URL") or "").rstrip("/")
@@ -30,7 +31,17 @@ CS_CONTAINER = os.getenv("CROWDSEC_CONTAINER") or "niktiar-se-crowdsec"
 SESSIONS: Dict[str, float] = {}
 SESSION_TTL = 12 * 3600
 
-app = FastAPI(title="NikTiar Secure Edge Dashboard", version="1.0.0")
+# Point engine at runtime paths
+ec.RUNTIME = RUNTIME
+ec.CONFIG_PATH = RUNTIME / "edge_config.json"
+ec.OVERRIDES = RUNTIME / "coraza-overrides"
+ec.RULES_D = RUNTIME / "coraza-rules.d"
+ec.SITES_CADDY = RUNTIME / "sites.caddy"
+ec.SITES_TLS = RUNTIME / "sites_tls.caddy"
+ec.FIREWALL_CADDY = RUNTIME / "firewall.caddy"
+ec.WAF_CONTAINER = WAF_CONTAINER
+
+app = FastAPI(title="NikTiar Secure Edge", version="2.0.0")
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(static_dir)), name="assets")
@@ -41,20 +52,37 @@ class LoginIn(BaseModel):
     password: str
 
 
-class LocalSiteIn(BaseModel):
-    tenant_short_code: str = Field(..., min_length=2, max_length=32)
-    public_hostname: str = Field(..., min_length=1, max_length=253)
-    origin_url: str = Field(..., min_length=3, max_length=512)
-    tls_mode: str = Field(default="http_only", max_length=16)
-    waf_profile: str = Field(default="standard", max_length=32)
+class GlobalSettingsIn(BaseModel):
+    security_level: Optional[str] = None
+    waf_enabled: Optional[bool] = None
+    bot_fight_mode: Optional[bool] = None
+    browser_integrity_check: Optional[bool] = None
+    always_use_https: Optional[bool] = None
+
+
+class ZoneIn(BaseModel):
+    public_hostname: str
+    origin_url: str
+    tenant_short_code: Optional[str] = "LOCAL"
+    ssl_mode: str = "flexible"
+    security_level: Optional[str] = None
+    under_attack_mode: bool = False
+    enabled: bool = True
+    waf: Optional[Dict[str, Any]] = None
+    firewall: Optional[Dict[str, Any]] = None
+    rate_limit_rules: Optional[List[Dict[str, Any]]] = None
+    cache: Optional[Dict[str, Any]] = None
     notes: Optional[str] = None
 
 
-def _headers() -> Dict[str, str]:
-    h = {"Content-Type": "application/json", "User-Agent": "NikTiar-SecureEdge-Dashboard/1.0"}
-    if TOKEN:
-        h["Authorization"] = f"Bearer {TOKEN}"
-    return h
+class CustomRuleIn(BaseModel):
+    name: str
+    expression: str
+    action: str = "block"
+    description: Optional[str] = None
+    enabled: bool = True
+    priority: int = 100
+    id: Optional[str] = None
 
 
 def _auth(authorization: Optional[str] = Header(default=None)) -> str:
@@ -84,37 +112,6 @@ def _docker_ps() -> List[Dict[str, str]]:
         return rows
     except Exception as exc:  # noqa: BLE001
         return [{"name": "error", "status": str(exc), "image": ""}]
-
-
-def _crowdsec_decisions() -> List[Dict[str, Any]]:
-    try:
-        r = subprocess.run(
-            ["docker", "exec", CS_CONTAINER, "cscli", "decisions", "list", "-o", "json"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if r.returncode != 0:
-            return []
-        data = json.loads(r.stdout or "[]")
-        return data if isinstance(data, list) else []
-    except Exception:  # noqa: BLE001
-        return []
-
-
-def _crowdsec_metrics() -> Dict[str, Any]:
-    try:
-        r = subprocess.run(
-            ["docker", "exec", CS_CONTAINER, "cscli", "metrics", "-o", "json"],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if r.returncode != 0:
-            return {"raw": (r.stderr or r.stdout or "")[:500]}
-        return json.loads(r.stdout or "{}")
-    except Exception as exc:  # noqa: BLE001
-        return {"error": str(exc)}
 
 
 def _parse_access_stats(limit: int = 500) -> Dict[str, Any]:
@@ -158,104 +155,85 @@ def _parse_access_stats(limit: int = 500) -> Dict[str, Any]:
         "total_sampled": total,
         "waf_blocks_403": blocks,
         "by_status": by_status,
-        "recent": recent[:80],
+        "recent": recent[:100],
     }
 
 
-def _local_sites_file() -> Path:
-    return RUNTIME / "local_sites.json"
-
-
-def _load_local_sites() -> List[Dict[str, Any]]:
-    p = _local_sites_file()
-    if not p.exists():
-        return []
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:  # noqa: BLE001
-        return []
-
-
-def _save_local_sites(sites: List[Dict[str, Any]]) -> None:
-    RUNTIME.mkdir(parents=True, exist_ok=True)
-    _local_sites_file().write_text(json.dumps(sites, indent=2), encoding="utf-8")
-
-
-def _render_sites_caddy(sites: List[Dict[str, Any]]) -> str:
-    lines = ["# Generated by Secure Edge dashboard/agent", f"# mode={MODE} host={HOST}"]
-    for site in sites:
-        public_host = (site.get("public_hostname") or "").strip().lower()
-        origin = (site.get("origin_url") or "").strip()
-        if not public_host or not origin:
-            continue
-        matcher = "site_" + re.sub(r"[^a-zA-Z0-9_]", "_", public_host)[:48]
-        tls = (site.get("tls_mode") or "http_only").lower()
-        lines.append(f"@{matcher} host {public_host}")
-        lines.append(f"handle @{matcher} {{")
-        if tls == "acme":
-            # ACME is configured on a dedicated :443 site block in Caddyfile; mark header for ops
-            lines.append("\theader X-NikTiar-TLS acme")
-        lines.append(f"\treverse_proxy {origin} {{")
-        lines.append("\t\ttrusted_proxies private_ranges")
-        lines.append("\t\theader_up X-NikTiar-Tenant {http.request.host}")
-        lines.append("\t}")
-        lines.append("}")
-        lines.append("")
-    if len(lines) <= 2:
-        lines.append("# (no sites)")
-    return "\n".join(lines) + "\n"
-
-
-def _reload_caddy() -> Dict[str, Any]:
+def _crowdsec_decisions() -> List[Dict[str, Any]]:
     try:
         r = subprocess.run(
-            [
-                "docker",
-                "exec",
-                WAF_CONTAINER,
-                "sh",
-                "-c",
-                "cp /config/caddy/Caddyfile /etc/caddy/Caddyfile && caddy reload --config /etc/caddy/Caddyfile --force",
-            ],
+            ["docker", "exec", CS_CONTAINER, "cscli", "decisions", "list", "-o", "json"],
             capture_output=True,
             text=True,
-            timeout=30,
+            timeout=15,
         )
-        return {"ok": r.returncode == 0, "stderr": (r.stderr or "")[-400:], "stdout": (r.stdout or "")[-200:]}
-    except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "error": str(exc)}
-
-
-def _apply_sites(sites: List[Dict[str, Any]]) -> Dict[str, Any]:
-    RUNTIME.mkdir(parents=True, exist_ok=True)
-    (RUNTIME / "sites.caddy").write_text(_render_sites_caddy(sites), encoding="utf-8")
-    (RUNTIME / "sites.json").write_text(json.dumps({"sites": sites}, indent=2), encoding="utf-8")
-    return _reload_caddy()
-
-
-async def _control_sites() -> List[Dict[str, Any]]:
-    if not CONTROL:
-        return []
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            r = await client.get(
-                f"{CONTROL}/api/v1/secure-edge/config",
-                headers=_headers(),
-                params={"hostname": HOST, "mode": MODE},
-            )
-            if r.status_code == 200:
-                return r.json().get("sites") or []
+        if r.returncode != 0:
+            return []
+        data = json.loads(r.stdout or "[]")
+        return data if isinstance(data, list) else []
     except Exception:  # noqa: BLE001
-        pass
-    return []
+        return []
+
+
+def _seed_zones_from_legacy() -> None:
+    """Import prior sites.json / control-plane sites into edge_config once."""
+    cfg = ec.load_config()
+    if cfg.get("zones"):
+        return
+    sites_path = RUNTIME / "sites.json"
+    imported = []
+    if sites_path.exists():
+        try:
+            data = json.loads(sites_path.read_text(encoding="utf-8"))
+            imported = data.get("sites") or data if isinstance(data, list) else data.get("sites") or []
+        except Exception:  # noqa: BLE001
+            imported = []
+    for s in imported:
+        host = (s.get("public_hostname") or "").lower()
+        if not host:
+            continue
+        z = deepcopy(ec.DEFAULT_ZONE)
+        z.update(
+            {
+                "id": ec.new_id(),
+                "public_hostname": host,
+                "origin_url": s.get("origin_url") or "http://origin:80",
+                "tenant_short_code": s.get("tenant_short_code") or "LOCAL",
+                "ssl_mode": "flexible" if (s.get("tls_mode") or "") != "acme" else "full",
+            }
+        )
+        cfg["zones"].append(z)
+    if cfg["zones"]:
+        ec.apply_all(cfg)
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    RUNTIME.mkdir(parents=True, exist_ok=True)
+    (RUNTIME / "coraza-overrides").mkdir(parents=True, exist_ok=True)
+    (RUNTIME / "coraza-rules.d").mkdir(parents=True, exist_ok=True)
+    if not (RUNTIME / "firewall.caddy").exists():
+        (RUNTIME / "firewall.caddy").write_text("# init\n", encoding="utf-8")
+    if not (RUNTIME / "sites.caddy").exists():
+        (RUNTIME / "sites.caddy").write_text("# init\n", encoding="utf-8")
+    if not (RUNTIME / "sites_tls.caddy").exists():
+        (RUNTIME / "sites_tls.caddy").write_text("# init\n", encoding="utf-8")
+    _seed_zones_from_legacy()
+    # Ensure config files exist
+    ec.load_config()
 
 
 @app.get("/")
 def index():
-    index_path = static_dir / "index.html"
-    if not index_path.exists():
-        return JSONResponse({"error": "dashboard UI missing"}, status_code=500)
-    return FileResponse(index_path)
+    p = static_dir / "index.html"
+    if not p.exists():
+        return JSONResponse({"error": "UI missing"}, status_code=500)
+    return FileResponse(p)
+
+
+@app.get("/api/health")
+def health():
+    return {"ok": True, "service": "secure-edge-dashboard", "version": "2.0.0", "hostname": HOST}
 
 
 @app.post("/api/login")
@@ -268,149 +246,143 @@ def login(body: LoginIn):
 
 
 @app.get("/api/overview")
-async def overview(_: str = Depends(_auth)):
-    control_sites = await _control_sites()
-    local_sites = _load_local_sites()
-    # Prefer merged view: control-plane authoritative when online
-    sites = control_sites or local_sites
+def overview(_: str = Depends(_auth)):
+    cfg = ec.load_config()
     stats = _parse_access_stats()
     decisions = _crowdsec_decisions()
     return {
         "hostname": HOST,
         "deployment_mode": MODE,
         "control_url": CONTROL or None,
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "global": cfg.get("global"),
+        "zones_count": len(cfg.get("zones") or []),
+        "custom_rules_count": len(cfg.get("custom_waf_rules") or []),
         "containers": _docker_ps(),
-        "sites_count": len(sites),
-        "sites": sites,
         "access": stats,
-        "crowdsec_decisions": decisions[:50],
         "crowdsec_decision_count": len(decisions),
         "features": [
-            "coraza_crs_waf",
-            "caddy_edge",
-            "crowdsec",
+            "security_levels",
+            "managed_waf_owasp_crs",
+            "custom_waf_rules",
+            "ip_access_rules",
+            "bot_fight_mode",
+            "under_attack_mode",
+            "rate_limiting",
+            "ssl_modes",
+            "caching",
+            "analytics",
             "hybrid_multitenant",
-            "site_management",
-            "tls_acme_ready",
-            "rate_limit",
-            "local_dashboard",
-            "control_plane_sync",
         ],
     }
 
 
-@app.get("/api/sites")
-async def list_sites(_: str = Depends(_auth)):
-    control = await _control_sites()
-    local = _load_local_sites()
-    return {"control_plane": control, "local": local, "active": control or local}
+@app.get("/api/config")
+def get_config(_: str = Depends(_auth)):
+    return ec.load_config()
 
 
-@app.post("/api/sites")
-async def create_site(body: LocalSiteIn, _: str = Depends(_auth)):
-    """Create site on control plane when reachable; always keep local copy + reload."""
+@app.put("/api/config/global")
+def put_global(body: GlobalSettingsIn, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    g = cfg.setdefault("global", deepcopy(ec.DEFAULT_GLOBAL))
+    data = body.model_dump(exclude_none=True)
+    if "security_level" in data and data["security_level"] not in ec.SECURITY_LEVELS:
+        raise HTTPException(400, detail=f"security_level must be one of {ec.SECURITY_LEVELS}")
+    g.update(data)
+    result = ec.apply_all(cfg)
+    return {"ok": True, "global": g, "apply": result}
+
+
+@app.get("/api/zones")
+def list_zones(_: str = Depends(_auth)):
+    return {"zones": ec.load_config().get("zones") or []}
+
+
+@app.post("/api/zones")
+def create_or_update_zone(body: ZoneIn, _: str = Depends(_auth)):
     payload = body.model_dump()
-    payload["public_hostname"] = payload["public_hostname"].lower().strip()
-    payload["tenant_short_code"] = payload["tenant_short_code"].upper()
-    payload["enabled"] = True
-    created = None
-    if CONTROL:
-        try:
-            async with httpx.AsyncClient(timeout=20.0) as client:
-                # Admin token not available on appliance — use local apply + instruct portal
-                # Still POST to appliance-facing path is not create; store local and reload.
-                pass
-        except Exception:  # noqa: BLE001
-            pass
-    sites = _load_local_sites()
-    sites = [s for s in sites if s.get("public_hostname") != payload["public_hostname"]]
-    sites.append(payload)
-    _save_local_sites(sites)
-    # Merge with control sites for routing
-    control = await _control_sites()
-    merged: Dict[str, Dict[str, Any]] = {}
-    for s in control:
-        merged[s["public_hostname"]] = s
-    for s in sites:
-        merged[s["public_hostname"]] = s
-    reload = _apply_sites(list(merged.values()))
-    return {"ok": True, "site": payload, "reload": reload, "created_remote": created}
+    if payload.get("security_level") and payload["security_level"] not in ec.SECURITY_LEVELS:
+        raise HTTPException(400, detail="invalid security_level")
+    try:
+        result = ec.upsert_zone(payload)
+    except ValueError as exc:
+        raise HTTPException(400, detail=str(exc)) from exc
+    return {"ok": True, "apply": result, "zones": ec.load_config().get("zones")}
 
 
-@app.delete("/api/sites/{hostname}")
-async def delete_site(hostname: str, _: str = Depends(_auth)):
-    hostname = hostname.lower().strip()
-    sites = [s for s in _load_local_sites() if s.get("public_hostname") != hostname]
-    _save_local_sites(sites)
-    control = await _control_sites()
-    merged = {s["public_hostname"]: s for s in control if s.get("public_hostname") != hostname}
-    for s in sites:
-        merged[s["public_hostname"]] = s
-    reload = _apply_sites(list(merged.values()))
-    return {"ok": True, "reload": reload}
+@app.patch("/api/zones/{hostname}")
+def patch_zone(hostname: str, body: Dict[str, Any], _: str = Depends(_auth)):
+    body = dict(body or {})
+    body["public_hostname"] = hostname
+    # Keep origin if not provided
+    cfg = ec.load_config()
+    existing = next(
+        (z for z in cfg.get("zones") or [] if (z.get("public_hostname") or "").lower() == hostname.lower()),
+        None,
+    )
+    if not existing:
+        raise HTTPException(404, detail="Zone not found")
+    if not body.get("origin_url"):
+        body["origin_url"] = existing.get("origin_url")
+    merged = {**existing, **body}
+    result = ec.upsert_zone(merged)
+    return {"ok": True, "apply": result}
 
 
-@app.post("/api/reload")
-def reload_edge(_: str = Depends(_auth)):
-    return _reload_caddy()
+@app.delete("/api/zones/{hostname}")
+def remove_zone(hostname: str, _: str = Depends(_auth)):
+    return ec.delete_zone(hostname)
 
 
-@app.get("/api/access-log")
-def access_log(_: str = Depends(_auth)):
-    return _parse_access_stats(800)
+@app.get("/api/waf/rules")
+def list_custom_rules(_: str = Depends(_auth)):
+    return {"rules": ec.load_config().get("custom_waf_rules") or []}
+
+
+@app.post("/api/waf/rules")
+def add_custom_rule(body: CustomRuleIn, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    rules = cfg.setdefault("custom_waf_rules", [])
+    rule = body.model_dump()
+    rule["id"] = body.id or ec.new_id()
+    rules = [r for r in rules if r.get("id") != rule["id"]]
+    rules.append(rule)
+    rules.sort(key=lambda r: int(r.get("priority") or 100))
+    cfg["custom_waf_rules"] = rules
+    apply = ec.apply_all(cfg)
+    return {"ok": True, "rule": rule, "apply": apply}
+
+
+@app.delete("/api/waf/rules/{rule_id}")
+def delete_custom_rule(rule_id: str, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    cfg["custom_waf_rules"] = [r for r in (cfg.get("custom_waf_rules") or []) if r.get("id") != rule_id]
+    return {"ok": True, "apply": ec.apply_all(cfg)}
+
+
+@app.post("/api/apply")
+def apply_config(_: str = Depends(_auth)):
+    return ec.apply_all()
+
+
+@app.get("/api/analytics")
+def analytics(_: str = Depends(_auth)):
+    stats = _parse_access_stats(1000)
+    return {
+        "requests_sampled": stats["total_sampled"],
+        "threats_blocked": stats["waf_blocks_403"],
+        "status_breakdown": stats["by_status"],
+        "recent": stats["recent"][:50],
+        "crowdsec_decisions": _crowdsec_decisions()[:30],
+    }
 
 
 @app.get("/api/crowdsec")
 def crowdsec_view(_: str = Depends(_auth)):
-    return {"decisions": _crowdsec_decisions()[:100], "metrics": _crowdsec_metrics()}
+    return {"decisions": _crowdsec_decisions()[:100]}
 
 
-@app.post("/api/crowdsec/bootstrap-bouncer")
-def bootstrap_bouncer(_: str = Depends(_auth)):
-    """Create firewall bouncer API key and write crowdsec/bouncer.yaml."""
-    try:
-        name = f"firewall-{int(time.time())}"
-        r = subprocess.run(
-            ["docker", "exec", CS_CONTAINER, "cscli", "bouncers", "add", name, "-o", "raw"],
-            capture_output=True,
-            text=True,
-            timeout=20,
-        )
-        if r.returncode != 0:
-            raise HTTPException(status_code=500, detail=(r.stderr or r.stdout or "cscli failed")[:300])
-        key = (r.stdout or "").strip()
-        bouncer_path = Path("/opt/niktiar-secure-edge/crowdsec/bouncer.yaml")
-        # Also write into runtime for compose mount override
-        runtime_b = RUNTIME / "bouncer.yaml"
-        content = (
-            "mode: iptables\n"
-            "update_frequency: 10s\n"
-            "log_mode: stdout\n"
-            "log_level: info\n"
-            "api_url: http://127.0.0.1:7422/\n"
-            f"api_key: {key}\n"
-            "iptables_chains:\n"
-            "  - INPUT\n"
-            "  - FORWARD\n"
-            "deny_action: DROP\n"
-        )
-        RUNTIME.mkdir(parents=True, exist_ok=True)
-        runtime_b.write_text(content, encoding="utf-8")
-        if bouncer_path.parent.exists():
-            bouncer_path.write_text(content, encoding="utf-8")
-        return {
-            "ok": True,
-            "bouncer": name,
-            "api_key": key,
-            "hint": "Run: cd /opt/niktiar-secure-edge/docker && sudo docker compose --profile enforce up -d crowdsec-firewall-bouncer",
-        }
-    except HTTPException:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@app.get("/api/health")
-def health():
-    return {"ok": True, "service": "secure-edge-dashboard", "hostname": HOST}
+@app.post("/api/reload")
+def reload_only(_: str = Depends(_auth)):
+    return ec.reload_caddy()

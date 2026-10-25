@@ -41,6 +41,7 @@ class SecureEdgeSiteCreate(BaseModel):
     tls_mode: str = Field(default="http_only", max_length=16)
     enabled: bool = True
     notes: Optional[str] = Field(default=None, max_length=1024)
+    zone_settings: Optional[Dict[str, Any]] = None
 
 
 class SecureEdgeSitePatch(BaseModel):
@@ -174,7 +175,8 @@ def secure_edge_config(
             sites = fetch_all(
                 """
                 SELECT id::text, tenant_short_code, public_hostname, origin_url,
-                       edge_node_hostname, waf_profile, tls_mode, enabled
+                       edge_node_hostname, waf_profile, tls_mode, enabled,
+                       COALESCE(zone_settings, '{}'::jsonb) AS zone_settings
                 FROM secure_edge_sites
                 WHERE enabled = TRUE
                   AND UPPER(tenant_short_code) = %s
@@ -187,7 +189,8 @@ def secure_edge_config(
         sites = fetch_all(
             """
             SELECT id::text, tenant_short_code, public_hostname, origin_url,
-                   edge_node_hostname, waf_profile, tls_mode, enabled
+                   edge_node_hostname, waf_profile, tls_mode, enabled,
+                   COALESCE(zone_settings, '{}'::jsonb) AS zone_settings
             FROM secure_edge_sites
             WHERE enabled = TRUE
               AND (edge_node_hostname IS NULL OR edge_node_hostname = %s)
@@ -358,12 +361,12 @@ def admin_create_site(
         """
         INSERT INTO secure_edge_sites (
             tenant_short_code, public_hostname, origin_url, edge_node_hostname,
-            waf_profile, tls_mode, enabled, notes, updated_at
+            waf_profile, tls_mode, enabled, notes, zone_settings, updated_at
         ) VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, NOW()
+            %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, NOW()
         )
         RETURNING id::text, tenant_short_code, public_hostname, origin_url,
-                  edge_node_hostname, waf_profile, tls_mode, enabled;
+                  edge_node_hostname, waf_profile, tls_mode, enabled, zone_settings;
         """,
         (
             body.tenant_short_code.upper(),
@@ -374,6 +377,7 @@ def admin_create_site(
             tls,
             body.enabled,
             body.notes,
+            json.dumps(body.zone_settings or {}),
         ),
     )
     _bump_config_version(body.edge_node_hostname)
@@ -388,6 +392,30 @@ def admin_create_site(
         """,
         (body.tenant_short_code.upper(),),
     )
+    return {"ok": True, "site": row}
+
+
+@router.put("/admin/secure-edge/sites/{site_id}/zone-settings")
+def admin_put_zone_settings(
+    site_id: UUID,
+    settings: Dict[str, Any],
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Cloudflare-parity per-zone security settings (WAF/firewall/ssl/cache/rate limit)."""
+    _ = current_user
+    row = fetch_one_write(
+        """
+        UPDATE secure_edge_sites
+        SET zone_settings = %s::jsonb, updated_at = NOW()
+        WHERE id = %s::uuid
+        RETURNING id::text, public_hostname, zone_settings, edge_node_hostname;
+        """,
+        (json.dumps(settings or {}), str(site_id)),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Site not found")
+    _bump_config_version(row.get("edge_node_hostname"))
+    _bump_shared_nodes()
     return {"ok": True, "site": row}
 
 

@@ -6,284 +6,405 @@
   <title>NikTiar Secure Edge</title>
   <style>
     :root {
-      --bg: #0b1220;
-      --panel: #121a2b;
-      --line: #243049;
-      --text: #e8eef7;
-      --muted: #93a0b8;
-      --accent: #3d9cf0;
-      --ok: #3ecf8e;
-      --warn: #f0b429;
-      --bad: #f07178;
-      --radius: 12px;
-      font-family: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+      --bg:#0b1220; --panel:#121a2b; --line:#243049; --text:#e8eef7; --muted:#93a0b8;
+      --accent:#f48120; --accent2:#3d9cf0; --ok:#3ecf8e; --warn:#f0b429; --bad:#f07178;
+      --radius:10px; font-family:Inter,Segoe UI,system-ui,sans-serif;
     }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: radial-gradient(1200px 600px at 10% -10%, #152238, var(--bg)); color: var(--text); min-height: 100vh; }
-    a { color: var(--accent); }
-    .wrap { max-width: 1200px; margin: 0 auto; padding: 1.25rem; }
-    header.app { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
-    .brand { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.02em; }
-    .brand span { color: var(--accent); font-weight: 500; font-size: 0.9rem; margin-left: .5rem; }
-    .card { background: color-mix(in srgb, var(--panel) 92%, black); border: 1px solid var(--line); border-radius: var(--radius); padding: 1rem 1.1rem; }
-    .grid { display: grid; gap: 1rem; }
-    .grid.kpi { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); margin-bottom: 1rem; }
-    .kpi .v { font-size: 1.6rem; font-weight: 700; }
-    .kpi .l { color: var(--muted); font-size: .85rem; margin-top: .2rem; }
-    .tabs { display: flex; gap: .5rem; flex-wrap: wrap; margin: 1rem 0; }
-    .tabs button, button.btn, .login button {
-      background: #1a2740; color: var(--text); border: 1px solid var(--line); border-radius: 8px;
-      padding: .55rem .9rem; cursor: pointer; font-weight: 600;
-    }
-    .tabs button.active, button.btn.primary { background: var(--accent); border-color: var(--accent); color: #041018; }
-    button.btn.danger { background: #3a1d24; border-color: #6b3038; color: #ffd0d4; }
-    table { width: 100%; border-collapse: collapse; font-size: .92rem; }
-    th, td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
-    th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
-    .muted { color: var(--muted); }
-    .pill { display: inline-block; padding: .15rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; }
-    .pill.ok { background: #163528; color: var(--ok); }
-    .pill.bad { background: #3a1d24; color: var(--bad); }
-    .pill.warn { background: #3a3014; color: var(--warn); }
-    .login { max-width: 380px; margin: 12vh auto; }
-    .login input, .form input, .form select, .form textarea {
-      width: 100%; margin: .35rem 0 .75rem; padding: .65rem .7rem; border-radius: 8px;
-      border: 1px solid var(--line); background: #0e1626; color: var(--text);
-    }
-    .form label { font-size: .85rem; color: var(--muted); }
-    .row { display: flex; gap: .75rem; flex-wrap: wrap; }
-    .row > * { flex: 1; min-width: 160px; }
-    .err { color: var(--bad); margin: .5rem 0; }
-    .okmsg { color: var(--ok); margin: .5rem 0; }
-    .hidden { display: none !important; }
-    code { background: #0e1626; padding: .1rem .35rem; border-radius: 4px; }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);min-height:100vh}
+    a{color:var(--accent2)}
+    .shell{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+    .side{background:#0e1626;border-right:1px solid var(--line);padding:1rem .75rem}
+    .brand{font-weight:800;font-size:1.05rem;padding:.5rem .6rem 1rem;letter-spacing:-.02em}
+    .brand small{display:block;color:var(--muted);font-weight:500;font-size:.75rem;margin-top:.2rem}
+    .nav button{display:block;width:100%;text-align:left;background:transparent;border:0;color:var(--muted);
+      padding:.65rem .7rem;border-radius:8px;cursor:pointer;font-weight:600;margin-bottom:.15rem}
+    .nav button.active,.nav button:hover{background:#1a2740;color:var(--text)}
+    .main{padding:1.25rem 1.5rem}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:1rem}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:1rem}
+    .grid{display:grid;gap:1rem}
+    .kpi{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+    .kpi .v{font-size:1.55rem;font-weight:800}
+    .kpi .l{color:var(--muted);font-size:.82rem}
+    table{width:100%;border-collapse:collapse;font-size:.9rem}
+    th,td{padding:.55rem .4rem;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+    th{color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.04em}
+    label{display:block;color:var(--muted);font-size:.8rem;margin:.4rem 0 .2rem}
+    input,select,textarea{width:100%;background:#0e1626;border:1px solid var(--line);color:var(--text);
+      border-radius:8px;padding:.55rem .65rem}
+    .row{display:flex;gap:.75rem;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
+    .btn{background:#1a2740;border:1px solid var(--line);color:var(--text);border-radius:8px;
+      padding:.55rem .9rem;cursor:pointer;font-weight:700}
+    .btn.primary{background:var(--accent);border-color:var(--accent);color:#1a0d00}
+    .btn.danger{background:#3a1d24;border-color:#6b3038;color:#ffd0d4}
+    .btn.blue{background:var(--accent2);border-color:var(--accent2);color:#041018}
+    .pill{display:inline-block;padding:.12rem .45rem;border-radius:999px;font-size:.72rem;font-weight:700}
+    .pill.ok{background:#163528;color:var(--ok)}.pill.bad{background:#3a1d24;color:var(--bad)}
+    .pill.warn{background:#3a3014;color:var(--warn)}
+    .muted{color:var(--muted)}.err{color:var(--bad)}.okmsg{color:var(--ok)}
+    .hidden{display:none!important}
+    .login{max-width:400px;margin:12vh auto}
+    .hint{font-size:.8rem;color:var(--muted);margin-top:.35rem}
+    .seg{display:flex;flex-wrap:wrap;gap:.35rem;margin:.5rem 0}
+    .seg button{padding:.4rem .65rem;border-radius:999px;border:1px solid var(--line);background:#0e1626;color:var(--muted);cursor:pointer;font-weight:600;font-size:.8rem}
+    .seg button.on{background:var(--accent);color:#1a0d00;border-color:var(--accent)}
+    h2{margin:.2rem 0 .8rem;font-size:1.15rem}
+    h3{margin:1rem 0 .5rem;font-size:1rem}
+    code{background:#0e1626;padding:.1rem .35rem;border-radius:4px;font-size:.85rem}
   </style>
 </head>
 <body>
-  <div id="loginView" class="wrap login card">
-    <div class="brand">NikTiar <span>Secure Edge</span></div>
-    <p class="muted">Appliance management dashboard</p>
-    <label>Username</label>
-    <input id="user" value="admin" autocomplete="username" />
-    <label>Password</label>
-    <input id="pass" type="password" autocomplete="current-password" />
+  <div id="loginView" class="login card">
+    <div class="brand">NikTiar Secure Edge<small>Cloudflare-class edge control</small></div>
+    <label>Username</label><input id="user" value="admin" />
+    <label>Password</label><input id="pass" type="password" />
     <div id="loginErr" class="err hidden"></div>
-    <button onclick="doLogin()">Sign in</button>
-    <p class="muted" style="margin-top:1rem;font-size:.8rem">Default lab password is in <code>docker/.env</code> → <code>EDGE_DASHBOARD_PASSWORD</code></p>
+    <p style="margin-top:1rem"><button class="btn primary" onclick="doLogin()">Sign in</button></p>
   </div>
 
-  <div id="appView" class="wrap hidden">
-    <header class="app">
-      <div class="brand">NikTiar Secure Edge <span id="hostLabel"></span></div>
-      <div>
-        <button class="btn" onclick="logout()">Logout</button>
+  <div id="appView" class="shell hidden">
+    <aside class="side">
+      <div class="brand">NikTiar Edge<small id="hostLabel">—</small></div>
+      <nav class="nav" id="nav">
+        <button data-t="overview" class="active" onclick="go('overview')">Overview</button>
+        <button data-t="zones" onclick="go('zones')">Zones / Sites</button>
+        <button data-t="waf" onclick="go('waf')">WAF</button>
+        <button data-t="firewall" onclick="go('firewall')">Firewall</button>
+        <button data-t="ratelimit" onclick="go('ratelimit')">Rate limiting</button>
+        <button data-t="ssl" onclick="go('ssl')">SSL / TLS</button>
+        <button data-t="cache" onclick="go('cache')">Caching</button>
+        <button data-t="rules" onclick="go('rules')">Custom rules</button>
+        <button data-t="analytics" onclick="go('analytics')">Analytics</button>
+        <button data-t="system" onclick="go('system')">System</button>
+      </nav>
+      <p style="padding:.75rem"><button class="btn" onclick="logout()">Logout</button></p>
+    </aside>
+    <main class="main">
+      <div class="top">
+        <div>
+          <h2 id="pageTitle">Overview</h2>
+          <div class="muted" id="pageSub">Security configuration for your edge</div>
+        </div>
+        <div>
+          <button class="btn blue" onclick="applyNow()">Apply changes</button>
+          <button class="btn" onclick="refresh()">Refresh</button>
+        </div>
       </div>
-    </header>
-
-    <div class="grid kpi" id="kpis"></div>
-    <div class="tabs">
-      <button class="active" data-tab="overview" onclick="tab('overview')">Overview</button>
-      <button data-tab="sites" onclick="tab('sites')">Sites</button>
-      <button data-tab="blocks" onclick="tab('blocks')">WAF / Blocks</button>
-      <button data-tab="crowdsec" onclick="tab('crowdsec')">CrowdSec</button>
-      <button data-tab="system" onclick="tab('system')">System</button>
-    </div>
-
-    <section id="tab-overview" class="card"></section>
-    <section id="tab-sites" class="card hidden"></section>
-    <section id="tab-blocks" class="card hidden"></section>
-    <section id="tab-crowdsec" class="card hidden"></section>
-    <section id="tab-system" class="card hidden"></section>
+      <div id="flash"></div>
+      <div id="content"></div>
+    </main>
   </div>
 
 <script>
-const S = { token: localStorage.getItem('se_tok') || '', data: null };
+const S = { token: localStorage.getItem('se_tok')||'', cfg:null, overview:null, zone:null };
 
 async function api(path, opts={}) {
   const headers = Object.assign({'Content-Type':'application/json'}, opts.headers||{});
-  if (S.token) headers.Authorization = 'Bearer ' + S.token;
-  const r = await fetch(path, Object.assign({}, opts, { headers }));
-  if (r.status === 401) { logout(false); throw new Error('Unauthorized'); }
+  if (S.token) headers.Authorization = 'Bearer '+S.token;
+  const r = await fetch(path, Object.assign({}, opts, {headers}));
+  if (r.status===401){ logout(false); throw new Error('Unauthorized'); }
   const j = await r.json().catch(()=>({}));
-  if (!r.ok) throw new Error(j.detail || j.error || ('HTTP '+r.status));
+  if (!r.ok) throw new Error(j.detail || JSON.stringify(j) || ('HTTP '+r.status));
   return j;
 }
+function flash(msg, ok=true){ const el=document.getElementById('flash'); el.innerHTML=`<div class="${ok?'okmsg':'err'}">${msg}</div>`; setTimeout(()=>el.innerHTML='',5000); }
+async function doLogin(){
+  try{
+    const j=await api('/api/login',{method:'POST',body:JSON.stringify({username:user.value,password:pass.value})});
+    S.token=j.token; localStorage.setItem('se_tok',S.token); showApp(); await refresh(); go('overview');
+  }catch(e){ loginErr.textContent=e.message; loginErr.classList.remove('hidden'); }
+}
+function logout(c=true){ if(c) localStorage.removeItem('se_tok'); S.token=''; appView.classList.add('hidden'); loginView.classList.remove('hidden'); }
+function showApp(){ loginView.classList.add('hidden'); appView.classList.remove('hidden'); }
 
-async function doLogin() {
-  const err = document.getElementById('loginErr');
-  err.classList.add('hidden');
-  try {
-    const j = await api('/api/login', { method:'POST', body: JSON.stringify({
-      username: document.getElementById('user').value,
-      password: document.getElementById('pass').value
-    })});
-    S.token = j.token; localStorage.setItem('se_tok', S.token);
-    showApp(); await refresh();
-  } catch (e) {
-    err.textContent = e.message; err.classList.remove('hidden');
+async function refresh(){
+  S.overview = await api('/api/overview');
+  S.cfg = await api('/api/config');
+  hostLabel.textContent = S.overview.hostname+' · '+S.overview.deployment_mode;
+  if (S.zone) {
+    const z = (S.cfg.zones||[]).find(x=>x.public_hostname===S.zone);
+    if (!z) S.zone=null;
   }
+  render();
 }
 
-function logout(clear=true) {
-  if (clear) localStorage.removeItem('se_tok');
-  S.token = '';
-  document.getElementById('appView').classList.add('hidden');
-  document.getElementById('loginView').classList.remove('hidden');
+async function applyNow(){
+  try{ const j=await api('/api/apply',{method:'POST'}); flash('Applied · waf_restarted='+!!j.waf_restarted+' · zones='+j.zones); await refresh(); }
+  catch(e){ flash(e.message,false); }
 }
 
-function showApp() {
-  document.getElementById('loginView').classList.add('hidden');
-  document.getElementById('appView').classList.remove('hidden');
+function go(t){
+  document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.t===t));
+  const titles={
+    overview:['Overview','Edge health & security posture'],
+    zones:['Zones','Like Cloudflare zones — hostname → origin'],
+    waf:['WAF','Managed OWASP CRS + security level (CF-style)'],
+    firewall:['Firewall','IP allow/block & UA rules'],
+    ratelimit:['Rate limiting','Throttle abusive paths'],
+    ssl:['SSL / TLS','Flexible / Full / Strict'],
+    cache:['Caching','Edge cache controls'],
+    rules:['Custom rules','Expression → block / log / allow'],
+    analytics:['Analytics','Requests & threats'],
+    system:['System','Containers & ops']
+  };
+  pageTitle.textContent=titles[t][0]; pageSub.textContent=titles[t][1];
+  S.tab=t; render();
 }
 
-function tab(name) {
-  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab===name));
-  ['overview','sites','blocks','crowdsec','system'].forEach(t => {
-    document.getElementById('tab-'+t).classList.toggle('hidden', t!==name);
-  });
+function selZone(){
+  const zones=S.cfg.zones||[];
+  if(!zones.length) return `<p class="muted">Create a zone first.</p>`;
+  if(!S.zone) S.zone=zones[0].public_hostname;
+  return `<label>Active zone</label><select id="zonePick" onchange="S.zone=this.value;render()">
+    ${zones.map(z=>`<option value="${z.public_hostname}" ${z.public_hostname===S.zone?'selected':''}>${z.public_hostname}</option>`).join('')}
+  </select>`;
+}
+function curZone(){ return (S.cfg.zones||[]).find(z=>z.public_hostname===S.zone) || null; }
+
+function securitySeg(current, onpick){
+  const levels=['off','essentially_off','low','medium','high','under_attack'];
+  const labels={off:'Off',essentially_off:'Essentially Off',low:'Low',medium:'Medium',high:'High',under_attack:"I'm Under Attack!"};
+  return `<div class="seg">${levels.map(l=>`<button class="${current===l?'on':''}" onclick="${onpick}('${l}')">${labels[l]}</button>`).join('')}</div>
+  <p class="hint">Maps to Coraza CRS paranoia / anomaly thresholds like Cloudflare Security Level.</p>`;
 }
 
-function pill(status) {
-  const s = (status||'').toLowerCase();
-  if (s.includes('up') || s==='ok') return '<span class="pill ok">'+status+'</span>';
-  if (s.includes('restart') || s.includes('unhealthy')) return '<span class="pill warn">'+status+'</span>';
-  return '<span class="pill bad">'+status+'</span>';
-}
-
-async function refresh() {
-  S.data = await api('/api/overview');
-  const d = S.data;
-  document.getElementById('hostLabel').textContent = d.hostname + ' · ' + d.deployment_mode;
-  document.getElementById('kpis').innerHTML = `
-    <div class="card kpi"><div class="v">${d.sites_count}</div><div class="l">Protected sites</div></div>
-    <div class="card kpi"><div class="v">${d.access.waf_blocks_403||0}</div><div class="l">WAF blocks (sample)</div></div>
-    <div class="card kpi"><div class="v">${d.crowdsec_decision_count||0}</div><div class="l">CrowdSec decisions</div></div>
-    <div class="card kpi"><div class="v">${(d.containers||[]).filter(c=> (c.status||'').toLowerCase().startsWith('up')).length}/${(d.containers||[]).length}</div><div class="l">Containers up</div></div>
-  `;
-  document.getElementById('tab-overview').innerHTML = `
-    <h3>Edge status</h3>
-    <p class="muted">Control plane: <code>${d.control_url||'offline / unset'}</code></p>
-    <p>Features: ${(d.features||[]).map(f=>'<code>'+f+'</code>').join(' ')}</p>
-    <p><button class="btn primary" onclick="reloadEdge()">Reload WAF config</button>
-       <button class="btn" onclick="refresh()">Refresh</button></p>
-    <h4>Containers</h4>
-    <table><thead><tr><th>Name</th><th>Status</th><th>Image</th></tr></thead>
-    <tbody>${(d.containers||[]).map(c=>`<tr><td>${c.name}</td><td>${pill(c.status)}</td><td class="muted">${c.image}</td></tr>`).join('')}</tbody></table>
-  `;
-  renderSites(d.sites||[]);
-  renderBlocks(d.access||{});
-  document.getElementById('tab-crowdsec').innerHTML = `<p class="muted">Loading CrowdSec…</p>`;
-  loadCrowdsec();
-  document.getElementById('tab-system').innerHTML = `
-    <h3>Operations</h3>
-    <ul>
-      <li>WAF edge: <code>http://${location.hostname}/</code> (port 80)</li>
-      <li>This dashboard: <code>http://${location.hostname}:9080/</code></li>
-      <li>Health: <code>/healthz</code> on edge</li>
-      <li>Hybrid mode: <b>${d.deployment_mode}</b> — shared hosts many tenants by Host header; dedicated pins one tenant.</li>
-    </ul>
-    <p><button class="btn primary" onclick="bootstrapBouncer()">Bootstrap CrowdSec firewall bouncer key</button></p>
-    <div id="sysMsg"></div>
-  `;
-}
-
-function renderSites(sites) {
-  document.getElementById('tab-sites').innerHTML = `
-    <h3>Protected sites</h3>
-    <p class="muted">Hybrid routing: DNS/CNAME to this edge, traffic matched by hostname.</p>
-    <table><thead><tr><th>Hostname</th><th>Origin</th><th>Tenant</th><th>TLS</th><th></th></tr></thead>
-    <tbody>${sites.map(s=>`<tr>
-      <td><code>${s.public_hostname}</code></td>
-      <td class="muted">${s.origin_url}</td>
-      <td>${s.tenant_short_code||'—'}</td>
-      <td>${s.tls_mode||'http_only'}</td>
-      <td><button class="btn danger" onclick="delSite('${s.public_hostname}')">Remove local</button></td>
-    </tr>`).join('') || '<tr><td colspan="5" class="muted">No sites yet</td></tr>'}</tbody></table>
-    <h4>Add site (local + live reload)</h4>
-    <div class="form">
-      <div class="row">
-        <div><label>Public hostname</label><input id="s_host" placeholder="app.customer.com" /></div>
-        <div><label>Origin URL</label><input id="s_origin" placeholder="http://10.0.0.20:8080" /></div>
-      </div>
-      <div class="row">
-        <div><label>Tenant code</label><input id="s_tenant" placeholder="ACME" /></div>
-        <div><label>TLS mode</label>
-          <select id="s_tls"><option value="http_only">http_only</option><option value="acme">acme</option><option value="off">off</option></select>
-        </div>
-      </div>
-      <button class="btn primary" onclick="addSite()">Add & apply</button>
-      <div id="siteMsg"></div>
+function render(){
+  if(!S.cfg) return;
+  const t=S.tab||'overview';
+  const c=document.getElementById('content');
+  if(t==='overview'){
+    const o=S.overview;
+    c.innerHTML=`<div class="grid kpi">
+      <div class="card"><div class="v">${o.zones_count}</div><div class="l">Zones</div></div>
+      <div class="card"><div class="v">${(o.global||{}).security_level||'medium'}</div><div class="l">Security level</div></div>
+      <div class="card"><div class="v">${o.access?.waf_blocks_403||0}</div><div class="l">Threats blocked (sample)</div></div>
+      <div class="card"><div class="v">${o.crowdsec_decision_count||0}</div><div class="l">CrowdSec decisions</div></div>
     </div>
-  `;
-}
-
-function renderBlocks(access) {
-  const rows = (access.recent||[]).filter(r => r.status===403 || r.status>=500).slice(0,40);
-  document.getElementById('tab-blocks').innerHTML = `
-    <h3>Recent WAF / error traffic</h3>
-    <p class="muted">Sampled from JSON access log · blocks=${access.waf_blocks_403||0}</p>
-    <table><thead><tr><th>Status</th><th>Host</th><th>URI</th><th>Client</th></tr></thead>
-    <tbody>${rows.map(r=>`<tr>
-      <td>${r.status===403?'<span class="pill bad">403</span>':r.status}</td>
-      <td>${r.host||''}</td><td><code>${r.uri||''}</code></td><td class="muted">${r.client_ip||''}</td>
-    </tr>`).join('') || '<tr><td colspan="4" class="muted">No blocked requests in sample</td></tr>'}</tbody></table>
-  `;
-}
-
-async function loadCrowdsec() {
-  try {
-    const j = await api('/api/crowdsec');
-    const dec = j.decisions||[];
-    document.getElementById('tab-crowdsec').innerHTML = `
-      <h3>CrowdSec decisions</h3>
-      <table><thead><tr><th>Type</th><th>Value</th><th>Duration</th><th>Reason</th></tr></thead>
-      <tbody>${dec.map(d=>`<tr>
-        <td>${d.type||d.Type||''}</td>
-        <td><code>${d.value||d.Value||''}</code></td>
-        <td>${d.duration||d.Duration||''}</td>
-        <td class="muted">${d.scenario||d.Scenario||d.reason||''}</td>
-      </tr>`).join('') || '<tr><td colspan="4" class="muted">No active decisions</td></tr>'}</tbody></table>
-    `;
-  } catch (e) {
-    document.getElementById('tab-crowdsec').innerHTML = `<div class="err">${e.message}</div>`;
+    <div class="card" style="margin-top:1rem">
+      <h3>Global security level</h3>
+      ${securitySeg((S.cfg.global||{}).security_level||'medium','setGlobalLevel')}
+      <div class="row" style="margin-top:.75rem">
+        <label><input type="checkbox" id="g_waf" ${(S.cfg.global||{}).waf_enabled!==false?'checked':''}/> WAF enabled</label>
+        <label><input type="checkbox" id="g_bot" ${(S.cfg.global||{}).bot_fight_mode!==false?'checked':''}/> Bot Fight Mode</label>
+        <label><input type="checkbox" id="g_bic" ${(S.cfg.global||{}).browser_integrity_check!==false?'checked':''}/> Browser Integrity Check</label>
+      </div>
+      <p style="margin-top:1rem"><button class="btn primary" onclick="saveGlobal()">Save global settings</button></p>
+    </div>`;
+  }
+  if(t==='zones'){
+    const zones=S.cfg.zones||[];
+    c.innerHTML=`<div class="card">
+      <table><thead><tr><th>Zone</th><th>Origin</th><th>SSL</th><th>Security</th><th>UAM</th><th></th></tr></thead>
+      <tbody>${zones.map(z=>`<tr>
+        <td><code>${z.public_hostname}</code></td>
+        <td class="muted">${z.origin_url}</td>
+        <td>${z.ssl_mode||'flexible'}</td>
+        <td>${z.security_level||'inherit'}</td>
+        <td>${z.under_attack_mode?'<span class="pill bad">ON</span>':'—'}</td>
+        <td><button class="btn" onclick="S.zone='${z.public_hostname}';go('waf')">Configure</button>
+            <button class="btn danger" onclick="delZone('${z.public_hostname}')">Delete</button></td>
+      </tr>`).join('')||'<tr><td colspan="6" class="muted">No zones</td></tr>'}</tbody></table>
+      <h3>Add zone</h3>
+      <div class="row">
+        <div><label>Hostname</label><input id="z_host" placeholder="app.customer.com"/></div>
+        <div><label>Origin URL</label><input id="z_origin" placeholder="http://10.0.0.20:8080"/></div>
+        <div><label>Tenant</label><input id="z_tenant" value="LOCAL"/></div>
+      </div>
+      <p style="margin-top:.75rem"><button class="btn primary" onclick="addZone()">Add zone & apply</button></p>
+    </div>`;
+  }
+  if(t==='waf'){
+    const z=curZone();
+    c.innerHTML=`<div class="card">${selZone()}
+      ${!z?'':`
+      <h3 style="margin-top:1rem">Security Level (zone)</h3>
+      ${securitySeg(z.security_level|| (S.cfg.global||{}).security_level ||'medium','setZoneLevel')}
+      <div class="row">
+        <div><label>WAF mode</label>
+          <select id="waf_mode"><option value="block" ${(z.waf||{}).mode!=='simulate'?'selected':''}>Block</option>
+          <option value="simulate" ${(z.waf||{}).mode==='simulate'?'selected':''}>Simulate (log only)</option></select>
+        </div>
+        <div><label>Paranoia level (CRS)</label>
+          <select id="waf_par">${[1,2,3,4].map(n=>`<option ${(z.waf||{}).paranoia_level==n?'selected':''} value="${n}">${n}</option>`).join('')}</select>
+        </div>
+        <div><label>Anomaly inbound</label><input id="waf_in" type="number" value="${(z.waf||{}).anomaly_inbound||5}"/></div>
+        <div><label>Anomaly outbound</label><input id="waf_out" type="number" value="${(z.waf||{}).anomaly_outbound||4}"/></div>
+      </div>
+      <label style="margin-top:.75rem"><input type="checkbox" id="waf_uam" ${z.under_attack_mode?'checked':''}/> I'm Under Attack Mode (challenge page)</label>
+      <p class="hint">Managed ruleset: OWASP CRS via Coraza (same job as Cloudflare Managed Rules / OWASP).</p>
+      <p><button class="btn primary" onclick="saveWaf()">Save WAF settings</button></p>`}
+    </div>`;
+  }
+  if(t==='firewall'){
+    const z=curZone();
+    c.innerHTML=`<div class="card">${selZone()}
+      ${!z?'':`<h3>IP Access Rules</h3>
+      <div class="row">
+        <div><label>Block IPs (one per line)</label><textarea id="ip_block" rows="5">${((z.firewall||{}).ip_block||[]).join('\\n')}</textarea></div>
+        <div><label>Allow IPs (one per line)</label><textarea id="ip_allow" rows="5">${((z.firewall||{}).ip_allow||[]).join('\\n')}</textarea></div>
+        <div><label>Block User-Agents (substring)</label><textarea id="ua_block" rows="5">${((z.firewall||{}).ua_block||[]).join('\\n')}</textarea></div>
+      </div>
+      <p><button class="btn primary" onclick="saveFirewall()">Save firewall</button></p>`}
+    </div>`;
+  }
+  if(t==='ratelimit'){
+    const z=curZone();
+    const rules=(z&&z.rate_limit_rules)||[];
+    c.innerHTML=`<div class="card">${selZone()}
+      ${!z?'':`
+      <table><thead><tr><th>Name</th><th>Path</th><th>Limit</th><th>Action</th><th></th></tr></thead>
+      <tbody>${rules.map((r,i)=>`<tr>
+        <td>${r.name||'—'}</td><td><code>${r.path}</code></td>
+        <td>${r.requests}/${r.period}s</td><td>${r.action||'block'}</td>
+        <td><button class="btn danger" onclick="delRL(${i})">Remove</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">No rules</td></tr>'}</tbody></table>
+      <h3>Add rate limit</h3>
+      <div class="row">
+        <div><label>Name</label><input id="rl_name" value="api"/></div>
+        <div><label>Path (regex ok)</label><input id="rl_path" value="/api/.*"/></div>
+        <div><label>Requests</label><input id="rl_req" type="number" value="100"/></div>
+        <div><label>Period (sec)</label><input id="rl_per" type="number" value="60"/></div>
+      </div>
+      <p><button class="btn primary" onclick="addRL()">Add & apply</button></p>`}
+    </div>`;
+  }
+  if(t==='ssl'){
+    const z=curZone();
+    c.innerHTML=`<div class="card">${selZone()}
+      ${!z?'':`<h3>SSL / TLS mode</h3>
+      <div class="seg">
+        ${['off','flexible','full','strict'].map(m=>`<button class="${(z.ssl_mode||'flexible')===m?'on':''}" onclick="setSsl('${m}')">${m}</button>`).join('')}
+      </div>
+      <p class="hint">flexible = HTTP to origin · full/strict = ACME TLS on edge (needs public DNS to this appliance).</p>
+      <p><button class="btn primary" onclick="saveSsl()">Save SSL mode</button></p>`}
+    </div>`;
+  }
+  if(t==='cache'){
+    const z=curZone();
+    const cache=(z&&z.cache)||{};
+    c.innerHTML=`<div class="card">${selZone()}
+      ${!z?'':`
+      <label><input type="checkbox" id="c_en" ${cache.enabled?'checked':''}/> Caching enabled</label>
+      <div class="row">
+        <div><label>Mode</label><select id="c_mode"><option value="bypass" ${cache.mode!=='standard'?'selected':''}>Bypass</option>
+          <option value="standard" ${cache.mode==='standard'?'selected':''}>Standard</option></select></div>
+        <div><label>Edge TTL (seconds)</label><input id="c_ttl" type="number" value="${cache.edge_ttl_seconds||3600}"/></div>
+      </div>
+      <p class="hint">Standard mode sets Cache-Control on responses. Full HTML cache/purge is a later CDN phase.</p>
+      <p><button class="btn primary" onclick="saveCache()">Save cache</button></p>`}
+    </div>`;
+  }
+  if(t==='rules'){
+    const rules=S.cfg.custom_waf_rules||[];
+    c.innerHTML=`<div class="card">
+      <p class="hint">Expression examples: <code>path contains /admin</code> · <code>ua contains sqlmap</code> · <code>ip eq 1.2.3.4</code> · <code>query contains union</code></p>
+      <table><thead><tr><th>Name</th><th>Expression</th><th>Action</th><th></th></tr></thead>
+      <tbody>${rules.map(r=>`<tr>
+        <td>${r.name}</td><td><code>${r.expression}</code></td><td>${r.action}</td>
+        <td><button class="btn danger" onclick="delRule('${r.id}')">Delete</button></td></tr>`).join('')||'<tr><td colspan="4" class="muted">No custom rules</td></tr>'}</tbody></table>
+      <h3>Create rule</h3>
+      <div class="row">
+        <div><label>Name</label><input id="r_name" placeholder="Block admin scanners"/></div>
+        <div><label>Expression</label><input id="r_expr" placeholder="path contains /wp-login"/></div>
+        <div><label>Action</label><select id="r_act"><option>block</option><option>log</option><option>allow</option><option>challenge</option></select></div>
+      </div>
+      <p><button class="btn primary" onclick="addRule()">Deploy rule</button></p>
+    </div>`;
+  }
+  if(t==='analytics'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading…</p></div>`;
+    api('/api/analytics').then(a=>{
+      c.innerHTML=`<div class="grid kpi">
+        <div class="card"><div class="v">${a.requests_sampled}</div><div class="l">Requests sampled</div></div>
+        <div class="card"><div class="v">${a.threats_blocked}</div><div class="l">Threats blocked</div></div>
+      </div>
+      <div class="card" style="margin-top:1rem">
+        <h3>Recent requests</h3>
+        <table><thead><tr><th>Status</th><th>Host</th><th>URI</th><th>Client</th></tr></thead>
+        <tbody>${(a.recent||[]).slice(0,40).map(r=>`<tr>
+          <td>${r.status===403?'<span class="pill bad">403</span>':r.status}</td>
+          <td>${r.host||''}</td><td><code>${r.uri||''}</code></td><td class="muted">${r.client_ip||''}</td>
+        </tr>`).join('')}</tbody></table>
+      </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
+  }
+  if(t==='system'){
+    const o=S.overview;
+    c.innerHTML=`<div class="card">
+      <p>Dashboard: <code>http://${location.hostname}:9080/</code></p>
+      <p>WAF: <code>http://${location.hostname}/</code></p>
+      <p>Control plane: <code>${o.control_url||'—'}</code></p>
+      <h3>Containers</h3>
+      <table><thead><tr><th>Name</th><th>Status</th><th>Image</th></tr></thead>
+      <tbody>${(o.containers||[]).map(x=>`<tr><td>${x.name}</td><td>${x.status}</td><td class="muted">${x.image}</td></tr>`).join('')}</tbody></table>
+      <p class="hint">Features: ${(o.features||[]).map(f=>'<code>'+f+'</code>').join(' ')}</p>
+    </div>`;
   }
 }
 
-async function addSite() {
-  const msg = document.getElementById('siteMsg');
-  try {
-    await api('/api/sites', { method:'POST', body: JSON.stringify({
-      public_hostname: document.getElementById('s_host').value.trim(),
-      origin_url: document.getElementById('s_origin').value.trim(),
-      tenant_short_code: document.getElementById('s_tenant').value.trim() || 'LOCAL',
-      tls_mode: document.getElementById('s_tls').value
+async function setGlobalLevel(l){ S.cfg.global.security_level=l; render(); }
+async function saveGlobal(){
+  try{
+    await api('/api/config/global',{method:'PUT',body:JSON.stringify({
+      security_level:S.cfg.global.security_level,
+      waf_enabled:document.getElementById('g_waf').checked,
+      bot_fight_mode:document.getElementById('g_bot').checked,
+      browser_integrity_check:document.getElementById('g_bic').checked
     })});
-    msg.innerHTML = '<div class="okmsg">Site applied.</div>';
-    await refresh(); tab('sites');
-  } catch (e) { msg.innerHTML = '<div class="err">'+e.message+'</div>'; }
+    flash('Global security saved & applied'); await refresh();
+  }catch(e){ flash(e.message,false); }
 }
-
-async function delSite(h) {
-  if (!confirm('Remove local site '+h+'?')) return;
-  await api('/api/sites/'+encodeURIComponent(h), { method:'DELETE' });
-  await refresh(); tab('sites');
+async function addZone(){
+  try{
+    await api('/api/zones',{method:'POST',body:JSON.stringify({
+      public_hostname:z_host.value.trim(), origin_url:z_origin.value.trim(),
+      tenant_short_code:z_tenant.value.trim()||'LOCAL', ssl_mode:'flexible'
+    })});
+    flash('Zone created'); await refresh();
+  }catch(e){ flash(e.message,false); }
 }
-
-async function reloadEdge() {
-  await api('/api/reload', { method:'POST' });
-  await refresh();
+async function delZone(h){ if(!confirm('Delete zone '+h+'?'))return; await api('/api/zones/'+encodeURIComponent(h),{method:'DELETE'}); flash('Deleted'); await refresh(); }
+function setZoneLevel(l){ const z=curZone(); if(z){ z.security_level=l; render(); } }
+async function saveWaf(){
+  const z=curZone(); if(!z)return;
+  z.waf=Object.assign({}, z.waf||{}, {
+    mode:waf_mode.value, paranoia_level:parseInt(waf_par.value,10),
+    anomaly_inbound:parseInt(waf_in.value,10), anomaly_outbound:parseInt(waf_out.value,10)
+  });
+  z.under_attack_mode=waf_uam.checked;
+  try{ await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('WAF settings applied'); await refresh(); }
+  catch(e){ flash(e.message,false); }
 }
-
-async function bootstrapBouncer() {
-  const el = document.getElementById('sysMsg');
-  try {
-    const j = await api('/api/crowdsec/bootstrap-bouncer', { method:'POST' });
-    el.innerHTML = `<div class="okmsg">Bouncer key created for <code>${j.bouncer}</code>. ${j.hint||''}</div>`;
-  } catch (e) { el.innerHTML = `<div class="err">${e.message}</div>`; }
+async function saveFirewall(){
+  const z=curZone(); if(!z)return;
+  const lines=id=>document.getElementById(id).value.split('\\n').map(s=>s.trim()).filter(Boolean);
+  z.firewall={ ip_block:lines('ip_block'), ip_allow:lines('ip_allow'), ua_block:lines('ua_block'), asn_block:(z.firewall||{}).asn_block||[] };
+  try{ await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('Firewall applied'); await refresh(); }
+  catch(e){ flash(e.message,false); }
 }
+async function addRL(){
+  const z=curZone(); if(!z)return;
+  z.rate_limit_rules=z.rate_limit_rules||[];
+  z.rate_limit_rules.push({name:rl_name.value, path:rl_path.value, requests:parseInt(rl_req.value,10), period:parseInt(rl_per.value,10), action:'block', enabled:true});
+  try{ await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('Rate limit added'); await refresh(); go('ratelimit'); }
+  catch(e){ flash(e.message,false); }
+}
+async function delRL(i){ const z=curZone(); z.rate_limit_rules.splice(i,1); await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); await refresh(); go('ratelimit'); }
+function setSsl(m){ const z=curZone(); if(z){ z.ssl_mode=m; render(); } }
+async function saveSsl(){ const z=curZone(); await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify({ssl_mode:z.ssl_mode, origin_url:z.origin_url, public_hostname:z.public_hostname})}); flash('SSL mode saved'); await refresh(); }
+async function saveCache(){
+  const z=curZone();
+  z.cache={enabled:c_en.checked, mode:c_mode.value, edge_ttl_seconds:parseInt(c_ttl.value,10)};
+  await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('Cache saved'); await refresh();
+}
+async function addRule(){
+  await api('/api/waf/rules',{method:'POST',body:JSON.stringify({name:r_name.value, expression:r_expr.value, action:r_act.value})});
+  flash('Custom rule deployed'); await refresh(); go('rules');
+}
+async function delRule(id){ await api('/api/waf/rules/'+id,{method:'DELETE'}); flash('Rule removed'); await refresh(); go('rules'); }
 
-if (S.token) { showApp(); refresh().catch(()=>logout()); }
-document.getElementById('pass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+if(S.token){ showApp(); refresh().then(()=>go('overview')).catch(()=>logout()); }
+pass.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 </script>
 </body>
 </html>

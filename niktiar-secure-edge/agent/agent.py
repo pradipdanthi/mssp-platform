@@ -139,6 +139,12 @@ def heartbeat() -> None:
             "crowdsec",
             "hybrid_multitenant",
             "site_map_sync",
+            "cf_parity_security_levels",
+            "custom_waf_rules",
+            "ip_access_rules",
+            "rate_limit",
+            "under_attack_mode",
+            "ssl_modes",
         ],
     }
     try:
@@ -170,11 +176,49 @@ def sync_config() -> None:
             return
         RUNTIME.mkdir(parents=True, exist_ok=True)
         (RUNTIME / "sites.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
-        (RUNTIME / "sites.caddy").write_text(render_sites_caddy(sites), encoding="utf-8")
-        (RUNTIME / "sites_tls.caddy").write_text(render_sites_tls_caddy(sites), encoding="utf-8")
-        base = CADDY_CFG / "Caddyfile"
-        if not base.exists():
-            print("warning: base Caddyfile missing at /config/caddy/Caddyfile", flush=True)
+        # Prefer Cloudflare-parity edge_config.json when present — merge CP sites as zones
+        edge_cfg_path = RUNTIME / "edge_config.json"
+        if edge_cfg_path.exists():
+            try:
+                cfg = json.loads(edge_cfg_path.read_text(encoding="utf-8"))
+            except Exception:  # noqa: BLE001
+                cfg = {"version": 2, "global": {}, "zones": [], "custom_waf_rules": []}
+            by_host = {
+                (z.get("public_hostname") or "").lower(): z for z in (cfg.get("zones") or [])
+            }
+            for s in sites:
+                host = (s.get("public_hostname") or "").lower()
+                if not host:
+                    continue
+                z = by_host.get(host) or {
+                    "id": host,
+                    "public_hostname": host,
+                    "ssl_mode": "flexible",
+                    "waf": {
+                        "managed_ruleset": "owasp_crs",
+                        "mode": "block",
+                        "paranoia_level": 1,
+                        "anomaly_inbound": 5,
+                        "anomaly_outbound": 4,
+                    },
+                    "firewall": {"ip_allow": [], "ip_block": [], "ua_block": []},
+                    "rate_limit_rules": [],
+                    "cache": {"enabled": False, "mode": "bypass", "edge_ttl_seconds": 3600},
+                }
+                z["origin_url"] = s.get("origin_url") or z.get("origin_url")
+                z["tenant_short_code"] = s.get("tenant_short_code") or z.get("tenant_short_code")
+                zs = s.get("zone_settings") or {}
+                if isinstance(zs, dict) and zs:
+                    z.update(zs)
+                by_host[host] = z
+            cfg["zones"] = list(by_host.values())
+            edge_cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+            # Dashboard apply engine owns Coraza/Caddy generation; trigger reload only
+            (RUNTIME / "sites.caddy").write_text(render_sites_caddy(sites), encoding="utf-8")
+            (RUNTIME / "sites_tls.caddy").write_text(render_sites_tls_caddy(sites), encoding="utf-8")
+        else:
+            (RUNTIME / "sites.caddy").write_text(render_sites_caddy(sites), encoding="utf-8")
+            (RUNTIME / "sites_tls.caddy").write_text(render_sites_tls_caddy(sites), encoding="utf-8")
         if reload_caddy():
             _last_config_version = version
             print(f"config applied version={version} sites={len(sites)}", flush=True)

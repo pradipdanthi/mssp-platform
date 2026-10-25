@@ -1,11 +1,10 @@
-# NikTiar Secure Edge — Coraza WAF + hybrid multi-tenant + rate shields
+# NikTiar Secure Edge — Cloudflare-parity WAF edge
 {
 	order coraza_waf first
 	log {
 		level WARN
 	}
 	admin 127.0.0.1:2019
-	# Optional email for ACME (set via env in future bake)
 	email {$ACME_EMAIL:ops@niktiar.local}
 }
 
@@ -45,15 +44,18 @@
 	}
 
 	handle /edge-info {
-		respond "NikTiar Secure Edge — Coraza CRS · CrowdSec · hybrid multi-tenant · dashboard :9080" 200
+		respond "NikTiar Secure Edge — Cloudflare-parity WAF · dashboard :9080" 200
 	}
 
-	# Basic abuse shield: huge URI / obvious scanners still hit CRS; soft request ceiling
 	@abuse path_regexp (?i)(wp-login|xmlrpc\.php|\.env|phpmyadmin)
 	handle @abuse {
 		respond "Blocked" 403
 	}
 
+	# IP firewall + Under Attack Mode (generated)
+	import /runtime/firewall.caddy
+
+	# Per-zone Host routing (generated)
 	import /runtime/sites.caddy
 
 	handle {
@@ -68,14 +70,14 @@
 	}
 }
 
-# TLS listener (host maps 443→8443). ACME sites imported from sites_tls.caddy
+# TLS listener — per-host blocks in sites_tls.caddy include Coraza themselves.
+# Avoid a second global coraza_waf here (duplicate SecRule IDs in one process).
 :8443 {
-	import coraza_block
 	import security_headers
 	import /runtime/sites_tls.caddy
 
 	handle {
-		respond "NikTiar Secure Edge TLS — configure site tls_mode=acme + public DNS" 200
+		respond "NikTiar Secure Edge TLS — set zone ssl_mode=full/strict or ACME" 200
 	}
 
 	log {

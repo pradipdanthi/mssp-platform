@@ -79,8 +79,11 @@ export default function SecureEdgePage() {
     <div className="page">
       <h1 className="page-title">NikTiar Secure Edge</h1>
       <p className="muted">
-        Self-hosted WAF / bot edge (Coraza CRS + CrowdSec). Hybrid: shared SMB edges or dedicated
-        enterprise appliances. Appliance dashboard: <code>http://&lt;edge-ip&gt;:9080/</code>
+        Self-hosted WAF / bot edge (Coraza CRS + CrowdSec). Hybrid multi-tenant. Configure Security
+        Level, WAF, Firewall, Rate limit, SSL, Cache like Cloudflare on the appliance dashboard:{" "}
+        <a href="http://192.168.0.217:9080/" target="_blank" rel="noreferrer">
+          http://192.168.0.217:9080/
+        </a>
       </p>
       {error && <p className="error-text">{error}</p>}
 

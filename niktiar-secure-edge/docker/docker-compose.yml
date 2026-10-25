@@ -34,6 +34,8 @@ services:
       - waf_logs:/var/log/caddy
       - ../runtime/caddy:/config/caddy
       - ../runtime:/runtime
+      - ../runtime/coraza-overrides:/opt/coraza/overrides
+      - ../runtime/coraza-rules.d:/opt/coraza/rules.d
     depends_on:
       - origin
     networks:
