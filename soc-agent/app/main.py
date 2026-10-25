@@ -9,20 +9,23 @@ from pydantic import BaseModel, Field
 
 from app.audit import audit
 from app.config import settings
-from app.enrichment import enrich_alert
-from app.triage import triage, write_dossier
+from app.core.analyst import run_analyst
+from app.core.llm_provider import LLMRouter
 
 app = FastAPI(
     title="MSSP SOC Analyst Agent",
-    description="Autonomous alert ingestion, enrichment, triage, and escalation dossiers.",
-    version="1.0.0",
+    description=(
+        "Sidecar Tier-1/2 analyst powered by Cursor subscription LLM. "
+        "Lab Ollama stays on control-plane Tier-1 only — not used here."
+    ),
+    version="2.1.0",
 )
 
-# In-memory recent cases for health demos (also audited to disk)
 _RECENT: list[dict[str, Any]] = []
 
 
 class AlertIn(BaseModel):
+    alert_id: str | None = None
     title: str
     severity: str = "medium"
     description: str | None = None
@@ -31,7 +34,7 @@ class AlertIn(BaseModel):
     domain: str | None = None
     hostname: str | None = None
     tenant: str | None = None
-    source_platform: str | None = "synthetic"
+    source_platform: str | None = "webhook"
     tags: list[str] = Field(default_factory=list)
     raw: dict[str, Any] | None = None
 
@@ -44,14 +47,18 @@ def require_token(x_soc_agent_token: str | None = Header(default=None)) -> None:
 
 @app.get("/health")
 def health() -> dict:
-    audit_path = Path(settings()["audit_log"])
+    cfg = settings()
+    audit_path = Path(cfg["triage_audit_log"])
+    llm = LLMRouter().status()
     return {
-        "status": "ok",
-        "service": settings()["agent_name"],
-        "version": "1.0.0",
+        "status": "ok" if llm["cursor"]["available"] else "degraded",
+        "service": cfg["agent_name"],
+        "version": "2.1.0",
+        "llm": llm,
         "recent_cases": len(_RECENT),
-        "audit_log_exists": audit_path.is_file(),
-        "audit_bytes": audit_path.stat().st_size if audit_path.is_file() else 0,
+        "triage_audit_exists": audit_path.is_file(),
+        "triage_audit_bytes": audit_path.stat().st_size if audit_path.is_file() else 0,
+        "note": "SOC agent uses Cursor subscription only; Ollama is not used here",
     }
 
 
@@ -64,59 +71,22 @@ def list_cases(_: None = Depends(require_token)) -> dict:
 def ingest(alert: AlertIn, _: None = Depends(require_token)) -> dict:
     cfg = settings()
     payload = alert.model_dump()
-    audit(cfg["audit_log"], "ingest.received", {"title": alert.title, "severity": alert.severity})
-
-    enrichment = enrich_alert(payload)
     audit(
         cfg["audit_log"],
-        "enrichment.done",
-        {
-            "title": alert.title,
-            "src_class": enrichment["source_reputation"]["classification"],
-            "mitre": enrichment["mitre"],
-        },
+        "ingest.received",
+        {"alert_id": alert.alert_id, "title": alert.title, "severity": alert.severity},
     )
-
-    result = triage(payload, enrichment)
-    dossier_id = None
-    if result["disposition"] in ("escalate", "investigate"):
-        dossier_id = write_dossier(cfg["dossier_dir"], payload, enrichment, result)
-        audit(
-            cfg["audit_log"],
-            "dossier.created",
-            {"dossier_id": dossier_id, "disposition": result["disposition"]},
+    if not LLMRouter().cursor.available():
+        raise HTTPException(
+            503,
+            detail={
+                "error": "cursor_llm_not_configured",
+                "reason": LLMRouter().cursor.missing_reason(),
+                "fix": "Set CURSOR_API_KEY in /opt/soc-agent/.env and restart mssp-soc-agent.service",
+            },
         )
-
-    case = {
-        "title": alert.title,
-        "tenant": alert.tenant,
-        "triage": result,
-        "enrichment": enrichment,
-        "dossier_id": dossier_id,
-    }
-    _RECENT.append(case)
+    result = run_analyst(payload)
+    _RECENT.append(result)
     if len(_RECENT) > 200:
         del _RECENT[:-200]
-
-    audit(
-        cfg["audit_log"],
-        "triage.complete",
-        {
-            "title": alert.title,
-            "score": result["score"],
-            "disposition": result["disposition"],
-            "classification": result["classification"],
-            "dossier_id": dossier_id,
-        },
-    )
-
-    return {
-        "ok": True,
-        "triage": result,
-        "enrichment": {
-            "source_reputation": enrichment["source_reputation"],
-            "destination_reputation": enrichment["destination_reputation"],
-            "mitre": enrichment["mitre"],
-        },
-        "dossier_id": dossier_id,
-    }
+    return result

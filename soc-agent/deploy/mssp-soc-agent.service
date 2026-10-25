@@ -1,0 +1,22 @@
+[Unit]
+Description=MSSP SOC Analyst Agent (Cursor LLM)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=secadmin
+Group=secadmin
+WorkingDirectory=/opt/soc-agent
+EnvironmentFile=-/opt/soc-agent/.env
+Environment=PATH=/home/secadmin/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=SOC_AGENT_WORKSPACE=/opt/soc-agent
+ExecStart=/opt/soc-agent/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8443
+Restart=unless-stopped
+RestartSec=5
+# No Ollama dependency
+MemoryMax=1536M
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target
