@@ -1,4 +1,10 @@
 filenames:
-  - /var/log/nginx/*.log
+  - /var/log/caddy/*.log
+  - /var/log/caddy/access.log
 labels:
-  type: nginx
+  type: caddy
+---
+filenames:
+  - /var/log/caddy/coraza*.log
+labels:
+  type: syslog

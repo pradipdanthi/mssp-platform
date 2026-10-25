@@ -1,10 +1,10 @@
 # NikTiar Secure Edge
 
-Self-hosted Cloudflare-alternative appliance (WAF + bot/abuse + TLS edge).
+Self-hosted Cloudflare-class edge (WAF + abuse) with **hybrid multi-tenant**.
 
-**Stack (MVP):** OWASP ModSecurity CRS (nginx) + CrowdSec + NikTiar agent  
-*(Coraza/Caddy was the target; GHCR `coraza-caddy` was denied — CRS nginx ships first; Coraza swap is Phase 2.)*  
+**Stack:** Coraza CRS (`ghcr.io/coreruleset/coraza-crs:caddy-alpine`) + CrowdSec + NikTiar agent  
+**Modes:** `shared` (SMB — many tenants by Host) · `dedicated` (enterprise — one tenant)  
 **Lab:** Proxmox VM 116 / `192.168.0.217`  
-**Commercial:** optional add-on on any Silver/Gold/Platinum tier  
+**Commercial:** add-on on any Silver/Gold/Platinum tier  
 
 See `docs/KB114_NIKTIAR_SECURE_EDGE.md`.

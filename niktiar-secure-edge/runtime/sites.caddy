@@ -1,0 +1,6 @@
+# Placeholder — agent overwrites from control-plane site map
+# Example generated block:
+# @site_demo host demo.secure-edge.lab
+# handle @site_demo {
+#     reverse_proxy http://origin:80
+# }

@@ -1,7 +1,4 @@
-# NikTiar Secure Edge MVP
-# WAF: OWASP ModSecurity CRS (nginx) — Coraza/Caddy swap when GHCR image available
-# Abuse: CrowdSec
-# Control plane: NikTiar agent
+# NikTiar Secure Edge — Coraza CRS (Caddy) + CrowdSec + hybrid multi-tenant agent
 services:
   origin:
     image: nginx:1.27-alpine
@@ -13,7 +10,7 @@ services:
       - edge
 
   waf:
-    image: owasp/modsecurity-crs:nginx-alpine
+    image: ghcr.io/coreruleset/coraza-crs:caddy-alpine
     container_name: niktiar-se-waf
     restart: unless-stopped
     ports:
@@ -21,16 +18,20 @@ services:
       - "443:8443"
     environment:
       TZ: UTC
-      MODSEC_RULE_ENGINE: On
+      PORT: "8080"
+      BACKEND: http://origin:80
+      LOGLEVEL: WARN
+      CORAZA_RULE_ENGINE: On
       BLOCKING_PARANOIA: "1"
-      DETECTION_PARANOIA: "1"
+      PARANOIA: "1"
       ANOMALY_INBOUND: "5"
       ANOMALY_OUTBOUND: "4"
-      BACKEND: http://origin:80
-      PORT: "8080"
-      SSL_PORT: "8443"
+      PROXY_TIMEOUT: 60s
+      KEEPALIVE_TIMEOUT: 60s
     volumes:
-      - waf_logs:/var/log/nginx
+      - waf_logs:/var/log/caddy
+      - ../runtime/caddy:/config/caddy
+      - ../runtime:/runtime
     depends_on:
       - origin
     networks:
@@ -40,15 +41,18 @@ services:
     image: crowdsecurity/crowdsec:v1.6.4
     container_name: niktiar-se-crowdsec
     restart: unless-stopped
+    ports:
+      # LAPI for optional host-network firewall bouncer
+      - "127.0.0.1:7422:8080"
     environment:
-      COLLECTIONS: "crowdsecurity/linux crowdsecurity/http-cve crowdsecurity/base-http-scenarios crowdsecurity/http-dos crowdsecurity/nginx"
+      COLLECTIONS: "crowdsecurity/linux crowdsecurity/http-cve crowdsecurity/base-http-scenarios crowdsecurity/http-dos crowdsecurity/caddy"
       TZ: UTC
       CUSTOM_HOSTNAME: niktiar-secure-edge
     volumes:
       - crowdsec_data:/var/lib/crowdsec/data
       - crowdsec_config:/etc/crowdsec
       - ../crowdsec/acquis.yaml:/etc/crowdsec/acquis.yaml:ro
-      - waf_logs:/var/log/nginx:ro
+      - waf_logs:/var/log/caddy:ro
     networks:
       - edge
 
@@ -62,11 +66,36 @@ services:
       NIKTIAR_TENANT_CODE: ${NIKTIAR_TENANT_CODE:-}
       NIKTIAR_APPLIANCE_TOKEN: ${NIKTIAR_APPLIANCE_TOKEN:-}
       SECURE_EDGE_HOSTNAME: ${SECURE_EDGE_HOSTNAME:-niktiar-secure-edge}
+      SECURE_EDGE_MODE: ${SECURE_EDGE_MODE:-shared}
+      WAF_CONTAINER: niktiar-se-waf
+      RUNTIME_DIR: /runtime
+      CADDY_CONFIG_DIR: /config/caddy
     volumes:
-      - waf_logs:/var/log/nginx:ro
+      - waf_logs:/var/log/caddy:ro
+      - ../runtime:/runtime
+      - ../runtime/caddy:/config/caddy
       - ../agent/config.yaml:/app/config.yaml:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - waf
+      - crowdsec
     networks:
       - edge
+
+  # Optional enforce path: docker compose --profile enforce up -d
+  crowdsec-firewall-bouncer:
+    profiles: ["enforce"]
+    image: crowdsecurity/firewall-bouncer:v0.0.28
+    container_name: niktiar-se-cs-fw
+    restart: unless-stopped
+    depends_on:
+      - crowdsec
+    volumes:
+      - ../crowdsec/bouncer.yaml:/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml:ro
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
 
 volumes:
   waf_logs:

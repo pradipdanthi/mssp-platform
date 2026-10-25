@@ -1,0 +1,56 @@
+# NikTiar Secure Edge — Coraza WAF + hybrid multi-tenant Host routing
+# Regenerated sites snippet: /runtime/sites.caddy (written by agent)
+
+{
+	order coraza_waf first
+	log {
+		level WARN
+	}
+	# Admin only on loopback inside container (reload uses `caddy reload` via docker exec)
+	admin 127.0.0.1:2019
+}
+
+(coraza_block) {
+	coraza_waf {
+		include /opt/coraza/config/coraza.conf
+		include /opt/coraza/config.d/*.conf
+		include /opt/coraza/config/crs-setup.conf
+		include /opt/coraza/owasp-crs/plugins/*-config.conf
+		include /opt/coraza/owasp-crs/plugins/*-before.conf
+		include /opt/coraza/plugins/*-config.conf
+		include /opt/coraza/plugins/*-before.conf
+		include /opt/coraza/owasp-crs/rules/*.conf
+		include /opt/coraza/owasp-crs/plugins/*-after.conf
+		include /opt/coraza/plugins/*-after.conf
+		include /opt/coraza/rules/*.conf
+		include /opt/coraza/rules.d/*.conf
+		include /opt/coraza/overrides/*.conf
+	}
+}
+
+:8080 {
+	import coraza_block
+
+	handle /healthz {
+		respond "niktiar-secure-edge-ok" 200
+	}
+
+	handle /edge-info {
+		respond "NikTiar Secure Edge (Coraza CRS + Caddy) — hybrid multi-tenant ready" 200
+	}
+
+	# Tenant / site routes — agent maintains /runtime/sites.caddy
+	import /runtime/sites.caddy
+
+	# Default catch-all → lab demo origin
+	handle {
+		reverse_proxy http://origin:80 {
+			trusted_proxies private_ranges
+		}
+	}
+
+	log {
+		output file /var/log/caddy/access.log
+		format json
+	}
+}
