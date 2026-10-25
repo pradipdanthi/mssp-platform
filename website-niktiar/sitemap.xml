@@ -11,6 +11,7 @@
   <url><loc>https://kevantic.com/services/threat-intelligence.html</loc><priority>0.75</priority></url>
   <url><loc>https://kevantic.com/services/endpoint-forensics-deception.html</loc><priority>0.75</priority></url>
   <url><loc>https://kevantic.com/services/external-attack-surface.html</loc><priority>0.75</priority></url>
+  <url><loc>https://kevantic.com/services/secure-edge.html</loc><priority>0.85</priority></url>
   <url><loc>https://kevantic.com/services/cloud-identity-protection.html</loc><priority>0.75</priority></url>
   <url><loc>https://kevantic.com/platform.html</loc><priority>0.85</priority></url>
   <url><loc>https://kevantic.com/solutions.html</loc><priority>0.8</priority></url>

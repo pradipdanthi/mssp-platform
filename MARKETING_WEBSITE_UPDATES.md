@@ -252,3 +252,13 @@ Paste the block below into the **Pricing & Capabilities** section of [www.kevant
 ---
 
 *Phase 3 complete — Silver / Gold / Platinum only. Public copy uses NikTiar™ product names (no third-party engine vendors). Canonical HTML lives in `website-niktiar/snippets/` and syncs to production via `scripts/sync_marketing_phase3.py`.*
+
+---
+
+## NikTiar Secure Edge (2026-10-25)
+
+Add-on edge SKU page live at [`website-niktiar/services/secure-edge.html`](website-niktiar/services/secure-edge.html):
+
+- Features: CRS WAF, bots / PoW, API Shield, GraphQL guard, Page Shield, Waiting Room, virtual patches, shared vs dedicated isolation
+- Wired into mega nav, homepage Edge block, `services.html`, `solutions.html`, sitemap, and capability snippet
+- Lab preview: `website-niktiar/lab-serve.sh` → `http://127.0.0.1:8080/services/secure-edge.html`
