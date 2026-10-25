@@ -66,3 +66,19 @@ Lab VM **116** `192.168.0.217`. **Not** part of mssp-appliance golden VM 199 —
 - `TRACE` → 405; Page Shield CSP headers present
 - `/cdn-cgi/challenge-platform/pow` → 200 PoW interstitial
 - Dashboard `/api/enterprise` catalog = 12 controls
+
+---
+
+## Multi-tenant isolation (strong shared + dedicated)
+
+| Control | Behavior |
+|---|---|
+| Unknown `Host` | **421** — no default origin fallthrough |
+| Routing | Exact `Host` → that zone’s origin only |
+| Firewall / UA / custom rules | **Chained to zone Host** (no cross-tenant IP/rule bleed) |
+| Tenant map | `/runtime/tenant_map.json` · events tagged by hostname→tenant |
+| Dedicated mode | `SECURE_EDGE_MODE=dedicated` + `NIKTIAR_TENANT_CODE` drops foreign zones |
+| Customer portal | Strict `tenant_short_code` on sites/events |
+| Appliance dashboard | **MSSP ops only** on shared edges — Isolation tab shows posture |
+
+Shared = logical isolation (Host-scoped). Dedicated = single-tenant node (strongest).

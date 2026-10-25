@@ -58,13 +58,13 @@
 	# Enterprise: Page Shield, Waiting Room, honeypots, PoW (generated)
 	import /runtime/enterprise.caddy
 
-	# Per-zone Host routing (generated)
+	# Per-zone Host routing (generated) — ONLY known tenant hostnames
 	import /runtime/sites.caddy
 
+	# Strong multi-tenant isolation: never fall through to a shared default origin
 	handle {
-		reverse_proxy http://origin:80 {
-			trusted_proxies private_ranges
-		}
+		header X-NikTiar-Isolation "unknown-host-denied"
+		respond "NikTiar Secure Edge — unknown host (multi-tenant isolation)" 421
 	}
 
 	log {
@@ -80,7 +80,8 @@
 	import /runtime/sites_tls.caddy
 
 	handle {
-		respond "NikTiar Secure Edge TLS — set zone ssl_mode=full/strict or ACME" 200
+		header X-NikTiar-Isolation "unknown-host-denied"
+		respond "NikTiar Secure Edge TLS — unknown host (multi-tenant isolation)" 421
 	}
 
 	log {

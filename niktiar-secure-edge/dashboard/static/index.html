@@ -76,6 +76,7 @@
         <button data-t="cache" onclick="go('cache')">Caching</button>
         <button data-t="rules" onclick="go('rules')">Custom rules</button>
         <button data-t="enterprise" onclick="go('enterprise')">Enterprise</button>
+        <button data-t="isolation" onclick="go('isolation')">Isolation</button>
         <button data-t="analytics" onclick="go('analytics')">Analytics</button>
         <button data-t="system" onclick="go('system')">System</button>
       </nav>
@@ -147,6 +148,7 @@ function go(t){
     cache:['Caching','Edge cache controls'],
     rules:['Custom rules','Expression → block / log / allow'],
     enterprise:['Enterprise','API Shield, Page Shield, Waiting Room, DLP, bots'],
+    isolation:['Tenant isolation','Host deny + per-zone firewall/rules scoping'],
     analytics:['Analytics','Requests & threats'],
     system:['System','Containers & ops']
   };
@@ -305,13 +307,37 @@ function render(){
         <td>${r.name}</td><td><code>${r.expression}</code></td><td>${r.action}</td>
         <td><button class="btn danger" onclick="delRule('${r.id}')">Delete</button></td></tr>`).join('')||'<tr><td colspan="4" class="muted">No custom rules</td></tr>'}</tbody></table>
       <h3>Create rule</h3>
+      <p class="hint">Multi-tenant isolation: every custom rule must set <code>tenant</code> and/or <code>hostname</code> (Host-scoped in Coraza).</p>
       <div class="row">
         <div><label>Name</label><input id="r_name" placeholder="Block admin scanners"/></div>
         <div><label>Expression</label><input id="r_expr" placeholder="path contains /wp-login"/></div>
         <div><label>Action</label><select id="r_act"><option>block</option><option>log</option><option>allow</option><option>challenge</option></select></div>
       </div>
+      <div class="row">
+        <div><label>Tenant code</label><input id="r_tenant" placeholder="ACME"/></div>
+        <div><label>Hostname (preferred)</label><input id="r_host" placeholder="shop.acme.com"/></div>
+      </div>
       <p><button class="btn primary" onclick="addRule()">Deploy rule</button></p>
     </div>`;
+  }
+  if(t==='isolation'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading isolation status…</p></div>`;
+    api('/api/isolation').then(j=>{
+      c.innerHTML=`<div class="card">
+        <p><span class="pill ok">strong_isolation=${!!j.strong_isolation}</span>
+           <span class="pill">${j.mode}</span></p>
+        <table>
+          <tr><th>Unknown Host</th><td><code>${j.unknown_host_policy}</code></td></tr>
+          <tr><th>Default origin fallthrough</th><td>${j.default_origin_fallthrough?'<span class="pill bad">YES (bad)</span>':'<span class="pill ok">disabled</span>'}</td></tr>
+          <tr><th>Firewall scope</th><td>${j.firewall_scope}</td></tr>
+          <tr><th>Custom rules scope</th><td>${j.custom_rules_scope}</td></tr>
+          <tr><th>Pinned tenant</th><td>${j.pinned_tenant||'— (shared)'}</td></tr>
+          <tr><th>Tenant map</th><td>${j.tenant_map_entries} hosts · ${(j.tenants||[]).join(', ')||'—'}</td></tr>
+        </table>
+        <p class="hint">${j.note||''}</p>
+        <p class="hint">Customers never use this dashboard on shared edges — MSSP ops only. Customer portal is tenant-scoped.</p>
+      </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
   }
   if(t==='enterprise'){
     c.innerHTML=`<div class="card"><p class="muted">Loading enterprise pack…</p></div>`;
@@ -440,8 +466,12 @@ async function saveCache(){
   await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('Cache saved'); await refresh();
 }
 async function addRule(){
-  await api('/api/waf/rules',{method:'POST',body:JSON.stringify({name:r_name.value, expression:r_expr.value, action:r_act.value})});
-  flash('Custom rule deployed'); await refresh(); go('rules');
+  await api('/api/waf/rules',{method:'POST',body:JSON.stringify({
+    name:r_name.value, expression:r_expr.value, action:r_act.value,
+    tenant_short_code:(r_tenant.value||'').trim()||null,
+    public_hostname:(r_host.value||'').trim()||null
+  })});
+  flash('Custom rule deployed (tenant-scoped)'); await refresh(); go('rules');
 }
 async function delRule(id){ await api('/api/waf/rules/'+id,{method:'DELETE'}); flash('Rule removed'); await refresh(); go('rules'); }
 

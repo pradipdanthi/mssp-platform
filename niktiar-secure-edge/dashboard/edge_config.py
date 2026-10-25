@@ -191,9 +191,23 @@ SecAction "id:1090011,phase:1,nolog,pass,t:none,setvar:tx.outbound_anomaly_score
     if old.exists():
         old.unlink()
 
-    # Custom WAF rules (Cloudflare Custom Rules analogue)
-    custom_lines = ["# Generated custom WAF rules"]
+    # Custom WAF rules — host-scoped (no cross-tenant rule bleed)
+    custom_lines = ["# Generated custom WAF rules (host scoped)"]
     rid = 1101000
+    try:
+        from tenant_isolation import normalize_host, zones_for_tenant
+    except Exception:  # noqa: BLE001
+
+        def normalize_host(h):  # type: ignore
+            return (h or "").strip().lower()
+
+        def zones_for_tenant(c, t):  # type: ignore
+            return [
+                z
+                for z in (c.get("zones") or [])
+                if (z.get("tenant_short_code") or "").upper() == (t or "").upper()
+            ]
+
     for rule in cfg.get("custom_waf_rules") or []:
         if not rule.get("enabled", True):
             continue
@@ -201,40 +215,61 @@ SecAction "id:1090011,phase:1,nolog,pass,t:none,setvar:tx.outbound_anomaly_score
         expr = (rule.get("expression") or "").strip()
         if not expr:
             continue
-        # Very small expression language: field op value
-        # Examples: path contains /admin | ip eq 1.2.3.4 | ua contains curl | uri_query contains union
-        sec = _expr_to_secrule(expr, rid, action, rule.get("name") or "custom")
-        if sec:
-            custom_lines.append(sec)
-            rid += 1
+        hosts: List[str] = []
+        host = normalize_host(rule.get("public_hostname"))
+        if host:
+            hosts = [host]
+        elif rule.get("tenant_short_code"):
+            hosts = [
+                normalize_host(z.get("public_hostname"))
+                for z in zones_for_tenant(cfg, str(rule.get("tenant_short_code")))
+                if normalize_host(z.get("public_hostname"))
+            ]
+        if not hosts:
+            custom_lines.append(
+                f"# skipped unscoped rule id={rule.get('id')} — require public_hostname or tenant_short_code"
+            )
+            continue
+        for zh in hosts:
+            sec_lines = _expr_to_secrule(expr, rid, action, rule.get("name") or "custom", host=zh)
+            if sec_lines:
+                custom_lines.extend(sec_lines)
+                rid += 2
     (RULES_D / "11010-custom-rules.conf").write_text("\n".join(custom_lines) + "\n", encoding="utf-8")
     for stale in ("91000-custom-rules.conf",):
         p = RULES_D / stale
         if p.exists():
             p.unlink()
 
-    # IP block/allow → Coraza
-    ip_lines = ["# Generated IP access rules"]
+    # IP/UA → Coraza chained to zone Host (never global across tenants)
+    ip_lines = ["# Generated IP/UA access rules — per-zone Host scoped"]
     rid = 1102000
     for z in cfg.get("zones") or []:
+        host = normalize_host(z.get("public_hostname"))
+        if not host:
+            continue
         fw = z.get("firewall") or {}
         for ip in fw.get("ip_block") or []:
             ip = str(ip).strip()
             if not ip:
                 continue
             ip_lines.append(
-                f'SecRule REMOTE_ADDR "@ipMatch {ip}" "id:{rid},phase:1,deny,status:403,log,'
-                f'msg:\'NikTiar IP block {ip}\'"'
+                f'SecRule REQUEST_HEADERS:Host "@streq {host}" '
+                f'"id:{rid},phase:1,deny,status:403,log,chain,msg:\'NikTiar IP block {ip} host={host}\'"'
             )
+            rid += 1
+            ip_lines.append(f'SecRule REMOTE_ADDR "@ipMatch {ip}"')
             rid += 1
         for ip in fw.get("ip_allow") or []:
             ip = str(ip).strip()
             if not ip:
                 continue
             ip_lines.append(
-                f'SecRule REMOTE_ADDR "@ipMatch {ip}" "id:{rid},phase:1,allow,nolog,'
-                f'msg:\'NikTiar IP allow {ip}\'"'
+                f'SecRule REQUEST_HEADERS:Host "@streq {host}" '
+                f'"id:{rid},phase:1,allow,nolog,chain,msg:\'NikTiar IP allow {ip} host={host}\'"'
             )
+            rid += 1
+            ip_lines.append(f'SecRule REMOTE_ADDR "@ipMatch {ip}"')
             rid += 1
         for ua in fw.get("ua_block") or []:
             ua = str(ua).strip()
@@ -242,9 +277,11 @@ SecAction "id:1090011,phase:1,nolog,pass,t:none,setvar:tx.outbound_anomaly_score
                 continue
             esc = ua.replace("\\", "\\\\").replace('"', '\\"')
             ip_lines.append(
-                f'SecRule REQUEST_HEADERS:User-Agent "@contains {esc}" "id:{rid},phase:1,deny,status:403,log,'
-                f'msg:\'NikTiar UA block\'"'
+                f'SecRule REQUEST_HEADERS:Host "@streq {host}" '
+                f'"id:{rid},phase:1,deny,status:403,log,chain,msg:\'NikTiar UA block host={host}\'"'
             )
+            rid += 1
+            ip_lines.append(f'SecRule REQUEST_HEADERS:User-Agent "@contains {esc}"')
             rid += 1
     (RULES_D / "11020-ip-access.conf").write_text("\n".join(ip_lines) + "\n", encoding="utf-8")
     for stale in ("92000-ip-access.conf",):
@@ -253,12 +290,12 @@ SecAction "id:1090011,phase:1,nolog,pass,t:none,setvar:tx.outbound_anomaly_score
             p.unlink()
 
 
-def _expr_to_secrule(expr: str, rid: int, action: str, name: str) -> Optional[str]:
-    """Minimal CF-like expression → SecRule."""
-    expr_l = expr.lower().strip()
+def _expr_to_secrule(
+    expr: str, rid: int, action: str, name: str, host: Optional[str] = None
+) -> Optional[List[str]]:
+    """Minimal CF-like expression → SecRule lines (Host-chained when host set)."""
     var = "REQUEST_URI"
     op = "@contains"
-    value = expr
     m = re.match(
         r"^(path|uri|url|ip|ua|user_agent|query|uri_query)\s+"
         r"(eq|equals|contains|matches)\s+(.+)$",
@@ -274,7 +311,6 @@ def _expr_to_secrule(expr: str, rid: int, action: str, name: str) -> Optional[st
         elif field in ("ua", "user_agent"):
             var = "REQUEST_HEADERS:User-Agent"
         elif field in ("query", "uri_query"):
-            var = "ARGS_COMBINED_SIZE" if False else "REQUEST_URI"  # use QUERY_STRING
             var = "QUERY_STRING"
         if oper in ("eq", "equals"):
             op = f"@streq {value}"
@@ -283,7 +319,6 @@ def _expr_to_secrule(expr: str, rid: int, action: str, name: str) -> Optional[st
         else:
             op = f"@contains {value}"
     else:
-        # bare substring against URI
         op = f"@contains {expr.strip().strip(chr(34))}"
         var = "REQUEST_URI"
 
@@ -293,11 +328,18 @@ def _expr_to_secrule(expr: str, rid: int, action: str, name: str) -> Optional[st
     elif action == "allow":
         act = "allow"
     elif action in ("challenge", "js_challenge"):
-        act = "deny,status:503"  # challenge page via Caddy for UAM; here hard deny fallback
+        act = "deny,status:503"
     msg = name.replace("'", "")
-    if op.startswith("@streq ") or op.startswith("@rx ") or op.startswith("@contains "):
-        return f'SecRule {var} "{op}" "id:{rid},phase:1,{act},log,msg:\'NikTiar custom: {msg}\'"'
-    return None
+    if not (op.startswith("@streq ") or op.startswith("@rx ") or op.startswith("@contains ")):
+        return None
+    if host:
+        h = host.strip().lower()
+        return [
+            f'SecRule REQUEST_HEADERS:Host "@streq {h}" '
+            f'"id:{rid},phase:1,{act},log,chain,msg:\'NikTiar custom: {msg}\'"',
+            f'SecRule {var} "{op}"',
+        ]
+    return [f'SecRule {var} "{op}" "id:{rid},phase:1,{act},log,msg:\'NikTiar custom: {msg}\'"']
 
 
 def _write_caddy_sites(cfg: Dict[str, Any]) -> None:
@@ -306,17 +348,22 @@ def _write_caddy_sites(cfg: Dict[str, Any]) -> None:
     tls_lines = ["# Generated TLS / ACME zones"]
     fw_lines = ["# Generated firewall / UAM / cache snippets"]
 
-    # Global IP blocks at edge (Caddy) for speed
-    all_blocks: List[str] = []
-    all_allows: List[str] = []
+    # Per-zone IP blocks at Caddy (host + remote_ip) — never merge across tenants
     for z in cfg.get("zones") or []:
+        host = (z.get("public_hostname") or "").strip().lower()
+        if not host:
+            continue
         fw = z.get("firewall") or {}
-        all_blocks.extend(fw.get("ip_block") or [])
-        all_allows.extend(fw.get("ip_allow") or [])
-    if all_blocks:
-        ips = " ".join(sorted(set(str(x).strip() for x in all_blocks if str(x).strip())))
-        fw_lines.append(f"@edge_block remote_ip {ips}")
-        fw_lines.append("handle @edge_block {")
+        blocks = [str(x).strip() for x in (fw.get("ip_block") or []) if str(x).strip()]
+        if not blocks:
+            continue
+        mid = f"fwblk_{_safe(host)}"
+        ips = " ".join(sorted(set(blocks)))
+        fw_lines.append(f"@{mid} {{")
+        fw_lines.append(f"\thost {host}")
+        fw_lines.append(f"\tremote_ip {ips}")
+        fw_lines.append("}")
+        fw_lines.append(f"handle @{mid} {{")
         fw_lines.append('\trespond "Forbidden by NikTiar Secure Edge firewall" 403')
         fw_lines.append("}")
 
@@ -392,9 +439,13 @@ def _write_caddy_sites(cfg: Dict[str, Any]) -> None:
             lines.append(f"\theader Cache-Control \"public, max-age={ttl}\"")
         else:
             lines.append('\theader Cache-Control "no-store"')
+        tenant_code = (z.get("tenant_short_code") or "UNKNOWN").strip().upper()
+        lines.append(f'\theader X-NikTiar-Tenant-Code "{tenant_code}"')
+        lines.append(f'\theader X-NikTiar-Zone "{host}"')
         lines.append(f"\treverse_proxy {origin} {{")
         lines.append("\t\ttrusted_proxies private_ranges")
         lines.append("\t\theader_up X-NikTiar-Tenant {http.request.host}")
+        lines.append(f'\t\theader_up X-NikTiar-Tenant-Code "{tenant_code}"')
         lines.append("\t}")
         lines.append("}")
         lines.append("")
@@ -404,39 +455,36 @@ def _write_caddy_sites(cfg: Dict[str, Any]) -> None:
             tls_lines.append("\ttls")
             tls_lines.append("\timport coraza_block")
             tls_lines.append("\timport security_headers")
+            tls_lines.append(f'\theader X-NikTiar-Tenant-Code "{tenant_code}"')
             tls_lines.append(f"\treverse_proxy {origin} {{")
             tls_lines.append("\t\ttrusted_proxies private_ranges")
+            tls_lines.append(f'\t\theader_up X-NikTiar-Tenant-Code "{tenant_code}"')
             tls_lines.append("\t}")
             tls_lines.append("}")
             tls_lines.append("")
 
     if len(lines) <= 2:
-        lines.append("# (no zones)")
+        lines.append("# (no zones — unknown hosts denied by Caddyfile)")
     if len(tls_lines) <= 1:
         tls_lines.append("# (no ACME zones)")
     SITES_CADDY.write_text("\n".join(lines) + "\n", encoding="utf-8")
     SITES_TLS.write_text("\n".join(tls_lines) + "\n", encoding="utf-8")
 
-    # Rate-limit as Coraza DOS-ish rules per path
-    rl_lines = ["# Generated rate limit approximations"]
-    rid = 1103000
+    # Rate-limit metadata (enforced via zone config + CrowdSec; avoid TX/IP collections)
+    rl_lines = [
+        "# Generated rate limit registry — Host scoped (no cross-tenant counters)",
+        "# Enforcement: use zone rate_limit_rules in control plane + CrowdSec scenarios.",
+    ]
     for z in cfg.get("zones") or []:
+        host = (z.get("public_hostname") or "").strip().lower()
+        tenant = (z.get("tenant_short_code") or "").strip().upper()
         for rl in z.get("rate_limit_rules") or []:
             if not rl.get("enabled", True):
                 continue
-            path = (rl.get("path") or "/").replace("*", ".*")
-            reqs = int(rl.get("requests") or 100)
-            # CRS-style: deny bursty identical URI from same IP using setvar counter (simplified)
             rl_lines.append(
-                f'SecRule REQUEST_URI "@rx ^{path}$" "id:{rid},phase:1,pass,nolog,'
-                f'setvar:ip.rl_{rid}=+1,expirevar:ip.rl_{rid}={int(rl.get("period") or 60)}"'
+                f"# tenant={tenant} host={host} path={rl.get('path')} "
+                f"limit={rl.get('requests')}/{rl.get('period')}s action={rl.get('action')}"
             )
-            rid += 1
-            rl_lines.append(
-                f'SecRule IP:rl_{rid-1} "@gt {reqs}" "id:{rid},phase:1,deny,status:429,log,'
-                f'msg:\'NikTiar rate limit exceeded\'"'
-            )
-            rid += 1
     (RULES_D / "11030-rate-limit.conf").write_text("\n".join(rl_lines) + "\n", encoding="utf-8")
     for stale in ("93000-rate-limit.conf",):
         p = RULES_D / stale
@@ -467,6 +515,14 @@ def reload_caddy(container: str = WAF_CONTAINER) -> Dict[str, Any]:
 
 def apply_all(cfg: Optional[Dict[str, Any]] = None, container: str = WAF_CONTAINER) -> Dict[str, Any]:
     cfg = cfg or load_config()
+    isolation_warnings: List[str] = []
+    try:
+        from tenant_isolation import enforce_dedicated_zones, save_tenant_map
+
+        cfg, isolation_warnings = enforce_dedicated_zones(cfg)
+        save_tenant_map(cfg)
+    except Exception as exc:  # noqa: BLE001
+        isolation_warnings.append(str(exc))
     try:
         from enterprise_features import apply_enterprise, merge_enterprise
 
@@ -478,6 +534,12 @@ def apply_all(cfg: Optional[Dict[str, Any]] = None, container: str = WAF_CONTAIN
     save_config(cfg)
     _write_coraza_overrides(cfg)
     _write_caddy_sites(cfg)
+    try:
+        from tenant_isolation import save_tenant_map
+
+        save_tenant_map(cfg)
+    except Exception:  # noqa: BLE001
+        pass
     # Coraza rules.d/overrides are read at process start — need container recreate for CRS vars
     # Caddy reload picks up sites/firewall; for SecRuleEngine changes restart waf
     reload = reload_caddy(container)
@@ -487,7 +549,13 @@ def apply_all(cfg: Optional[Dict[str, Any]] = None, container: str = WAF_CONTAIN
         restart = True
     except Exception:  # noqa: BLE001
         pass
-    return {"ok": True, "reload": reload, "waf_restarted": restart, "zones": len(cfg.get("zones") or [])}
+    return {
+        "ok": True,
+        "reload": reload,
+        "waf_restarted": restart,
+        "zones": len(cfg.get("zones") or []),
+        "isolation_warnings": isolation_warnings,
+    }
 
 
 def upsert_zone(zone: Dict[str, Any]) -> Dict[str, Any]:
@@ -495,14 +563,24 @@ def upsert_zone(zone: Dict[str, Any]) -> Dict[str, Any]:
     host = (zone.get("public_hostname") or "").strip().lower()
     if not host:
         raise ValueError("public_hostname required")
+    tenant = (zone.get("tenant_short_code") or "").strip().upper()
+    if not tenant:
+        raise ValueError("tenant_short_code required for multi-tenant isolation")
+    zone = dict(zone)
+    zone["tenant_short_code"] = tenant
     zones = cfg.get("zones") or []
     found = False
     for i, z in enumerate(zones):
         if (z.get("public_hostname") or "").lower() == host:
+            # Refuse silently taking over another tenant's hostname
+            existing_t = (z.get("tenant_short_code") or "").strip().upper()
+            if existing_t and existing_t != tenant:
+                raise ValueError(f"hostname {host} owned by tenant {existing_t}")
             merged = deepcopy(DEFAULT_ZONE)
             merged.update(z)
             merged.update(zone)
             merged["public_hostname"] = host
+            merged["tenant_short_code"] = tenant
             if not merged.get("id"):
                 merged["id"] = z.get("id") or secrets.token_hex(8)
             zones[i] = merged
@@ -512,6 +590,7 @@ def upsert_zone(zone: Dict[str, Any]) -> Dict[str, Any]:
         merged = deepcopy(DEFAULT_ZONE)
         merged.update(zone)
         merged["public_hostname"] = host
+        merged["tenant_short_code"] = tenant
         merged["id"] = zone.get("id") or secrets.token_hex(8)
         zones.append(merged)
     cfg["zones"] = zones

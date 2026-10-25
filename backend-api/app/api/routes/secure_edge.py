@@ -222,6 +222,29 @@ def secure_edge_events(
 
     accepted = 0
     for ev in (payload.events or [])[:100]:
+        host = (ev.get("public_hostname") or "").strip().lower() or None
+        tenant = (ev.get("tenant_short_code") or "").strip().upper() or None
+        # Strong attribution: resolve tenant from site map when missing (prevents mis-tag / cross-tenant events)
+        if host and not tenant:
+            row = fetch_one(
+                """
+                SELECT UPPER(tenant_short_code) AS tenant_short_code
+                FROM secure_edge_sites
+                WHERE LOWER(public_hostname) = %s
+                LIMIT 1;
+                """,
+                (host,),
+            )
+            tenant = (row or {}).get("tenant_short_code")
+        # Drop events that cannot be attributed on shared multi-tenant edges
+        if host and not tenant:
+            continue
+        details = dict(ev.get("details") or {})
+        details["tenant_short_code"] = tenant
+        details["public_hostname"] = host
+        # Never persist other tenants' raw payloads beyond excerpt
+        if isinstance(details.get("raw_excerpt"), str):
+            details["raw_excerpt"] = details["raw_excerpt"][:300]
         execute(
             """
             INSERT INTO secure_edge_events (
@@ -230,13 +253,13 @@ def secure_edge_events(
             ) VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb);
             """,
             (
-                ev.get("tenant_short_code") or None,
+                tenant,
                 payload.edge_hostname,
-                ev.get("public_hostname"),
+                host,
                 (ev.get("event_type") or "unknown")[:64],
                 (ev.get("severity") or "info")[:16],
                 (ev.get("summary") or "event")[:512],
-                json.dumps(ev.get("details") or {}),
+                json.dumps(details),
             ),
         )
         accepted += 1
@@ -520,12 +543,14 @@ def customer_list_sites(
         """,
         (short_code.upper(),),
     )
+    # Defense-in-depth: only this tenant's rows (already filtered); never mix events here
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},
         "sites": sites or [],
+        "isolation": "tenant_scoped_query",
         "deployment_hint": (
-            "Hybrid: unpinned sites land on shared SMB edges; "
-            "set edge_node_hostname for dedicated enterprise appliances."
+            "Hybrid: unpinned sites land on shared SMB edges with Host isolation; "
+            "set edge_node_hostname + dedicated mode for strongest single-tenant isolation."
         ),
     }
 
@@ -558,19 +583,16 @@ def customer_secure_edge_summary(
         """,
         (short_code.upper(),),
     )
+    # Strict tenant_short_code match only (hostname OR removed to avoid any cross-tenant edge cases)
     events = fetch_all(
         """
         SELECT event_type, severity, summary, public_hostname, created_at
         FROM secure_edge_events
         WHERE UPPER(COALESCE(tenant_short_code, '')) = %s
-           OR public_hostname IN (
-                SELECT public_hostname FROM secure_edge_sites
-                WHERE UPPER(tenant_short_code) = %s
-           )
         ORDER BY created_at DESC
         LIMIT 50;
         """,
-        (short_code.upper(), short_code.upper()),
+        (short_code.upper(),),
     )
     return {
         "tenant": {"short_code": tenant["short_code"], "name": tenant["name"]},

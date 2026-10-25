@@ -41,6 +41,8 @@ ec.SITES_TLS = RUNTIME / "sites_tls.caddy"
 ec.FIREWALL_CADDY = RUNTIME / "firewall.caddy"
 ec.WAF_CONTAINER = WAF_CONTAINER
 
+PINNED_TENANT = (os.getenv("NIKTIAR_TENANT_CODE") or "").strip().upper()
+
 try:
     import enterprise_features as ef
 
@@ -48,6 +50,17 @@ try:
     ef.ENTERPRISE_CADDY = RUNTIME / "enterprise.caddy"
 except Exception:  # noqa: BLE001
     ef = None  # type: ignore
+
+try:
+    import tenant_isolation as ti
+
+    ti._RUNTIME = RUNTIME
+    ti.TENANT_MAP_PATH = RUNTIME / "tenant_map.json"
+    ti.ISOLATION_META_PATH = RUNTIME / "isolation.json"
+    ti.MODE = MODE
+    ti.PINNED_TENANT = PINNED_TENANT
+except Exception:  # noqa: BLE001
+    ti = None  # type: ignore
 
 app = FastAPI(title="NikTiar Secure Edge", version="2.0.0")
 static_dir = Path(__file__).parent / "static"
@@ -91,6 +104,8 @@ class CustomRuleIn(BaseModel):
     enabled: bool = True
     priority: int = 100
     id: Optional[str] = None
+    tenant_short_code: Optional[str] = None
+    public_hostname: Optional[str] = None
 
 
 def _auth(authorization: Optional[str] = Header(default=None)) -> str:
@@ -281,6 +296,9 @@ def overview(_: str = Depends(_auth)):
             "caching",
             "analytics",
             "hybrid_multitenant",
+            "strong_tenant_isolation",
+            "unknown_host_deny",
+            "host_scoped_firewall",
             "api_shield",
             "graphql_guard",
             "page_shield",
@@ -297,9 +315,36 @@ def overview(_: str = Depends(_auth)):
     }
 
 
+@app.get("/api/isolation")
+def isolation_status(_: str = Depends(_auth)):
+    cfg = ec.load_config()
+    tmap = ti.load_tenant_map() if ti else {}
+    return {
+        "mode": MODE,
+        "pinned_tenant": PINNED_TENANT or None,
+        "unknown_host_policy": "deny_421",
+        "default_origin_fallthrough": False,
+        "firewall_scope": "per_zone_host",
+        "custom_rules_scope": "host_or_tenant",
+        "tenant_map_entries": len(tmap),
+        "tenants": sorted(set(tmap.values())),
+        "zones": len(cfg.get("zones") or []),
+        "strong_isolation": True,
+        "note": (
+            "Shared = soft multi-tenant with Host-scoped policies + unknown-host deny. "
+            "Dedicated = single-tenant pin via NIKTIAR_TENANT_CODE."
+        ),
+    }
+
+
 @app.get("/api/config")
-def get_config(_: str = Depends(_auth)):
-    return ec.load_config()
+def get_config(tenant: Optional[str] = None, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    if ti and (tenant or (MODE == "dedicated" and PINNED_TENANT)):
+        return ti.filter_config_view(
+            cfg, tenant or PINNED_TENANT, mssp_admin=not tenant and MODE != "dedicated"
+        )
+    return cfg
 
 
 @app.put("/api/config/global")
@@ -315,8 +360,13 @@ def put_global(body: GlobalSettingsIn, _: str = Depends(_auth)):
 
 
 @app.get("/api/zones")
-def list_zones(_: str = Depends(_auth)):
-    return {"zones": ec.load_config().get("zones") or []}
+def list_zones(tenant: Optional[str] = None, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    zones = cfg.get("zones") or []
+    scope = (tenant or (PINNED_TENANT if MODE == "dedicated" else "") or "").upper()
+    if scope:
+        zones = [z for z in zones if (z.get("tenant_short_code") or "").upper() == scope]
+    return {"zones": zones, "tenant_scope": scope or None}
 
 
 @app.post("/api/zones")
@@ -324,6 +374,14 @@ def create_or_update_zone(body: ZoneIn, _: str = Depends(_auth)):
     payload = body.model_dump()
     if payload.get("security_level") and payload["security_level"] not in ec.SECURITY_LEVELS:
         raise HTTPException(400, detail="invalid security_level")
+    if not (payload.get("tenant_short_code") or "").strip():
+        if MODE == "dedicated" and PINNED_TENANT:
+            payload["tenant_short_code"] = PINNED_TENANT
+        else:
+            raise HTTPException(400, detail="tenant_short_code required for multi-tenant isolation")
+    if MODE == "dedicated" and PINNED_TENANT:
+        if payload["tenant_short_code"].upper() != PINNED_TENANT:
+            raise HTTPException(403, detail=f"dedicated edge pinned to {PINNED_TENANT}")
     try:
         result = ec.upsert_zone(payload)
     except ValueError as exc:
@@ -335,7 +393,6 @@ def create_or_update_zone(body: ZoneIn, _: str = Depends(_auth)):
 def patch_zone(hostname: str, body: Dict[str, Any], _: str = Depends(_auth)):
     body = dict(body or {})
     body["public_hostname"] = hostname
-    # Keep origin if not provided
     cfg = ec.load_config()
     existing = next(
         (z for z in cfg.get("zones") or [] if (z.get("public_hostname") or "").lower() == hostname.lower()),
@@ -343,8 +400,13 @@ def patch_zone(hostname: str, body: Dict[str, Any], _: str = Depends(_auth)):
     )
     if not existing:
         raise HTTPException(404, detail="Zone not found")
+    if MODE == "dedicated" and PINNED_TENANT:
+        if (existing.get("tenant_short_code") or "").upper() != PINNED_TENANT:
+            raise HTTPException(403, detail="cross-tenant zone denied")
     if not body.get("origin_url"):
         body["origin_url"] = existing.get("origin_url")
+    if not body.get("tenant_short_code"):
+        body["tenant_short_code"] = existing.get("tenant_short_code")
     merged = {**existing, **body}
     result = ec.upsert_zone(merged)
     return {"ok": True, "apply": result}
@@ -352,12 +414,26 @@ def patch_zone(hostname: str, body: Dict[str, Any], _: str = Depends(_auth)):
 
 @app.delete("/api/zones/{hostname}")
 def remove_zone(hostname: str, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    existing = next(
+        (z for z in cfg.get("zones") or [] if (z.get("public_hostname") or "").lower() == hostname.lower()),
+        None,
+    )
+    if existing and MODE == "dedicated" and PINNED_TENANT:
+        if (existing.get("tenant_short_code") or "").upper() != PINNED_TENANT:
+            raise HTTPException(403, detail="cross-tenant zone denied")
     return ec.delete_zone(hostname)
 
 
 @app.get("/api/waf/rules")
-def list_custom_rules(_: str = Depends(_auth)):
-    return {"rules": ec.load_config().get("custom_waf_rules") or []}
+def list_custom_rules(tenant: Optional[str] = None, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    rules = cfg.get("custom_waf_rules") or []
+    scope = (tenant or (PINNED_TENANT if MODE == "dedicated" else "") or "").upper()
+    if scope and ti:
+        view = ti.filter_config_view(cfg, scope, mssp_admin=False)
+        rules = view.get("custom_waf_rules") or []
+    return {"rules": rules, "tenant_scope": scope or None}
 
 
 @app.post("/api/waf/rules")
@@ -366,6 +442,18 @@ def add_custom_rule(body: CustomRuleIn, _: str = Depends(_auth)):
     rules = cfg.setdefault("custom_waf_rules", [])
     rule = body.model_dump()
     rule["id"] = body.id or ec.new_id()
+    if MODE == "dedicated" and PINNED_TENANT:
+        rule["tenant_short_code"] = PINNED_TENANT
+    if ti:
+        try:
+            rule = ti.validate_custom_rule_scope(rule, mssp_admin=True)
+        except ValueError as exc:
+            raise HTTPException(400, detail=str(exc)) from exc
+    if not rule.get("public_hostname") and not rule.get("tenant_short_code"):
+        raise HTTPException(
+            400,
+            detail="public_hostname or tenant_short_code required (multi-tenant isolation)",
+        )
     rules = [r for r in rules if r.get("id") != rule["id"]]
     rules.append(rule)
     rules.sort(key=lambda r: int(r.get("priority") or 100))
@@ -387,13 +475,34 @@ def apply_config(_: str = Depends(_auth)):
 
 
 @app.get("/api/analytics")
-def analytics(_: str = Depends(_auth)):
+def analytics(tenant: Optional[str] = None, _: str = Depends(_auth)):
     stats = _parse_access_stats(1000)
+    recent = stats["recent"][:50]
+    scope = (tenant or (PINNED_TENANT if MODE == "dedicated" else "") or "").upper()
+    if scope and ti:
+        tmap = ti.load_tenant_map() or ti.build_tenant_map(ec.load_config())
+        allowed_hosts = {h for h, t in tmap.items() if t == scope}
+        recent = [
+            r
+            for r in recent
+            if (r.get("host") or "").lower().split(":")[0] in allowed_hosts
+        ]
+        # recompute block count for scope
+        blocks = sum(1 for r in recent if r.get("status") == 403)
+        return {
+            "requests_sampled": len(recent),
+            "threats_blocked": blocks,
+            "status_breakdown": stats["by_status"],
+            "recent": recent,
+            "tenant_scope": scope,
+            "crowdsec_decisions": _crowdsec_decisions()[:30],
+            "note": "CrowdSec decisions are IP-global on shared edges (security side-effect, not data leak).",
+        }
     return {
         "requests_sampled": stats["total_sampled"],
         "threats_blocked": stats["waf_blocks_403"],
         "status_breakdown": stats["by_status"],
-        "recent": stats["recent"][:50],
+        "recent": recent,
         "crowdsec_decisions": _crowdsec_decisions()[:30],
     }
 
