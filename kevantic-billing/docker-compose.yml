@@ -1,0 +1,50 @@
+# Standalone Quote & Billing — does NOT attach to mssp-control compose.
+# UI/API: host port 8090  |  Postgres: 127.0.0.1:5433 only
+services:
+  billing-db:
+    image: postgres:16-alpine
+    container_name: kevantic-billing-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-billing}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-kevantic_billing}
+    volumes:
+      - billing_pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  billing-app:
+    build: .
+    container_name: kevantic-billing-app
+    restart: unless-stopped
+    depends_on:
+      billing-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-billing}:${POSTGRES_PASSWORD}@billing-db:5432/${POSTGRES_DB:-kevantic_billing}
+      BILLING_ADMIN_USER: ${BILLING_ADMIN_USER:-billing.admin}
+      BILLING_ADMIN_PASSWORD: ${BILLING_ADMIN_PASSWORD:?set BILLING_ADMIN_PASSWORD in .env}
+      BILLING_COMPANY_NAME: ${BILLING_COMPANY_NAME:-Kevantic Cyber Security Private Limited}
+      BILLING_COMPANY_GSTIN: ${BILLING_COMPANY_GSTIN:-}
+      BILLING_COMPANY_STATE: ${BILLING_COMPANY_STATE:-Maharashtra}
+      BILLING_COMPANY_STATE_CODE: ${BILLING_COMPANY_STATE_CODE:-27}
+      BILLING_COMPANY_ADDRESS: ${BILLING_COMPANY_ADDRESS:-India}
+      BILLING_DEFAULT_CURRENCY: ${BILLING_DEFAULT_CURRENCY:-INR}
+      BILLING_LUT_FILED: ${BILLING_LUT_FILED:-false}
+      BILLING_QUOTE_VALIDITY_DAYS: ${BILLING_QUOTE_VALIDITY_DAYS:-30}
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  billing_pgdata:

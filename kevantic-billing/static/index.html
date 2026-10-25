@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Kevantic Quote & Billing</title>
+  <link rel="stylesheet" href="/assets/app.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="brand">Kevantic</p>
+      <h1>Quote & Billing</h1>
+      <p class="sub" id="companyLine">NikTiar portfolio · CPQ + GST tax invoices</p>
+    </div>
+    <div class="auth-box" id="authBox">
+      <label>User <input id="user" autocomplete="username" /></label>
+      <label>Password <input id="pass" type="password" autocomplete="current-password" /></label>
+      <button id="btnLogin" type="button">Sign in</button>
+      <button id="btnLogout" type="button" class="ghost hidden">Sign out</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" hidden>
+    <button data-tab="catalog" class="active">Catalog</button>
+    <button data-tab="parties">Parties</button>
+    <button data-tab="quotes">Quotes</button>
+    <button data-tab="invoices">Invoices</button>
+    <button data-tab="builder">New Quote</button>
+  </nav>
+
+  <main id="main" hidden>
+    <section id="tab-catalog" class="panel"></section>
+    <section id="tab-parties" class="panel hidden"></section>
+    <section id="tab-quotes" class="panel hidden"></section>
+    <section id="tab-invoices" class="panel hidden"></section>
+    <section id="tab-builder" class="panel hidden"></section>
+  </main>
+
+  <p id="status" class="status"></p>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
