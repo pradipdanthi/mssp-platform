@@ -7,10 +7,11 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_admin
-from app.config import get_settings
 from app.db import Base, SessionLocal, engine
-from app.routers import catalog, invoices, parties, quotes
+from app.routers import catalog, dashboard, invoices, parties, quotes, settings
 from app.services.catalog_seed import seed_catalog
+from app.services.company import get_or_create_profile
+from app.services.migrate import run_migrations
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -21,23 +22,24 @@ app = FastAPI(
         "for the NikTiar product portfolio. Portable Docker stack — not part of "
         "mssp-control Admin/Customer portals."
     ),
-    version="1.0.0",
+    version="1.1.0",
 )
 
 
 @app.on_event("startup")
 def on_startup() -> None:
     Base.metadata.create_all(bind=engine)
+    run_migrations(engine)
     db = SessionLocal()
     try:
         seed_catalog(db)
+        get_or_create_profile(db)
     finally:
         db.close()
 
 
 @app.get("/health")
 def health() -> dict:
-    settings = get_settings()
     db_ok = False
     try:
         with engine.connect() as conn:
@@ -48,30 +50,37 @@ def health() -> dict:
     return {
         "status": "ok" if db_ok else "degraded",
         "service": "kevantic-billing",
+        "version": "1.1.0",
         "database": "ok" if db_ok else "error",
-        "company": settings.company_name,
         "port": 8090,
     }
 
 
 @app.get("/api/me")
 def me(user: str = Depends(require_admin)) -> dict:
-    settings = get_settings()
-    return {
-        "user": user,
-        "company_name": settings.company_name,
-        "company_gstin": settings.company_gstin,
-        "company_state": settings.company_state,
-        "company_state_code": settings.company_state_code,
-        "currency": settings.default_currency,
-        "lut_filed": settings.lut_filed,
-    }
+    db = SessionLocal()
+    try:
+        profile = get_or_create_profile(db)
+        return {
+            "user": user,
+            "company_name": profile.legal_name,
+            "company_gstin": profile.gstin or "",
+            "company_state": profile.state,
+            "company_state_code": profile.state_code,
+            "currency": profile.currency,
+            "lut_filed": profile.lut_filed,
+            "version": "1.1.0",
+        }
+    finally:
+        db.close()
 
 
 app.include_router(parties.router)
 app.include_router(catalog.router)
 app.include_router(quotes.router)
 app.include_router(invoices.router)
+app.include_router(dashboard.router)
+app.include_router(settings.router)
 
 if STATIC_DIR.is_dir():
     app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
@@ -79,5 +88,4 @@ if STATIC_DIR.is_dir():
 
 @app.get("/")
 def ui_index() -> FileResponse:
-    index = STATIC_DIR / "index.html"
-    return FileResponse(index)
+    return FileResponse(STATIC_DIR / "index.html")

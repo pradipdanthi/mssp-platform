@@ -91,6 +91,11 @@ class Quote(Base):
     discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     notes: Mapped[str | None] = mapped_column(Text)
     internal_notes: Mapped[str | None] = mapped_column(Text)
+    terms_text: Mapped[str | None] = mapped_column(Text)
+    opportunity_name: Mapped[str | None] = mapped_column(String(255))
+    sales_owner: Mapped[str | None] = mapped_column(String(128))
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    approved_by: Mapped[str | None] = mapped_column(String(128))
     place_of_supply_state: Mapped[str | None] = mapped_column(String(64))
     place_of_supply_code: Mapped[str | None] = mapped_column(String(8))
     tax_mode: Mapped[str] = mapped_column(String(16), default="auto")
@@ -172,6 +177,9 @@ class Invoice(Base):
     lines: Mapped[list[InvoiceLine]] = relationship(
         back_populates="invoice", cascade="all, delete-orphan"
     )
+    payments: Mapped[list[Payment]] = relationship(
+        back_populates="invoice", cascade="all, delete-orphan"
+    )
 
 
 class InvoiceLine(Base):
@@ -203,3 +211,52 @@ class SequenceCounter(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     last_value: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Payment(Base):
+    __tablename__ = "payments"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    invoice_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("invoices.id"), nullable=False)
+    amount: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
+    payment_date: Mapped[date] = mapped_column(Date, default=date.today)
+    method: Mapped[str] = mapped_column(String(64), default="bank_transfer")
+    # bank_transfer | upi | cheque | card | cash | other
+    reference: Mapped[str | None] = mapped_column(String(128))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    invoice: Mapped[Invoice] = relationship(back_populates="payments")
+
+
+class CompanyProfile(Base):
+    """Single-row seller profile (Tally company masters equivalent)."""
+
+    __tablename__ = "company_profile"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    gstin: Mapped[str | None] = mapped_column(String(20))
+    pan: Mapped[str | None] = mapped_column(String(20))
+    state: Mapped[str] = mapped_column(String(64), default="Maharashtra")
+    state_code: Mapped[str] = mapped_column(String(8), default="27")
+    address: Mapped[str | None] = mapped_column(Text)
+    email: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(64))
+    website: Mapped[str | None] = mapped_column(String(255))
+    bank_name: Mapped[str | None] = mapped_column(String(128))
+    bank_account: Mapped[str | None] = mapped_column(String(64))
+    bank_ifsc: Mapped[str | None] = mapped_column(String(32))
+    bank_branch: Mapped[str | None] = mapped_column(String(128))
+    upi_id: Mapped[str | None] = mapped_column(String(128))
+    default_terms: Mapped[str | None] = mapped_column(Text)
+    invoice_footer: Mapped[str | None] = mapped_column(Text)
+    currency: Mapped[str] = mapped_column(String(8), default="INR")
+    lut_filed: Mapped[bool] = mapped_column(Boolean, default=False)
+    quote_validity_days: Mapped[int] = mapped_column(Integer, default=30)
+    discount_approval_threshold: Mapped[Decimal] = mapped_column(
+        Numeric(5, 2), default=Decimal("15.00")
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

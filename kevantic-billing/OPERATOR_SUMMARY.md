@@ -1,43 +1,36 @@
 # Operator summary — Kevantic Quote & Billing (overnight build)
 
-## What you have
+## What you have (v1.1)
 
-A **standalone** enterprise quoting + GST invoicing tool for the NikTiar portfolio, running on this server **without touching** Admin (`:3000`), Customer (`:3001`), or `mssp-control` Compose.
+Standalone **enterprise quote-to-cash** for NikTiar: dashboard, CPQ quotes, Tally-style GST invoices, payments, aging, company/bank settings. Own Compose — **does not** touch Admin `:3000` / Customer `:3001`.
 
 | Item | Value |
 |---|---|
-| UI + API | `http://<server-ip>:8090/` |
+| UI + API | `http://192.168.0.201:8090/` |
 | Health | `http://127.0.0.1:8090/health` |
 | Postgres | `127.0.0.1:5433` (loopback only) |
 | Containers | `kevantic-billing-app`, `kevantic-billing-db` |
-| Login | See `data/OPERATOR_CREDS.txt` (chmod 600, not in git) |
+| Login | `data/OPERATOR_CREDS.txt` |
 
-## How to quote a customer
+## Features
 
-1. Open `:8090` → sign in  
-2. **Parties** → add legal name, state/code, GSTIN  
-3. **New Quote** → pick SKUs (Silver/Gold/Platinum, SecureEdge, appliances) + term months  
-4. Tax auto-picks **IGST** (inter-state) or **CGST+SGST** (same state as company)  
-5. **Create invoice** from the quote → PDF → Mark paid / Credit note  
+- **Dashboard** — open quotes, AR, MTD invoiced/collected, GST break-up, aging bars, overdue + expiring quotes  
+- **Parties** — GSTIN, Indian state codes, export flag, payment terms  
+- **Catalog** — edit list prices / active flags in UI  
+- **Quotes** — opportunity, owner, line + doc discount, approval when discount ≥ threshold, duplicate, send/accept/decline, PDF, terms  
+- **Invoices** — tax invoice + proforma, credit note, void, record payment (UTR/UPI/cheque), balance due, PDF with bank details  
+- **Company settings** — GSTIN, bank/IFSC/UPI, default terms, LUT, validity days  
 
-## Proven overnight smoke
+## How to quote
 
-- Quote `KEV/QT/2026/0001` → Invoice `KEV/INV/2026/0001` (IGST, sample Acme Karnataka)  
-- PDFs generated; mark-paid works  
-- Admin/Customer portals still HTTP 200; mssp `/health` ok  
+1. Sign in → **Company settings** (GSTIN + bank) once  
+2. **Parties** → customer  
+3. **New quote** → SKUs + term → Create  
+4. Approve if prompted → Tax invoice / Proforma → Record payment  
 
-## Move to another cloud VM later
+## Move to another cloud VM
 
 ```bash
 cd /opt/mssp-control/kevantic-billing
-docker compose down
-# copy folder + docker volume kevantic-billing_billing_pgdata (or pg_dump)
-docker compose up -d --build
+docker compose up -d --build   # after copying folder + volume / dump
 ```
-
-## Next (when you wake)
-
-1. Put real company GSTIN / address in `.env` and recreate app container  
-2. Adjust list prices if commercial rates differ  
-3. Say **commit** if you want this folder in git (`.env` / `data/` stay ignored)  
-4. Optional later: read-only sync of tenants from control-plane API  

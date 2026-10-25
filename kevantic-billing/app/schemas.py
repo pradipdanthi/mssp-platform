@@ -77,6 +77,10 @@ class QuoteCreate(BaseModel):
     term_months: int = 12
     discount_percent: Decimal = Decimal("0")
     notes: str | None = None
+    internal_notes: str | None = None
+    terms_text: str | None = None
+    opportunity_name: str | None = None
+    sales_owner: str | None = None
     tax_mode: str = "auto"
     status: str = "draft"
 
@@ -109,6 +113,12 @@ class QuoteOut(BaseModel):
     term_months: int
     discount_percent: Decimal
     notes: str | None
+    internal_notes: str | None = None
+    terms_text: str | None = None
+    opportunity_name: str | None = None
+    sales_owner: str | None = None
+    requires_approval: bool = False
+    approved_by: str | None = None
     place_of_supply_state: str | None
     place_of_supply_code: str | None
     tax_mode: str
@@ -120,6 +130,7 @@ class QuoteOut(BaseModel):
     igst_amount: Decimal
     total_amount: Decimal
     lines: list[QuoteLineOut] = []
+    party_name: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -137,6 +148,19 @@ class InvoiceLineOut(BaseModel):
     line_taxable: Decimal
     line_tax: Decimal
     line_total: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class PaymentOut(BaseModel):
+    id: UUID
+    invoice_id: UUID
+    amount: Decimal
+    payment_date: date
+    method: str
+    reference: str | None
+    notes: str | None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -162,11 +186,48 @@ class InvoiceOut(BaseModel):
     igst_amount: Decimal
     total_amount: Decimal
     amount_paid: Decimal
+    balance_due: Decimal | None = None
     notes: str | None
     lines: list[InvoiceLineOut] = []
+    payments: list[PaymentOut] = []
+    party_name: str | None = None
 
     model_config = {"from_attributes": True}
 
 
 class MarkPaidIn(BaseModel):
     amount: Decimal | None = None
+    method: str = "bank_transfer"
+    reference: str | None = None
+    notes: str | None = None
+    payment_date: date | None = None
+
+
+class CompanyProfileIn(BaseModel):
+    legal_name: str
+    gstin: str | None = None
+    pan: str | None = None
+    state: str = "Maharashtra"
+    state_code: str = "27"
+    address: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    website: str | None = None
+    bank_name: str | None = None
+    bank_account: str | None = None
+    bank_ifsc: str | None = None
+    bank_branch: str | None = None
+    upi_id: str | None = None
+    default_terms: str | None = None
+    invoice_footer: str | None = None
+    currency: str = "INR"
+    lut_filed: bool = False
+    quote_validity_days: int = 30
+    discount_approval_threshold: Decimal = Decimal("15.00")
+
+
+class CompanyProfileOut(CompanyProfileIn):
+    id: int
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}

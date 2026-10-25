@@ -7,35 +7,62 @@
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
-  <header class="top">
-    <div>
+  <div id="loginGate" class="login-gate">
+    <div class="login-card">
       <p class="brand">Kevantic</p>
-      <h1>Quote & Billing</h1>
-      <p class="sub" id="companyLine">NikTiar portfolio · CPQ + GST tax invoices</p>
-    </div>
-    <div class="auth-box" id="authBox">
+      <h1>Quote &amp; Billing</h1>
+      <p class="sub">NikTiar CPQ · GST tax invoices · collections</p>
       <label>User <input id="user" autocomplete="username" /></label>
       <label>Password <input id="pass" type="password" autocomplete="current-password" /></label>
-      <button id="btnLogin" type="button">Sign in</button>
-      <button id="btnLogout" type="button" class="ghost hidden">Sign out</button>
+      <button id="btnLogin" type="button" class="accent">Sign in</button>
+      <p class="hint">Credentials: <code>kevantic-billing/data/OPERATOR_CREDS.txt</code></p>
     </div>
-  </header>
+  </div>
 
-  <nav class="tabs" id="tabs" hidden>
-    <button data-tab="catalog" class="active">Catalog</button>
-    <button data-tab="parties">Parties</button>
-    <button data-tab="quotes">Quotes</button>
-    <button data-tab="invoices">Invoices</button>
-    <button data-tab="builder">New Quote</button>
-  </nav>
+  <div id="appShell" class="app hidden">
+    <aside class="side">
+      <div class="side-brand">
+        <p class="brand">Kevantic</p>
+        <strong>Quote &amp; Billing</strong>
+        <span id="sideCompany" class="muted"></span>
+      </div>
+      <nav id="nav">
+        <button data-tab="home" class="active">Dashboard</button>
+        <button data-tab="builder">New quote</button>
+        <button data-tab="quotes">Quotes</button>
+        <button data-tab="invoices">Invoices</button>
+        <button data-tab="parties">Parties</button>
+        <button data-tab="catalog">Catalog</button>
+        <button data-tab="settings">Company settings</button>
+      </nav>
+      <button id="btnLogout" type="button" class="ghost side-out">Sign out</button>
+    </aside>
+    <div class="workspace">
+      <header class="topbar">
+        <h2 id="pageTitle">Dashboard</h2>
+        <div class="top-actions">
+          <input id="globalSearch" placeholder="Filter lists…" />
+          <span id="userChip" class="chip"></span>
+        </div>
+      </header>
+      <main id="main">
+        <section id="tab-home" class="panel"></section>
+        <section id="tab-builder" class="panel hidden"></section>
+        <section id="tab-quotes" class="panel hidden"></section>
+        <section id="tab-invoices" class="panel hidden"></section>
+        <section id="tab-parties" class="panel hidden"></section>
+        <section id="tab-catalog" class="panel hidden"></section>
+        <section id="tab-settings" class="panel hidden"></section>
+      </main>
+    </div>
+  </div>
 
-  <main id="main" hidden>
-    <section id="tab-catalog" class="panel"></section>
-    <section id="tab-parties" class="panel hidden"></section>
-    <section id="tab-quotes" class="panel hidden"></section>
-    <section id="tab-invoices" class="panel hidden"></section>
-    <section id="tab-builder" class="panel hidden"></section>
-  </main>
+  <div id="drawer" class="drawer hidden">
+    <div class="drawer-panel">
+      <button type="button" id="drawerClose" class="ghost">Close</button>
+      <div id="drawerBody"></div>
+    </div>
+  </div>
 
   <p id="status" class="status"></p>
   <script src="/assets/app.js"></script>

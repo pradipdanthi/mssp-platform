@@ -6,9 +6,17 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
-from app.models import CatalogItem, Invoice, InvoiceLine, Party, Quote, QuoteLine
+from app.models import (
+    CatalogItem,
+    Invoice,
+    InvoiceLine,
+    Party,
+    Payment,
+    Quote,
+    QuoteLine,
+)
 from app.services import numbering
+from app.services.company import get_or_create_profile
 from app.services.tax import calc_document, money, resolve_tax_mode
 
 
@@ -26,15 +34,19 @@ def build_quote(
     term_months: int = 12,
     discount_percent: Decimal = Decimal("0"),
     notes: str | None = None,
+    internal_notes: str | None = None,
+    terms_text: str | None = None,
+    opportunity_name: str | None = None,
+    sales_owner: str | None = None,
     tax_mode_forced: str = "auto",
     status: str = "draft",
 ) -> Quote:
-    settings = get_settings()
+    profile = get_or_create_profile(db)
     tax_mode = resolve_tax_mode(
-        company_state_code=settings.company_state_code,
+        company_state_code=profile.state_code,
         party_state_code=party.state_code,
         is_export=bool(party.is_export),
-        lut_filed=settings.lut_filed,
+        lut_filed=bool(profile.lut_filed),
         forced=tax_mode_forced,
     )
 
@@ -52,11 +64,22 @@ def build_quote(
         sku = (item.sku if item else spec.get("sku")) or "CUSTOM"
         desc = spec.get("description") or (item.name if item else "Custom line")
         qty = Decimal(str(spec.get("quantity") or (item.min_qty if item else 1)))
-        unit = Decimal(str(spec.get("unit_price") if spec.get("unit_price") is not None else (item.list_price if item else 0)))
-        # Subscription list price is monthly — extend by term
+        unit = Decimal(
+            str(
+                spec.get("unit_price")
+                if spec.get("unit_price") is not None
+                else (item.list_price if item else 0)
+            )
+        )
         billing_model = item.billing_model if item else spec.get("billing_model", "one_time")
         unit = money(unit * _term_multiplier(billing_model, term_months))
-        gst = Decimal(str(spec.get("gst_rate") if spec.get("gst_rate") is not None else (item.gst_rate if item else 18)))
+        gst = Decimal(
+            str(
+                spec.get("gst_rate")
+                if spec.get("gst_rate") is not None
+                else (item.gst_rate if item else 18)
+            )
+        )
         disc = Decimal(str(spec.get("discount_percent") or 0))
         hsn = spec.get("hsn_sac") or (item.hsn_sac if item else None)
 
@@ -85,17 +108,24 @@ def build_quote(
     totals = calc_document(
         prepared, doc_discount_percent=Decimal(str(discount_percent)), tax_mode=tax_mode
     )
+    disc_pct = money(discount_percent)
+    needs_approval = disc_pct >= money(profile.discount_approval_threshold)
 
     quote = Quote(
         quote_number=numbering.next_quote_number(db),
         party_id=party.id,
-        status=status,
-        currency=party.currency or settings.default_currency,
+        status="pending_approval" if needs_approval and status == "draft" else status,
+        currency=party.currency or profile.currency,
         issue_date=date.today(),
-        valid_until=date.today() + timedelta(days=settings.quote_validity_days),
+        valid_until=date.today() + timedelta(days=profile.quote_validity_days),
         term_months=term_months,
-        discount_percent=money(discount_percent),
+        discount_percent=disc_pct,
         notes=notes,
+        internal_notes=internal_notes,
+        terms_text=terms_text or profile.default_terms,
+        opportunity_name=opportunity_name,
+        sales_owner=sales_owner,
+        requires_approval=needs_approval,
         place_of_supply_state=party.state,
         place_of_supply_code=party.state_code,
         tax_mode=tax_mode,
@@ -134,20 +164,63 @@ def build_quote(
     return quote
 
 
-def accept_quote_to_invoice(db: Session, quote: Quote) -> Invoice:
-    if quote.status not in ("draft", "sent", "accepted"):
+def duplicate_quote(db: Session, source: Quote) -> Quote:
+    party = source.party
+    specs = [
+        {
+            "sku": ln.sku,
+            "description": ln.description.split(" (")[0],
+            "quantity": ln.quantity,
+            # unit_price already term-extended — pass as one_time so we don't multiply again
+            "unit_price": ln.unit_price,
+            "discount_percent": ln.discount_percent,
+            "gst_rate": ln.gst_rate,
+            "hsn_sac": ln.hsn_sac,
+            "billing_model": "one_time",
+        }
+        for ln in sorted(source.lines, key=lambda x: x.sort_order)
+    ]
+    return build_quote(
+        db,
+        party=party,
+        line_specs=specs,
+        term_months=1,  # prices already term-extended on source lines
+        discount_percent=source.discount_percent,
+        notes=source.notes,
+        internal_notes=source.internal_notes,
+        terms_text=source.terms_text,
+        opportunity_name=source.opportunity_name,
+        sales_owner=source.sales_owner,
+        tax_mode_forced=source.tax_mode,
+        status="draft",
+    )
+
+
+def accept_quote_to_invoice(
+    db: Session, quote: Quote, *, invoice_type: str = "tax_invoice"
+) -> Invoice:
+    if quote.status in ("declined", "expired"):
         raise ValueError(f"Cannot invoice quote in status {quote.status}")
+    if quote.requires_approval and not quote.approved_by and quote.status == "pending_approval":
+        raise ValueError("Quote requires discount approval before invoicing")
 
     party = quote.party
-    settings = get_settings()
+    profile = get_or_create_profile(db)
     due = date.today() + timedelta(days=party.payment_terms_days or 15)
 
+    if invoice_type == "proforma":
+        inv_number = numbering.next_number(db, "KEV/PF", "proforma")
+        status = "issued"
+    else:
+        inv_number = numbering.next_invoice_number(db)
+        status = "issued"
+
     inv = Invoice(
-        invoice_number=numbering.next_invoice_number(db),
+        invoice_number=inv_number,
         party_id=party.id,
         quote_id=quote.id,
-        status="issued",
-        invoice_type="tax_invoice",
+        status=status,
+        invoice_type=invoice_type,
         currency=quote.currency,
         issue_date=date.today(),
         due_date=due,
@@ -162,7 +235,7 @@ def accept_quote_to_invoice(db: Session, quote: Quote) -> Invoice:
         igst_amount=quote.igst_amount,
         total_amount=quote.total_amount,
         notes=quote.notes
-        or f"Converted from quote {quote.quote_number}. Seller: {settings.company_name}",
+        or f"From quote {quote.quote_number}. Seller: {profile.legal_name}",
     )
     db.add(inv)
     db.flush()
@@ -184,7 +257,8 @@ def accept_quote_to_invoice(db: Session, quote: Quote) -> Invoice:
                 sort_order=ql.sort_order,
             )
         )
-    quote.status = "invoiced"
+    if invoice_type == "tax_invoice":
+        quote.status = "invoiced"
     db.commit()
     db.refresh(inv)
     return inv
@@ -238,3 +312,39 @@ def create_credit_note(db: Session, invoice: Invoice, reason: str | None = None)
     db.commit()
     db.refresh(cn)
     return cn
+
+
+def record_payment(
+    db: Session,
+    invoice: Invoice,
+    *,
+    amount: Decimal,
+    method: str = "bank_transfer",
+    reference: str | None = None,
+    notes: str | None = None,
+    payment_date: date | None = None,
+) -> Payment:
+    if invoice.invoice_type == "credit_note":
+        raise ValueError("Cannot record payment against a credit note")
+    if invoice.status == "void":
+        raise ValueError("Invoice is void")
+    pay_amt = money(amount)
+    if pay_amt <= 0:
+        raise ValueError("Payment amount must be positive")
+    payment = Payment(
+        invoice_id=invoice.id,
+        amount=pay_amt,
+        payment_date=payment_date or date.today(),
+        method=method,
+        reference=reference,
+        notes=notes,
+    )
+    db.add(payment)
+    invoice.amount_paid = money(Decimal(str(invoice.amount_paid or 0)) + pay_amt)
+    if invoice.amount_paid >= invoice.total_amount:
+        invoice.status = "paid"
+    else:
+        invoice.status = "partially_paid"
+    db.commit()
+    db.refresh(payment)
+    return payment
