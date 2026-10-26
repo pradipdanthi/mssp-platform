@@ -1,7 +1,7 @@
 # Kevantic marketing website
 
 Fortune-500-style static site for **kevantic.com** (Hostinger `public_html`).
-Operated by **Kevantic Cyber Security Private Limited**. No public Admin/SOC links.
+Brand: **Kevantic Cyber Security Solutions**. Operated by **Cicilia Consultancy** (GSTIN 29DBAPS0800N1ZH). No public Admin/SOC links.
 
 ## Preview (lab)
 
@@ -46,5 +46,5 @@ Set customer portal URL in `js/site-config.js` (`portal.kevantic.com` or `/porta
 
 - **Core (2):** Log & Event Monitoring · Incident Response & Casework
 - **Add-ons (9):** Automation · VMaaS · CaaS · NDR · Threat Intel · Forensics · EASM · ITDR · **NikTiar Secure Edge (WAF)**
-- **Secure Edge page:** `services/secure-edge.html` — Shared vs Dedicated SKUs, enterprise WAF features, use cases
+- **Secure Edge page:** `services/secure-edge.html` — Dedicated Edge only; NGFW + WAF + DNS/URL Filter + ransomware exposure controls (honest scope, no zero-ransomware claims)
 - Public pages use the **Kevantic NikTiar™** engine suite only (NikTiar™ Core, NikTiar™ DeepSight NDR, NikTiar™ Aegis, NikTiar™ Apex Orchestrator, NikTiar™ Spectre DFIR, NikTiar™ Secure Edge, Edge Node). No competitor cloud-edge brand names (e.g. Cloudflare product labels), and no backend open-source engine names (Wazuh / Suricata / Zeek / MISP / TheHive / Velociraptor / Coraza / CrowdSec / Caddy). Use NikTiar™ product language only.

@@ -4,14 +4,14 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>NikTiar&trade; SecureEdge | Web, API &amp; Edge Protection | Kevantic</title>
-  <meta name="description" content="NikTiar SecureEdge: on-appliance WAF, bot defense, API protection, visitor queue, and virtual patches. Shared or Dedicated. Protect portals, APIs, ecommerce, and GraphQL without shipping traffic to an external cloud edge service." />
-  <meta name="keywords" content="NikTiar SecureEdge, WAF, web application firewall, API protection, bot management, visitor queue, GraphQL protection, edge security, Kevantic" />
+  <meta name="description" content="NikTiar SecureEdge: dedicated on-appliance NGFW and WAF for public apps — DNS Filter, URL Filter, ransomware exposure controls, bot defense, API protection. Protect portals, APIs, and ecommerce without shipping traffic to an external cloud edge service." />
+  <meta name="keywords" content="NikTiar SecureEdge, WAF, NGFW, DNS filter, URL filter, ransomware exposure reduction, web application firewall, API protection, bot management, edge security, Kevantic" />
   <link rel="canonical" href="https://kevantic.com/services/secure-edge.html" />
   <link rel="icon" href="../assets/brand/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="../assets/brand/favicon.ico" type="image/x-icon" />
   <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon-180.png" />
   <link rel="stylesheet" href="../assets/brand/kevantic-brand.css" />
-  <link rel="stylesheet" href="../css/styles.css?v=14" />
+  <link rel="stylesheet" href="../css/styles.css?v=16" />
 </head>
 <body>
   <header class="site-header">
@@ -44,7 +44,7 @@
               </div>
               <div class="mega-col">
                 <h4>Platform &middot; Edge <span class="badge badge-addon">New</span></h4>
-                <a class="mega-item" href="../services/secure-edge.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 3 4.5 6.2v5.1c0 5 3.3 9.4 7.5 10.7 4.2-1.3 7.5-5.7 7.5-10.7V6.2L12 3Z"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M9 12.2 11 14.2 15.2 10"/></svg></span><span class="mega-copy"><strong>NikTiar SecureEdge</strong><span>WAF, bots, API protection, visitor queue — Shared or Dedicated.</span></span></a>
+                <a class="mega-item" href="../services/secure-edge.html"><span class="mega-ico" aria-hidden="true"><svg class="mega-ico-svg" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" d="M12 3 4.5 6.2v5.1c0 5 3.3 9.4 7.5 10.7 4.2-1.3 7.5-5.7 7.5-10.7V6.2L12 3Z"/><path fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" d="M9 12.2 11 14.2 15.2 10"/></svg></span><span class="mega-copy"><strong>NikTiar SecureEdge</strong><span>Dedicated edge: WAF, DNS Filter, NGFW policies, ransomware exposure controls.</span></span></a>
               </div>
             </div>
             <div class="mega-foot">
@@ -72,9 +72,10 @@
         <a class="crumb" href="../services.html">← Platform &amp; Services</a>
         <div style="margin:0.85rem 0 0.7rem;"><span class="badge badge-addon">Platform · Edge</span></div>
         <h1>NikTiar&trade; SecureEdge</h1>
-        <p>Enterprise web, API, and edge protection on your appliance — WAF, bot defense, visitor queue, and virtual patches — without sending production traffic to an external cloud edge service.</p>
+        <p>A <strong>dedicated</strong> next-generation edge appliance for one organization — NGFW policies, managed WAF, DNS Filter, URL Filter, and layered ransomware <em>exposure</em> controls — without sending production traffic to an external cloud edge service.</p>
         <p style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:0.6rem;">
           <a class="btn btn-primary btn-sm" href="#how-it-works">How it works</a>
+          <a class="btn btn-ghost btn-sm" href="#capabilities">Capabilities</a>
           <a class="btn btn-ghost btn-sm" href="#applications">Applications supported</a>
           <a class="btn btn-ghost btn-sm" href="#who">Who should go for it</a>
         </p>
@@ -86,14 +87,15 @@
         <div>
           <article class="card detail-block" id="how-it-works">
             <h2>How it works</h2>
-            <p>NikTiar SecureEdge terminates HTTPS in front of your origins. DNS for each public hostname points at the SecureEdge node. Every request is classified, challenged, or blocked before it reaches your application servers.</p>
+            <p>NikTiar SecureEdge sits in front of your public hostnames as a <strong>dedicated edge for one organization</strong>. Visitor HTTPS terminates on the appliance; clean traffic is proxied to your origin. Optionally, LAN clients can use the same appliance as DNS so known-bad domains are sinkholed before a connection starts.</p>
             <ol class="detail-list">
-              <li><strong>Onboard a zone</strong> — hostname → origin (IP or upstream URL), TLS mode, and security level.</li>
-              <li><strong>Apply policy</strong> — managed WAF signatures, firewall / UA rules, rate limits, bot / browser challenges, and enterprise controls from the SecureEdge dashboard.</li>
-              <li><strong>Cut over DNS</strong> — visitor traffic hits SecureEdge first; clean traffic is proxied to your origin.</li>
-              <li><strong>Operate in the Kevantic portals</strong> — MSSP admins and customers see sites, events, and health without raw third-party WAF consoles.</li>
+              <li><strong>Onboard a zone</strong> — public hostname → origin URL, TLS mode, and security level.</li>
+              <li><strong>Apply layered policy</strong> — NGFW allow/deny rules, URL Filter categories, DNS Filter categories, Ransomware Defense, Security Profiles, WAF, rate limits, and advanced defenses from the SecureEdge operator console.</li>
+              <li><strong>Cut over public DNS</strong> — point each hostname at SecureEdge so visitors hit the edge first.</li>
+              <li><strong>Optional LAN DNS</strong> — point DHCP/DNS at the edge when you want category-based domain sinkholing for workstations.</li>
+              <li><strong>Operate in Kevantic portals</strong> — admins and customers see sites, events, and health in NikTiar portals — not third-party engine consoles.</li>
             </ol>
-            <p class="detail-note">One software image. <strong>Shared</strong> mode hosts many customer zones with Host-scoped isolation. <strong>Dedicated</strong> mode pins the node to a single tenant for the strongest separation.</p>
+            <p class="detail-note"><strong>Dedicated only.</strong> Each customer receives their own SecureEdge appliance (virtual or physical form factor as scoped in the engagement). Unknown Host headers are denied; firewall and custom rules stay scoped to each site hostname.</p>
           </article>
 
           <article class="card detail-block" id="applications">
@@ -112,34 +114,39 @@
             <p class="detail-note">Not a fit for pure offline / air-gapped estates with no public HTTP(S), or for non-HTTP protocols (SMTP, industrial OT buses) — those stay with other NikTiar modules.</p>
           </article>
 
-          <article class="card detail-block">
+          <article class="card detail-block" id="capabilities">
             <h2>Capabilities (technical)</h2>
             <ul class="detail-list">
-              <li><strong>Managed web application firewall</strong> — SQLi, XSS, LFI-class blocks with tunable paranoia and anomaly scoring</li>
-              <li><strong>Security levels &amp; elevated attack mode</strong> — Off through elevated lockdown with interstitial challenges</li>
-              <li><strong>Bot defense, client integrity checks &amp; browser challenges</strong> — scrapers, headless clients, credential stuffing</li>
-              <li><strong>Custom rules, IP / UA firewall, path rate limits</strong> — chained to the zone Host so tenants do not bleed rules</li>
-              <li><strong>SSL/TLS modes &amp; edge cache</strong> — Flexible / Full / Strict; Bypass or Standard cache with edge TTL</li>
-              <li><strong>Enterprise pack</strong> — API protection, GraphQL abuse protection, page security headers (CSP + Referrer + Permissions-Policy), visitor queue, virtual CVE path patches, auth hardening, sensitive-data scan, leaked-credential checks, log forwarding webhooks, honeypot paths, mTLS stub</li>
-              <li><strong>Isolation</strong> — unknown Host → HTTP 421; exact Host → that zone’s origin only; Dedicated mode drops foreign zones</li>
+              <li><strong>NGFW policies</strong> — ordered Allow / Deny / Challenge / Log rules by IP group, path, method, User-Agent, and application profile</li>
+              <li><strong>Managed web application firewall</strong> — common web-attack classes (such as SQLi and XSS) with tunable security level and inspection depth</li>
+              <li><strong>NikTiar URL Filter</strong> — HTTP path category controls for malware, phishing, ransomware-related, and scanner-style patterns</li>
+              <li><strong>NikTiar DNS Filter</strong> — category feeds and domain blocklists at DNS resolution when clients use this edge as DNS; optional Host-header mirror on the web edge</li>
+              <li><strong>Ransomware Defense</strong> — layered controls intended to <em>reduce exposure</em> to known ransomware infrastructure domains and common web-borne dropper / ransom-note / WebDAV abuse patterns (complements endpoint security; does not replace EDR or backups)</li>
+              <li><strong>Security Profiles</strong> — File Blocking, Anti-Spyware style host/path heuristics, URL category alignment, and operator-managed threat lists</li>
+              <li><strong>Bot defense, client integrity &amp; rate limits</strong> — scrapers, headless clients, login/API flood throttling (HTTP 429)</li>
+              <li><strong>IP / User-Agent / geo firewall &amp; custom WAF rules</strong> — Host-scoped so site policies stay isolated on the dedicated edge</li>
+              <li><strong>SSL/TLS modes &amp; optional edge cache</strong> — Flexible / Full / Strict; Bypass or Standard cache with edge TTL</li>
+              <li><strong>Advanced defenses</strong> — API protection, GraphQL abuse protection, page security headers, visitor queue, virtual path patches, auth hardening, sensitive-data detection (default log), leaked-credential checks, log-export webhooks, honeypot paths, mutual TLS (when CA is wired)</li>
+              <li><strong>Dedicated isolation</strong> — unknown Host → HTTP 421; exact Host → that zone’s origin only; no shared multi-tenant fallthrough</li>
             </ul>
+            <p class="detail-note">Marketing and contracts describe <strong>controls and exposure reduction</strong> — not a guarantee that ransomware, breaches, or downtime cannot occur.</p>
           </article>
 
           <article class="card detail-block">
-            <h2>Deployment choices</h2>
+            <h2>Deployment model</h2>
             <ul class="detail-list">
-              <li><strong>Shared SecureEdge</strong> — multi-customer edge; logical isolation by hostname / zone. Best for MSSP density and fast onboarding.</li>
-              <li><strong>Dedicated SecureEdge</strong> — single-tenant node. Best for regulated estates, high traffic, or contractually isolated edges.</li>
+              <li><strong>Dedicated SecureEdge</strong> — one organization per appliance. Best for regulated estates, high traffic, or contractually isolated edges.</li>
+              <li><strong>Form factor</strong> — virtual appliance or physical hardware as scoped with Kevantic for the engagement (resilience design is engagement-specific).</li>
             </ul>
-            <p class="detail-note">Same image; mode is a configuration pin — not a different product lineage.</p>
+            <p class="detail-note">Shared multi-tenant SecureEdge is not offered. Dedicated isolation is the product default.</p>
           </article>
 
           <article class="card detail-block" id="who">
             <h2>Who should go for it</h2>
             <ul class="detail-list">
-              <li>Security and IT leaders exposing portals, APIs, or ecommerce who need WAF + bot controls.</li>
+              <li>Security and IT leaders exposing portals, APIs, or ecommerce who need dedicated WAF + NGFW + DNS controls.</li>
               <li>Buyers who want enterprise edge controls without mandatory traffic exit to an external cloud edge service.</li>
-              <li>MSSPs and enterprises that need Shared density <em>or</em> Dedicated isolation on one stack.</li>
+              <li>Organizations that require a dedicated edge appliance for one customer estate (not a shared multi-tenant edge).</li>
               <li>Teams already on NikTiar Silver / Gold / Platinum who want the public HTTP edge covered end-to-end.</li>
             </ul>
             <h3 class="detail-sub">Usually not the best fit if…</h3>
@@ -153,11 +160,12 @@
           <article class="card detail-block">
             <h2>Limitations (honest scope)</h2>
             <ul class="detail-list detail-list-warn">
-              <li>Protects HTTP(S) edges you place behind SecureEdge — not a worldwide CDN PoP mesh.</li>
-              <li>Does not replace endpoint MDR, NDR, or identity ITDR (those remain NikTiar subscription tiers).</li>
-              <li>DNS cutover, certificates, and origin readiness still need an IT change window.</li>
-              <li>mTLS and some enterprise toggles need ops wiring (CA / client certs) on Dedicated edges.</li>
-              <li>WAF reduces risk; it does not fix every application business-logic bug.</li>
+              <li>Protects HTTP(S) edges (and optional LAN DNS) you place behind SecureEdge — not a worldwide CDN PoP mesh.</li>
+              <li>Does not replace endpoint MDR/EDR, NDR, backups, or identity ITDR (those remain NikTiar subscription / complementary controls).</li>
+              <li>Ransomware Defense and DNS Filter help reduce exposure to known infrastructure and common web patterns; they do <strong>not</strong> guarantee zero ransomware or stop encryption already running on an endpoint.</li>
+              <li>DNS cutover, certificates, LAN DNS pointing, and origin readiness still need an IT change window.</li>
+              <li>Mutual TLS and some advanced toggles need ops wiring (CA / client certificates) on the dedicated edge.</li>
+              <li>WAF and NGFW reduce risk; they do not fix every application business-logic flaw.</li>
             </ul>
           </article>
         </div>
@@ -170,7 +178,7 @@
               <li><strong>Solutions</strong> → NikTiar SecureEdge situations</li>
             </ul>
             <h3>Next step</h3>
-            <p>Ask Kevantic to map Shared vs Dedicated SecureEdge to your hostnames and origins.</p>
+            <p>Ask Kevantic to map a Dedicated SecureEdge appliance to your hostnames, origins, and (optional) LAN DNS plan.</p>
             <a class="btn btn-primary" href="../index.html#demo" style="width:100%;margin-bottom:0.6rem;">Request SecureEdge Demo</a>
             <a class="btn btn-ghost" href="../solutions.html#secureedge" style="width:100%;margin-bottom:0.6rem;">View SecureEdge solutions</a>
             <a class="btn btn-ghost" data-customer-portal href="../portal.html" style="width:100%;">Client Portal Access</a>
@@ -187,8 +195,8 @@
     </section>
   </main>
   <footer class="site-footer"><div class="container">
-    <div class="footer-bottom" style="border:0;padding-top:0;"><span>© 2026 Kevantic Cyber Security Private Limited. All rights reserved.</span></div>
+    <div class="footer-bottom" style="border:0;padding-top:0;"><span>© 2026 Kevantic Cyber Security Solutions. Operated by Cicilia Consultancy. GSTIN: 29DBAPS0800N1ZH.</span></div>
   </div></footer>
-  <script src="../js/site-config.js"></script><script src="../js/app.js?v=14"></script>
+  <script src="../js/site-config.js"></script><script src="../js/app.js?v=16"></script>
 </body>
 </html>
