@@ -56,14 +56,14 @@ fi
 BUILD_OPTS=(--build)
 if [[ "${MSSP_FORCE_REBUILD:-}" == "1" ]]; then
   log "MSSP_FORCE_REBUILD=1 — no-cache rebuild of backend + frontends"
-  docker compose build --no-cache backend-api frontend-admin frontend-customer
+  docker compose build --no-cache backend-api frontend-admin frontend-customer frontend-soc
 fi
 
 log "Starting postgres + redis (if needed)"
 docker compose up -d postgres redis
 
-log "Building and recreating backend-api + both frontends"
-docker compose up -d "${BUILD_OPTS[@]}" --force-recreate backend-api frontend-admin frontend-customer
+log "Building and recreating backend-api + frontends (admin, customer, soc)"
+docker compose up -d "${BUILD_OPTS[@]}" --force-recreate backend-api frontend-admin frontend-customer frontend-soc
 
 log "Waiting for API health"
 ok=0
@@ -85,15 +85,18 @@ fi
 
 admin_home="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/)"
 customer_home="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3001/)"
+soc_home="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3002/)"
 admin_login="$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3000/api/auth/login \
-  -H 'Content-Type: application/json' -d '{"email":"bad@example.com","password":"wrong"}')"
+  -H 'Content-Type: application/json' -d '{"email":"bad@example.com","password":"wrong","portal":"admin"}')"
 customer_login="$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:3001/api/auth/login \
-  -H 'Content-Type: application/json' -d '{"email":"bad@example.com","password":"wrong"}')"
+  -H 'Content-Type: application/json' -d '{"email":"bad@example.com","password":"wrong","portal":"customer"}')"
 
-log "Smoke: admin_home=${admin_home} customer_home=${customer_home} admin_login=${admin_login} customer_login=${customer_login}"
+log "Smoke: admin_home=${admin_home} customer_home=${customer_home} soc_home=${soc_home} admin_login=${admin_login} customer_login=${customer_login}"
 
-[[ "$admin_home" == "200" && "$customer_home" == "200" ]] || die "portal home page not 200"
-[[ "$admin_login" == "401" && "$customer_login" == "401" ]] || die "login proxy expected 401 not 502/405"
+[[ "$admin_home" == "200" && "$customer_home" == "200" && "$soc_home" == "200" ]] || die "portal home page not 200"
+# 401 = bad creds OK; 429 = auth rate-limit from prior smokes (not a proxy break)
+[[ "$admin_login" == "401" || "$admin_login" == "429" ]] || die "admin login proxy expected 401/429 not 502/405"
+[[ "$customer_login" == "401" || "$customer_login" == "429" ]] || die "customer login proxy expected 401/429 not 502/405"
 
 log "OK — control plane deploy smoke passed"
 log "Next: ./scripts/kb011_validate_protected_apis.sh (needs lab credentials) or production bootstrap (KB-020)"

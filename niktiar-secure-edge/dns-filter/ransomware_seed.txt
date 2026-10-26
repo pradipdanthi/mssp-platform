@@ -1,0 +1,41 @@
+# NikTiar ransomware seed — clearweb hostnames from public ransomwatch groups.json
+# Regenerated for shipping; feed sync also refreshes ransomwatch live.
+# Does NOT stop endpoint encryption — reduces C2 / leak-site / panel reachability via DNS.
+0mega.cc
+54bb47h.blog
+cloak.su
+continews.bz
+continews.click
+databasebb.top
+disposessor.com
+dwhyj2.top
+eraleignews.com
+filesnatchcloud.top
+handala-hack.to
+handala.to
+hitleransomware.cf
+huntersinternational.net
+incapt.blog
+incapt.su
+incbackend.top
+karaleaks.com
+kelvinsecteamcyber.wixsite.com
+lynxblog.net
+malekteam.ac
+moses-staff.se
+nullbulge.co
+nullbulge.com
+nullbulge.se
+osintcorp.net
+pandoraxyz.xyz
+pryx.cc
+radar.ltd
+ransomed.vc
+robinhoodleaks.tumblr.com
+sn76920193ch.top
+snatch.press
+snatchnews.top
+snatchteam.cc
+sntech2ch.top
+weerwolven.biz
+werewolves.pro

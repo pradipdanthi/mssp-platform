@@ -1,0 +1,58 @@
+# NikTiar™ DNS Filter — category taxonomy (product names only in UI)
+version: 1
+categories:
+  malware:
+    label: "Malware & C2"
+    hint: "Known malware droppers, botnet C2, and exploit kit domains."
+    severity: critical
+    default_action: block
+  phishing:
+    label: "Phishing & fraud"
+    hint: "Credential-harvest and brand-impersonation domains."
+    severity: critical
+    default_action: block
+  ransomware:
+    label: "Ransomware infrastructure"
+    hint: "Domains linked to ransomware operators and payment portals."
+    severity: critical
+    default_action: block
+  adult:
+    label: "Adult content"
+    hint: "Adult / NSFW domains."
+    severity: medium
+    default_action: block
+  gambling:
+    label: "Gambling"
+    hint: "Online gambling and betting domains."
+    severity: medium
+    default_action: block
+  social:
+    label: "Social media"
+    hint: "Major social networks (optional workplace control)."
+    severity: low
+    default_action: log
+  ads:
+    label: "Advertising & trackers"
+    hint: "Ad networks and cross-site trackers."
+    severity: low
+    default_action: block
+  cryptomining:
+    label: "Cryptomining"
+    hint: "Browser and botnet mining pools."
+    severity: high
+    default_action: block
+  proxy_vpn:
+    label: "Anonymizers / proxies"
+    hint: "Public proxies and anonymizing gateways."
+    severity: medium
+    default_action: block
+  newly_registered:
+    label: "Newly registered domains"
+    hint: "Very new domains often used in campaigns (when feed available)."
+    severity: high
+    default_action: log
+  custom:
+    label: "Custom blocklist"
+    hint: "Domains you add manually (tenant or edge-wide)."
+    severity: high
+    default_action: block

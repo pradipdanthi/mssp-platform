@@ -1,4 +1,4 @@
-"""Strong multi-tenant isolation helpers for NikTiar Secure Edge (shared + dedicated)."""
+"""Dedicated Secure Edge isolation helpers (one customer per appliance)."""
 from __future__ import annotations
 
 import json
@@ -11,8 +11,13 @@ _RUNTIME = Path(os.getenv("RUNTIME_DIR") or "/runtime")
 TENANT_MAP_PATH = _RUNTIME / "tenant_map.json"
 ISOLATION_META_PATH = _RUNTIME / "isolation.json"
 
-MODE = (os.getenv("SECURE_EDGE_MODE") or "shared").lower()
+_raw_mode = (os.getenv("SECURE_EDGE_MODE") or "dedicated").lower().strip()
+# Shared multi-tenant offering retired — always run as dedicated.
+MODE = "dedicated" if _raw_mode in ("shared", "dedicated", "") else "dedicated"
 PINNED_TENANT = (os.getenv("NIKTIAR_TENANT_CODE") or "").strip().upper()
+FORM_FACTOR = (os.getenv("SECURE_EDGE_FORM_FACTOR") or "ha_pair").lower().strip()
+if FORM_FACTOR not in ("ha_pair", "physical"):
+    FORM_FACTOR = "ha_pair"
 
 
 def normalize_host(host: Optional[str]) -> str:
@@ -40,7 +45,9 @@ def save_tenant_map(cfg: Dict[str, Any]) -> Dict[str, str]:
     TENANT_MAP_PATH.write_text(json.dumps(m, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     meta = {
         "mode": MODE,
+        "form_factor": FORM_FACTOR,
         "pinned_tenant": PINNED_TENANT or None,
+        "shared_offering": False,
         "zone_count": len(m),
         "isolation": {
             "unknown_host": "deny_421",

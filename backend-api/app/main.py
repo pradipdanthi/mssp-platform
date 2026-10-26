@@ -43,6 +43,8 @@ from app.api.routes.public_agent_install import router as public_agent_install_r
 from app.api.routes.customer_users import router as customer_users_router
 from app.api.routes.edr import router as edr_router
 from app.api.routes.secure_edge import router as secure_edge_router
+from app.api.routes.soc_agent_callback import router as soc_agent_callback_router
+from app.api.routes.soc_console import router as soc_console_router
 from app.api.routes.entitlements import router as entitlements_router
 from app.api.routes.service_catalog import router as service_catalog_router
 from app.api.routes.compliance import router as compliance_router
@@ -178,6 +180,12 @@ app.include_router(edr_router)
 
 # KB-114: NikTiar Secure Edge (self-hosted WAF) heartbeat + admin inventory.
 app.include_router(secure_edge_router)
+
+# KB-117: SOC agent (VM 117) triage-result callback — service token auth.
+app.include_router(soc_agent_callback_router)
+
+# KB-117b: dedicated SOC Console (Cursor chat + overview).
+app.include_router(soc_console_router)
 
 # KB-096: Admin AI chat (SOC Q&A; dark behind AI_CHAT_ENABLED).
 app.include_router(admin_ai_chat_router)

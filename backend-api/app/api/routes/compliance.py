@@ -294,3 +294,83 @@ def admin_compliance_summary(
         """
     )
     return {"tenants": rows or []}
+
+
+@router.get("/admin/compliance/patch-gaps")
+def admin_compliance_patch_gaps(
+    tenant_id: Optional[str] = Query(default=None),
+    short_code: Optional[str] = Query(default=None, max_length=64),
+    q: Optional[str] = Query(default=None, max_length=200),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Failed SCA / hardening checks — the SOC Console “Patch Gaps” tile source of truth."""
+    _ = current_user
+    clauses = ["upper(c.status) IN ('FAILED', 'FAIL')"]
+    params: list[Any] = []
+    if tenant_id:
+        clauses.append("c.tenant_id = %s::uuid")
+        params.append(tenant_id)
+    if short_code:
+        clauses.append("t.short_code = %s")
+        params.append(short_code.upper())
+    if q:
+        clauses.append(
+            "(c.rule_title ILIKE %s OR COALESCE(e.agent_name,'') ILIKE %s "
+            "OR COALESCE(t.short_code,'') ILIKE %s OR COALESCE(c.check_id,'') ILIKE %s)"
+        )
+        like = f"%{q.strip()}%"
+        params.extend([like, like, like, like])
+    where = " AND ".join(clauses)
+    count_row = fetch_one(
+        f"""
+        SELECT count(*)::int AS n
+        FROM sca_check_details c
+        JOIN sca_evaluations e ON e.id = c.evaluation_id
+        JOIN tenants t ON t.id = c.tenant_id
+        WHERE {where};
+        """,
+        tuple(params),
+    )
+    total = int((count_row or {}).get("n") or 0)
+    offset = (page - 1) * page_size
+    rows = fetch_all(
+        f"""
+        SELECT
+            c.id::text,
+            c.check_id,
+            c.rule_title,
+            c.status,
+            c.severity,
+            c.rationale,
+            c.remediation,
+            c.compliance_refs,
+            e.policy_id,
+            e.title AS policy_title,
+            e.agent_name,
+            t.name AS tenant_name,
+            t.short_code,
+            c.tenant_id::text AS tenant_id,
+            c.updated_at::text
+        FROM sca_check_details c
+        JOIN sca_evaluations e ON e.id = c.evaluation_id
+        JOIN tenants t ON t.id = c.tenant_id
+        WHERE {where}
+        ORDER BY
+            CASE lower(COALESCE(c.severity,''))
+                WHEN 'critical' THEN 0 WHEN 'high' THEN 1
+                WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4
+            END,
+            c.updated_at DESC NULLS LAST
+        LIMIT %s OFFSET %s;
+        """,
+        tuple(params + [page_size, offset]),
+    )
+    return {
+        "items": rows or [],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": max(1, (total + page_size - 1) // page_size),
+    }

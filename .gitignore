@@ -15,6 +15,9 @@ docker-compose.yml.backup-*
 **/mssp-callback.key
 backend-api/app/endpoint_configs/**/mssp-callback.key
 
+# SOC console lab TLS (self-signed) — regenerate with scripts/soc_console_gen_tls.sh
+frontend-soc/certs/
+
 # KB-078 local scanner runtime (binaries, templates, vuln DBs — never commit)
 runtime/vuln-free/
 deploy/velociraptor-client/client.config.yaml
@@ -28,6 +31,8 @@ kevantic-appliance/.cache/licensing/
 
 # Sysmon redistributable cache (not in git). Package build embeds it when present.
 .cache/sysmon/
+# Live Proxmox metrics cache written for Tia
+.cache/mssp/
 backend-api/app/endpoint_configs/Sysmon64.exe
 backend-api/app/endpoint_configs/Sysmon.exe
 deploy/windows-endpoint-telemetry/Sysmon64.exe

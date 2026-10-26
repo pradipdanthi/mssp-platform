@@ -1,10 +1,27 @@
-# NikTiar Secure Edge
+# NikTiar™ Secure Edge
 
-Self-hosted Cloudflare-class edge (WAF + abuse) with **hybrid multi-tenant**.
+Self-hosted **NikTiar WAF + NikTiar Firewall (NGFW) + DNS Filter + Bot Defense**.
 
-**Stack:** Coraza CRS (`ghcr.io/coreruleset/coraza-crs:caddy-alpine`) + CrowdSec + NikTiar agent  
-**Modes:** `shared` (SMB — many tenants by Host) · `dedicated` (enterprise — one tenant)  
-**Lab:** Proxmox VM 116 / `192.168.0.217` · dashboard `:9080` · **v3 enterprise pack** (API Shield / Page Shield / GraphQL / Waiting Room / PoW / HIBP / Logpush)  
-**Commercial:** add-on on any Silver/Gold/Platinum tier  
+**Product default:** **Dedicated** per customer — **HA pair** (virtual) or **physical 1U** at the customer site. Shared multi-tenant edges are **not** offered.
 
-See `docs/KB114_NIKTIAR_SECURE_EDGE.md`.
+**Product names (UI):** see `/opt/mssp-control/docs/NIKTIAR_PRODUCT_NAMES.md` — never expose upstream package brands in dashboards or portals.
+
+**Lab:** VM 116 · dashboard `http://192.168.0.217:9080/`
+
+| Env | Meaning |
+|---|---|
+| `SECURE_EDGE_MODE=dedicated` | Always (default). `shared` is coerced to dedicated. |
+| `SECURE_EDGE_FORM_FACTOR=ha_pair` \| `physical` | Virtual HA pair vs physical appliance |
+| `NIKTIAR_TENANT_CODE` | Pins this node to one customer |
+
+## Quick deploy
+
+```bash
+cd docker
+cp .env.example .env   # set NIKTIAR_TENANT_CODE + form factor
+docker compose build dashboard agent dns-feed-sync
+docker compose up -d
+```
+
+- Runbook: `docs/KB114_NIKTIAR_SECURE_EDGE.md`
+- Dedicated HA + physical: `docs/KB115_SECURE_EDGE_DEDICATED_HA_PHYSICAL.md`

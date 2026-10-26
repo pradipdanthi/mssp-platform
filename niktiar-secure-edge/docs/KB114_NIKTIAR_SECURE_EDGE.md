@@ -1,6 +1,6 @@
-# KB-114 — NikTiar Secure Edge (Cloudflare-parity appliance)
+# KB-114 — NikTiar™ Secure Edge
 
-**Status:** v3.0 enterprise pack live on lab (2026-10-25) — CF Advantage-class controls on-appliance.
+**Status:** v4.1 DNS Filter + NGFW pack (2026-10-26) — NikTiar WAF, Firewall, URL Filter, DNS Filter, Bot Defense.
 
 ---
 
@@ -8,51 +8,56 @@
 
 | Surface | URL |
 |---|---|
-| **Appliance dashboard (configure WAF here)** | **http://192.168.0.217:9080/** |
-| WAF / traffic | http://192.168.0.217/ |
+| **Appliance dashboard (NikTiar WAF + Firewall)** | **http://192.168.0.217:9080/** |
+| Edge traffic | http://192.168.0.217/ |
 | Admin portal | http://192.168.0.201:3000/secure-edge |
 | Customer portal | http://192.168.0.201:3001/secure-edge |
 
-Dashboard login: `admin` / `EDGE_DASHBOARD_PASSWORD` (default `NikTiarEdge!ChangeMe`).
+Dashboard login: `admin` / `EDGE_DASHBOARD_PASSWORD` (default lab password — rotate for prod).
 
 ---
 
-## Cloudflare → NikTiar mapping
+## Product capabilities (NikTiar names only)
 
-| Cloudflare concept | NikTiar Secure Edge |
+| Capability | What operators configure |
 |---|---|
-| Zone | **Zone / Site** (hostname → origin) |
-| Security Level | **Off / Essentially Off / Low / Medium / High / I'm Under Attack!** |
-| Managed Rules (OWASP) | **Coraza + OWASP CRS** (paranoia + anomaly) |
-| Custom Rules | **Custom WAF rules** (`path/ua/ip/query` expressions) |
-| IP Access Rules | **Firewall** IP allow/block + UA block |
-| Bot Fight Mode | **Bot Fight Mode** toggle |
-| Browser Integrity Check | **BIC** toggle |
-| Under Attack Mode | **UAM** challenge page (`/cdn-cgi/challenge-platform`) |
-| Rate limiting | **Rate limit rules** per path |
-| SSL/TLS mode | **off / flexible / full / strict** |
-| Caching | **Bypass / Standard** (+ edge TTL) |
-| Analytics | **Analytics** tab (requests / blocks) |
-| API Shield | **Enterprise → API Shield** (JSON on `/api`, TRACE block, body caps) |
-| GraphQL protection | **Enterprise → GraphQL Guard** (batch / depth / alias) |
-| Page Shield | **Enterprise → Page Shield** (CSP + Referrer + Permissions-Policy) |
-| Waiting Room | **Enterprise → Waiting Room** (`/cdn-cgi/waiting-room/pass`) |
-| Bot Management / PoW | **Enterprise → Advanced Bot** + `/cdn-cgi/challenge-platform/pow` |
-| Virtual patches / CVE paths | **Enterprise → Virtual Patching** (`.env`, actuators, WP, phpMyAdmin) |
-| Auth / credential stuffing | **Enterprise → Auth Hardening** + zone rate limits |
-| DLP / sensitive data | **Enterprise → Sensitive Data Detection** (PAN/SSN response scan) |
-| Leaked credentials | **HIBP k-anonymity** via `/api/enterprise/hibp-check` |
-| Logpush | **Enterprise → Logpush** webhook |
-| mTLS | **Enterprise → mTLS stub** (enable + wire CA on dedicated edges) |
-| Deception | **Enterprise → Honeypot paths** |
+| **NikTiar™ Zones** | Public hostname → origin |
+| **NikTiar™ WAF** | Security Level, managed rules, simulate/block, Under Attack Mode |
+| **NikTiar™ custom WAF rules** | Simple expressions (`path contains …`) |
+| **NikTiar™ Firewall** | IP allow/block, UA block, geo block |
+| **NikTiar™ NGFW policies** | Ordered Allow / Deny / Challenge |
+| **NikTiar™ URL Filter** | Category + custom path filtering |
+| **NikTiar™ DNS Filter** | Category feeds + domain blocklists (UDP/TCP 53); optional WAF Host mirror |
+| **NikTiar™ Rate Limit** | Per-path throttling (HTTP 429) |
+| **NikTiar™ Bot Defense** | Scanner/bot abuse decisions |
+| **SSL / TLS modes** | off / flexible / full / strict |
+| **Caching** | Bypass / Standard (+ edge TTL) |
+| **Analytics** | Requests & blocks |
+| **Advanced defenses** | API Shield, GraphQL Guard, Page Shield, Waiting Room, Virtual Patching, Auth Hardening, Sensitive Data Detection, Honeypot, Advanced Bot/PoW, Leaked Credentials, Logpush, mTLS |
 
-Configure in the appliance dashboard (**Enterprise** tab + classic WAF tabs) → **Apply changes**. Settings live in `/runtime/edge_config.json` and compile into Coraza `rules.d` (`11040-enterprise.conf`) + `/runtime/enterprise.caddy`.
+Configure on the appliance: **How this works** → policies / URL Filter / DNS Filter / NikTiar WAF → **Apply changes**.
+
+Product naming standard: `docs/NIKTIAR_PRODUCT_NAMES.md` (never show upstream package brands in UI).
 
 ---
 
-## Stack
+## NikTiar DNS Filter
 
-Coraza CRS Caddy · CrowdSec + firewall bouncer · hybrid multi-tenant agent · dashboard `:9080` (v3 enterprise pack)
+| Item | Detail |
+|---|---|
+| Listen | UDP/TCP **53** on the edge LAN IP (`NIKTIAR_DNS_BIND_IP`, lab default `192.168.0.217`) — point LAN/DHCP DNS here |
+| Dashboard | **NikTiar DNS Filter** tab — categories, custom domains, feed status |
+| APIs | `GET/PUT /api/dns-filter`, `POST /api/dns-filter/resync`, `GET /api/dns-filter/catalog` |
+| Open feeds | URLhaus, Phishing Army, OISD, StevenBlack multi (malware/phish/ads/adult/gambling/social) |
+| Commercial hook | `NIKTIAR_DNS_COMMERCIAL_FEED_URL` + `NIKTIAR_DNS_COMMERCIAL_API_KEY` (JSON `{ "categories": { "malware": ["…"], … } }`); optional `NIKTIAR_DNS_COMMERCIAL_BLOCKLIST_URL` |
+| WAF Host mirror | Enforced-category domains also denied on HTTP Host header (capped, default 5000) |
+| Runtime dirs | `/runtime/dns-feeds/`, `/runtime/dns-filter/config.yml`, `policy.json` |
+
+---
+
+## Stack (engineering — not shown in product UI)
+
+Runtime uses industry open-source components under NikTiar branding. Operator-facing UI and portals must use NikTiar names only.
 
 Lab VM **116** `192.168.0.217`. **Not** part of mssp-appliance golden VM 199 — skip golden bake for Secure Edge-only changes.
 
@@ -61,24 +66,29 @@ Lab VM **116** `192.168.0.217`. **Not** part of mssp-appliance golden VM 199 —
 ## Smoke (lab)
 
 - `GET /healthz` → 200
-- SQLi query → 403 (CRS)
+- SQLi query → 403 (NikTiar WAF)
 - `/.env`, `/actuator/env`, headless UA → 403
-- `TRACE` → 405; Page Shield CSP headers present
+- `TRACE` → 405; Page Shield headers present
 - `/cdn-cgi/challenge-platform/pow` → 200 PoW interstitial
-- Dashboard `/api/enterprise` catalog = 12 controls
+- Dashboard `/api/ngfw/catalog` returns URL categories + app profiles
+- Dashboard `/api/dns-filter/catalog` returns DNS categories; `/api/dns-filter` shows feed status
+- Dashboard `/api/enterprise` catalog = 12 advanced controls
+- DNS: dig @192.168.0.217 a known-blocked domain → sinkhole `0.0.0.0` when category enforced
 
 ---
 
-## Multi-tenant isolation (strong shared + dedicated)
+## Deployment model (dedicated only)
+
+Shared multi-tenant edges are **not** offered. See **KB-115**.
 
 | Control | Behavior |
 |---|---|
+| Offering | **Dedicated** per customer — HA pair (default) or physical 1U |
+| Env | `SECURE_EDGE_MODE=dedicated` · `SECURE_EDGE_FORM_FACTOR=ha_pair\|physical` · `NIKTIAR_TENANT_CODE` |
 | Unknown `Host` | **421** — no default origin fallthrough |
-| Routing | Exact `Host` → that zone’s origin only |
-| Firewall / UA / custom rules | **Chained to zone Host** (no cross-tenant IP/rule bleed) |
-| Tenant map | `/runtime/tenant_map.json` · events tagged by hostname→tenant |
-| Dedicated mode | `SECURE_EDGE_MODE=dedicated` + `NIKTIAR_TENANT_CODE` drops foreign zones |
+| Routing | Exact `Host` → that zone’s origin only (same customer’s sites) |
+| Firewall / UA / custom rules | **Chained to zone Host** |
 | Customer portal | Strict `tenant_short_code` on sites/events |
-| Appliance dashboard | **MSSP ops only** on shared edges — Isolation tab shows posture |
+| Appliance dashboard | Deployment tab shows Dedicated · HA pair / Physical |
 
-Shared = logical isolation (Host-scoped). Dedicated = single-tenant node (strongest).
+Dashboard top-left shows **Dedicated · HA pair** (or Physical) — never “shared”.

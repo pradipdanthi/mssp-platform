@@ -401,7 +401,7 @@ export interface TriageListFilters {
   tenant_id?: string;
   asset_category?: string;
   q?: string;
-  /** Exact Wazuh/detection rule id filter (GET /admin/alerts). */
+  /** Exact detection rule id filter (GET /admin/alerts). */
   rule_id?: string;
   hostname?: string;
   /** Query alias `process` → backend process_name. */
@@ -460,7 +460,7 @@ export function getTenants(filters?: TriageListFilters): Promise<TenantsListResp
   return request<TenantsListResponse>(withFilters("/admin/tenants", filters));
 }
 
-/** KB-072: Wazuh/TheHive engine binding for a tenant. */
+/** KB-072: Core Telemetry / Apex engine binding for a tenant. */
 export interface TenantEngineBinding {
   tenant_id: string;
   wazuh_agent_group: string;
@@ -1598,7 +1598,7 @@ export function putApplianceAgentSourceCidrs(
   );
 }
 
-/** KB-069: Admin vulnerability findings (Greenbone normalized). */
+/** KB-069: Admin vulnerability findings (Aegis Scanning normalized). */
 export interface AdminVulnerability {
   id: string;
   tenant_id: string;
@@ -2292,6 +2292,17 @@ export function createSecureEdgeSite(payload: {
   waf_profile?: string;
 }): Promise<{ ok: boolean; site: SecureEdgeSite }> {
   return request("/admin/secure-edge/sites", { method: "POST", body: payload });
+}
+
+/** Push NikTiar Secure Edge zone settings to a site (appliance agent merges on sync). */
+export function putSecureEdgeZoneSettings(
+  siteId: string,
+  zone_settings: Record<string, unknown>
+): Promise<{ ok?: boolean; site?: SecureEdgeSite; zone_settings?: Record<string, unknown> }> {
+  return request(`/admin/secure-edge/sites/${encodeURIComponent(siteId)}/zone-settings`, {
+    method: "PUT",
+    body: zone_settings,
+  });
 }
 
 

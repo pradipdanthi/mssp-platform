@@ -57,7 +57,7 @@ export default function SecureEdgePage() {
         origin_url: origin.trim(),
         tls_mode: "http_only",
       });
-      setMsg("Site created — shared edges will pull config within ~30s.");
+      setMsg("Site created — the customer’s dedicated Secure Edge will pull config within ~30s.");
       setHost("");
       setOrigin("");
       load();
@@ -77,14 +77,29 @@ export default function SecureEdgePage() {
 
   return (
     <div className="page">
-      <h1 className="page-title">NikTiar Secure Edge</h1>
+      <h1 className="page-title">NikTiar™ Secure Edge</h1>
       <p className="muted">
-        Self-hosted WAF / bot edge (Coraza CRS + CrowdSec). Hybrid multi-tenant. Configure Security
-        Level, WAF, Firewall, Rate limit, SSL, Cache like Cloudflare on the appliance dashboard:{" "}
+        Dedicated <strong>NikTiar™ Secure Edge</strong> per customer — virtual{" "}
+        <strong>HA pair</strong> by default, or <strong>physical 1U</strong> appliances when they have
+        no virtual infra. Register sites here; configure NGFW / WAF / DNS Filter on the appliance
+        console:{" "}
         <a href="http://192.168.0.217:9080/" target="_blank" rel="noreferrer">
           http://192.168.0.217:9080/
         </a>
       </p>
+      <div className="card" style={{ padding: "1rem", marginBottom: "1rem", borderLeft: "4px solid #C8102E" }}>
+        <strong>Operator guide</strong>
+        <ol style={{ margin: "0.5rem 0 0 1.1rem", lineHeight: 1.5 }}>
+          <li>Assign a dedicated edge (HA pair or physical) to the customer tenant.</li>
+          <li>Create a site below (hostname → origin) for that tenant only.</li>
+          <li>
+            On the edge console, open <em>How this works</em>, then add NikTiar NGFW policies and URL
+            / DNS Filter rules.
+          </li>
+          <li>Set NikTiar WAF Security Level (Medium is the safe default).</li>
+          <li>Click <strong>Apply changes</strong> on the appliance so the edge reloads.</li>
+        </ol>
+      </div>
       {error && <p className="error-text">{error}</p>}
 
       <div className="kpi-row" style={{ display: "flex", gap: "1rem", flexWrap: "wrap", margin: "1rem 0" }}>
@@ -157,7 +172,7 @@ export default function SecureEdgePage() {
               <td className="muted">{s.origin_url}</td>
               <td>{s.tenant_short_code}</td>
               <td>{s.tls_mode}</td>
-              <td className="muted">{s.edge_node_hostname || "shared"}</td>
+              <td className="muted">{s.edge_node_hostname || "Dedicated edge"}</td>
             </tr>
           ))}
         </tbody>

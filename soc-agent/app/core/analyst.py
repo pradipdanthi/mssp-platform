@@ -7,6 +7,7 @@ from typing import Any
 
 from app.audit import audit
 from app.config import settings
+from app.core.callback import push_triage_result
 from app.core.llm_provider import LLMRouter
 from app.core.osint import enrich_osint
 from app.enrichment import enrich_alert
@@ -117,5 +118,21 @@ def run_analyst(alert: dict[str, Any]) -> dict[str, Any]:
             else "auto_closed_or_low_touch"
         ),
     }
+    # Push to control plane when configured (fail-soft; local result still returned)
+    try:
+        cb = push_triage_result(result, alert)
+        if cb is not None:
+            result["mssp_callback"] = {"ok": True, "response": cb}
+            audit(audit_path, "analyst.callback_ok", {"alert_id": alert.get("alert_id")})
+        else:
+            result["mssp_callback"] = {"ok": False, "skipped": True}
+    except Exception as exc:  # noqa: BLE001
+        result["mssp_callback"] = {"ok": False, "error": str(exc)[:200]}
+        audit(
+            audit_path,
+            "analyst.callback_failed",
+            {"alert_id": alert.get("alert_id"), "error": str(exc)[:300]},
+        )
+
     audit(audit_path, "analyst.complete", {"alert_id": alert.get("alert_id"), "verdict": verdict, "dossier_id": dossier_id})
     return result

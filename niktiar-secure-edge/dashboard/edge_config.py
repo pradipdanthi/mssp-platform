@@ -1,4 +1,4 @@
-"""Cloudflare-parity Secure Edge config model + Coraza/Caddy apply engine."""
+"""NikTiar Secure Edge config model + NikTiar WAF / Edge Engine apply."""
 from __future__ import annotations
 
 import json
@@ -82,6 +82,12 @@ def load_config() -> Dict[str, Any]:
         from enterprise_features import merge_enterprise
 
         merge_enterprise(data)
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from ngfw_features import merge_ngfw
+
+        merge_ngfw(data)
     except Exception:  # noqa: BLE001
         pass
     return data
@@ -531,6 +537,43 @@ def apply_all(cfg: Optional[Dict[str, Any]] = None, container: str = WAF_CONTAIN
     except Exception as exc:  # noqa: BLE001
         # keep applying core even if enterprise module missing
         cfg.setdefault("_enterprise_error", str(exc))
+    ngfw_meta: Dict[str, Any] = {}
+    try:
+        from ngfw_features import apply_ngfw, merge_ngfw
+
+        merge_ngfw(cfg)
+        ngfw_meta = apply_ngfw(cfg)
+    except Exception as exc:  # noqa: BLE001
+        cfg.setdefault("_ngfw_error", str(exc))
+        ngfw_meta = {"ok": False, "error": str(exc)}
+    dns_meta: Dict[str, Any] = {}
+    try:
+        from dns_filter import merge_into_edge_config, write_waf_host_rules
+
+        merge_into_edge_config(cfg)
+        # Compile Host-header domain denials; full DNS list resync is via /api/dns-filter
+        dns_meta = write_waf_host_rules()
+    except Exception as exc:  # noqa: BLE001
+        cfg.setdefault("_dns_filter_error", str(exc))
+        dns_meta = {"ok": False, "error": str(exc)}
+    ransom_meta: Dict[str, Any] = {}
+    try:
+        from ransomware_defense import apply_ransomware_defense, merge_ransomware
+
+        merge_ransomware(cfg)
+        ransom_meta = apply_ransomware_defense(cfg)
+    except Exception as exc:  # noqa: BLE001
+        cfg.setdefault("_ransomware_error", str(exc))
+        ransom_meta = {"ok": False, "error": str(exc)}
+    profiles_meta: Dict[str, Any] = {}
+    try:
+        from security_profiles import apply_security_profiles, merge_security_profiles
+
+        merge_security_profiles(cfg)
+        profiles_meta = apply_security_profiles(cfg)
+    except Exception as exc:  # noqa: BLE001
+        cfg.setdefault("_security_profiles_error", str(exc))
+        profiles_meta = {"ok": False, "error": str(exc)}
     save_config(cfg)
     _write_coraza_overrides(cfg)
     _write_caddy_sites(cfg)
@@ -555,6 +598,10 @@ def apply_all(cfg: Optional[Dict[str, Any]] = None, container: str = WAF_CONTAIN
         "waf_restarted": restart,
         "zones": len(cfg.get("zones") or []),
         "isolation_warnings": isolation_warnings,
+        "ngfw": ngfw_meta,
+        "dns_filter": dns_meta,
+        "ransomware_defense": ransom_meta,
+        "security_profiles": profiles_meta,
     }
 
 

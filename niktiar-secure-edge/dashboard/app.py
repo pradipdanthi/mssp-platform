@@ -1,4 +1,4 @@
-"""NikTiar Secure Edge — Cloudflare-parity appliance dashboard."""
+"""NikTiar Secure Edge — appliance dashboard (NikTiar WAF / Firewall / NGFW)."""
 from __future__ import annotations
 
 import json
@@ -22,8 +22,22 @@ RUNTIME = Path(os.getenv("RUNTIME_DIR") or "/runtime")
 CONTROL = (os.getenv("NIKTIAR_CONTROL_URL") or "").rstrip("/")
 TOKEN = os.getenv("NIKTIAR_APPLIANCE_TOKEN") or ""
 HOST = os.getenv("SECURE_EDGE_HOSTNAME") or "niktiar-secure-edge"
-MODE = (os.getenv("SECURE_EDGE_MODE") or "shared").lower()
+# Product default: dedicated only. Shared multi-tenant is not offered commercially.
+_raw_mode = (os.getenv("SECURE_EDGE_MODE") or "dedicated").lower().strip()
+if _raw_mode == "shared":
+    MODE = "dedicated"
+else:
+    MODE = _raw_mode if _raw_mode in ("dedicated",) else "dedicated"
+FORM_FACTOR = (os.getenv("SECURE_EDGE_FORM_FACTOR") or "ha_pair").lower().strip()
+if FORM_FACTOR not in ("ha_pair", "physical"):
+    FORM_FACTOR = "ha_pair"
+HA_ROLE = (os.getenv("SECURE_EDGE_HA_ROLE") or "primary").lower().strip()
 DASH_USER = os.getenv("EDGE_DASHBOARD_USER") or "admin"
+
+
+def _deployment_label() -> str:
+    # Customer-facing: never surface internal form-factor jargon (HA pair / physical) in the header.
+    return "Dedicated Edge"
 DASH_PASS = os.getenv("EDGE_DASHBOARD_PASSWORD") or "NikTiarEdge!ChangeMe"
 ACCESS_LOG = Path(os.getenv("ACCESS_LOG") or "/runtime/niktiar-access.log")
 WAF_CONTAINER = os.getenv("WAF_CONTAINER") or "niktiar-se-waf"
@@ -62,10 +76,47 @@ try:
 except Exception:  # noqa: BLE001
     ti = None  # type: ignore
 
-app = FastAPI(title="NikTiar Secure Edge", version="2.0.0")
+app = FastAPI(title="NikTiar Secure Edge", version="4.1.0")
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/assets", StaticFiles(directory=str(static_dir)), name="assets")
+
+try:
+    import ngfw_features as ngfw
+except Exception:  # noqa: BLE001
+    ngfw = None  # type: ignore
+
+try:
+    import dns_filter as dnsf
+
+    dnsf.RUNTIME = RUNTIME
+    dnsf.FEEDS_DIR = RUNTIME / "dns-feeds"
+    dnsf.FILTER_DIR = RUNTIME / "dns-filter"
+    dnsf.POLICY_PATH = RUNTIME / "dns-filter" / "policy.json"
+    dnsf.MANIFEST_PATH = RUNTIME / "dns-feeds" / "manifest.json"
+    dnsf.WAF_LIST = RUNTIME / "dns-feeds" / "waf_host_blocklist.txt"
+    dnsf.RULES_D = RUNTIME / "coraza-rules.d"
+except Exception:  # noqa: BLE001
+    dnsf = None  # type: ignore
+
+try:
+    import ransomware_defense as rwd
+
+    rwd.RUNTIME = RUNTIME
+    rwd.RULES_D = RUNTIME / "coraza-rules.d"
+    rwd.POLICY_PATH = RUNTIME / "ransomware_defense.json"
+except Exception:  # noqa: BLE001
+    rwd = None  # type: ignore
+
+try:
+    import security_profiles as secprof
+
+    secprof.RUNTIME = RUNTIME
+    secprof.RULES_D = RUNTIME / "coraza-rules.d"
+    secprof.EDL_DIR = RUNTIME / "edl"
+    secprof.POLICY_PATH = RUNTIME / "security_profiles.json"
+except Exception:  # noqa: BLE001
+    secprof = None  # type: ignore
 
 
 class LoginIn(BaseModel):
@@ -256,7 +307,7 @@ def index():
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "service": "secure-edge-dashboard", "version": "2.0.0", "hostname": HOST}
+    return {"ok": True, "service": "secure-edge-dashboard", "version": "4.1.0", "hostname": HOST}
 
 
 @app.post("/api/login")
@@ -273,14 +324,21 @@ def overview(_: str = Depends(_auth)):
     cfg = ec.load_config()
     stats = _parse_access_stats()
     decisions = _crowdsec_decisions()
+    rw_pol = None
+    if rwd:
+        rw_pol = dict(rwd.load_policy())
+        rw_pol.pop("sellable_claims", None)
+        rw_pol.pop("never_claim", None)
     return {
         "hostname": HOST,
         "deployment_mode": MODE,
+        "deployment_label": _deployment_label(),
         "control_url": CONTROL or None,
-        "version": "3.0.0",
+        "version": "4.1.0",
         "global": cfg.get("global"),
         "zones_count": len(cfg.get("zones") or []),
         "custom_rules_count": len(cfg.get("custom_waf_rules") or []),
+        "ngfw_policies": len((((cfg.get("global") or {}).get("ngfw") or {}).get("policies") or [])),
         "containers": _docker_ps(),
         "access": stats,
         "crowdsec_decision_count": len(decisions),
@@ -291,7 +349,7 @@ def overview(_: str = Depends(_auth)):
             "ip_access_rules",
             "bot_fight_mode",
             "under_attack_mode",
-            "rate_limiting",
+            "rate_limiting_enforced",
             "ssl_modes",
             "caching",
             "analytics",
@@ -299,6 +357,19 @@ def overview(_: str = Depends(_auth)):
             "strong_tenant_isolation",
             "unknown_host_deny",
             "host_scoped_firewall",
+            "ngfw_policies",
+            "url_filtering",
+            "dns_filter",
+            "domain_blocklists",
+            "category_feeds",
+            "ransomware_defense",
+            "security_profiles",
+            "file_blocking",
+            "anti_spyware",
+            "external_dynamic_lists",
+            "app_control",
+            "geo_blocking",
+            "address_objects",
             "api_shield",
             "graphql_guard",
             "page_shield",
@@ -312,6 +383,8 @@ def overview(_: str = Depends(_auth)):
             "logpush",
             "mtls_stub",
         ],
+        "dns_filter": (dnsf.feed_status() if dnsf else None),
+        "ransomware_defense": rw_pol,
     }
 
 
@@ -321,6 +394,7 @@ def isolation_status(_: str = Depends(_auth)):
     tmap = ti.load_tenant_map() if ti else {}
     return {
         "mode": MODE,
+        "deployment_label": _deployment_label(),
         "pinned_tenant": PINNED_TENANT or None,
         "unknown_host_policy": "deny_421",
         "default_origin_fallthrough": False,
@@ -330,10 +404,8 @@ def isolation_status(_: str = Depends(_auth)):
         "tenants": sorted(set(tmap.values())),
         "zones": len(cfg.get("zones") or []),
         "strong_isolation": True,
-        "note": (
-            "Shared = soft multi-tenant with Host-scoped policies + unknown-host deny. "
-            "Dedicated = single-tenant pin via NIKTIAR_TENANT_CODE."
-        ),
+        "shared_offering": False,
+        "note": "This appliance is dedicated to one organization. Unknown hosts are denied.",
     }
 
 
@@ -496,7 +568,7 @@ def analytics(tenant: Optional[str] = None, _: str = Depends(_auth)):
             "recent": recent,
             "tenant_scope": scope,
             "crowdsec_decisions": _crowdsec_decisions()[:30],
-            "note": "CrowdSec decisions are IP-global on shared edges (security side-effect, not data leak).",
+            "note": "NikTiar Bot Defense decisions are IP-scoped on this dedicated edge.",
         }
     return {
         "requests_sampled": stats["total_sampled"],
@@ -515,6 +587,259 @@ def crowdsec_view(_: str = Depends(_auth)):
 @app.post("/api/reload")
 def reload_only(_: str = Depends(_auth)):
     return ec.reload_caddy()
+
+
+@app.get("/api/security-profiles")
+def get_security_profiles(_: str = Depends(_auth)):
+    if not secprof:
+        raise HTTPException(503, detail="Security Profiles module unavailable")
+    return {
+        "policy": secprof.load_policy(),
+        "catalog": secprof.catalog(),
+        "edl_dir": str(RUNTIME / "edl"),
+    }
+
+
+@app.put("/api/security-profiles")
+def put_security_profiles(body: Dict[str, Any], _: str = Depends(_auth)):
+    if not secprof:
+        raise HTTPException(503, detail="Security Profiles module unavailable")
+    pol = secprof.load_policy()
+    if body.get("preset") and body["preset"] != pol.get("preset"):
+        pol = secprof.apply_preset(str(body["preset"]))
+    for section in (
+        "file_blocking",
+        "anti_spyware",
+        "url_filtering",
+        "vulnerability_protection",
+        "edl",
+        "sandbox",
+    ):
+        if isinstance(body.get(section), dict):
+            pol[section] = {**(pol.get(section) or {}), **body[section]}
+    for k in ("enabled", "notes", "preset"):
+        if k in body and k != "preset":
+            pol[k] = body[k]
+        elif k == "preset" and body.get("preset"):
+            pol["preset"] = body["preset"]
+    if body.get("_customized"):
+        pol["_customized"] = True
+    cfg = ec.load_config()
+    result = secprof.apply_security_profiles(cfg, pol)
+    apply = ec.apply_all(cfg)
+    return {
+        "ok": True,
+        "profiles": result,
+        "apply": {"ok": apply.get("ok"), "security_profiles": apply.get("security_profiles")},
+    }
+
+
+@app.post("/api/security-profiles/preset/{name}")
+def security_profiles_preset(name: str, _: str = Depends(_auth)):
+    if not secprof:
+        raise HTTPException(503, detail="Security Profiles module unavailable")
+    pol = secprof.apply_preset(name)
+    cfg = ec.load_config()
+    result = secprof.apply_security_profiles(cfg, pol)
+    apply = ec.apply_all(cfg)
+    return {"ok": True, "policy": pol, "result": result, "apply": apply}
+
+
+@app.get("/api/ransomware-defense")
+def get_ransomware_defense(_: str = Depends(_auth)):
+    if not rwd:
+        raise HTTPException(503, detail="Ransomware Defense module unavailable")
+    ransom_count = 0
+    try:
+        p = RUNTIME / "dns-feeds" / "ransomware.txt"
+        if p.exists():
+            ransom_count = sum(
+                1 for line in p.read_text(encoding="utf-8").splitlines() if line.strip() and not line.startswith("#")
+            )
+    except Exception:  # noqa: BLE001
+        pass
+    cat = rwd.catalog()
+    # Customer-facing API: omit internal sell/SLA claim lists if present on policy.
+    pol = dict(rwd.load_policy())
+    pol.pop("sellable_claims", None)
+    pol.pop("never_claim", None)
+    return {
+        "policy": pol,
+        "catalog": cat,
+        "dns_ransomware_domains": ransom_count,
+        "summary": cat.get("summary"),
+    }
+
+
+@app.put("/api/ransomware-defense")
+def put_ransomware_defense(body: Dict[str, Any], _: str = Depends(_auth)):
+    if not rwd:
+        raise HTTPException(503, detail="Ransomware Defense module unavailable")
+    pol = rwd.load_policy()
+    for k in (
+        "enabled",
+        "mode",
+        "dns_category",
+        "block_ransom_note_paths",
+        "block_double_extension_downloads",
+        "block_script_droppers",
+        "block_archive_droppers",
+        "block_webdav_write",
+        "block_tor2web_gateways",
+        "block_suspicious_exfil_paths",
+        "notes",
+    ):
+        if k in (body or {}):
+            pol[k] = body[k]
+    cfg = ec.load_config()
+    result = rwd.apply_ransomware_defense(cfg, pol)
+    apply = ec.apply_all(cfg)
+    return {"ok": True, "ransomware": result, "apply": {"ok": apply.get("ok"), "ransomware_defense": apply.get("ransomware_defense")}}
+
+
+@app.get("/api/dns-filter/catalog")
+def dns_filter_catalog(_: str = Depends(_auth)):
+    if not dnsf:
+        raise HTTPException(503, detail="DNS Filter module unavailable")
+    return dnsf.catalog()
+
+
+@app.get("/api/dns-filter")
+def get_dns_filter(_: str = Depends(_auth)):
+    if not dnsf:
+        raise HTTPException(503, detail="DNS Filter module unavailable")
+    return {
+        "policy": dnsf.load_policy(),
+        "status": dnsf.feed_status(),
+        "catalog": dnsf.catalog(),
+    }
+
+
+@app.put("/api/dns-filter")
+def put_dns_filter(body: Dict[str, Any], _: str = Depends(_auth)):
+    if not dnsf:
+        raise HTTPException(503, detail="DNS Filter module unavailable")
+    pol = dnsf.load_policy()
+    for k in (
+        "enabled",
+        "enabled_categories",
+        "custom_block_domains",
+        "custom_allow_domains",
+        "waf_host_block",
+        "sinkhole_ip",
+        "notes",
+    ):
+        if k in (body or {}):
+            pol[k] = body[k]
+    # Normalize domains
+    if isinstance(pol.get("custom_block_domains"), list):
+        pol["custom_block_domains"] = [
+            d for d in (dnsf.normalize_domain(str(x)) for x in pol["custom_block_domains"]) if d
+        ]
+    if isinstance(pol.get("custom_allow_domains"), list):
+        pol["custom_allow_domains"] = [
+            d for d in (dnsf.normalize_domain(str(x)) for x in pol["custom_allow_domains"]) if d
+        ]
+    if isinstance(pol.get("enabled_categories"), list):
+        pol["enabled_categories"] = [
+            str(c) for c in pol["enabled_categories"] if str(c) in dnsf.DEFAULT_CATEGORIES
+        ]
+    result = dnsf.apply_dns_filter(pol)
+    # Reload WAF so Host-header rules take effect
+    waf_apply = ec.apply_all(ec.load_config())
+    return {"ok": True, "dns": result, "waf_apply": {"ok": waf_apply.get("ok"), "dns_filter": waf_apply.get("dns_filter")}}
+
+
+@app.post("/api/dns-filter/resync")
+def dns_filter_resync(_: str = Depends(_auth)):
+    if not dnsf:
+        raise HTTPException(503, detail="DNS Filter module unavailable")
+    sync = dnsf.trigger_feed_resync()
+    dns = dnsf.reload_dns_engine()
+    waf = dnsf.write_waf_host_rules()
+    return {"ok": bool(sync.get("ok")), "sync": sync, "dns_reload": dns, "waf": waf}
+
+
+@app.get("/api/ngfw/catalog")
+def ngfw_catalog(_: str = Depends(_auth)):
+    if not ngfw:
+        raise HTTPException(503, detail="NGFW module unavailable")
+    return ngfw.catalog()
+
+
+@app.get("/api/ngfw")
+def get_ngfw(_: str = Depends(_auth)):
+    cfg = ec.load_config()
+    if ngfw:
+        ngfw.merge_ngfw(cfg)
+    return {
+        "ngfw": ((cfg.get("global") or {}).get("ngfw") or {}),
+        "catalog": ngfw.catalog() if ngfw else {},
+        "help": (ngfw.catalog().get("help") if ngfw else {}),
+    }
+
+
+@app.put("/api/ngfw")
+def put_ngfw(body: Dict[str, Any], _: str = Depends(_auth)):
+    """Replace or merge the global NGFW pack (policies, URL filter, geo, objects)."""
+    cfg = ec.load_config()
+    if ngfw:
+        ngfw.merge_ngfw(cfg)
+    g = cfg.setdefault("global", {})
+    current = g.setdefault("ngfw", {})
+    for k, v in (body or {}).items():
+        if k in ("policies", "address_objects", "url_objects") and isinstance(v, list):
+            current[k] = v
+        elif k == "url_filter" and isinstance(v, dict):
+            current["url_filter"] = {**(current.get("url_filter") or {}), **v}
+        elif k == "geo_block" and isinstance(v, dict):
+            current["geo_block"] = {**(current.get("geo_block") or {}), **v}
+        else:
+            current[k] = v
+    result = ec.apply_all(cfg)
+    return {"ok": True, "ngfw": current, "apply": result}
+
+
+@app.post("/api/ngfw/policies")
+def add_ngfw_policy(body: Dict[str, Any], _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    if ngfw:
+        ngfw.merge_ngfw(cfg)
+    policies = ((cfg.setdefault("global", {})).setdefault("ngfw", {})).setdefault("policies", [])
+    pol = dict(body or {})
+    pol["id"] = pol.get("id") or (ngfw.new_policy_id() if ngfw else secrets.token_hex(6))
+    pol.setdefault("enabled", True)
+    pol.setdefault("priority", 100)
+    pol.setdefault("action", "deny")
+    pol.setdefault("source", "any")
+    pol.setdefault("zone", "*")
+    policies.append(pol)
+    result = ec.apply_all(cfg)
+    return {"ok": True, "policy": pol, "apply": result}
+
+
+@app.delete("/api/ngfw/policies/{policy_id}")
+def del_ngfw_policy(policy_id: str, _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    ng = (cfg.setdefault("global", {})).setdefault("ngfw", {})
+    ng["policies"] = [p for p in (ng.get("policies") or []) if p.get("id") != policy_id]
+    result = ec.apply_all(cfg)
+    return {"ok": True, "apply": result}
+
+
+@app.post("/api/ngfw/objects/address")
+def add_address_object(body: Dict[str, Any], _: str = Depends(_auth)):
+    cfg = ec.load_config()
+    if ngfw:
+        ngfw.merge_ngfw(cfg)
+    objs = ((cfg.setdefault("global", {})).setdefault("ngfw", {})).setdefault("address_objects", [])
+    obj = dict(body or {})
+    obj["id"] = obj.get("id") or (ngfw.new_object_id("obj") if ngfw else secrets.token_hex(4))
+    obj.setdefault("type", "cidr")
+    obj.setdefault("values", [])
+    objs.append(obj)
+    ec.save_config(cfg)
+    return {"ok": True, "object": obj}
 
 
 @app.get("/api/enterprise")

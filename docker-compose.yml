@@ -119,6 +119,20 @@ services:
       AI_DEEP_TRIAGE_ESCALATE_CONFIDENCE: ${AI_DEEP_TRIAGE_ESCALATE_CONFIDENCE:-60}
       AI_DEEP_TRIAGE_BENIGN_SILENCE_CONFIDENCE: ${AI_DEEP_TRIAGE_BENIGN_SILENCE_CONFIDENCE:-85}
       AI_DEEP_TRIAGE_TIMEOUT_SECONDS: ${AI_DEEP_TRIAGE_TIMEOUT_SECONDS:-180}
+      # KB-117 Cursor SOC agent (VM 117) — expert deep triage; off by default
+      SOC_AGENT_ENABLED: ${SOC_AGENT_ENABLED:-false}
+      SOC_AGENT_URL: ${SOC_AGENT_URL:-http://192.168.0.228:8443}
+      SOC_AGENT_TOKEN: ${SOC_AGENT_TOKEN:-}
+      SOC_AGENT_CALLBACK_TOKEN: ${SOC_AGENT_CALLBACK_TOKEN:-}
+      SOC_AGENT_TIMEOUT_SECONDS: ${SOC_AGENT_TIMEOUT_SECONDS:-90}
+      SOC_AGENT_MIN_SEVERITY: ${SOC_AGENT_MIN_SEVERITY:-medium}
+      # Live Proxmox inventory for Tia (vCPU/RAM/status). Key mounted below.
+      PROXMOX_ENABLED: ${PROXMOX_ENABLED:-true}
+      PROXMOX_SSH_HOST: ${PROXMOX_SSH_HOST:-192.168.0.191}
+      PROXMOX_SSH_USER: ${PROXMOX_SSH_USER:-root}
+      PROXMOX_SSH_KEY_FILE: /run/secrets/proxmox_ssh_key
+      PROXMOX_SSH_TIMEOUT: ${PROXMOX_SSH_TIMEOUT:-25}
+      PROXMOX_METRICS_CACHE: /var/cache/mssp/proxmox_vm_metrics.json
       SOC_ESCALATION_CHANNEL: ${SOC_ESCALATION_CHANNEL:-whatsapp}
       SOC_ONCALL_WHATSAPP: ${SOC_ONCALL_WHATSAPP:-}
       SOC_ONCALL_NAME: ${SOC_ONCALL_NAME:-Kevantic SOC on-call}
@@ -164,6 +178,8 @@ services:
       - ./.secrets/wazuh_api_user:/run/secrets/wazuh_api_user:ro
       - ./.secrets/wazuh_api_password:/run/secrets/wazuh_api_password:ro
       - ./.secrets/licensing-ed25519-v1.key:/opt/mssp-control/.secrets/licensing-ed25519-v1.key:ro
+      - ./.secrets/proxmox_ssh_key:/run/secrets/proxmox_ssh_key:ro
+      - ./.cache/mssp:/var/cache/mssp
     networks:
       - mssp-backend
 
@@ -194,6 +210,24 @@ services:
       - backend-api
     ports:
       - "3001:80"
+    networks:
+      - mssp-backend
+
+  # KB-117b: dedicated SOC Agent Console — HTTP :3002 + HTTPS :3443 (mic needs HTTPS).
+  frontend-soc:
+    build:
+      context: ./frontend-soc
+    container_name: mssp-frontend-soc
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    depends_on:
+      - backend-api
+    ports:
+      - "3002:80"
+      - "3443:443"
+    volumes:
+      - ./frontend-soc/certs:/etc/nginx/certs:ro
     networks:
       - mssp-backend
 

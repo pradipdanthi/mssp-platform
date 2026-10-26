@@ -52,8 +52,9 @@ export default function SecureEdgePage() {
       <div className="page">
         <h1 className="page-title">Secure Edge</h1>
         <p>
-          Protect public web apps with NikTiar’s self-hosted WAF edge (Coraza CRS + CrowdSec). Available
-          as an add-on on any tier — ask your SOC to enable sites for this tenant.
+          Protect public web apps with NikTiar Secure Edge — next-gen firewall policies, URL filtering,
+          and web application firewall in front of your sites. Available as an add-on on any tier — ask
+          your SOC to enable sites for this tenant.
         </p>
       </div>
     );
@@ -95,7 +96,7 @@ export default function SecureEdgePage() {
               </td>
               <td>{s.tls_mode}</td>
               <td>{s.enabled ? "Active" : "Disabled"}</td>
-              <td className="muted">{s.edge_node_hostname || "Shared edge"}</td>
+              <td className="muted">{s.edge_node_hostname || "Dedicated edge"}</td>
             </tr>
           ))}
         </tbody>

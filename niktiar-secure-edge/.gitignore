@@ -1,3 +1,5 @@
 docker/.env
 *.pyc
 __pycache__/
+# Live appliance runtime (feeds, generated Caddy/WAF/DNS) — never commit
+runtime/

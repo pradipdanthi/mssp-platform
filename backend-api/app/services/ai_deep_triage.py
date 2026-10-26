@@ -338,8 +338,17 @@ def _oncall_recipients() -> List[Dict[str, str]]:
 
 
 def process_deep_triage_job(*, alert_id: str, tenant_id: str) -> bool:
-    """Run full enrichment triage on one alert and escalate when rules say so."""
-    if not deep_triage_enabled():
+    """Run expert (Cursor SOC agent) or Ollama Tier-1 deep triage, then escalate.
+
+    When SOC_AGENT_ENABLED, prefer the Cursor agent on VM 117 (no parallel
+    Ollama deep call). Fall back to existing run_tier1_triage if the agent
+    is down or returns nothing. Never auto-contains.
+    """
+    from app.services.soc_agent_client import soc_agent_enabled
+    from app.services.soc_agent_expert import run_expert_on_alert
+
+    agent_on = soc_agent_enabled()
+    if not deep_triage_enabled() and not agent_on:
         return False
 
     alert = load_alert_for_triage(alert_id, tenant_id)
@@ -347,35 +356,60 @@ def process_deep_triage_job(*, alert_id: str, tenant_id: str) -> bool:
         logger.info("Deep triage skipped — alert not found id=%s", alert_id)
         return False
 
-    if not _severity_ok(alert.get("severity")):
+    # Severity gate: agent uses SOC_AGENT_MIN_SEVERITY; Ollama deep uses
+    # AI_DEEP_TRIAGE_MIN_SEVERITY. Allow the job if either path would accept.
+    from app.services.soc_agent_client import severity_meets_agent_threshold
+
+    severity_ok = False
+    if agent_on and severity_meets_agent_threshold(alert.get("severity")):
+        severity_ok = True
+    if deep_triage_enabled() and _severity_ok(alert.get("severity")):
+        severity_ok = True
+    if not severity_ok:
         return False
 
     if (alert.get("ai_triage_status") or "").strip() == "accepted":
         return True
 
-    timeout = _llm_timeout_seconds()
-    try:
-        triage = run_tier1_triage(
-            alert_id=alert_id,
-            tenant_id=tenant_id,
-            alert=alert,
-            customer_safe=False,
-            force=False,
-            llm_timeout_seconds=timeout,
-        )
-        # A rule-based result cached by an 8s dashboard timeout must not stand in
-        # for a real model verdict here.
-        if triage.get("cached") and triage.get("model") == "rule_based_fallback":
+    triage: Optional[Dict[str, Any]] = None
+
+    if agent_on and severity_meets_agent_threshold(alert.get("severity")):
+        try:
+            triage = run_expert_on_alert(
+                alert_id=alert_id, tenant_id=tenant_id, alert=alert
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("SOC agent expert failed id=%s: %s", alert_id, exc)
+            triage = None
+
+    if triage is None and deep_triage_enabled():
+        timeout = _llm_timeout_seconds()
+        try:
             triage = run_tier1_triage(
                 alert_id=alert_id,
                 tenant_id=tenant_id,
                 alert=alert,
                 customer_safe=False,
-                force=True,
+                force=False,
                 llm_timeout_seconds=timeout,
             )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Deep triage failed id=%s: %s", alert_id, exc)
+            # A rule-based result cached by an 8s dashboard timeout must not stand in
+            # for a real model verdict here.
+            if triage.get("cached") and triage.get("model") == "rule_based_fallback":
+                triage = run_tier1_triage(
+                    alert_id=alert_id,
+                    tenant_id=tenant_id,
+                    alert=alert,
+                    customer_safe=False,
+                    force=True,
+                    llm_timeout_seconds=timeout,
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Deep triage failed id=%s: %s", alert_id, exc)
+            return False
+
+    if triage is None:
+        logger.warning("Deep triage produced no result id=%s", alert_id)
         return False
 
     decision = decide_escalation(alert, triage)

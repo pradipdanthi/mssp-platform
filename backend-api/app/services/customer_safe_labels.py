@@ -26,6 +26,17 @@ def customer_safe_alert_source(source_tool: Optional[str]) -> str:
         "endpoint_kernel": "NikTiar™ Core Telemetry",
         "endpoint_audit_exec": "NikTiar™ Core Telemetry",
         "endpoint_process_create": "NikTiar™ Core Telemetry",
+        "secure_edge": "NikTiar™ Secure Edge",
+        "coraza": "NikTiar™ WAF",
+        "owasp": "NikTiar™ WAF",
+        "owasp_crs": "NikTiar™ WAF",
+        "modsecurity": "NikTiar™ WAF",
+        "crowdsec": "NikTiar™ Bot Defense",
+        "caddy": "NikTiar™ Edge Engine",
+        "okta": "NikTiar™ Identity Protection",
+        "ad": "NikTiar™ Identity Protection",
+        "active_directory": "NikTiar™ Identity Protection",
+        "entra": "NikTiar™ Identity Protection",
     }
     if key in mapping:
         return mapping[key]
@@ -35,6 +46,29 @@ def customer_safe_alert_source(source_tool: Optional[str]) -> str:
         return "NikTiar™ Managed Detection"
     # Unknown adapter: generic branded label (never echo raw tool id to customers).
     return "NikTiar™ Managed Detection"
+
+
+# Secure Edge console / portal capability labels (never upstream package names).
+NIKTIAR_EDGE_LABELS = {
+    "waf": "NikTiar™ WAF",
+    "firewall": "NikTiar™ Firewall",
+    "ngfw": "NikTiar™ NGFW",
+    "url_filter": "NikTiar™ URL Filter",
+    "dns_filter": "NikTiar™ DNS Filter",
+    "ransomware_defense": "NikTiar™ Ransomware Defense",
+    "security_profiles": "NikTiar™ Security Profiles",
+    "file_blocking": "NikTiar™ File Blocking",
+    "anti_spyware": "NikTiar™ Anti-Spyware",
+    "rate_limit": "NikTiar™ Rate Limit",
+    "bot_defense": "NikTiar™ Bot Defense",
+    "edge_engine": "NikTiar™ Edge Engine",
+    "secure_edge": "NikTiar™ Secure Edge",
+    "zones": "NikTiar™ Zones",
+}
+
+
+def niktiair_edge_label(key: str) -> str:
+    return NIKTIAR_EDGE_LABELS.get((key or "").strip().lower(), "NikTiar™ Secure Edge")
 
 
 def customer_safe_incident_response_mode(mode: Optional[str]) -> str:

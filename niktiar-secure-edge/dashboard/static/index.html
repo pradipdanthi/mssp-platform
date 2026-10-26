@@ -3,12 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NikTiar Secure Edge — WAF</title>
+  <title>NikTiar Secure Edge — NGFW / WAF</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    /* Security-ops palette: crimson + white + charcoal (CrowdStrike / Fortinet style) */
+    /* Enterprise security-ops palette: crimson + white + charcoal */
+    html{color-scheme:light}
     :root {
       --red:#C8102E;
       --red-dark:#9B0C24;
@@ -101,8 +102,20 @@
     th{color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700}
     label{display:block;color:var(--muted);font-size:.78rem;font-weight:600;margin:.45rem 0 .2rem;text-transform:uppercase;letter-spacing:.04em}
     input,select,textarea{
-      width:100%;background:#fff;border:1px solid var(--line);color:var(--ink);
+      width:100%;background:#fff;border:1px solid var(--line);color:#141414;
       border-radius:4px;padding:.58rem .7rem;font-family:var(--font);font-size:.92rem;
+      color-scheme: light;
+    }
+    /* Native <select> dropdowns: force readable option text (fixes blank/white-on-white menus) */
+    select{
+      background-color:#ffffff !important;
+      color:#141414 !important;
+      -webkit-text-fill-color:#141414;
+    }
+    select option, select optgroup{
+      background-color:#ffffff !important;
+      color:#141414 !important;
+      -webkit-text-fill-color:#141414;
     }
     input:focus,select:focus,textarea:focus{outline:2px solid rgba(200,16,46,.25);border-color:var(--red)}
     .row{display:flex;gap:.75rem;flex-wrap:wrap}.row>*{flex:1;min-width:140px}
@@ -144,42 +157,92 @@
     #flash .okmsg,#flash .err{padding:.55rem .75rem;border-radius:4px;margin-bottom:.75rem}
     #flash .okmsg{background:var(--ok-bg);border:1px solid #BBF7D0}
     #flash .err{background:var(--bad-bg);border:1px solid #FECACA}
+    .teach{
+      background:linear-gradient(135deg,#FEF2F2,#FFF7ED);border:1px solid #FECACA;
+      border-left:4px solid var(--red);border-radius:4px;padding:.85rem 1rem;margin:0 0 1rem;
+      font-size:.88rem;line-height:1.45;color:#374151;
+    }
+    .teach strong{color:var(--red-dark)}
+    .teach ol{margin:.4rem 0 0 1.1rem;padding:0}
+    .step-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin:1rem 0}
+    .step-cards .card{border-top-color:#9CA3AF;cursor:pointer}
+    .step-cards .card:hover{border-top-color:var(--red)}
+    .step-cards .n{font-family:var(--display);font-size:1.4rem;font-weight:800;color:var(--red)}
+    .toggle-row{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.55rem 0;border-bottom:1px solid var(--line)}
+    .toggle-row:last-child{border-bottom:0}
+    .cat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.6rem}
+    .cat-item{border:1px solid var(--line);border-radius:4px;padding:.7rem .8rem;background:#fff}
+    .cat-item label{text-transform:none;letter-spacing:0;font-size:.9rem;color:var(--ink);margin:0;display:flex;gap:.5rem;align-items:flex-start}
+    .cat-item .hint{margin:.25rem 0 0 1.4rem;font-size:.78rem}
+    .man-toc{margin-bottom:1rem}
+    .man-toc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.35rem .75rem}
+    .man-toc-grid a{
+      display:block;font-size:.86rem;font-weight:600;color:var(--red-dark);
+      text-decoration:none;padding:.35rem .45rem;border-radius:3px;border:1px solid transparent;
+    }
+    .man-toc-grid a:hover{background:var(--red-soft);border-color:#FECACA}
+    .man-sec{
+      background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+      padding:1.1rem 1.2rem 1.2rem;margin:0 0 1rem;border-top:3px solid var(--red);
+      scroll-margin-top:1rem;
+    }
+    .man-sec h3{
+      margin:0 0 .75rem;font-family:var(--display);font-size:1.25rem;font-weight:800;
+      letter-spacing:.02em;text-transform:uppercase;color:var(--ink);
+    }
+    .man-sec h4{
+      margin:1rem 0 .4rem;font-size:.78rem;font-weight:700;letter-spacing:.06em;
+      text-transform:uppercase;color:var(--red-dark);
+    }
+    .man-sec p,.man-sec li{font-size:.9rem;line-height:1.55;color:#1F2937}
+    .man-sec ul{margin:.35rem 0 .35rem 1.15rem;padding:0}
+    .man-steps{margin:.4rem 0 .5rem 1.15rem;padding:0}
+    .man-steps li{margin:.35rem 0;line-height:1.5}
+    .man-sec table{font-size:.86rem;margin-top:.4rem}
     @media (max-width:860px){
       .shell{grid-template-columns:1fr}
       .side{border-right:0;border-bottom:3px solid var(--red)}
     }
   </style>
+  <script src="/assets/operator_manual.js"></script>
 </head>
 <body>
   <div id="loginView" class="login-wrap">
     <div class="login">
-      <div class="brand"><span class="mark"></span>NikTiar Secure Edge<small>Web Application Firewall · Edge Control</small></div>
+      <div class="brand"><span class="mark"></span>NikTiar Secure Edge<small>Next-Gen Firewall · WAF · Edge Control</small></div>
       <label>Username</label><input id="user" value="admin" autocomplete="username" />
       <label>Password</label><input id="pass" type="password" autocomplete="current-password" />
       <div id="loginErr" class="err hidden"></div>
-      <p style="margin-top:1.15rem"><button class="btn primary" onclick="doLogin()" style="width:100%">Sign in to WAF console</button></p>
-      <p class="hint">Authorized MSSP operators only. All actions are audited.</p>
+      <p style="margin-top:1.15rem"><button class="btn primary" onclick="doLogin()" style="width:100%">Sign in to Secure Edge</button></p>
+      <p class="hint">Authorized administrators only. Configure firewall, DNS filter, and WAF policies for this edge.</p>
     </div>
   </div>
 
   <div id="appView" class="shell hidden">
     <aside class="side">
-      <div class="brand"><span class="mark"></span>NikTiar WAF<small id="hostLabel">—</small></div>
+      <div class="brand"><span class="mark"></span>NikTiar Edge<small id="hostLabel">—</small></div>
       <nav class="nav" id="nav">
-        <div class="nav-label">Monitor</div>
+        <div class="nav-label">Start here</div>
+        <button data-t="guide" onclick="go('guide')">Operator manual</button>
         <button data-t="overview" class="active" onclick="go('overview')">Overview</button>
         <button data-t="analytics" onclick="go('analytics')">Analytics</button>
-        <button data-t="isolation" onclick="go('isolation')">Isolation</button>
-        <div class="nav-label">Protect</div>
+        <div class="nav-label">Next-Gen Firewall</div>
+        <button data-t="ngfw" onclick="go('ngfw')">Policies</button>
+        <button data-t="urlfilter" onclick="go('urlfilter')">NikTiar URL Filter</button>
+        <button data-t="dnsfilter" onclick="go('dnsfilter')">NikTiar DNS Filter</button>
+        <button data-t="ransomware" onclick="go('ransomware')">Ransomware Defense</button>
+        <button data-t="profiles" onclick="go('profiles')">Security Profiles</button>
+        <button data-t="firewall" onclick="go('firewall')">NikTiar Firewall</button>
+        <button data-t="ratelimit" onclick="go('ratelimit')">NikTiar Rate Limit</button>
+        <div class="nav-label">Web Application Firewall</div>
+        <button data-t="waf" onclick="go('waf')">NikTiar WAF</button>
+        <button data-t="rules" onclick="go('rules')">NikTiar custom WAF rules</button>
+        <button data-t="enterprise" onclick="go('enterprise')">NikTiar advanced defenses</button>
+        <div class="nav-label">Sites &amp; edge</div>
         <button data-t="zones" onclick="go('zones')">Zones / Sites</button>
-        <button data-t="waf" onclick="go('waf')">WAF</button>
-        <button data-t="firewall" onclick="go('firewall')">Firewall</button>
-        <button data-t="ratelimit" onclick="go('ratelimit')">Rate limiting</button>
-        <button data-t="rules" onclick="go('rules')">Custom rules</button>
-        <button data-t="enterprise" onclick="go('enterprise')">Enterprise</button>
-        <div class="nav-label">Edge</div>
         <button data-t="ssl" onclick="go('ssl')">SSL / TLS</button>
         <button data-t="cache" onclick="go('cache')">Caching</button>
+        <button data-t="isolation" onclick="go('isolation')">Deployment</button>
         <button data-t="system" onclick="go('system')">System</button>
       </nav>
       <div class="side-foot"><button class="btn" onclick="logout()" style="width:100%;background:#242424;color:#fff;border-color:#333">Logout</button></div>
@@ -187,9 +250,9 @@
     <main class="main">
       <div class="top">
         <div>
-          <div class="ribbon">Secure Edge · WAF Console</div>
+          <div class="ribbon">Secure Edge · NGFW + WAF</div>
           <h2 id="pageTitle">Overview</h2>
-          <div class="muted" id="pageSub">Security configuration for your edge</div>
+          <div class="muted" id="pageSub">Enterprise edge firewall — every control explained</div>
         </div>
         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
           <button class="btn primary" onclick="applyNow()">Apply changes</button>
@@ -226,7 +289,7 @@ function showApp(){ loginView.classList.add('hidden'); appView.classList.remove(
 async function refresh(){
   S.overview = await api('/api/overview');
   S.cfg = await api('/api/config');
-  hostLabel.textContent = S.overview.hostname+' · '+S.overview.deployment_mode;
+  hostLabel.textContent = S.overview.deployment_label || S.overview.hostname || 'Dedicated Edge';
   if (S.zone) {
     const z = (S.cfg.zones||[]).find(x=>x.public_hostname===S.zone);
     if (!z) S.zone=null;
@@ -235,25 +298,31 @@ async function refresh(){
 }
 
 async function applyNow(){
-  try{ const j=await api('/api/apply',{method:'POST'}); flash('Applied · waf_restarted='+!!j.waf_restarted+' · zones='+j.zones); await refresh(); }
+  try{ const j=await api('/api/apply',{method:'POST'}); flash('Policies applied successfully'+(j.zones!=null?' · '+j.zones+' zone(s)':'')); await refresh(); }
   catch(e){ flash(e.message,false); }
 }
 
 function go(t){
   document.querySelectorAll('.nav button').forEach(b=>b.classList.toggle('active', b.dataset.t===t));
   const titles={
+    guide:['Operator manual','Complete reference — every feature, why it matters, how to configure'],
     overview:['Overview','Edge health & security posture'],
-    zones:['Zones','Like Cloudflare zones — hostname → origin'],
-    waf:['WAF','Managed OWASP CRS + security level (CF-style)'],
-    firewall:['Firewall','IP allow/block & UA rules'],
-    ratelimit:['Rate limiting','Throttle abusive paths'],
-    ssl:['SSL / TLS','Flexible / Full / Strict'],
-    cache:['Caching','Edge cache controls'],
-    rules:['Custom rules','Expression → block / log / allow'],
-    enterprise:['Enterprise','API Shield, Page Shield, Waiting Room, DLP, bots'],
-    isolation:['Tenant isolation','Host deny + per-zone firewall/rules scoping'],
-    analytics:['Analytics','Requests & threats'],
-    system:['System','Containers & ops']
+    zones:['Zones / Sites','Each public hostname you protect (a protected public hostname)'],
+    waf:['NikTiar WAF','NikTiar WAF — blocks SQLi, XSS, and common web attacks'],
+    ngfw:['NikTiar Firewall policies','Ordered Allow / Deny rules — who can reach what'],
+    urlfilter:['NikTiar URL Filter','Block malware, phishing, scanner & category paths'],
+    dnsfilter:['NikTiar DNS Filter','Category feeds + domain blocklists at DNS resolution'],
+    ransomware:['NikTiar Ransomware Defense','Block ransomware infrastructure and dropper traffic'],
+    profiles:['NikTiar Security Profiles','File Blocking · Anti-Spyware · URL Filtering · Threat lists'],
+    firewall:['NikTiar Firewall','Block or allow by IP, User-Agent, or country'],
+    ratelimit:['NikTiar Rate Limit','Stop floods — returns HTTP 429 per path'],
+    ssl:['SSL / TLS','How the edge talks to visitors and to origin'],
+    cache:['Caching','Optional edge Cache-Control for static responses'],
+    rules:['NikTiar custom WAF rules','Write a simple expression → block / log / allow'],
+    enterprise:['NikTiar advanced defenses','API Shield, Page Shield, bots, DLP, waiting room'],
+    isolation:['Deployment','Dedicated edge posture for this organization'],
+    analytics:['Analytics','Requests & threats seen by this appliance'],
+    system:['System','Service health for this appliance']
   };
   pageTitle.textContent=titles[t][0]; pageSub.textContent=titles[t][1];
   S.tab=t; render();
@@ -271,30 +340,41 @@ function curZone(){ return (S.cfg.zones||[]).find(z=>z.public_hostname===S.zone)
 
 function securitySeg(current, onpick){
   const levels=['off','essentially_off','low','medium','high','under_attack'];
-  const labels={off:'Off',essentially_off:'Essentially Off',low:'Low',medium:'Medium',high:'High',under_attack:"I'm Under Attack!"};
+  const labels={off:'Off',essentially_off:'Monitor only',low:'Low',medium:'Medium',high:'High',under_attack:'Emergency'};
   return `<div class="seg">${levels.map(l=>`<button class="${current===l?'on':''}" onclick="${onpick}('${l}')">${labels[l]}</button>`).join('')}</div>
-  <p class="hint">Maps to Coraza CRS paranoia / anomaly thresholds like Cloudflare Security Level.</p>`;
+  <p class="hint">Controls how strict NikTiar WAF inspection is for this edge.</p>`;
 }
 
 function render(){
   if(!S.cfg) return;
   const t=S.tab||'overview';
   const c=document.getElementById('content');
+  if(t==='guide'){
+    if(typeof SE_renderOperatorManual==='function'){
+      c.innerHTML=SE_renderOperatorManual();
+    }else{
+      c.innerHTML=`<div class="err">Operator manual failed to load. Refresh the page.</div>`;
+    }
+  }
   if(t==='overview'){
     const o=S.overview;
-    c.innerHTML=`<div class="grid kpi">
+    c.innerHTML=`
+    <div class="teach"><strong>Tip:</strong> Open <em>Operator manual</em> for the full reference (every feature, why it matters, step-by-step setup).
+      Security Level below is the big “how strict” dial — Medium is the safe default.</div>
+    <div class="grid kpi">
       <div class="card"><div class="v">${o.zones_count}</div><div class="l">Zones</div></div>
       <div class="card"><div class="v">${(o.global||{}).security_level||'medium'}</div><div class="l">Security level</div></div>
+      <div class="card"><div class="v">${o.ngfw_policies||0}</div><div class="l">NGFW policies</div></div>
       <div class="card"><div class="v">${o.access?.waf_blocks_403||0}</div><div class="l">Threats blocked (sample)</div></div>
-      <div class="card"><div class="v">${o.crowdsec_decision_count||0}</div><div class="l">CrowdSec decisions</div></div>
+      <div class="card"><div class="v">${o.crowdsec_decision_count||0}</div><div class="l">NikTiar Bot Defense</div></div>
     </div>
     <div class="card" style="margin-top:1rem">
       <h3>Global security level</h3>
       ${securitySeg((S.cfg.global||{}).security_level||'medium','setGlobalLevel')}
       <div class="row" style="margin-top:.75rem">
         <label><input type="checkbox" id="g_waf" ${(S.cfg.global||{}).waf_enabled!==false?'checked':''}/> WAF enabled</label>
-        <label><input type="checkbox" id="g_bot" ${(S.cfg.global||{}).bot_fight_mode!==false?'checked':''}/> Bot Fight Mode</label>
-        <label><input type="checkbox" id="g_bic" ${(S.cfg.global||{}).browser_integrity_check!==false?'checked':''}/> Browser Integrity Check</label>
+        <label><input type="checkbox" id="g_bot" ${(S.cfg.global||{}).bot_fight_mode!==false?'checked':''}/> Bot Defense</label>
+        <label><input type="checkbox" id="g_bic" ${(S.cfg.global||{}).browser_integrity_check!==false?'checked':''}/> Browser Integrity</label>
       </div>
       <p style="margin-top:1rem"><button class="btn primary" onclick="saveGlobal()">Save global settings</button></p>
     </div>`;
@@ -316,63 +396,413 @@ function render(){
       <div class="row">
         <div><label>Hostname</label><input id="z_host" placeholder="app.customer.com"/></div>
         <div><label>Origin URL</label><input id="z_origin" placeholder="http://10.0.0.20:8080"/></div>
-        <div><label>Tenant</label><input id="z_tenant" value="LOCAL"/></div>
+        <div><label>Organization code</label><input id="z_tenant" value="LOCAL"/></div>
       </div>
       <p style="margin-top:.75rem"><button class="btn primary" onclick="addZone()">Add zone & apply</button></p>
     </div>`;
   }
   if(t==='waf'){
     const z=curZone();
-    c.innerHTML=`<div class="card">${selZone()}
+    c.innerHTML=`
+    <div class="teach"><strong>NikTiar WAF</strong> inspects HTTP requests for attacks (SQL injection, XSS, and more).
+      <br/><strong>Security Level</strong> is the easy dial — Medium for production, High under active attack,
+      Simulate mode logs without blocking while you tune.</div>
+    <div class="card">${selZone()}
       ${!z?'':`
-      <h3 style="margin-top:1rem">Security Level (zone)</h3>
+      <h3 style="margin-top:1rem">Security Level (this zone)</h3>
       ${securitySeg(z.security_level|| (S.cfg.global||{}).security_level ||'medium','setZoneLevel')}
       <div class="row">
         <div><label>WAF mode</label>
-          <select id="waf_mode"><option value="block" ${(z.waf||{}).mode!=='simulate'?'selected':''}>Block</option>
+          <select id="waf_mode"><option value="block" ${(z.waf||{}).mode!=='simulate'?'selected':''}>Block (enforce)</option>
           <option value="simulate" ${(z.waf||{}).mode==='simulate'?'selected':''}>Simulate (log only)</option></select>
         </div>
-        <div><label>Paranoia level (CRS)</label>
-          <select id="waf_par">${[1,2,3,4].map(n=>`<option ${(z.waf||{}).paranoia_level==n?'selected':''} value="${n}">${n}</option>`).join('')}</select>
+        <div><label>WAF paranoia level</label>
+          <select id="waf_par">${[1,2,3,4].map(n=>`<option ${(z.waf||{}).paranoia_level==n?'selected':''} value="${n}">${n}${n===1?' — safest':(n===4?' — strictest':'')}</option>`).join('')}</select>
         </div>
-        <div><label>Anomaly inbound</label><input id="waf_in" type="number" value="${(z.waf||{}).anomaly_inbound||5}"/></div>
+        <div><label>Anomaly inbound threshold</label><input id="waf_in" type="number" value="${(z.waf||{}).anomaly_inbound||5}"/>
+          <p class="hint">Lower = blocks sooner. Default 5.</p></div>
         <div><label>Anomaly outbound</label><input id="waf_out" type="number" value="${(z.waf||{}).anomaly_outbound||4}"/></div>
       </div>
-      <label style="margin-top:.75rem"><input type="checkbox" id="waf_uam" ${z.under_attack_mode?'checked':''}/> I'm Under Attack Mode (challenge page)</label>
-      <p class="hint">Managed ruleset: OWASP CRS via Coraza (same job as Cloudflare Managed Rules / OWASP).</p>
+      <label style="margin-top:.75rem"><input type="checkbox" id="waf_uam" ${z.under_attack_mode?'checked':''}/> Emergency mode (challenge interstitial)</label>
       <p><button class="btn primary" onclick="saveWaf()">Save WAF settings</button></p>`}
     </div>`;
   }
+  if(t==='ngfw'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading NGFW policies…</p></div>`;
+    api('/api/ngfw').then(j=>{
+      S.ngfw=j.ngfw||{};
+      S.ngfwCat=j.catalog||{};
+      const policies=(S.ngfw.policies||[]).slice().sort((a,b)=>(a.priority||100)-(b.priority||100));
+      const help=(j.help||{}).policy_order||'';
+      c.innerHTML=`
+        <div class="teach"><strong>NikTiar Firewall policies</strong> are checked in priority order (lowest number first).
+          First match wins. ${help}</div>
+        <div class="card">
+          <div class="toggle-row">
+            <div><strong>NGFW engine</strong><div class="hint">Master switch for policies, URL filter, and geo rules.</div></div>
+            <label><input type="checkbox" id="ngfw_on" ${S.ngfw.enabled!==false?'checked':''}/> Enabled</label>
+          </div>
+          <div class="row">
+            <div><label>If nothing matches</label>
+              <select id="ngfw_default">
+                <option value="allow" ${S.ngfw.default_action!=='deny'?'selected':''}>Allow (recommended)</option>
+                <option value="deny" ${S.ngfw.default_action==='deny'?'selected':''}>Deny everything else</option>
+              </select>
+            </div>
+          </div>
+          <p><button class="btn primary" onclick="saveNgfwMaster()">Save engine settings</button></p>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>Policy table</h3>
+          <table><thead><tr><th>#</th><th>Name</th><th>Action</th><th>Zone</th><th>Match</th><th></th></tr></thead>
+          <tbody>${policies.map(p=>{
+            const bits=[];
+            if(p.path_contains) bits.push('path contains '+p.path_contains);
+            if(p.path_rx) bits.push('path rx');
+            if(p.app) bits.push('app='+p.app);
+            if((p.methods||[]).length) bits.push((p.methods||[]).join('/'));
+            if((p.ua_contains||[]).length) bits.push('UA block');
+            if(p.source && p.source!=='any') bits.push('src='+p.source);
+            return `<tr>
+              <td>${p.priority||100}</td>
+              <td><strong>${p.name||p.id}</strong><div class="hint">${p.description||''}</div></td>
+              <td><span class="pill ${p.action==='allow'?'ok':(p.action==='log'?'warn':'bad')}">${p.action}</span>
+                  ${p.enabled===false?' <span class="pill warn">off</span>':''}</td>
+              <td><code>${p.zone||'*'}</code></td>
+              <td class="muted">${bits.join(' · ')||'any'}</td>
+              <td><button class="btn danger" onclick="delNgfwPol('${p.id}')">Delete</button></td>
+            </tr>`;
+          }).join('')||'<tr><td colspan="6" class="muted">No policies yet</td></tr>'}</tbody></table>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>Create a policy (guided)</h3>
+          <p class="hint">Example: Deny admin panels from the internet → Action=Deny, Path contains=/admin, Zone=* </p>
+          <div class="row">
+            <div><label>Name</label><input id="np_name" placeholder="Block public admin"/></div>
+            <div><label>Priority (lower = first)</label><input id="np_pri" type="number" value="50"/></div>
+            <div><label>Action</label>
+              <select id="np_act">
+                <option value="deny">Deny (block)</option>
+                <option value="allow">Allow</option>
+                <option value="challenge">Challenge</option>
+                <option value="log">Log only</option>
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div><label>Zone hostname (* = all)</label><input id="np_zone" value="*" placeholder="shop.customer.com or *"/></div>
+            <div><label>Source</label>
+              <select id="np_src">
+                <option value="any">Any IP</option>
+                <option value="obj_private">Private networks only</option>
+              </select>
+            </div>
+            <div><label>Application profile</label>
+              <select id="np_app">
+                <option value="">— none —</option>
+                ${(S.ngfwCat.app_profiles||[]).map(a=>`<option value="${a.id}">${a.label}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="row">
+            <div><label>Path contains</label><input id="np_path" placeholder="/admin"/></div>
+            <div><label>Methods (comma)</label><input id="np_meth" placeholder="GET,POST"/></div>
+            <div><label>Block UA contains (comma)</label><input id="np_ua" placeholder="sqlmap,nikto"/></div>
+          </div>
+          <div><label>Description (shown to operators)</label><input id="np_desc" placeholder="Why this rule exists"/></div>
+          <p style="margin-top:.75rem"><button class="btn primary" onclick="addNgfwPol()">Add policy &amp; apply</button></p>
+        </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
+  }
+  if(t==='profiles'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading Security Profiles…</p></div>`;
+    api('/api/security-profiles').then(j=>{
+      const pol=j.policy||{};
+      const cat=j.catalog||{};
+      const fb=pol.file_blocking||{}, asp=pol.anti_spyware||{}, uf=pol.url_filtering||{}, edl=pol.edl||{};
+      c.innerHTML=`
+        <div class="teach"><strong>Security Profiles</strong> group File Blocking, Anti-Spyware, URL Filtering,
+          and Vulnerability Protection into one policy pack for this dedicated edge.
+          Use a preset for a known-good baseline, then fine-tune the toggles below.</div>
+        <div class="card">
+          <h3>Presets</h3>
+          <p class="hint">Strict Ransomware enables aggressive file blocking, DNS sinkholing of threat categories, and related WAF protections.</p>
+          <p style="display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn primary" onclick="applyProfilePreset('strict_ransomware')">Apply Strict Ransomware</button>
+            <button class="btn" onclick="applyProfilePreset('recommended')">Apply Recommended</button>
+          </p>
+          <div class="toggle-row" style="margin-top:1rem">
+            <div><strong>Security Profiles engine</strong><div class="hint">Active preset: <code>${pol.preset||'—'}</code></div></div>
+            <label><input type="checkbox" id="sp_on" ${pol.enabled!==false?'checked':''}/> Enabled</label>
+          </div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>File Blocking</h3>
+          <div class="cat-grid">
+            ${[['enabled','Enabled'],['block_pe_and_scripts','Block PE / scripts / LNK / HTA'],['block_office_macros','Block Office macros (docm/xlsm)'],['block_disk_images','Block ISO/IMG/VHD'],['block_pe_magic_upload','Block PE uploads (MZ magic)'],['block_unknown_url_downloads','Block risky types under /download']].map(([k,l])=>`
+              <div class="cat-item"><label><input type="checkbox" id="fb_${k}" ${fb[k]!==false?'checked':''}/> ${l}</label></div>`).join('')}
+          </div>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>Anti-Spyware</h3>
+          <div class="cat-grid">
+            ${[['enabled','Enabled'],['block_c2_paths','Block C2-like paths'],['block_dga_hosts','Block DGA-like Hostnames'],['block_dns_tunnel_hosts','Block DNS-tunnel Host labels']].map(([k,l])=>`
+              <div class="cat-item"><label><input type="checkbox" id="asp_${k}" ${asp[k]!==false?'checked':''}/> ${l}</label></div>`).join('')}
+          </div>
+          <p class="hint">DNS sinkhole categories: ${(asp.dns_sinkhole_categories||[]).join(', ')||'—'}</p>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>URL Filtering + EDL</h3>
+          <p class="hint">URL categories enforced: <code>${(uf.categories||[]).join(', ')}</code></p>
+          <div class="cat-grid">
+            <div class="cat-item"><label><input type="checkbox" id="edl_on" ${edl.enabled!==false?'checked':''}/> External Dynamic Lists (domains / IPs / URLs under <code>/runtime/edl/</code>)</label></div>
+          </div>
+          <p style="margin-top:.75rem"><button class="btn primary" onclick="saveSecurityProfiles()">Save profile toggles &amp; apply</button></p>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>What these profiles cover</h3>
+          <ul>
+            <li><strong>File Blocking</strong> — stops risky executables, scripts, and disk images used as loaders.</li>
+            <li><strong>Anti-Spyware</strong> — blocks C2-style paths and suspicious hostnames; works with DNS Filter sinkholing.</li>
+            <li><strong>URL Filtering</strong> — blocks malware, phishing, ransomware, and related web categories.</li>
+            <li><strong>Threat lists (EDL)</strong> — operator-managed domain, IP, and URL deny lists.</li>
+          </ul>
+        </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
+  }
+  if(t==='ransomware'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading Ransomware Defense…</p></div>`;
+    api('/api/ransomware-defense').then(j=>{
+      const pol=j.policy||{};
+      const cat=j.catalog||{};
+      const layers=cat.layers||[];
+      c.innerHTML=`
+        <div class="teach"><strong>NikTiar Ransomware Defense</strong> blocks known ransomware infrastructure
+          at DNS and stops common dropper, ransom-note, and WebDAV abuse patterns on the web edge.
+          For strongest protection, keep endpoint security and backups enabled alongside this appliance.</div>
+        <div class="card">
+          <div class="toggle-row">
+            <div><strong>NikTiar Ransomware Defense</strong><div class="hint">DNS category + WAF dropper / note / WebDAV controls. Ransomware domains loaded: <code>${j.dns_ransomware_domains||0}</code></div></div>
+            <label><input type="checkbox" id="rw_on" ${pol.enabled!==false?'checked':''}/> Enabled</label>
+          </div>
+          <div class="row">
+            <div><label>When a rule matches</label>
+              <select id="rw_mode" class="select-light">
+                <option value="block" ${pol.mode!=='log'?'selected':''}>Block (403)</option>
+                <option value="log" ${pol.mode==='log'?'selected':''}>Log only</option>
+              </select>
+            </div>
+          </div>
+          <h3>Layers</h3>
+          <div class="cat-grid">
+            ${[
+              ['dns_category','DNS ransomware category'],
+              ['block_ransom_note_paths','Ransom note / staging paths'],
+              ['block_double_extension_downloads','Double-extension downloads'],
+              ['block_script_droppers','Script droppers under /download'],
+              ['block_archive_droppers','ISO/IMG droppers under /download'],
+              ['block_webdav_write','WebDAV write / PROPFIND'],
+              ['block_tor2web_gateways','Tor2web / onion gateways'],
+              ['block_suspicious_exfil_paths','Suspicious exfil path keywords']
+            ].map(([id,label])=>`<div class="cat-item"><label><input type="checkbox" id="rw_${id}" ${pol[id]!==false?'checked':''}/> <strong>${label}</strong></label></div>`).join('')}
+          </div>
+          <p style="margin-top:.75rem"><button class="btn primary" onclick="saveRansomware()">Save &amp; apply</button></p>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>Protection layers</h3>
+          <ul>${layers.map(l=>`<li><strong>${l.label}</strong> — ${l.hint}</li>`).join('')}</ul>
+        </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
+  }
+  if(t==='dnsfilter'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading DNS Filter…</p></div>`;
+    api('/api/dns-filter').then(j=>{
+      S.dns=j;
+      const pol=j.policy||{};
+      const st=j.status||{};
+      const cats=j.catalog?.categories||[];
+      const selected=new Set(pol.enabled_categories||[]);
+      const files=st.category_files||{};
+      const man=st.manifest||{};
+      const prov=man.providers||{};
+      c.innerHTML=`
+        <div class="teach"><strong>NikTiar DNS Filter</strong> blocks bad domains when clients use this edge as their DNS server (UDP/TCP 53).
+          Category feeds refresh automatically. Optional commercial category feed plugs in via appliance env.
+          With <em>WAF Host block</em> on, the same domains are also denied if requested by Host header through NikTiar WAF.</div>
+        <div class="card">
+          <div class="toggle-row">
+            <div><strong>DNS Filter</strong><div class="hint">Sinkholes enforced categories. Point LAN / DHCP DNS at this edge IP.</div></div>
+            <label><input type="checkbox" id="dns_on" ${pol.enabled!==false?'checked':''}/> Enabled</label>
+          </div>
+          <div class="toggle-row" style="margin-top:.5rem">
+            <div><strong>Also block on NikTiar WAF (Host header)</strong><div class="hint">Stops HTTP(S) to blocked domains even if DNS was bypassed.</div></div>
+            <label><input type="checkbox" id="dns_waf" ${pol.waf_host_block!==false?'checked':''}/> Enabled</label>
+          </div>
+          <h3>Categories</h3>
+          <div class="cat-grid" id="dns_cats">
+            ${cats.map(cat=>`<div class="cat-item">
+              <label><input type="checkbox" data-dnscat="${cat.id}" ${selected.has(cat.id)?'checked':''}/> <span><strong>${cat.label}</strong></span></label>
+              <div class="hint">${cat.hint||''} · feed domains: <code>${files[cat.id]||0}</code></div>
+            </div>`).join('')||'<p class="muted">No categories</p>'}
+          </div>
+          <div class="row" style="margin-top:1rem">
+            <div><label>Custom block domains (one per line)</label>
+              <textarea id="dns_block" rows="5">${(pol.custom_block_domains||[]).join('\\n')}</textarea></div>
+            <div><label>Allow exceptions (one per line)</label>
+              <textarea id="dns_allow" rows="5">${(pol.custom_allow_domains||[]).join('\\n')}</textarea></div>
+          </div>
+          <p style="margin-top:.75rem;display:flex;gap:.5rem;flex-wrap:wrap">
+            <button class="btn primary" onclick="saveDnsFilter()">Save DNS policy &amp; apply</button>
+            <button class="btn" onclick="resyncDnsFeeds()">Refresh feeds now</button>
+          </p>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>Feed status</h3>
+          <p class="hint">${(j.catalog&&j.catalog.help&&j.catalog.help.commercial_feed)||''}</p>
+          <table>
+            <tr><th>Config ready</th><td>${st.config_present?'yes':'no'}</td></tr>
+            <tr><th>WAF host list</th><td>${st.waf_list_count||0} domains</td></tr>
+            <tr><th>Last sync</th><td>${man.ts?new Date(man.ts*1000).toLocaleString():'—'}</td></tr>
+          </table>
+          <h3 style="margin-top:1rem">Providers</h3>
+          <table><thead><tr><th>Provider</th><th>Status</th><th>Detail</th></tr></thead>
+          <tbody>
+            ${Object.keys(prov).length?Object.entries(prov).map(([id,p])=>`<tr>
+              <td><code>${id}</code></td>
+              <td>${p.ok?'OK':(p.skipped?'skipped':'fail')}</td>
+              <td class="muted">${p.domains!=null?p.domains+' domains':(p.reason||p.error||'')}</td>
+            </tr>`).join(''):'<tr><td colspan="3" class="muted">Waiting for first feed sync…</td></tr>'}
+          </tbody></table>
+        </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
+  }
+  if(t==='urlfilter'){
+    c.innerHTML=`<div class="card"><p class="muted">Loading URL filter…</p></div>`;
+    api('/api/ngfw').then(j=>{
+      S.ngfw=j.ngfw||{};
+      const uf=S.ngfw.url_filter||{};
+      const cats=j.catalog?.url_categories||[];
+      const selected=new Set(uf.categories||[]);
+      c.innerHTML=`
+        <div class="teach"><strong>NikTiar URL Filter</strong> inspects the request path (HTTP).
+          For whole-domain blocking at DNS time, use <a href="#" onclick="go('dnsfilter');return false">NikTiar DNS Filter</a>.
+          Turn on path categories you want blocked (malware, phishing, scanners…).
+          Custom allow patterns are checked first so you can carve out exceptions.</div>
+        <div class="card">
+          <div class="toggle-row">
+            <div><strong>URL Filter</strong><div class="hint">Applies to all zones on this edge.</div></div>
+            <label><input type="checkbox" id="uf_on" ${uf.enabled!==false?'checked':''}/> Enabled</label>
+          </div>
+          <div class="row">
+            <div><label>When a category matches</label>
+              <select id="uf_mode">
+                <option value="block" ${uf.mode!=='log'?'selected':''}>Block (403)</option>
+                <option value="log" ${uf.mode==='log'?'selected':''}>Log only</option>
+              </select>
+            </div>
+          </div>
+          <h3>Categories</h3>
+          <div class="cat-grid" id="uf_cats">
+            ${cats.map(cat=>`<div class="cat-item">
+              <label><input type="checkbox" data-cat="${cat.id}" ${selected.has(cat.id)?'checked':''}/> <span><strong>${cat.label}</strong></span></label>
+              <div class="hint">${cat.hint||''}</div>
+            </div>`).join('')||'<p class="muted">No categories loaded</p>'}
+          </div>
+          <div class="row" style="margin-top:1rem">
+            <div><label>Custom block regexes (one per line)</label>
+              <textarea id="uf_block" rows="4">${(uf.custom_block||[]).join('\\n')}</textarea></div>
+            <div><label>Allow exceptions (one per line)</label>
+              <textarea id="uf_allow" rows="4">${(uf.custom_allow||[]).join('\\n')}</textarea></div>
+          </div>
+          <p style="margin-top:.75rem"><button class="btn primary" onclick="saveUrlFilter()">Save URL filter &amp; apply</button></p>
+        </div>
+        <div class="card" style="margin-top:1rem">
+          <h3>Per-zone URL categories (optional)</h3>
+          ${selZone()}
+          ${(()=>{ const z=curZone(); if(!z) return '';
+            const zc=new Set(((z.firewall||{}).url_categories)||[]);
+            return `<div class="cat-grid" style="margin-top:.75rem">
+              ${cats.map(cat=>`<div class="cat-item">
+                <label><input type="checkbox" data-zcat="${cat.id}" ${zc.has(cat.id)?'checked':''}/> ${cat.label}</label>
+              </div>`).join('')}
+            </div>
+            <div><label>Zone custom block regexes</label>
+              <textarea id="z_uf_block" rows="3">${(((z.firewall||{}).url_custom_block)||[]).join('\\n')}</textarea></div>
+            <p><button class="btn primary" onclick="saveZoneUrlFilter()">Save for this zone</button></p>`;
+          })()}
+        </div>`;
+    }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
+  }
   if(t==='firewall'){
     const z=curZone();
-    c.innerHTML=`<div class="card">${selZone()}
-      ${!z?'':`<h3>IP Access Rules</h3>
+    c.innerHTML=`
+    <div class="teach"><strong>NikTiar Firewall</strong> is the classic access list:
+      Block known-bad IPs, allow trusted office IPs, block malicious User-Agents, and optionally block countries
+      (requires a country header such as <code>CF-IPCountry</code> from an upstream).</div>
+    <div class="card">${selZone()}
+      ${!z?'':`<h3>IP Access Rules — zone <code>${z.public_hostname}</code></h3>
       <div class="row">
-        <div><label>Block IPs (one per line)</label><textarea id="ip_block" rows="5">${((z.firewall||{}).ip_block||[]).join('\\n')}</textarea></div>
-        <div><label>Allow IPs (one per line)</label><textarea id="ip_allow" rows="5">${((z.firewall||{}).ip_allow||[]).join('\\n')}</textarea></div>
-        <div><label>Block User-Agents (substring)</label><textarea id="ua_block" rows="5">${((z.firewall||{}).ua_block||[]).join('\\n')}</textarea></div>
+        <div><label>Block IPs / CIDRs (one per line)</label><textarea id="ip_block" rows="5">${((z.firewall||{}).ip_block||[]).join('\\n')}</textarea>
+          <p class="hint">Example: <code>203.0.113.10</code> or <code>198.51.100.0/24</code></p></div>
+        <div><label>Allow IPs / CIDRs (one per line)</label><textarea id="ip_allow" rows="5">${((z.firewall||{}).ip_allow||[]).join('\\n')}</textarea>
+          <p class="hint">Allow is evaluated with WAF allow semantics — use for trusted scanners / office egress.</p></div>
+        <div><label>Block User-Agents (substring)</label><textarea id="ua_block" rows="5">${((z.firewall||{}).ua_block||[]).join('\\n')}</textarea>
+          <p class="hint">Example: <code>sqlmap</code></p></div>
+      </div>
+      <div class="row">
+        <div><label>Block countries (ISO codes, comma)</label>
+          <input id="geo_countries" value="${((z.firewall||{}).countries_block||[]).join(',')}" placeholder="CN,RU,KP"/>
+          <p class="hint">Needs country header on requests. Configure global geo in NGFW if you prefer edge-wide.</p></div>
       </div>
       <p><button class="btn primary" onclick="saveFirewall()">Save firewall</button></p>`}
+    </div>
+    <div class="card" style="margin-top:1rem">
+      <h3>Edge-wide geo block</h3>
+      <p class="muted">Loading…</p>
+      <div id="geoBox"></div>
     </div>`;
+    api('/api/ngfw').then(j=>{
+      const geo=((j.ngfw||{}).geo_block)||{};
+      const box=document.getElementById('geoBox');
+      if(!box) return;
+      box.innerHTML=`
+        <div class="toggle-row">
+          <div><strong>Geo blocking</strong><div class="hint">${geo.description||'Block by country code header.'}</div></div>
+          <label><input type="checkbox" id="geo_on" ${geo.enabled?'checked':''}/> Enabled</label>
+        </div>
+        <div class="row">
+          <div><label>Mode</label>
+            <select id="geo_mode"><option value="block" ${geo.mode!=='log'?'selected':''}>Block</option>
+            <option value="log" ${geo.mode==='log'?'selected':''}>Log only</option></select></div>
+          <div><label>Header name</label><input id="geo_hdr" value="${geo.header||'CF-IPCountry'}"/></div>
+          <div><label>Countries (comma)</label><input id="geo_list" value="${(geo.countries||[]).join(',')}" placeholder="CN,RU"/></div>
+        </div>
+        <p><button class="btn primary" onclick="saveGeo()">Save geo settings</button></p>`;
+    }).catch(()=>{});
   }
   if(t==='ratelimit'){
     const z=curZone();
     const rules=(z&&z.rate_limit_rules)||[];
-    c.innerHTML=`<div class="card">${selZone()}
+    c.innerHTML=`
+    <div class="teach"><strong>NikTiar Rate Limit</strong> counts requests per client IP for a path.
+      When the limit is exceeded the edge returns <strong>HTTP 429</strong> (Too Many Requests).
+      Use this on <code>/api</code> and login paths.</div>
+    <div class="card">${selZone()}
       ${!z?'':`
       <table><thead><tr><th>Name</th><th>Path</th><th>Limit</th><th>Action</th><th></th></tr></thead>
       <tbody>${rules.map((r,i)=>`<tr>
         <td>${r.name||'—'}</td><td><code>${r.path}</code></td>
-        <td>${r.requests}/${r.period}s</td><td>${r.action||'block'}</td>
-        <td><button class="btn danger" onclick="delRL(${i})">Remove</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">No rules</td></tr>'}</tbody></table>
+        <td>${r.requests} req / ${r.period}s</td><td>${r.action||'block'}</td>
+        <td><button class="btn danger" onclick="delRL(${i})">Remove</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted">No rules — add one below</td></tr>'}</tbody></table>
       <h3>Add rate limit</h3>
       <div class="row">
-        <div><label>Name</label><input id="rl_name" value="api"/></div>
-        <div><label>Path (regex ok)</label><input id="rl_path" value="/api/.*"/></div>
-        <div><label>Requests</label><input id="rl_req" type="number" value="100"/></div>
-        <div><label>Period (sec)</label><input id="rl_per" type="number" value="60"/></div>
+        <div><label>Friendly name</label><input id="rl_name" value="api"/></div>
+        <div><label>Path (prefix or regex)</label><input id="rl_path" value="/api"/></div>
+        <div><label>Max requests</label><input id="rl_req" type="number" value="100"/></div>
+        <div><label>Per seconds</label><input id="rl_per" type="number" value="60"/></div>
       </div>
-      <p><button class="btn primary" onclick="addRL()">Add & apply</button></p>`}
+      <p class="hint">Example: 100 requests per 60 seconds on <code>/api</code> ≈ generous API; use 20/60 on <code>/login</code>.</p>
+      <p><button class="btn primary" onclick="addRL()">Add &amp; apply</button></p>`}
     </div>`;
   }
   if(t==='ssl'){
@@ -410,35 +840,34 @@ function render(){
         <td>${r.name}</td><td><code>${r.expression}</code></td><td>${r.action}</td>
         <td><button class="btn danger" onclick="delRule('${r.id}')">Delete</button></td></tr>`).join('')||'<tr><td colspan="4" class="muted">No custom rules</td></tr>'}</tbody></table>
       <h3>Create rule</h3>
-      <p class="hint">Multi-tenant isolation: every custom rule must set <code>tenant</code> and/or <code>hostname</code> (Host-scoped in Coraza).</p>
+      <p class="hint">On a dedicated edge, scope each rule to a site hostname (Host-scoped). Tenant code is optional when the appliance is already pinned.</p>
       <div class="row">
         <div><label>Name</label><input id="r_name" placeholder="Block admin scanners"/></div>
         <div><label>Expression</label><input id="r_expr" placeholder="path contains /wp-login"/></div>
         <div><label>Action</label><select id="r_act"><option>block</option><option>log</option><option>allow</option><option>challenge</option></select></div>
       </div>
       <div class="row">
-        <div><label>Tenant code</label><input id="r_tenant" placeholder="ACME"/></div>
+        <div><label>Organization code (optional)</label><input id="r_tenant" placeholder="ACME"/></div>
         <div><label>Hostname (preferred)</label><input id="r_host" placeholder="shop.acme.com"/></div>
       </div>
-      <p><button class="btn primary" onclick="addRule()">Deploy rule</button></p>
+      <p><button class="btn primary" onclick="addRule()">Add rule</button></p>
     </div>`;
   }
   if(t==='isolation'){
-    c.innerHTML=`<div class="card"><p class="muted">Loading isolation status…</p></div>`;
+    c.innerHTML=`<div class="card"><p class="muted">Loading deployment posture…</p></div>`;
     api('/api/isolation').then(j=>{
       c.innerHTML=`<div class="card">
-        <p><span class="pill ok">strong_isolation=${!!j.strong_isolation}</span>
-           <span class="pill">${j.mode}</span></p>
+        <div class="teach"><strong>Dedicated edge.</strong> This appliance protects one organization.
+          Unknown hostnames are denied. Firewall and custom rules stay scoped to each site hostname.</div>
+        <p><span class="pill ok">${j.deployment_label||'Dedicated Edge'}</span></p>
         <table>
+          <tr><th>Mode</th><td>Dedicated</td></tr>
+          <tr><th>Organization</th><td>${j.pinned_tenant||'—'}</td></tr>
           <tr><th>Unknown Host</th><td><code>${j.unknown_host_policy}</code></td></tr>
-          <tr><th>Default origin fallthrough</th><td>${j.default_origin_fallthrough?'<span class="pill bad">YES (bad)</span>':'<span class="pill ok">disabled</span>'}</td></tr>
-          <tr><th>Firewall scope</th><td>${j.firewall_scope}</td></tr>
-          <tr><th>Custom rules scope</th><td>${j.custom_rules_scope}</td></tr>
-          <tr><th>Pinned tenant</th><td>${j.pinned_tenant||'— (shared)'}</td></tr>
-          <tr><th>Tenant map</th><td>${j.tenant_map_entries} hosts · ${(j.tenants||[]).join(', ')||'—'}</td></tr>
+          <tr><th>Default origin fallthrough</th><td>${j.default_origin_fallthrough?'<span class="pill bad">enabled</span>':'<span class="pill ok">disabled</span>'}</td></tr>
+          <tr><th>Firewall / rules scope</th><td>${j.firewall_scope} · ${j.custom_rules_scope}</td></tr>
+          <tr><th>Sites on this edge</th><td>${j.tenant_map_entries} hosts${(j.tenants||[]).length?(' · '+(j.tenants||[]).join(', ')) : ''}</td></tr>
         </table>
-        <p class="hint">${j.note||''}</p>
-        <p class="hint">Customers never use this dashboard on shared edges — MSSP ops only. Customer portal is tenant-scoped.</p>
       </div>`;
     }).catch(e=>c.innerHTML=`<div class="err">${e.message}</div>`);
   }
@@ -453,23 +882,23 @@ function render(){
           <div style="flex:0"><label><input type="checkbox" id="ent_${id}" ${on(id)?'checked':''}/> Enabled</label></div>
         </div></div>`;
       c.innerHTML=`
-        <p class="hint">Next-gen controls mapped to Cloudflare Advantage / API Shield / Bot / Page Shield / Waiting Room / Logpush.</p>
-        ${row('api_shield','API Shield','JSON-required on /api, block TRACE/TRACK, body size caps')}
-        ${row('graphql_guard','GraphQL Guard','Block batch arrays, deep nesting, alias abuse')}
-        ${row('page_shield','Page Shield','CSP + Referrer-Policy + Permissions-Policy headers')}
-        ${row('virtual_patching','Virtual Patching','Block .env, actuators, phpMyAdmin, WP probes')}
-        ${row('auth_hardening','Auth Hardening','Rate-limit login / token / oauth paths')}
-        ${row('sensitive_data_egress','Sensitive Data Detection','PAN/SSN patterns in responses (default: log)')}
-        ${row('honeypot','Honeypot Paths','Fake 404 traps for scanners')}
-        ${row('advanced_bot','Advanced Bot / PoW','Block headless UAs + /cdn-cgi PoW challenge')}
-        ${row('leaked_credentials','Leaked Credentials','HIBP k-anonymity check API')}
-        ${row('waiting_room','Waiting Room','Queue visitors until cookie pass (CF Waiting Room)')}
-        ${row('logpush','Logpush','Webhook SIEM export',
+        <p class="hint">Advanced NikTiar defenses for APIs, bots, sensitive data, and visitor queues.</p>
+        ${row('api_shield','API Shield','Require JSON on /api, block TRACE/TRACK, enforce body size limits')}
+        ${row('graphql_guard','GraphQL Guard','Block batch arrays, deep nesting, and alias abuse')}
+        ${row('page_shield','Page Shield','CSP, Referrer-Policy, and Permissions-Policy response headers')}
+        ${row('virtual_patching','Virtual Patching','Block probes for .env, actuators, phpMyAdmin, and similar paths')}
+        ${row('auth_hardening','Auth Hardening','Rate-limit login, token, and OAuth paths')}
+        ${row('sensitive_data_egress','Sensitive Data Detection','Detect PAN/SSN patterns in responses (default: log)')}
+        ${row('honeypot','Honeypot Paths','Decoy paths that trap automated scanners')}
+        ${row('advanced_bot','Advanced Bot Defense','Block common headless clients and challenge suspicious traffic')}
+        ${row('leaked_credentials','Leaked Credentials','Check passwords against known breach corpora (k-anonymity)')}
+        ${row('waiting_room','Waiting Room','Queue visitors until capacity allows entry')}
+        ${row('logpush','Log export','Webhook export to your SIEM',
           `<div class="row" style="margin-top:.5rem"><div><label>Webhook URL</label>
           <input id="ent_logpush_url" value="${(e.logpush||{}).webhook_url||''}" placeholder="https://siem.example/hooks/edge"/></div></div>`)}
-        ${row('mtls','mTLS (stub)','Request client certs — wire CA on dedicated edges')}
+        ${row('mtls','Mutual TLS','Request client certificates (configure CA on this edge)')}
         <div class="card">
-          <h3>HIBP password check</h3>
+          <h3>Password breach check</h3>
           <div class="row">
             <div><label>Password</label><input id="hibp_pw" type="password" placeholder="test password"/></div>
           </div>
@@ -502,13 +931,11 @@ function render(){
   if(t==='system'){
     const o=S.overview;
     c.innerHTML=`<div class="card">
-      <p>Dashboard: <code>http://${location.hostname}:9080/</code></p>
-      <p>WAF: <code>http://${location.hostname}/</code></p>
-      <p>Control plane: <code>${o.control_url||'—'}</code></p>
-      <h3>Containers</h3>
-      <table><thead><tr><th>Name</th><th>Status</th><th>Image</th></tr></thead>
-      <tbody>${(o.containers||[]).map(x=>`<tr><td>${x.name}</td><td>${x.status}</td><td class="muted">${x.image}</td></tr>`).join('')}</tbody></table>
-      <p class="hint">Features: ${(o.features||[]).map(f=>'<code>'+f+'</code>').join(' ')}</p>
+      <p>Appliance console: <code>http://${location.hostname}:9080/</code></p>
+      <p>Edge service: <code>http://${location.hostname}/</code></p>
+      <h3>Service health</h3>
+      <table><thead><tr><th>Service</th><th>Status</th></tr></thead>
+      <tbody>${(o.containers||[]).map(x=>`<tr><td>${(x.name||'').replace(/^niktiar-se-/,'')}</td><td>${x.status}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">No status available</td></tr>'}</tbody></table>
     </div>`;
   }
 }
@@ -549,9 +976,155 @@ async function saveWaf(){
 async function saveFirewall(){
   const z=curZone(); if(!z)return;
   const lines=id=>document.getElementById(id).value.split('\\n').map(s=>s.trim()).filter(Boolean);
-  z.firewall={ ip_block:lines('ip_block'), ip_allow:lines('ip_allow'), ua_block:lines('ua_block'), asn_block:(z.firewall||{}).asn_block||[] };
-  try{ await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('Firewall applied'); await refresh(); }
+  const geoEl=document.getElementById('geo_countries');
+  const countries=(geoEl?geoEl.value:'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
+  z.firewall={
+    ip_block:lines('ip_block'), ip_allow:lines('ip_allow'), ua_block:lines('ua_block'),
+    asn_block:(z.firewall||{}).asn_block||[],
+    countries_block:countries,
+    url_categories:(z.firewall||{}).url_categories||[],
+    url_custom_block:(z.firewall||{}).url_custom_block||[]
+  };
+  try{ await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('Firewall applied'); await refresh(); go('firewall'); }
   catch(e){ flash(e.message,false); }
+}
+async function saveNgfwMaster(){
+  try{
+    await api('/api/ngfw',{method:'PUT',body:JSON.stringify({
+      enabled:document.getElementById('ngfw_on').checked,
+      default_action:document.getElementById('ngfw_default').value
+    })});
+    flash('NGFW engine saved'); await refresh(); go('ngfw');
+  }catch(e){ flash(e.message,false); }
+}
+async function addNgfwPol(){
+  const methods=(np_meth.value||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean);
+  const ua=(np_ua.value||'').split(',').map(s=>s.trim()).filter(Boolean);
+  try{
+    await api('/api/ngfw/policies',{method:'POST',body:JSON.stringify({
+      name:np_name.value.trim()||'Policy',
+      priority:parseInt(np_pri.value,10)||100,
+      action:np_act.value,
+      zone:np_zone.value.trim()||'*',
+      source:np_src.value,
+      app:np_app.value||null,
+      path_contains:np_path.value.trim()||null,
+      methods:methods.length?methods:null,
+      ua_contains:ua.length?ua:null,
+      description:np_desc.value.trim()||'',
+      enabled:true
+    })});
+    flash('Policy deployed'); await refresh(); go('ngfw');
+  }catch(e){ flash(e.message,false); }
+}
+async function delNgfwPol(id){
+  if(!confirm('Delete this policy?')) return;
+  try{ await api('/api/ngfw/policies/'+id,{method:'DELETE'}); flash('Policy removed'); await refresh(); go('ngfw'); }
+  catch(e){ flash(e.message,false); }
+}
+async function applyProfilePreset(name){
+  try{
+    await api('/api/security-profiles/preset/'+encodeURIComponent(name),{method:'POST'});
+    flash('Preset applied: '+name); await refresh(); go('profiles');
+  }catch(e){ flash(e.message,false); }
+}
+async function saveSecurityProfiles(){
+  try{
+    await api('/api/security-profiles',{method:'PUT',body:JSON.stringify({
+      enabled:document.getElementById('sp_on').checked,
+      _customized:true,
+      file_blocking:{
+        enabled:document.getElementById('fb_enabled').checked,
+        block_pe_and_scripts:document.getElementById('fb_block_pe_and_scripts').checked,
+        block_office_macros:document.getElementById('fb_block_office_macros').checked,
+        block_disk_images:document.getElementById('fb_block_disk_images').checked,
+        block_pe_magic_upload:document.getElementById('fb_block_pe_magic_upload').checked,
+        block_unknown_url_downloads:document.getElementById('fb_block_unknown_url_downloads').checked
+      },
+      anti_spyware:{
+        enabled:document.getElementById('asp_enabled').checked,
+        block_c2_paths:document.getElementById('asp_block_c2_paths').checked,
+        block_dga_hosts:document.getElementById('asp_block_dga_hosts').checked,
+        block_dns_tunnel_hosts:document.getElementById('asp_block_dns_tunnel_hosts').checked
+      },
+      edl:{enabled:document.getElementById('edl_on').checked}
+    })});
+    flash('Security Profiles saved'); await refresh(); go('profiles');
+  }catch(e){ flash(e.message,false); }
+}
+async function saveRansomware(){
+  try{
+    await api('/api/ransomware-defense',{method:'PUT',body:JSON.stringify({
+      enabled:document.getElementById('rw_on').checked,
+      mode:document.getElementById('rw_mode').value,
+      dns_category:document.getElementById('rw_dns_category').checked,
+      block_ransom_note_paths:document.getElementById('rw_block_ransom_note_paths').checked,
+      block_double_extension_downloads:document.getElementById('rw_block_double_extension_downloads').checked,
+      block_script_droppers:document.getElementById('rw_block_script_droppers').checked,
+      block_archive_droppers:document.getElementById('rw_block_archive_droppers').checked,
+      block_webdav_write:document.getElementById('rw_block_webdav_write').checked,
+      block_tor2web_gateways:document.getElementById('rw_block_tor2web_gateways').checked,
+      block_suspicious_exfil_paths:document.getElementById('rw_block_suspicious_exfil_paths').checked
+    })});
+    flash('Ransomware Defense applied'); await refresh(); go('ransomware');
+  }catch(e){ flash(e.message,false); }
+}
+async function saveDnsFilter(){
+  const lines=id=>(document.getElementById(id).value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  try{
+    const cats=[...document.querySelectorAll('input[data-dnscat]:checked')].map(el=>el.getAttribute('data-dnscat'));
+    await api('/api/dns-filter',{method:'PUT',body:JSON.stringify({
+      enabled:document.getElementById('dns_on').checked,
+      waf_host_block:document.getElementById('dns_waf').checked,
+      enabled_categories:cats,
+      custom_block_domains:lines('dns_block'),
+      custom_allow_domains:lines('dns_allow')
+    })});
+    flash('DNS Filter policy applied'); await refresh(); go('dnsfilter');
+  }catch(e){ flash(e.message,false); }
+}
+async function resyncDnsFeeds(){
+  try{
+    const j=await api('/api/dns-filter/resync',{method:'POST'});
+    flash(j.ok?'Feeds refreshed':'Feed refresh had errors', j.ok); await refresh(); go('dnsfilter');
+  }catch(e){ flash(e.message,false); }
+}
+async function saveUrlFilter(){
+  const cats=[...document.querySelectorAll('#uf_cats input[data-cat]:checked')].map(el=>el.getAttribute('data-cat'));
+  const lines=id=>(document.getElementById(id).value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  try{
+    await api('/api/ngfw',{method:'PUT',body:JSON.stringify({
+      url_filter:{
+        enabled:document.getElementById('uf_on').checked,
+        mode:document.getElementById('uf_mode').value,
+        categories:cats,
+        custom_block:lines('uf_block'),
+        custom_allow:lines('uf_allow')
+      }
+    })});
+    flash('URL filter applied'); await refresh(); go('urlfilter');
+  }catch(e){ flash(e.message,false); }
+}
+async function saveZoneUrlFilter(){
+  const z=curZone(); if(!z)return;
+  const cats=[...document.querySelectorAll('input[data-zcat]:checked')].map(el=>el.getAttribute('data-zcat'));
+  const custom=(document.getElementById('z_uf_block').value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  z.firewall=Object.assign({}, z.firewall||{}, {url_categories:cats, url_custom_block:custom});
+  try{ await api('/api/zones/'+encodeURIComponent(z.public_hostname),{method:'PATCH',body:JSON.stringify(z)}); flash('Zone URL filter saved'); await refresh(); go('urlfilter'); }
+  catch(e){ flash(e.message,false); }
+}
+async function saveGeo(){
+  try{
+    await api('/api/ngfw',{method:'PUT',body:JSON.stringify({
+      geo_block:{
+        enabled:document.getElementById('geo_on').checked,
+        mode:document.getElementById('geo_mode').value,
+        header:document.getElementById('geo_hdr').value.trim()||'CF-IPCountry',
+        countries:(document.getElementById('geo_list').value||'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)
+      }
+    })});
+    flash('Geo settings applied'); await refresh(); go('firewall');
+  }catch(e){ flash(e.message,false); }
 }
 async function addRL(){
   const z=curZone(); if(!z)return;
@@ -574,7 +1147,7 @@ async function addRule(){
     tenant_short_code:(r_tenant.value||'').trim()||null,
     public_hostname:(r_host.value||'').trim()||null
   })});
-  flash('Custom rule deployed (tenant-scoped)'); await refresh(); go('rules');
+  flash('Custom rule saved'); await refresh(); go('rules');
 }
 async function delRule(id){ await api('/api/waf/rules/'+id,{method:'DELETE'}); flash('Rule removed'); await refresh(); go('rules'); }
 

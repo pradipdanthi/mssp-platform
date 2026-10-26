@@ -208,6 +208,160 @@ def secure_edge_config(
     }
 
 
+_EDGE_ALERT_SEVERITIES = {"high", "critical"}
+_EDGE_ALERT_EVENT_HINTS = (
+    "waf_block",
+    "bot_block",
+    "ddos",
+    "rate_limit",
+    "firewall_block",
+    "challenge",
+    "blocked",
+)
+
+
+def _edge_event_should_promote(ev: Dict[str, Any]) -> bool:
+    """Promote high/critical or block-class Secure Edge events into security_alerts."""
+    sev = str(ev.get("severity") or "info").strip().lower()
+    if sev in _EDGE_ALERT_SEVERITIES:
+        return True
+    et = str(ev.get("event_type") or "").strip().lower()
+    summary = str(ev.get("summary") or "").strip().lower()
+    blob = f"{et} {summary}"
+    return any(h in blob for h in _EDGE_ALERT_EVENT_HINTS)
+
+
+def _promote_secure_edge_to_security_alert(
+    *,
+    tenant_short_code: str,
+    edge_hostname: str,
+    public_hostname: Optional[str],
+    ev: Dict[str, Any],
+    details: Dict[str, Any],
+) -> Optional[str]:
+    """Idempotent upsert into security_alerts; enqueue AI when new. Returns alert id."""
+    tenant_row = fetch_one(
+        "SELECT id::text AS id FROM tenants WHERE upper(short_code) = upper(%s) LIMIT 1;",
+        (tenant_short_code,),
+    )
+    if not tenant_row:
+        return None
+    tenant_id = tenant_row["id"]
+    event_type = (ev.get("event_type") or "unknown")[:64]
+    severity = (ev.get("severity") or "high").strip().lower()
+    if severity not in ("low", "medium", "high", "critical"):
+        severity = "high"
+    summary = (ev.get("summary") or "Secure Edge event")[:512]
+    # Stable external id for idempotency within a short window
+    fingerprint = (
+        f"secure-edge:{edge_hostname}:{public_hostname or '-'}:{event_type}:"
+        f"{summary[:80]}"
+    )[:240]
+    existing = fetch_one(
+        """
+        SELECT id::text AS id
+        FROM security_alerts
+        WHERE tenant_id = %s::uuid
+          AND source_tool = 'secure_edge'
+          AND external_alert_id = %s
+        LIMIT 1;
+        """,
+        (tenant_id, fingerprint),
+    )
+    if existing:
+        return existing["id"]
+
+    title = f"Secure Edge: {event_type}"[:500]
+    description = (
+        f"{summary}\nedge={edge_hostname}\nhost={public_hostname or '-'}"
+    )[:4000]
+    src_ip = None
+    for key in ("client_ip", "source_ip", "ip"):
+        cand = details.get(key) or ev.get(key)
+        if cand and isinstance(cand, str) and len(cand) < 64:
+            src_ip = cand
+            break
+
+    row = fetch_one_write(
+        """
+        INSERT INTO security_alerts (
+            tenant_id, source_tool, external_alert_id,
+            severity, alert_title, alert_description, event_time,
+            source_ip, destination_host, raw_event, customer_visible, status
+        )
+        VALUES (
+            %s::uuid, 'secure_edge', %s,
+            %s, %s, %s, now(),
+            %s::inet, %s, %s::jsonb, true, 'new'
+        )
+        ON CONFLICT DO NOTHING
+        RETURNING id::text AS id;
+        """,
+        (
+            tenant_id,
+            fingerprint,
+            severity,
+            title,
+            description,
+            src_ip,
+            public_hostname,
+            json.dumps(details),
+        ),
+    )
+    # Some DBs lack a unique constraint on (tenant, source, external) — fall back
+    if not row:
+        row = fetch_one(
+            """
+            SELECT id::text AS id FROM security_alerts
+            WHERE tenant_id = %s::uuid AND source_tool = 'secure_edge'
+              AND external_alert_id = %s
+            LIMIT 1;
+            """,
+            (tenant_id, fingerprint),
+        )
+        if row:
+            return row["id"]
+        row = fetch_one_write(
+            """
+            INSERT INTO security_alerts (
+                tenant_id, source_tool, external_alert_id,
+                severity, alert_title, alert_description, event_time,
+                source_ip, destination_host, raw_event, customer_visible, status
+            )
+            VALUES (
+                %s::uuid, 'secure_edge', %s,
+                %s, %s, %s, now(),
+                %s::inet, %s, %s::jsonb, true, 'new'
+            )
+            RETURNING id::text AS id;
+            """,
+            (
+                tenant_id,
+                fingerprint,
+                severity,
+                title,
+                description,
+                src_ip,
+                public_hostname,
+                json.dumps(details),
+            ),
+        )
+    alert_id = (row or {}).get("id")
+    if not alert_id:
+        return None
+    try:
+        from app.services.ai_alert_queue import enqueue_ai_alert_analysis
+
+        enqueue_ai_alert_analysis(
+            alert_id=str(alert_id),
+            tenant_id=str(tenant_id),
+            severity=severity,
+        )
+    except Exception:  # noqa: BLE001
+        pass
+    return alert_id
+
+
 @router.post("/api/v1/secure-edge/events")
 def secure_edge_events(
     payload: SecureEdgeEventsIn,
@@ -221,6 +375,7 @@ def secure_edge_events(
         raise HTTPException(status_code=401, detail="Invalid appliance token")
 
     accepted = 0
+    promoted = 0
     for ev in (payload.events or [])[:100]:
         host = (ev.get("public_hostname") or "").strip().lower() or None
         tenant = (ev.get("tenant_short_code") or "").strip().upper() or None
@@ -263,7 +418,22 @@ def secure_edge_events(
             ),
         )
         accepted += 1
-    return {"ok": True, "accepted": accepted}
+        # KB-117: fan-in high-value Secure Edge events into the SOC AI pipeline
+        if tenant and _edge_event_should_promote(ev):
+            try:
+                aid = _promote_secure_edge_to_security_alert(
+                    tenant_short_code=tenant,
+                    edge_hostname=payload.edge_hostname,
+                    public_hostname=host,
+                    ev=ev,
+                    details=details,
+                )
+                if aid:
+                    promoted += 1
+            except Exception:  # noqa: BLE001
+                # Never fail edge event ingest because alert promotion failed
+                pass
+    return {"ok": True, "accepted": accepted, "alerts_promoted": promoted}
 
 
 @router.get("/admin/secure-edge/summary")

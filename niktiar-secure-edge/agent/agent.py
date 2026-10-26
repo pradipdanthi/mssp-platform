@@ -18,14 +18,20 @@ CONTROL = (os.getenv("NIKTIAR_CONTROL_URL") or "").rstrip("/")
 TOKEN = os.getenv("NIKTIAR_APPLIANCE_TOKEN") or ""
 TENANT = (os.getenv("NIKTIAR_TENANT_CODE") or "").strip().upper()
 HOST = os.getenv("SECURE_EDGE_HOSTNAME") or "niktiar-secure-edge"
-MODE = (os.getenv("SECURE_EDGE_MODE") or "shared").lower()  # shared | dedicated
+_raw_mode = (os.getenv("SECURE_EDGE_MODE") or "dedicated").lower().strip()
+MODE = "dedicated"  # product default — shared multi-tenant offering retired
+FORM_FACTOR = (os.getenv("SECURE_EDGE_FORM_FACTOR") or "ha_pair").lower().strip()
+if FORM_FACTOR not in ("ha_pair", "physical"):
+    FORM_FACTOR = "ha_pair"
+# keep _raw_mode available for diagnostics only
+_ = _raw_mode
 POLL = int(CFG.get("poll_seconds") or 30)
 RUNTIME = Path(os.getenv("RUNTIME_DIR") or "/runtime")
 CADDY_CFG = Path(os.getenv("CADDY_CONFIG_DIR") or "/config/caddy")
 WAF_CONTAINER = os.getenv("WAF_CONTAINER") or "niktiar-se-waf"
 ACCESS_LOG = Path(os.getenv("ACCESS_LOG") or "/runtime/niktiar-access.log")
 TENANT_MAP_PATH = RUNTIME / "tenant_map.json"
-VERSION = "0.3.0-isolation"
+VERSION = "0.4.0-ngfw"
 _last_config_version = -1
 _log_offset = 0
 
@@ -189,6 +195,10 @@ def heartbeat() -> None:
             "unknown_host_deny",
             "host_scoped_firewall",
             "site_map_sync",
+            "ngfw_policies",
+            "url_filtering",
+            "rate_limiting_enforced",
+            "zone_settings_sync",
         ],
     }
     try:
@@ -263,6 +273,25 @@ def sync_config() -> None:
                 z["origin_url"] = s.get("origin_url") or z.get("origin_url")
                 z["tenant_short_code"] = tcode
                 z["enabled"] = bool(s.get("enabled", True))
+                # Merge control-plane zone_settings (WAF / firewall / rate_limit / cache / SSL)
+                zs = s.get("zone_settings") if isinstance(s.get("zone_settings"), dict) else {}
+                if zs:
+                    if isinstance(zs.get("waf"), dict):
+                        z["waf"] = {**(z.get("waf") or {}), **zs["waf"]}
+                    if isinstance(zs.get("firewall"), dict):
+                        z["firewall"] = {**(z.get("firewall") or {}), **zs["firewall"]}
+                    if isinstance(zs.get("rate_limit_rules"), list):
+                        z["rate_limit_rules"] = zs["rate_limit_rules"]
+                    if isinstance(zs.get("cache"), dict):
+                        z["cache"] = {**(z.get("cache") or {}), **zs["cache"]}
+                    if zs.get("ssl_mode"):
+                        z["ssl_mode"] = zs["ssl_mode"]
+                    if zs.get("security_level"):
+                        z["security_level"] = zs["security_level"]
+                    if "under_attack_mode" in zs:
+                        z["under_attack_mode"] = bool(zs.get("under_attack_mode"))
+                    if isinstance(zs.get("ngfw_policies"), list):
+                        z["ngfw_policies"] = zs["ngfw_policies"]
                 by_host[host] = z
             # dedicated: drop foreign zones
             zones = list(by_host.values())

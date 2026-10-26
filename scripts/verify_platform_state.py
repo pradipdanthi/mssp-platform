@@ -1155,7 +1155,8 @@ def check_appliance_licensing() -> CheckResult:
 # CHECK 6 — Open-source compliance attributions + UI brand isolation
 # ---------------------------------------------------------------------------
 FORBIDDEN_UI_ENGINE_NAMES = re.compile(
-    r"\b(Wazuh|Suricata|Zeek|Nuclei|Vuls|Greenbone|Velociraptor|Fluent\s*Bit|TheHive|Shuffle|MISP|OpenVAS)\b",
+    r"\b(Wazuh|Suricata|Zeek|Nuclei|Vuls|Greenbone|Velociraptor|Fluent\s*Bit|TheHive|Shuffle|MISP|OpenVAS|"
+    r"Coraza|CrowdSec|Cloudflare|OWASP|ModSecurity|Caddy|OpenCTI)\b",
     re.I,
 )
 
@@ -1182,6 +1183,328 @@ def _tsx_line_exposes_engine_brand(line: str) -> bool:
         flags=re.I,
     )
     return bool(FORBIDDEN_UI_ENGINE_NAMES.search(scrubbed))
+
+
+def check_soc_agent_integration() -> CheckResult:
+    """KB-117: Cursor SOC agent expert deep-triage wiring (no duplicate portals)."""
+    cr = CheckResult("CHECK 7: SOC agent enterprise integration (KB-117)")
+    f = cr.findings
+    client = BACKEND / "app" / "services" / "soc_agent_client.py"
+    expert = BACKEND / "app" / "services" / "soc_agent_expert.py"
+    callback = BACKEND / "app" / "api" / "routes" / "soc_agent_callback.py"
+    deep = BACKEND / "app" / "services" / "ai_deep_triage.py"
+    queue = BACKEND / "app" / "services" / "ai_alert_queue.py"
+    edge = BACKEND / "app" / "api" / "routes" / "secure_edge.py"
+    identity = BACKEND / "app" / "api" / "v1" / "identity_ingest.py"
+    main_py = BACKEND / "app" / "main.py"
+    lab_env = ROOT / "deploy" / "environments" / "control-plane.lab.example.env"
+    agent_cb = ROOT / "soc-agent" / "app" / "core" / "callback.py"
+    kb117 = ROOT / "docs" / "KB117_SOC_AGENT_ENTERPRISE_INTEGRATION.md"
+
+    for path, label in (
+        (client, "soc_agent_client.py"),
+        (expert, "soc_agent_expert.py"),
+        (callback, "soc_agent_callback.py"),
+        (agent_cb, "soc-agent callback.py"),
+        (kb117, "KB117 doc"),
+    ):
+        require_file(f, path, label)
+
+    deep_txt = read(deep) if deep.is_file() else ""
+    expect(
+        f,
+        "run_expert_on_alert" in deep_txt and "soc_agent_enabled" in deep_txt,
+        "ai_deep_triage prefers Cursor SOC agent before Ollama fallback",
+        path=deep,
+        status_if_false="FAILED",
+    )
+    queue_txt = read(queue) if queue.is_file() else ""
+    expect(
+        f,
+        "soc_agent_enabled" in queue_txt,
+        "ai_alert_queue treats SOC_AGENT_ENABLED as pipeline enable flag",
+        path=queue,
+        status_if_false="FAILED",
+    )
+    main_txt = read(main_py) if main_py.is_file() else ""
+    expect(
+        f,
+        "soc_agent_callback_router" in main_txt,
+        "main.py registers soc_agent_callback_router",
+        path=main_py,
+        status_if_false="FAILED",
+    )
+    edge_txt = read(edge) if edge.is_file() else ""
+    expect(
+        f,
+        "_promote_secure_edge_to_security_alert" in edge_txt
+        and "enqueue_ai_alert_analysis" in edge_txt,
+        "Secure Edge high/block events promote to security_alerts + AI enqueue",
+        path=edge,
+        status_if_false="FAILED",
+    )
+    ngfw = ROOT / "niktiar-secure-edge" / "dashboard" / "ngfw_features.py"
+    require_file(f, ngfw, "Secure Edge NGFW module")
+    ngfw_txt = read(ngfw) if ngfw.is_file() else ""
+    expect(
+        f,
+        "apply_ngfw" in ngfw_txt and "URL_CATEGORIES" in ngfw_txt and "DEFAULT_NGFW" in ngfw_txt,
+        "Secure Edge NGFW pack defines policies, URL categories, and apply_ngfw",
+        path=ngfw,
+        status_if_false="FAILED",
+    )
+    se_dash = ROOT / "niktiar-secure-edge" / "dashboard" / "app.py"
+    se_dash_txt = read(se_dash) if se_dash.is_file() else ""
+    expect(
+        f,
+        "/api/ngfw" in se_dash_txt and "ngfw_catalog" in se_dash_txt,
+        "Secure Edge dashboard exposes /api/ngfw policy APIs",
+        path=se_dash,
+        status_if_false="FAILED",
+    )
+    dns_mod = ROOT / "niktiar-secure-edge" / "dashboard" / "dns_filter.py"
+    require_file(f, dns_mod, "Secure Edge DNS Filter module")
+    dns_mod_txt = read(dns_mod) if dns_mod.is_file() else ""
+    expect(
+        f,
+        "apply_dns_filter" in dns_mod_txt
+        and "write_waf_host_rules" in dns_mod_txt
+        and "DEFAULT_CATEGORIES" in dns_mod_txt,
+        "Secure Edge DNS Filter defines categories, apply, and WAF Host blocklist",
+        path=dns_mod,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "/api/dns-filter" in se_dash_txt and "dns_filter_catalog" in se_dash_txt,
+        "Secure Edge dashboard exposes /api/dns-filter APIs",
+        path=se_dash,
+        status_if_false="FAILED",
+    )
+    dns_feeds = ROOT / "niktiar-secure-edge" / "dns-filter" / "feeds.yaml"
+    dns_cats = ROOT / "niktiar-secure-edge" / "dns-filter" / "categories.yaml"
+    dns_sync = ROOT / "niktiar-secure-edge" / "dns-filter" / "sync_feeds.py"
+    require_file(f, dns_feeds, "DNS Filter feeds.yaml")
+    require_file(f, dns_cats, "DNS Filter categories.yaml")
+    require_file(f, dns_sync, "DNS Filter sync_feeds.py")
+    feeds_txt = read(dns_feeds) if dns_feeds.is_file() else ""
+    expect(
+        f,
+        "NIKTIAR_DNS_COMMERCIAL_FEED_URL" in feeds_txt and "urlhaus" in feeds_txt,
+        "DNS Filter feeds include open lists + commercial feed env hook",
+        path=dns_feeds,
+        status_if_false="FAILED",
+    )
+    compose = ROOT / "niktiar-secure-edge" / "docker" / "docker-compose.yml"
+    compose_txt = read(compose) if compose.is_file() else ""
+    expect(
+        f,
+        "dns-filter:" in compose_txt and "dns-feed-sync:" in compose_txt and "niktiar-se-dns" in compose_txt,
+        "Secure Edge compose includes DNS Filter + feed sync services",
+        path=compose,
+        status_if_false="FAILED",
+    )
+    se_ui = ROOT / "niktiar-secure-edge" / "dashboard" / "static" / "index.html"
+    se_ui_txt = read(se_ui) if se_ui.is_file() else ""
+    expect(
+        f,
+        "NikTiar DNS Filter" in se_ui_txt and "dnsfilter" in se_ui_txt,
+        "Secure Edge UI exposes NikTiar DNS Filter tab",
+        path=se_ui,
+        status_if_false="FAILED",
+    )
+
+    expect(
+        f,
+        "SECURE_EDGE_MODE:-dedicated" in compose_txt or "SECURE_EDGE_MODE: ${SECURE_EDGE_MODE:-dedicated}" in compose_txt,
+        "Secure Edge compose defaults to dedicated mode",
+        path=compose,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "SECURE_EDGE_FORM_FACTOR" in compose_txt and "deployment_label" in se_dash_txt,
+        "Secure Edge exposes form factor (HA pair / physical) + deployment_label",
+        path=compose,
+        status_if_false="FAILED",
+    )
+    kb115 = ROOT / "docs" / "KB115_SECURE_EDGE_DEDICATED_HA_PHYSICAL.md"
+    require_file(f, kb115, "KB-115 dedicated HA + physical Secure Edge")
+    expect(
+        f,
+        "deployment_label" in (se_ui_txt or "")
+        and "Dedicated Edge" in (se_ui_txt or "")
+        and "HA pair" not in (se_ui_txt or "")
+        and "Sell as" not in (se_ui_txt or ""),
+        "Secure Edge UI shows Dedicated Edge and omits HA-pair / sales meta copy",
+        path=se_ui,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "select option" in (se_ui_txt or "")
+        and "color:#141414" in (se_ui_txt or "")
+        and "color-scheme:light" in (se_ui_txt or "").replace(" ", ""),
+        "Secure Edge UI forces readable select/option colors (light scheme)",
+        path=se_ui,
+        status_if_false="FAILED",
+    )
+    se_manual = ROOT / "niktiar-secure-edge" / "dashboard" / "static" / "operator_manual.js"
+    require_file(f, se_manual, "Secure Edge operator manual (man-page style)")
+    se_manual_txt = read(se_manual) if se_manual.is_file() else ""
+    expect(
+        f,
+        "SE_renderOperatorManual" in se_manual_txt
+        and "NikTiar DNS Filter" in se_manual_txt
+        and "Ransomware Defense" in se_manual_txt
+        and "Security Profiles" in se_manual_txt
+        and "Recommended production baseline" in se_manual_txt
+        and "Sell as" not in se_manual_txt
+        and "HA pair" not in se_manual_txt,
+        "Operator manual covers DNS/ransomware/profiles + baseline and omits sales/HA meta",
+        path=se_manual,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "operator_manual.js" in (se_ui_txt or "") and "Operator manual" in (se_ui_txt or ""),
+        "Secure Edge UI loads Operator manual nav + script",
+        path=se_ui,
+        status_if_false="FAILED",
+    )
+    rw_mod = ROOT / "niktiar-secure-edge" / "dashboard" / "ransomware_defense.py"
+    require_file(f, rw_mod, "Secure Edge Ransomware Defense module")
+    rw_txt = read(rw_mod) if rw_mod.is_file() else ""
+    expect(
+        f,
+        "apply_ransomware_defense" in rw_txt
+        and "never_claim" in rw_txt
+        and "sellable_claims" in rw_txt,
+        "Ransomware Defense defines apply + SLA-safe claim lists",
+        path=rw_mod,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "/api/ransomware-defense" in se_dash_txt and "Ransomware Defense" in (se_ui_txt or ""),
+        "Secure Edge exposes Ransomware Defense API + UI",
+        path=se_dash,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "ransomwatch_groups" in feeds_txt and "ransomware_seed" in feeds_txt,
+        "DNS feeds include ransomware seed + ransomwatch provider",
+        path=dns_feeds,
+        status_if_false="FAILED",
+    )
+    kb116 = ROOT / "docs" / "KB116_NIKTIAR_RANSOMWARE_DEFENSE_SELLING.md"
+    require_file(f, kb116, "KB-116 ransomware defense selling guide")
+    expect(
+        f,
+        "Never promise" in read(kb116) and "Safe selling points" in read(kb116),
+        "KB-116 documents safe claims vs never-promise SLA language",
+        path=kb116,
+        status_if_false="FAILED",
+    )
+    sp_mod = ROOT / "niktiar-secure-edge" / "dashboard" / "security_profiles.py"
+    require_file(f, sp_mod, "Secure Edge Security Profiles (NGFW-style) module")
+    sp_txt = read(sp_mod) if sp_mod.is_file() else ""
+    expect(
+        f,
+        "strict_ransomware" in sp_txt
+        and "file_blocking" in sp_txt
+        and "anti_spyware" in sp_txt
+        and "apply_security_profiles" in sp_txt,
+        "Security Profiles define Strict Ransomware + File Blocking + Anti-Spyware",
+        path=sp_mod,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "/api/security-profiles" in se_dash_txt and "Security Profiles" in (se_ui_txt or ""),
+        "Secure Edge exposes Security Profiles API + UI",
+        path=se_dash,
+        status_if_false="FAILED",
+    )
+    kb117 = ROOT / "docs" / "KB117_SECURE_EDGE_NGFW_PARITY_MAP.md"
+    require_file(f, kb117, "KB-117 NGFW parity map")
+    expect(
+        f,
+        "File Blocking" in read(kb117) and "Honest gaps" in read(kb117),
+        "KB-117 maps industry NGFW controls and documents honest gaps",
+        path=kb117,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "ddns_blocklist" in feeds_txt or "ddns_seed" in feeds_txt,
+        "DNS feeds include DDNS seed for Anti-Spyware sinkhole",
+        path=dns_feeds,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        not FORBIDDEN_UI_ENGINE_NAMES.search(se_ui_txt or ""),
+        "Secure Edge appliance UI has no forbidden upstream engine brands",
+        path=se_ui,
+        status_if_false="FAILED",
+    )
+    id_txt = read(identity) if identity.is_file() else ""
+    expect(
+        f,
+        "_enqueue_identity_alerts" in id_txt,
+        "ITDR identity ingest enqueues AI/SOC-agent pipeline",
+        path=identity,
+        status_if_false="FAILED",
+    )
+    lab_txt = read(lab_env) if lab_env.is_file() else ""
+    expect(
+        f,
+        "SOC_AGENT_ENABLED" in lab_txt and "SOC_AGENT_URL" in lab_txt,
+        "control-plane.lab.example.env documents SOC_AGENT_* keys",
+        path=lab_env,
+        status_if_false="FAILED",
+    )
+    cb_txt = read(callback) if callback.is_file() else ""
+    expect(
+        f,
+        "/api/v1/soc-agent/triage-result" in cb_txt
+        and "apply_callback_payload" in cb_txt,
+        "callback route persists triage via apply_callback_payload",
+        path=callback,
+        status_if_false="FAILED",
+    )
+    # Import smoke for client only (expert pulls psycopg via db.session — host may lack it)
+    sys.path.insert(0, str(BACKEND))
+    try:
+        from app.services.soc_agent_client import soc_agent_enabled, build_agent_payload
+
+        expect(f, soc_agent_enabled() in (True, False), "soc_agent_enabled() importable")
+        payload = build_agent_payload(
+            {"id": "x", "alert_title": "t", "severity": "high", "short_code": "DEMO"}
+        )
+        expect(f, payload.get("title") == "t", "build_agent_payload shapes title")
+    except Exception as exc:
+        f.append(
+            Finding(
+                "FAILED",
+                "could not import soc_agent_client",
+                detail=str(exc),
+                path=client,
+            )
+        )
+    expert_txt = read(expert) if expert.is_file() else ""
+    expect(
+        f,
+        '"critical": "MALICIOUS"' in expert_txt
+        and "propose_edr_isolate" in expert_txt
+        and "Never auto-executes" in expert_txt,
+        "soc_agent_expert maps Critical→MALICIOUS and documents no auto-contain",
+        path=expert,
+        status_if_false="FAILED",
+    )
+    return cr
 
 
 def check_open_source_compliance() -> CheckResult:
@@ -1302,6 +1625,7 @@ def main() -> int:
         check_portability(),
         check_appliance_licensing(),
         check_open_source_compliance(),
+        check_soc_agent_integration(),
     ]
 
     passed = failed = warnings = gaps = 0

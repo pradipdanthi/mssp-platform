@@ -67,6 +67,45 @@ def list_cases(_: None = Depends(require_token)) -> dict:
     return {"count": len(_RECENT), "cases": list(reversed(_RECENT[-50:]))}
 
 
+class ChatIn(BaseModel):
+    message: str = Field(min_length=3, max_length=8000)
+    system: str | None = Field(default=None, max_length=4000)
+    context: dict[str, Any] | None = None
+
+
+@app.post("/api/v1/chat")
+def chat(body: ChatIn, _: None = Depends(require_token)) -> dict:
+    """Human SOC free-form chat powered by Cursor subscription."""
+    if not LLMRouter().cursor.available():
+        raise HTTPException(
+            503,
+            detail={
+                "error": "cursor_llm_not_configured",
+                "reason": LLMRouter().cursor.missing_reason(),
+            },
+        )
+    system = (body.system or "").strip() or (
+        "You are an enterprise MSSP SOC analyst assistant for Kevantic NikTiar. "
+        "Answer from provided context when present. Never invent IOCs or credentials. "
+        "Never claim you executed containment — only advise. Be concise and actionable."
+    )
+    user_blob = body.message
+    if body.context:
+        import json as _json
+
+        user_blob = (
+            f"CONTEXT (JSON facts):\n{_json.dumps(body.context, default=str)[:12000]}\n\n"
+            f"QUESTION:\n{body.message}"
+        )
+    answer, meta = LLMRouter().chat(system, user_blob)
+    audit(
+        settings()["audit_log"],
+        "chat.complete",
+        {"chars": len(answer), "provider": meta.get("provider")},
+    )
+    return {"ok": True, "answer": answer, "llm_meta": meta}
+
+
 @app.post("/api/v1/ingest")
 def ingest(alert: AlertIn, _: None = Depends(require_token)) -> dict:
     cfg = settings()

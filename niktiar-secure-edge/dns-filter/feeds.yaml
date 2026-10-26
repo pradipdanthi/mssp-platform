@@ -1,0 +1,95 @@
+# NikTiar™ DNS Filter — feed providers
+# Open high-quality lists ship enabled. Commercial API feeds plug in via env (disabled by default).
+version: 1
+refresh_hours: 6
+sinkhole_ip: "0.0.0.0"
+
+providers:
+  # --- Built-in / open commercial-grade quality ---
+  urlhaus:
+    enabled: true
+    label: "abuse.ch URLhaus hosts"
+    categories: [malware]
+    format: hosts
+    url: "https://urlhaus.abuse.ch/downloads/hostfile/"
+
+  phishing_army:
+    enabled: true
+    label: "Phishing Army extended"
+    categories: [phishing]
+    format: domains
+    url: "https://phishing.army/download/phishing_army_blocklist_extended.txt"
+
+  oisd_big:
+    enabled: true
+    label: "OISD big (ads/malware/trackers)"
+    categories: [ads, malware]
+    format: domains
+    url: "https://big.oisd.nl/domainswild"
+
+  stevenblack_fakenews_gambling_porn_social:
+    enabled: true
+    label: "StevenBlack multi (gambling/adult/social)"
+    categories: [gambling, adult, social]
+    format: hosts
+    url: "https://raw.githubusercontent.com/StevenBlack/hosts/master/alternates/fakenews-gambling-porn-social/hosts"
+
+  someonewhocares:
+    enabled: false
+    label: "Dan Pollock ads/malware"
+    categories: [ads, malware]
+    format: hosts
+    url: "https://someonewhocares.org/hosts/zero/hosts"
+
+  # --- Ransomware-focused (NikTiar Ransomware Defense) ---
+  ransomware_seed:
+    enabled: true
+    label: "NikTiar ransomware seed (shipped clearweb panels/leak hosts)"
+    categories: [ransomware]
+    format: domains
+    # Local file next to sync_feeds.py — always available offline
+    file: ransomware_seed.txt
+
+  ransomwatch_groups:
+    enabled: true
+    label: "Ransomwatch group locations (clearweb FQDNs)"
+    categories: [ransomware]
+    format: ransomwatch_json
+    url: "https://raw.githubusercontent.com/joshhighet/ransomwatch/main/groups.json"
+
+  # Dynamic DNS / free-hosting — strengthens Anti-Spyware DNS sinkhole (Strict preset)
+  ddns_blocklist:
+    enabled: true
+    label: "Public dynamic-DNS domain patterns (proxy_vpn + newly_registered)"
+    categories: [proxy_vpn, newly_registered]
+    format: domains
+    file: ddns_seed.txt
+
+  # Optional: ThreatFox host export (requires free abuse.ch Auth-Key)
+  threatfox_hostfile:
+    enabled: false
+    label: "ThreatFox hostfile (payload + C2 domains)"
+    categories: [ransomware, malware]
+    format: hosts
+    # Set NIKTIAR_THREATFOX_AUTH_KEY — URL becomes .../exports/<key>/hostfile
+    url_env: NIKTIAR_THREATFOX_HOSTFILE_URL
+    api_key_env: NIKTIAR_THREATFOX_AUTH_KEY
+
+  # --- Commercial / licensed feed hook (configure in .env, never commit secrets) ---
+  commercial_primary:
+    enabled: false
+    label: "Commercial category feed (primary)"
+    categories: [malware, phishing, ransomware, adult, gambling, social, ads, cryptomining, proxy_vpn, newly_registered]
+    format: niktiair_json
+    # Set NIKTIAR_DNS_COMMERCIAL_FEED_URL + NIKTIAR_DNS_COMMERCIAL_API_KEY on the edge
+    url_env: NIKTIAR_DNS_COMMERCIAL_FEED_URL
+    api_key_env: NIKTIAR_DNS_COMMERCIAL_API_KEY
+    # Expected JSON: { "categories": { "malware": ["bad.example", ...], ... } }
+
+  commercial_secondary:
+    enabled: false
+    label: "Commercial domain intel (secondary)"
+    categories: [malware, phishing, ransomware]
+    format: domains
+    url_env: NIKTIAR_DNS_COMMERCIAL_BLOCKLIST_URL
+    api_key_env: NIKTIAR_DNS_COMMERCIAL_API_KEY

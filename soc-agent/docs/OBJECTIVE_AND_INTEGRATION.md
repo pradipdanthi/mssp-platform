@@ -26,10 +26,10 @@ So this agent must be a **sidecar analyst**, not a second product UI.
 **Inbound (engines → agent)**  
 Normalized alert JSON POSTed to the agent webhook (Shuffle/Wazuh custom integration / future control-plane forwarder). Same shape as MSSP alert fields where possible.
 
-**Outbound (agent → MSSP)** — *next approved step* (still no schema change if we reuse existing APIs):  
-POST triage notes into existing incident/recommendation endpoints with a service JWT — **not implemented until you approve** (Gemini forbids touching production in this pass).
+**Outbound (agent → MSSP)** — implemented (KB-117, no schema change):  
+`POST {MSSP_CALLBACK_URL}/api/v1/soc-agent/triage-result` with `X-Soc-Agent-Token` writes the same `security_alerts` AI columns Admin already shows, plus optional draft `customer_recommendations` (category `soc_agent`, not customer-visible until SOC shares). Never auto-isolates or auto-ITDR.
 
-**This pass:** upgrade agent intelligence (LLM + OSINT + audit) on VM 117 only; publish a stable webhook contract Admin/Shuffle can call later.
+**Control plane inbound:** when `SOC_AGENT_ENABLED=1`, deep triage prefers this agent (Ollama Tier-1 deep path is fallback only). Explain/assist Ollama stages stay unchanged.
 
 ## Drivers ($0 extra — Cursor subscription)
 

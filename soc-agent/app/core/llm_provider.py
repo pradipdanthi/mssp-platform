@@ -13,21 +13,38 @@ import shutil
 import subprocess
 from typing import Any
 
-SOC_ANALYST_SYSTEM = """You are a certified MSSP Tier-1/Tier-2 SOC analyst working for Kevantic/NikTiar.
-Analyze the alert + enrichment context. Respond with ONLY valid JSON (no markdown fences):
+SOC_ANALYST_SYSTEM = """You are an enterprise-class MSSP MDR/XDR SOC analyst (Tier-1/Tier-2 expert) for Kevantic NikTiar.
+You assess ALL alert families: Silver ITDR (Okta/Entra/AD), Gold EDR/vuln/EASM, Platinum NDR/DFIR/threat-intel, and Secure Edge WAF/bot/DDoS events.
+Analyze alert + enrichment. Respond with ONLY valid JSON (no markdown fences):
 {
   "verdict": "Benign" | "Suspicious" | "Critical",
   "confidence": 0-100,
   "summary": "plain English one paragraph for a human SOC analyst",
-  "root_cause": "likely root cause hypothesis",
+  "customer_safe_summary": "short non-technical summary safe for the customer portal",
+  "root_cause": "likely root cause hypothesis grounded in evidence",
   "mitre": [{"technique_id": "Txxxx", "technique_name": "..."}],
   "recommended_actions": ["action 1", "action 2"],
   "false_positive_likelihood": "low" | "medium" | "high",
-  "escalate_to_human": true | false
+  "escalate_to_human": true | false,
+  "action_package": {
+    "propose_edr_isolate": false,
+    "propose_itdr_remediate": false,
+    "propose_case_note": true,
+    "propose_customer_recommendation": false,
+    "escalate_human": false,
+    "customer_action_title": "",
+    "customer_action_body": "",
+    "notes": "why these proposals — never claim auto-execution"
+  }
 }
 Rules:
-- Prefer escalate_to_human=true when severity is high/critical and confidence < 80.
-- Do not invent IOCs that are not in the context.
+- Evidence discipline: do NOT invent IOCs, hosts, users, or MITRE techniques not supported by context.
+- Prefer escalate_to_human=true when severity is high/critical and confidence < 80, or when containment is proposed.
+- NEVER claim you isolated a host or disabled a user — only PROPOSE actions for human/SOAR approval.
+- propose_edr_isolate only for credible Gold/Platinum host compromise with clear host evidence.
+- propose_itdr_remediate only for credible identity compromise (MFA fatigue, impossible travel, account takeover).
+- propose_customer_recommendation when the customer must take a concrete action; fill title/body in plain English.
+- Secure Edge / WAF: focus on attacker intent, blocked vs bypassed, origin risk — not raw rule IDs.
 - Map MITRE ATT&CK only when evidence supports it.
 """
 
@@ -88,6 +105,7 @@ class CursorAgentProvider:
             "text",
             "--sandbox",
             "disabled",
+            "--trust",
             "--api-key",
             api_key,
         ]
@@ -124,6 +142,62 @@ class CursorAgentProvider:
             "rc": proc.returncode,
         }
 
+    def chat_text(self, system: str, user: str) -> tuple[str, dict[str, Any]]:
+        """Free-form analyst chat (plain text answer, not triage JSON)."""
+        binary = shutil.which("cursor-agent") or shutil.which("agent")
+        if not binary:
+            raise RuntimeError("cursor-agent binary not found on PATH")
+        api_key = (os.environ.get("CURSOR_API_KEY") or "").strip()
+        if not api_key:
+            raise RuntimeError("CURSOR_API_KEY missing")
+
+        model = (os.environ.get("CURSOR_AGENT_MODEL") or "").strip()
+        full = f"{system.strip()}\n\nANALYST QUESTION / CONTEXT:\n{user.strip()}\n\nAnswer in clear prose for a human SOC analyst."
+        cmd = [
+            binary,
+            "-p",
+            "--mode",
+            "ask",
+            "--output-format",
+            "text",
+            "--sandbox",
+            "disabled",
+            "--trust",
+            "--api-key",
+            api_key,
+        ]
+        if model:
+            cmd.extend(["--model", model])
+        cmd.append(full)
+
+        env = os.environ.copy()
+        env["CURSOR_API_KEY"] = api_key
+        env.pop("OLLAMA_HOST", None)
+        env.pop("AI_ALERT_BASE_URL", None)
+
+        timeout = int(os.environ.get("SOC_AGENT_LLM_TIMEOUT", "180"))
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            env=env,
+            cwd=os.environ.get("SOC_AGENT_WORKSPACE", "/opt/soc-agent"),
+        )
+        stdout = (proc.stdout or "").strip()
+        stderr = (proc.stderr or "").strip()
+        if proc.returncode != 0 and not stdout:
+            raise RuntimeError(
+                f"cursor-agent rc={proc.returncode}: {(stderr or stdout)[:600]}"
+            )
+        return stdout, {
+            "provider": self.name,
+            "binary": binary,
+            "model": model or "account_default",
+            "rc": proc.returncode,
+            "mode": "chat",
+        }
+
 
 class LLMRouter:
     """Cursor subscription only — Ollama is intentionally excluded."""
@@ -149,3 +223,10 @@ class LLMRouter:
                 "Cursor LLM not ready: " + self.cursor.missing_reason()
             )
         return self.cursor.complete(prompt)
+
+    def chat(self, system: str, user: str) -> tuple[str, dict[str, Any]]:
+        if not self.cursor.available():
+            raise RuntimeError(
+                "Cursor LLM not ready: " + self.cursor.missing_reason()
+            )
+        return self.cursor.chat_text(system, user)

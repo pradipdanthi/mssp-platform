@@ -72,6 +72,41 @@ services:
       - NET_ADMIN
       - NET_RAW
 
+  dns-feed-sync:
+    build:
+      context: ../dns-filter
+    container_name: niktiar-se-dns-sync
+    restart: unless-stopped
+    environment:
+      RUNTIME_DIR: /runtime
+      NIKTIAR_DNS_UPSTREAM: ${NIKTIAR_DNS_UPSTREAM:-1.1.1.1,8.8.8.8}
+      NIKTIAR_DNS_SINKHOLE: ${NIKTIAR_DNS_SINKHOLE:-0.0.0.0}
+      NIKTIAR_DNS_COMMERCIAL_FEED_URL: ${NIKTIAR_DNS_COMMERCIAL_FEED_URL:-}
+      NIKTIAR_DNS_COMMERCIAL_BLOCKLIST_URL: ${NIKTIAR_DNS_COMMERCIAL_BLOCKLIST_URL:-}
+      NIKTIAR_DNS_COMMERCIAL_API_KEY: ${NIKTIAR_DNS_COMMERCIAL_API_KEY:-}
+      NIKTIAR_DNS_WAF_DOMAIN_CAP: ${NIKTIAR_DNS_WAF_DOMAIN_CAP:-5000}
+    volumes:
+      - ../runtime:/runtime
+    networks:
+      - edge
+
+  dns-filter:
+    image: spx01/blocky:v0.24
+    container_name: niktiar-se-dns
+    restart: unless-stopped
+    # Bind to LAN IP (not 0.0.0.0) so systemd-resolved stub on 127.0.0.53 keeps working
+    ports:
+      - "${NIKTIAR_DNS_BIND_IP:-192.168.0.217}:53:53/udp"
+      - "${NIKTIAR_DNS_BIND_IP:-192.168.0.217}:53:53/tcp"
+      - "127.0.0.1:4053:4000"
+    volumes:
+      - ../runtime/dns-filter/config.yml:/app/config.yml:ro
+      - ../runtime/dns-feeds:/runtime/dns-feeds:ro
+    depends_on:
+      - dns-feed-sync
+    networks:
+      - edge
+
   dashboard:
     build:
       context: ../dashboard
@@ -83,12 +118,16 @@ services:
       NIKTIAR_CONTROL_URL: ${NIKTIAR_CONTROL_URL:-http://192.168.0.201:8000}
       NIKTIAR_APPLIANCE_TOKEN: ${NIKTIAR_APPLIANCE_TOKEN:-}
       SECURE_EDGE_HOSTNAME: ${SECURE_EDGE_HOSTNAME:-niktiar-secure-edge}
-      SECURE_EDGE_MODE: ${SECURE_EDGE_MODE:-shared}
+      SECURE_EDGE_MODE: ${SECURE_EDGE_MODE:-dedicated}
+      SECURE_EDGE_FORM_FACTOR: ${SECURE_EDGE_FORM_FACTOR:-ha_pair}
+      SECURE_EDGE_HA_ROLE: ${SECURE_EDGE_HA_ROLE:-primary}
       EDGE_DASHBOARD_USER: ${EDGE_DASHBOARD_USER:-admin}
       EDGE_DASHBOARD_PASSWORD: ${EDGE_DASHBOARD_PASSWORD:-NikTiarEdge!ChangeMe}
       RUNTIME_DIR: /runtime
       WAF_CONTAINER: niktiar-se-waf
       CROWDSEC_CONTAINER: niktiar-se-crowdsec
+      DNS_FILTER_CONTAINER: niktiar-se-dns
+      DNS_FEED_SYNC_CONTAINER: niktiar-se-dns-sync
       ACCESS_LOG: /runtime/niktiar-access.log
     volumes:
       - ../runtime:/runtime
@@ -98,6 +137,7 @@ services:
     depends_on:
       - waf
       - crowdsec
+      - dns-filter
     networks:
       - edge
 
@@ -111,7 +151,9 @@ services:
       NIKTIAR_TENANT_CODE: ${NIKTIAR_TENANT_CODE:-}
       NIKTIAR_APPLIANCE_TOKEN: ${NIKTIAR_APPLIANCE_TOKEN:-}
       SECURE_EDGE_HOSTNAME: ${SECURE_EDGE_HOSTNAME:-niktiar-secure-edge}
-      SECURE_EDGE_MODE: ${SECURE_EDGE_MODE:-shared}
+      SECURE_EDGE_MODE: ${SECURE_EDGE_MODE:-dedicated}
+      SECURE_EDGE_FORM_FACTOR: ${SECURE_EDGE_FORM_FACTOR:-ha_pair}
+      SECURE_EDGE_HA_ROLE: ${SECURE_EDGE_HA_ROLE:-primary}
       WAF_CONTAINER: niktiar-se-waf
       RUNTIME_DIR: /runtime
       CADDY_CONFIG_DIR: /config/caddy

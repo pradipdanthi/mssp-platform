@@ -178,6 +178,9 @@ def ingest_okta_telemetry(
         for event in events:
             alert_ids.extend(process_okta_event(tenant_id, event, cur=cur))
 
+    # KB-117: enqueue identity alerts into the existing AI / SOC-agent pipeline
+    _enqueue_identity_alerts(tenant_id, alert_ids)
+
     logger.info(
         "okta telemetry ingested tenant=%s events=%s alerts=%s",
         tenant_id,
@@ -230,6 +233,9 @@ def ingest_ad_telemetry(
         for event in filtered:
             alert_ids.extend(process_ad_event(tenant_id, event, cur=cur))
 
+    # KB-117: enqueue identity alerts into the existing AI / SOC-agent pipeline
+    _enqueue_identity_alerts(tenant_id, alert_ids)
+
     logger.info(
         "ad telemetry ingested tenant=%s events=%s alerts=%s",
         tenant_id,
@@ -242,6 +248,34 @@ def ingest_ad_telemetry(
         alerts_created=len(alert_ids),
         alert_ids=alert_ids,
     )
+
+
+def _enqueue_identity_alerts(tenant_id: str, alert_ids: List[str]) -> None:
+    """Soft-fail enqueue so identity ingest never breaks on AI/agent outage."""
+    if not alert_ids:
+        return
+    try:
+        from app.services.ai_alert_queue import enqueue_ai_alert_analysis
+    except Exception:  # noqa: BLE001
+        return
+    seen = set()
+    for alert_id in alert_ids:
+        if not alert_id or alert_id in seen:
+            continue
+        seen.add(alert_id)
+        row = fetch_one(
+            "SELECT severity FROM security_alerts WHERE id = %s::uuid LIMIT 1;",
+            (alert_id,),
+        )
+        severity = (row or {}).get("severity") or "high"
+        try:
+            enqueue_ai_alert_analysis(
+                alert_id=str(alert_id),
+                tenant_id=str(tenant_id),
+                severity=str(severity),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("AI enqueue failed for identity alert_id=%s", alert_id)
 
 
 def _ad_event_allowed(event: Dict[str, Any], allowed: set) -> bool:
