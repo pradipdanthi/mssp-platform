@@ -94,7 +94,12 @@ def _alert_detail(alert_id: UUID) -> Dict[str, Any]:
             sa.customer_visible,
             sa.status,
             sa.created_at,
-            sa.updated_at
+            sa.updated_at,
+            sa.occurrence_count,
+            sa.first_seen_at,
+            sa.last_seen_at,
+            sa.merge_fingerprint,
+            sa.recurrence_of_alert_id::text AS recurrence_of_alert_id
         FROM security_alerts sa
         JOIN tenants t ON t.id = sa.tenant_id
         LEFT JOIN appliances a ON a.id = sa.appliance_id
@@ -197,7 +202,23 @@ def get_admin_alert_detail(
     alert_id: UUID,
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
 ) -> Dict[str, Any]:
-    return {"alert": _alert_detail(alert_id)}
+    alert = _alert_detail(alert_id)
+    occurrences = fetch_all(
+        """
+        SELECT occurrence_no,
+               source_tool,
+               external_alert_id,
+               severity,
+               summary,
+               event_time::text AS event_time,
+               received_at::text AS received_at
+        FROM security_alert_occurrences
+        WHERE alert_id = %s
+        ORDER BY occurrence_no;
+        """,
+        (alert_id,),
+    )
+    return {"alert": alert, "occurrences": occurrences or []}
 
 
 @router.get("/alerts/{alert_id}/ai-triage")

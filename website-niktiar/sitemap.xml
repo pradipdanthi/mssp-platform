@@ -19,4 +19,18 @@
   <url><loc>https://kevantic.com/contact.html</loc><priority>0.8</priority></url>
   <url><loc>https://kevantic.com/privacy.html</loc><priority>0.3</priority></url>
   <url><loc>https://kevantic.com/terms.html</loc><priority>0.3</priority></url>
+  <url><loc>https://kevantic.com/blog/</loc><lastmod>2026-10-28</lastmod><priority>0.9</priority></url>
+  <url><loc>https://kevantic.com/blog/kinds-of-security-a-business-needs.html</loc><lastmod>2026-10-28</lastmod><priority>0.8</priority></url>
+  <url><loc>https://kevantic.com/blog/stolen-logins-look-like-normal-work.html</loc><lastmod>2026-10-28</lastmod><priority>0.8</priority></url>
+  <url><loc>https://kevantic.com/blog/after-a-phishing-click.html</loc><lastmod>2026-10-28</lastmod><priority>0.8</priority></url>
+  <url><loc>https://kevantic.com/blog/ransomware-is-an-operations-problem.html</loc><lastmod>2026-10-28</lastmod><priority>0.8</priority></url>
+  <url><loc>https://kevantic.com/blog/edge-devices-are-the-front-door.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/fix-exposed-weaknesses-first.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/what-the-internet-can-already-see.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/movement-inside-the-network.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/evidence-to-keep-after-an-alert.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/threat-intelligence-without-the-noise.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/compliance-without-shipping-every-log.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/where-security-logs-should-live.html</loc><lastmod>2026-10-28</lastmod><priority>0.7</priority></url>
+  <url><loc>https://kevantic.com/blog/how-to-choose-a-managed-security-provider.html</loc><lastmod>2026-10-28</lastmod><priority>0.8</priority></url>
 </urlset>

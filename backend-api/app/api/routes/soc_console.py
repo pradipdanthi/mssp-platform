@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.api.dependencies import require_roles
 from app.api.routes.admin import ADMIN_SOC_ROLES
 from app.db.session import fetch_all, fetch_one
-from app.services import soc_console_activity, soc_console_chat
+from app.services import soc_console_activity, soc_console_chat, tia_conversation, tia_tools, tia_trace
 from app.services.soc_agent_client import soc_agent_enabled
 from app.services.soc_console_engines import build_engine_wall
 from app.services.soc_console_socfeed import build_soc_kpis, list_soc_feed
@@ -34,6 +34,37 @@ class SocConsoleChatRequest(BaseModel):
     alert_id: Optional[str] = Field(default=None, max_length=64)
     apply_actions: bool = False
     auto_approve: bool = False
+
+
+_ID_PATTERN = r"^[A-Za-z0-9_-]{6,64}$"
+
+
+class TiaConverseRequest(BaseModel):
+    """One operator turn. The server, not this payload, decides what 'yes' refers to."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(min_length=2, max_length=4000)
+    session_id: str = Field(pattern=_ID_PATTERN)
+    client_turn_id: Optional[str] = Field(default=None, pattern=_ID_PATTERN)
+    tenant_id: Optional[UUID] = None
+    tenant_short_code: Optional[str] = Field(default=None, max_length=64)
+    view_alert_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class TiaUiAckRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    session_id: str = Field(pattern=_ID_PATTERN)
+    loaded_alert_id: Optional[str] = Field(default=None, max_length=64)
+    failure: Optional[str] = Field(default=None, max_length=120)
+
+
+class TiaClientTimingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str = Field(min_length=6, max_length=64)
+    stages: Dict[str, float] = Field(default_factory=dict, max_length=16)
 
 
 class SocConsoleActionRequest(BaseModel):
@@ -145,12 +176,27 @@ def soc_console_speak(
 @router.get("/wake-briefing")
 def soc_console_wake_briefing(
     current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+    session_id: Optional[str] = Query(default=None, pattern=_ID_PATTERN),
+    tenant_id: Optional[UUID] = Query(default=None),
+    tenant_short_code: Optional[str] = Query(default=None, max_length=64),
 ) -> Dict[str, Any]:
-    """Proactive 'Hi Tia' welcome: alerts + urgency + end-to-end stack health."""
-    _ = current_user
+    """Proactive 'Hi Tia' welcome: alerts + urgency + end-to-end stack health.
+
+    When session_id is present, the same list_alerts order is stored on that
+    conversation so 'the first one' resolves after welcome.
+    """
     from app.services.soc_console_operator import render_wake_briefing
 
-    result = render_wake_briefing()
+    listed = None
+    if session_id:
+        tenant = None
+        if tenant_id or tenant_short_code:
+            tenant = tia_tools.resolve_tenant(str(tenant_id) if tenant_id else None, tenant_short_code)
+            if not tenant:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        scope = _tia_scope(current_user, session_id, tenant["id"] if tenant else None)
+        listed = tia_conversation.remember_listing(scope)
+    result = render_wake_briefing(listed_alerts=listed)
     actor = str(current_user.get("email") or current_user.get("full_name") or "soc")
     soc_console_activity.push_local_activity(
         kind="ai_response",
@@ -319,6 +365,7 @@ def soc_console_chat_endpoint(
         actor=actor,
     )
 
+    legacy_trace = tia_trace.Trace("model")
     try:
         result = soc_console_chat.answer_with_cursor(
             question=payload.message,
@@ -329,17 +376,21 @@ def soc_console_chat_endpoint(
             actor_email=actor,
             apply_actions=bool(payload.apply_actions),
             auto_approve=bool(payload.auto_approve),
+            trace=legacy_trace,
         )
     except ValueError as exc:
+        legacy_trace.finish(ok=False)
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=str(exc),
         ) from exc
     except RuntimeError as exc:
+        legacy_trace.finish(ok=False)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+    legacy_trace.finish(ok=True)
 
     soc_console_activity.push_local_activity(
         kind="ai_response",
@@ -350,6 +401,179 @@ def soc_console_chat_endpoint(
         actor="Tia",
     )
     return result
+
+
+def _tia_scope(current_user: Dict[str, Any], session_id: str, tenant_id: Optional[str]) -> tia_tools.Scope:
+    return tia_tools.Scope(
+        operator_email=str(current_user.get("email") or ""),
+        operator_id=str(current_user.get("id") or "") or None,
+        role=str(current_user.get("role") or ""),
+        session_id=session_id,
+        tenant_id=tenant_id,
+    )
+
+
+def _tia_not_ready(exc: Exception) -> HTTPException:
+    logger.error("TIA conversation unavailable: %s", exc)
+    return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="conversation_schema_unavailable")
+
+
+@router.get("/capabilities")
+def soc_console_capabilities(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """What TIA can really do through chat and voice, read from the tool registry."""
+    return {
+        "tools": tia_tools.capabilities(),
+        "not_available_by_chat": list(tia_tools.NOT_AVAILABLE_BY_CHAT),
+        "conversation_ready": tia_conversation.schema_fault() is None,
+    }
+
+
+@router.post("/converse")
+def soc_console_converse(
+    payload: TiaConverseRequest,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Conversational turn: tools, pending actions and verified dashboard commands."""
+    trace = tia_trace.Trace("navigation", turn_id=payload.client_turn_id)
+    ok = True
+    try:
+        with trace.stage("auth_and_context"):
+            tenant = None
+            if payload.tenant_id or payload.tenant_short_code:
+                tenant = tia_tools.resolve_tenant(str(payload.tenant_id) if payload.tenant_id else None, payload.tenant_short_code)
+                if not tenant:
+                    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            scope = _tia_scope(current_user, payload.session_id, tenant["id"] if tenant else None)
+
+        def model_fallback(
+            question: str,
+            selected_alert_id: Optional[str],
+            sc: tia_tools.Scope,
+            evidence: Optional[Dict[str, Any]] = None,
+        ) -> Dict[str, Any]:
+            trace.path = "model"
+            out = soc_console_chat.answer_with_cursor(
+                question=question,
+                tenant_id=sc.tenant_id,
+                alert_id=selected_alert_id,
+                actor_user_id=sc.operator_id,
+                actor_email=sc.operator_email,
+                trace=trace,
+                evidence=evidence,
+                allow_live_floor=False,
+            )
+            return {
+                "answer": out.get("answer"),
+                "spoken_answer": out.get("spoken_answer"),
+                "provider": out.get("provider"),
+                "pending_approval": out.get("pending_approval"),
+                "proposed_actions": out.get("proposed_actions"),
+                "briefing_counts": out.get("briefing_counts"),
+            }
+
+        trace_started = trace.elapsed_ms()
+        try:
+            result = tia_conversation.handle_turn(
+                scope,
+                text=payload.message,
+                client_turn_id=payload.client_turn_id,
+                view_alert_id=payload.view_alert_id,
+                request_id=trace.request_id,
+                tenant=tenant,
+                fallback=model_fallback,
+                trace=trace,
+            )
+        except tia_conversation.ConversationNotReady as exc:
+            ok = False
+            raise _tia_not_ready(exc) from exc
+        except tia_conversation.TurnInProgress as exc:
+            ok = False
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="turn_in_progress") from exc
+        except tia_tools.ToolError as exc:
+            ok = False
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
+        if trace.path != "model":
+            trace.add("tool_execution", trace.elapsed_ms() - trace_started)
+            if result.get("intent") in ("list",):
+                trace.path = "status"
+            elif result.get("intent") in ("open_case", "pending_cancelled", "confirm_expired"):
+                trace.path = "action"
+        if result.get("replayed"):
+            trace.path = "navigation"
+        return result
+    except HTTPException:
+        ok = False
+        raise
+    finally:
+        trace.finish(ok=ok)
+
+
+@router.get("/ui-commands")
+def soc_console_pending_ui_commands(
+    session_id: str = Query(pattern=_ID_PATTERN),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Commands this browser session has not yet confirmed (used after a reconnect)."""
+    try:
+        return {"commands": tia_conversation.pending_commands(_tia_scope(current_user, session_id, None))}
+    except tia_conversation.ConversationNotReady as exc:
+        raise _tia_not_ready(exc) from exc
+
+
+@router.get("/ui-commands/{command_id}")
+def soc_console_ui_command_status(
+    command_id: str,
+    session_id: str = Query(pattern=_ID_PATTERN),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    try:
+        row = tia_conversation.command_status(_tia_scope(current_user, session_id, None), command_id)
+    except tia_conversation.ConversationNotReady as exc:
+        raise _tia_not_ready(exc) from exc
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Command not found")
+    return row
+
+
+@router.post("/ui-commands/{command_id}/ack")
+def soc_console_ui_command_ack(
+    command_id: str,
+    payload: TiaUiAckRequest,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """The dashboard reports what it actually loaded. Only a matching id is believed."""
+    try:
+        return tia_conversation.acknowledge_command(
+            _tia_scope(current_user, payload.session_id, None),
+            command_id,
+            loaded_alert_id=payload.loaded_alert_id,
+            failure=payload.failure,
+        )
+    except tia_conversation.ConversationNotReady as exc:
+        raise _tia_not_ready(exc) from exc
+    except tia_tools.ToolError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.message) from exc
+
+
+@router.post("/telemetry/client")
+def soc_console_client_timing(
+    payload: TiaClientTimingRequest,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Browser-measured stages (speech end, first audio, interruption) joined to the server turn."""
+    return {"recorded": tia_trace.record_client_stages(payload.request_id, payload.stages)}
+
+
+@router.get("/telemetry/latency")
+def soc_console_latency_summary(
+    window_minutes: int = Query(default=60, ge=1, le=10080),
+    path: Optional[str] = Query(default=None, max_length=16),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """p50/p95 by path and stage with sample sizes. Numbers and ids only."""
+    return tia_trace.summarize(window_minutes, path if path in tia_trace.PATHS else None)
 
 
 @router.post("/actions")
@@ -366,6 +590,7 @@ def soc_console_actions(
         list(payload.actions or [])[:5],
         actor_user_id=actor_id,
         actor_email=actor,
+        execution_source="analyst_api",
     )
     return {"results": results, "applied": sum(1 for r in results if r.get("ok"))}
 
@@ -470,6 +695,7 @@ def soc_console_overview(
         """
         SELECT id::text, alert_title, severity, status, event_time::text,
                destination_host, source_tool, ai_verdict, ai_confidence,
+               occurrence_count, first_seen_at::text, last_seen_at::text,
                CASE WHEN source_ip IS NOT NULL THEN host(source_ip)::text ELSE NULL END AS source_ip
         FROM security_alerts
         WHERE status NOT IN ('closed','false_positive')
@@ -500,6 +726,37 @@ def soc_console_engines(
     """Hollywood engine wall — VM/tool lanes with reachability + live streams."""
     _ = current_user
     return build_engine_wall()
+
+
+@router.get("/engine-health")
+def soc_console_engine_health(
+    engine: Optional[str] = Query(default=None, max_length=40),
+    refresh: bool = Query(default=False),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Layered engine health (reachability / API / login / application / telemetry), role-gated detail."""
+    from app.services import tia_engine_health as eh
+
+    report = eh.get_health(force=refresh, only=engine)
+    return eh.redact_for_role(report, str(current_user.get("role") or ""))
+
+
+@router.get("/alerts/{alert_id}/ticket-summary")
+def soc_console_ticket_summary(
+    alert_id: str,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Case-specific summary built only from the stored record (facts, unknowns, hypotheses, next step)."""
+    from app.services import tia_ticket_summary
+
+    scope = tia_tools.Scope(
+        operator_email=str(current_user.get("email") or ""), operator_id=str(current_user.get("id") or "") or None,
+        role=str(current_user.get("role") or ""), session_id="ticket-summary", tenant_id=None,
+    )
+    try:
+        return tia_ticket_summary.build(scope, alert_id)
+    except tia_tools.ToolError as err:
+        raise HTTPException(status_code=404 if err.code == "not_found" else 403, detail=err.message)
 
 
 @router.get("/queue")
@@ -538,6 +795,7 @@ def soc_console_queue(
         SELECT sa.id::text AS id, sa.alert_title, sa.severity, sa.status,
                sa.event_time::text, sa.destination_host, sa.source_tool,
                sa.ai_verdict, sa.ai_confidence, sa.ai_containment_suggestion,
+               sa.occurrence_count, sa.first_seen_at::text, sa.last_seen_at::text,
                CASE WHEN sa.source_ip IS NOT NULL THEN host(sa.source_ip)::text ELSE NULL END AS source_ip,
                t.name AS tenant_name, t.short_code
         FROM security_alerts sa
@@ -565,6 +823,141 @@ def soc_console_queue(
         """
     )
     return {"alerts": alerts or [], "incidents": incidents or []}
+
+
+def _review_call(fn, *args, **kwargs) -> Dict[str, Any]:
+    """Run a review-service call and map its refusals to HTTP errors."""
+    from app.services import tia_review
+    from app.services.tia_schema import SchemaNotReady
+
+    try:
+        return fn(*args, **kwargs)
+    except tia_review.ReviewError as exc:
+        raise HTTPException(status_code=exc.http, detail=exc.message)
+    except SchemaNotReady as exc:
+        logger.error("review queue unavailable: schema not ready (missing=%s)", exc.missing)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Review queue is not available: required database migration is missing",
+        )
+
+
+@router.get("/review-queue")
+def soc_console_review_queue(
+    status_filter: Optional[str] = Query(default=None, alias="status", pattern="^(open|acknowledged|resolved)$"),
+    tenant_id: Optional[UUID] = Query(default=None),
+    assigned_to: Optional[str] = Query(default=None, max_length=200),
+    include_resolved: bool = Query(default=False),
+    limit: int = Query(default=100, ge=1, le=300),
+    offset: int = Query(default=0, ge=0),
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Investigations that did not complete or need a person, soonest deadline first.
+
+    SOC roles only (customer roles get 403). Deadlines are provisional. Holds no raw
+    alert payloads; customer APIs never read it.
+    """
+    from app.services import tia_review
+
+    _ = current_user
+    return _review_call(
+        tia_review.list_items,
+        status=status_filter,
+        tenant_id=str(tenant_id) if tenant_id else None,
+        assigned_to=assigned_to,
+        include_resolved=include_resolved or status_filter == "resolved",
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/review-queue/summary")
+def soc_console_review_summary(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    from app.services import tia_review
+
+    _ = current_user
+    return _review_call(tia_review.summary)
+
+
+@router.get("/review-queue/{item_id}")
+def soc_console_review_detail(
+    item_id: UUID,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    from app.services import tia_review
+
+    _ = current_user
+    return _review_call(tia_review.get_item, str(item_id))
+
+
+class ReviewNoteIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ReviewAssignIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    assignee: Optional[str] = Field(default=None, max_length=200)
+
+
+@router.post("/review-queue/{item_id}/acknowledge")
+def soc_console_review_acknowledge(
+    item_id: UUID,
+    body: ReviewNoteIn,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Take ownership of the page. Does NOT resolve the item or change the case."""
+    from app.services import tia_review
+
+    return _review_call(tia_review.acknowledge, str(item_id), current_user, body.note)
+
+
+@router.post("/review-queue/{item_id}/assign")
+def soc_console_review_assign(
+    item_id: UUID,
+    body: ReviewAssignIn,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    from app.services import tia_review
+
+    return _review_call(tia_review.assign, str(item_id), current_user, body.assignee)
+
+
+@router.post("/review-queue/{item_id}/resolve")
+def soc_console_review_resolve(
+    item_id: UUID,
+    body: ReviewNoteIn,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    from app.services import tia_review
+
+    return _review_call(tia_review.resolve, str(item_id), current_user, body.note)
+
+
+@router.post("/review-queue/{item_id}/reopen")
+def soc_console_review_reopen(
+    item_id: UUID,
+    body: ReviewNoteIn,
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    from app.services import tia_review
+
+    return _review_call(tia_review.reopen, str(item_id), current_user, body.note)
+
+
+@router.get("/tia-readiness")
+def soc_console_tia_readiness(
+    current_user: Dict[str, Any] = Depends(require_roles(*ADMIN_SOC_ROLES)),
+) -> Dict[str, Any]:
+    """Operational readiness of the investigation/notification path (never claims paging works unless configured)."""
+    from app.services import tia_schema
+
+    _ = current_user
+    return tia_schema.readiness()
 
 
 @router.get("/activity")

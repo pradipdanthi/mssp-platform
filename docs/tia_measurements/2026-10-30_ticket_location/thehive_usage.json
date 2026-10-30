@@ -1,0 +1,34 @@
+{
+ "listCase:default": {
+  "returned": 0,
+  "latest_updated_ms": null,
+  "status": {},
+  "updaters_masked": {},
+  "with_tags_alert_id": 0,
+  "sources": null
+ },
+ "listCase:MSSP": {
+  "returned": 0,
+  "latest_updated_ms": null,
+  "status": {},
+  "updaters_masked": {},
+  "with_tags_alert_id": 0,
+  "sources": null
+ },
+ "listAlert:default": {
+  "returned": 0,
+  "latest_updated_ms": null,
+  "status": {},
+  "updaters_masked": {},
+  "with_tags_alert_id": 0,
+  "sources": {}
+ },
+ "listAlert:MSSP": {
+  "returned": 0,
+  "latest_updated_ms": null,
+  "status": {},
+  "updaters_masked": {},
+  "with_tags_alert_id": 0,
+  "sources": {}
+ }
+}

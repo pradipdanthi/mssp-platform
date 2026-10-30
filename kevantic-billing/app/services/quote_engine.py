@@ -10,6 +10,7 @@ from app.models import (
     CatalogItem,
     Invoice,
     InvoiceLine,
+    Opportunity,
     Party,
     Payment,
     Quote,
@@ -17,6 +18,7 @@ from app.models import (
 )
 from app.services import numbering
 from app.services.company import get_or_create_profile
+from app.services.pipeline import mark_collected, mark_invoiced
 from app.services.tax import calc_document, money, resolve_tax_mode
 
 
@@ -38,6 +40,7 @@ def build_quote(
     terms_text: str | None = None,
     opportunity_name: str | None = None,
     sales_owner: str | None = None,
+    opportunity_id: UUID | None = None,
     tax_mode_forced: str = "auto",
     status: str = "draft",
 ) -> Quote:
@@ -49,6 +52,17 @@ def build_quote(
         lut_filed=bool(profile.lut_filed),
         forced=tax_mode_forced,
     )
+
+    linked: Opportunity | None = None
+    if opportunity_id:
+        linked = db.get(Opportunity, opportunity_id)
+        if linked is None or linked.party_id != party.id:
+            raise ValueError("Deal does not belong to this customer")
+        opportunity_name = opportunity_name or linked.name
+        sales_owner = sales_owner or linked.owner
+        if linked.stage in ("prospecting", "needs_analysis", "qualification", "discovery", "assigned", "working", "supplier_price"):
+            linked.stage = "proposal"
+            linked.probability = 50
 
     prepared: list[dict] = []
     line_meta: list[dict] = []
@@ -82,6 +96,7 @@ def build_quote(
         )
         disc = Decimal(str(spec.get("discount_percent") or 0))
         hsn = spec.get("hsn_sac") or (item.hsn_sac if item else None)
+        vendor = (spec.get("vendor_name") or (item.vendor_name if item else None) or "").strip() or None
 
         prepared.append(
             {
@@ -102,6 +117,7 @@ def build_quote(
                 "discount_percent": disc,
                 "gst_rate": gst,
                 "hsn_sac": hsn,
+                "vendor_name": vendor,
             }
         )
 
@@ -123,6 +139,7 @@ def build_quote(
         notes=notes,
         internal_notes=internal_notes,
         terms_text=terms_text or profile.default_terms,
+        opportunity_id=linked.id if linked else None,
         opportunity_name=opportunity_name,
         sales_owner=sales_owner,
         requires_approval=needs_approval,
@@ -152,6 +169,7 @@ def build_quote(
                 discount_percent=meta["discount_percent"],
                 gst_rate=meta["gst_rate"],
                 hsn_sac=meta["hsn_sac"],
+                vendor_name=meta.get("vendor_name"),
                 line_subtotal=lr.line_subtotal,
                 line_taxable=lr.line_taxable,
                 line_tax=lr.line_tax,
@@ -176,6 +194,7 @@ def duplicate_quote(db: Session, source: Quote) -> Quote:
             "discount_percent": ln.discount_percent,
             "gst_rate": ln.gst_rate,
             "hsn_sac": ln.hsn_sac,
+            "vendor_name": ln.vendor_name,
             "billing_model": "one_time",
         }
         for ln in sorted(source.lines, key=lambda x: x.sort_order)
@@ -191,6 +210,7 @@ def duplicate_quote(db: Session, source: Quote) -> Quote:
         terms_text=source.terms_text,
         opportunity_name=source.opportunity_name,
         sales_owner=source.sales_owner,
+        opportunity_id=source.opportunity_id,
         tax_mode_forced=source.tax_mode,
         status="draft",
     )
@@ -219,6 +239,7 @@ def accept_quote_to_invoice(
         invoice_number=inv_number,
         party_id=party.id,
         quote_id=quote.id,
+        opportunity_id=quote.opportunity_id,
         status=status,
         invoice_type=invoice_type,
         currency=quote.currency,
@@ -250,6 +271,7 @@ def accept_quote_to_invoice(
                 discount_percent=ql.discount_percent,
                 gst_rate=ql.gst_rate,
                 hsn_sac=ql.hsn_sac,
+                vendor_name=ql.vendor_name,
                 line_subtotal=ql.line_subtotal,
                 line_taxable=ql.line_taxable,
                 line_tax=ql.line_tax,
@@ -259,6 +281,7 @@ def accept_quote_to_invoice(
         )
     if invoice_type == "tax_invoice":
         quote.status = "invoiced"
+        mark_invoiced(db, quote.opportunity_id)
     db.commit()
     db.refresh(inv)
     return inv
@@ -343,6 +366,7 @@ def record_payment(
     invoice.amount_paid = money(Decimal(str(invoice.amount_paid or 0)) + pay_amt)
     if invoice.amount_paid >= invoice.total_amount:
         invoice.status = "paid"
+        mark_collected(db, invoice.opportunity_id)
     else:
         invoice.status = "partially_paid"
     db.commit()

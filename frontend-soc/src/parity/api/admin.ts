@@ -182,6 +182,9 @@ export interface Alert {
   customer_visible: boolean;
   status: string;
   created_at: string;
+  occurrence_count?: number | null;
+  first_seen_at?: string | null;
+  last_seen_at?: string | null;
   /** Tier-1 AI queue fields (persisted on triage write). */
   ai_verdict?: string | null;
   ai_confidence?: number | null;
@@ -293,10 +296,23 @@ export interface AlertDetail extends Alert {
   win_eventdata?: Record<string, unknown> | null;
   mitre_tactics?: string[] | null;
   mitre_techniques?: string[] | null;
+  merge_fingerprint?: string | null;
+  recurrence_of_alert_id?: string | null;
+}
+
+export interface AlertOccurrence {
+  occurrence_no: number;
+  source_tool: string;
+  external_alert_id: string;
+  severity: string | null;
+  summary: string | null;
+  event_time: string | null;
+  received_at: string | null;
 }
 
 export interface AlertDetailResponse {
   alert: AlertDetail;
+  occurrences?: AlertOccurrence[];
 }
 
 export interface AlertTriageUpdate {

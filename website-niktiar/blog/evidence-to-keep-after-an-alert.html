@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Evidence to Keep After a Security Alert | Kevantic</title>
+  <meta name="description" content="An alert without a record becomes a rumour. See what to keep, what NikTiar Spectre DFIR adds, and why those raw logs should stay on the Edge Node." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://kevantic.com/blog/evidence-to-keep-after-an-alert.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Kevantic Cyber Security Solutions" />
+  <meta property="og:title" content="Evidence to Keep After a Security Alert | Kevantic" />
+  <meta property="og:description" content="An alert without a record becomes a rumour. See what to keep, what NikTiar Spectre DFIR adds, and why those raw logs should stay on the Edge Node." />
+  <meta property="og:url" content="https://kevantic.com/blog/evidence-to-keep-after-an-alert.html" />
+  <meta property="og:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Evidence to Keep After a Security Alert | Kevantic" />
+  <meta name="twitter:description" content="An alert without a record becomes a rumour. See what to keep, what NikTiar Spectre DFIR adds, and why those raw logs should stay on the Edge Node." />
+  <meta name="twitter:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <link rel="icon" href="../assets/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../assets/brand/favicon.ico" type="image/x-icon" />
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon-180.png" />
+  <link rel="preload" href="insights.css?v=4" as="style" />
+  <link rel="stylesheet" href="../assets/brand/kevantic-brand.css" />
+  <link rel="stylesheet" href="insights.css?v=4" />
+</head>
+<body class="blog-shell">
+<header class="blog-top">
+  <div class="blog-wrap blog-top-inner" id="blog-top">
+    <a class="blog-brand" href="../index.html" aria-label="Kevantic Cyber Security">
+      <img src="../assets/brand/kevantic-horizontal-ink.svg?v=1.1.1" alt="Kevantic Cyber Security" width="190" height="40" decoding="async" />
+    </a>
+    <button class="blog-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-blog-toggle><span></span><span></span><span></span></button>
+    <ul class="blog-nav">
+      <li><a class="is-active" href="index.html">Blog</a></li>
+      <li><a href="../services.html">Services</a></li>
+      <li><a href="../platform.html">Platform</a></li>
+      <li><a href="../contact.html">Contact</a></li>
+      <li><a class="blog-cta" href="../index.html#demo">Request Demo</a></li>
+    </ul>
+  </div>
+</header>
+
+<main>
+  <section class="blog-hero"><div class="blog-wrap">
+    <nav class="blog-crumbs" aria-label="Breadcrumb"><a href="../index.html">Home</a><span aria-hidden="true">/</span><a href="index.html">Blog</a><span aria-hidden="true">/</span><span>The evidence to keep after an alert</span></nav>
+    <span class="blog-kicker">How protection works</span>
+    <h1>The evidence to keep after an alert</h1>
+    <p class="lede">Two weeks later the board asks what was touched. “We think” is not an answer.</p>
+  </div></section>
+  <div class="blog-wrap blog-layout">
+    <article class="blog-article">
+      <p class="meta">28 October 2026 · 3 min read · Kevantic Cyber Security</p>
+      <p>An alert without a record is a rumour by Thursday. The board, the insurer, or the customer asks what was touched, and the only honest sentence left is “we think.” Forensics is the discipline of keeping enough of the story that the sentence can be specific: which account, which hour, which process.</p>
+<h2 id="what-is-worth-keeping-before-anything-goes-wrong">What is worth keeping before anything goes wrong</h2>
+<ul><li>Sign-in history, including the approvals, not only the failures.</li><li>Admin logins to the edge devices and remote gateways.</li><li>Enough endpoint history to see which process started which child, for long enough that a slow intrusion is still visible.</li></ul>
+<p>You do not need to export every log to a vendor’s cloud to be allowed to ask what happened. That choice is the subject of <a href="where-security-logs-should-live.html">where security logs should live</a>.</p>
+<h2 id="how-an-investigation-is-supported">How an investigation is supported</h2>
+<p><a href="../services/endpoint-forensics-deception.html">NikTiar Spectre DFIR</a> supports the investigation: process trees, canary files that light up if someone touches a bait, and a human investigator when the case needs one. The raw material stays on the NikTiar Edge Node. On the threat-intelligence service, a new indicator can be checked back across about 90 days of retained telemetry, which is only useful if those days were actually kept.</p>
+<h2 id="what-you-should-receive-when-a-case-closes">What you should receive when a case closes</h2>
+<p>You should be able to say, without opening a raw log, what was accessed, whether it left the company, what was contained, and what still needs a human decision. The technical tree — which process started which program — stays available to the investigation. NikTiar Spectre DFIR is how Kevantic supports that tree, including canaries that light up if someone touches a bait left for exactly that purpose. You do not need a procedure manual to demand the plain-English version.</p>
+<p>You should also know the limits. A record that was never collected cannot be invented after the fact. Sign-in history, edge admin history, and endpoint history have to be kept on purpose, on the NikTiar Edge Node, for long enough that a slow intrusion is still inside the window. Threat intelligence sweeps of about 90 days only help if those days exist.</p>
+<p>Insurers and customers ask these questions later, in calmer language. Answering them from memory is how companies end up arguing with their own timeline.</p>
+<aside class="blog-pull"><p>Decide the retention question on a quiet Friday. During an incident, it is already too late to wish the logs existed.</p></aside>
+      <div class="blog-related">
+        <h2>Keep reading</h2>
+        <div class="blog-grid"><a class="blog-card" href="after-a-phishing-click.html"><span class="blog-kicker">Active threats</span><h2>What actually happens after a phishing click</h2><p>Training posters talk about the click. The loss usually happens in the hour after it.</p></a><a class="blog-card" href="where-security-logs-should-live.html"><span class="blog-kicker">Foundations</span><h2>Where your security logs should live</h2><p>There is a quiet second bill hiding in many security contracts: the copy of your own logs.</p></a></div>
+      </div>
+    </article>
+    <aside class="blog-aside">
+      <span class="blog-kicker">Related service</span>
+      <h2>Endpoint Forensics (NikTiar Spectre DFIR)</h2>
+      <p>NikTiar Spectre DFIR, on the Platinum tier, supports the investigation with process history and canary files that light up if someone touches a bait. The raw record stays on the NikTiar Edge Node.</p>
+      <a class="blog-btn" href="../services/endpoint-forensics-deception.html">View this service</a>
+      <a class="soft-link" href="../contact.html">Request a demo</a>
+      <a class="soft-link" href="mailto:sales@kevantic.com">sales@kevantic.com</a>
+    </aside>
+  </div>
+</main>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BlogPosting",
+      "headline": "The evidence to keep after an alert",
+      "description": "An alert without a record becomes a rumour. See what to keep, what NikTiar Spectre DFIR adds, and why those raw logs should stay on the Edge Node.",
+      "datePublished": "2026-10-28",
+      "dateModified": "2026-10-28",
+      "inLanguage": "en",
+      "mainEntityOfPage": "https://kevantic.com/blog/evidence-to-keep-after-an-alert.html",
+      "image": "https://kevantic.com/assets/brand/kevantic-og-1200x630.png",
+      "author": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://kevantic.com/assets/brand/kevantic-horizontal-ink.svg?v=1.1.1"
+        }
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://kevantic.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Blog",
+          "item": "https://kevantic.com/blog/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "The evidence to keep after an alert",
+          "item": "https://kevantic.com/blog/evidence-to-keep-after-an-alert.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+<footer class="blog-foot"><div class="blog-wrap">
+  <p>&copy; 2026 Kevantic Cyber Security Solutions · <a href="../index.html">kevantic.com</a> · <a href="mailto:sales@kevantic.com">sales@kevantic.com</a> · Bengaluru</p>
+</div></footer>
+<script>
+(function(){var t=document.querySelector('[data-blog-toggle]');var n=document.getElementById('blog-top');if(!t||!n)return;t.addEventListener('click',function(){var o=n.classList.toggle('is-open');t.setAttribute('aria-expanded',o?'true':'false');});})();
+</script>
+</body>
+</html>

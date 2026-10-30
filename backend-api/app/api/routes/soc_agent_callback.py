@@ -5,16 +5,20 @@ Reuses existing security_alerts AI columns. Never auto-contains.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 import os
 import secrets
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, HTTPException, status
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app.db.session import fetch_one
-from app.services.soc_agent_expert import apply_callback_payload
+from app.services import tia_acceptance as acc
+from app.services import tia_outbox
+from app.services import tia_schema
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +27,13 @@ router = APIRouter(tags=["soc-agent"])
 
 class TriageResultIn(BaseModel):
     alert_id: str = Field(min_length=1, max_length=64)
+    # Binding issued when the control plane opened the attempt (echoed by the agent).
+    attempt_id: str = Field(min_length=1, max_length=64)
+    job_id: Optional[str] = Field(default=None, max_length=200)
+    evidence_version: Optional[str] = Field(default=None, max_length=64)
     tenant_id: Optional[str] = Field(default=None, max_length=64)
     tenant_short_code: Optional[str] = Field(default=None, max_length=64)
-    ok: bool = True
+    ok: bool = False
     verdict: Optional[str] = None
     confidence: Optional[float] = None
     summary: Optional[str] = None
@@ -37,6 +45,14 @@ class TriageResultIn(BaseModel):
     action_package: Optional[Dict[str, Any]] = None
     dossier_id: Optional[str] = None
     llm_meta: Optional[Dict[str, Any]] = None
+    # analyst-result-2 fields. Validated server-side in tia_investigation; the
+    # agent's own claims are never trusted on their own.
+    contract: Optional[str] = Field(default=None, max_length=40)
+    execution: Optional[Dict[str, Any]] = None
+    disposition: Optional[str] = Field(default=None, max_length=40)
+    source_severity: Optional[str] = Field(default=None, max_length=20)
+    human_review: Optional[Dict[str, Any]] = None
+    limited_evidence: Optional[Dict[str, Any]] = None
 
 
 def _expected_token() -> str:
@@ -61,67 +77,131 @@ def _require_agent_token(x_soc_agent_token: Optional[str]) -> None:
         )
 
 
-def _resolve_tenant_id(payload: TriageResultIn) -> Optional[str]:
-    if payload.tenant_id:
-        row = fetch_one(
-            "SELECT id::text AS id FROM tenants WHERE id = %s::uuid LIMIT 1;",
-            (payload.tenant_id,),
-        )
-        return (row or {}).get("id")
-    if payload.tenant_short_code:
-        row = fetch_one(
-            "SELECT id::text AS id FROM tenants WHERE upper(short_code) = upper(%s) LIMIT 1;",
-            (payload.tenant_short_code,),
-        )
-        return (row or {}).get("id")
-    # Derive from alert
-    row = fetch_one(
-        "SELECT tenant_id::text AS tenant_id FROM security_alerts WHERE id = %s::uuid LIMIT 1;",
-        (payload.alert_id,),
-    )
-    return (row or {}).get("tenant_id")
-
-
 @router.post("/api/v1/soc-agent/triage-result")
 def soc_agent_triage_result(
     payload: TriageResultIn,
     x_soc_agent_token: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
+    """Accept an agent callback through the same function the HTTP reply uses.
+
+    Status codes tell the agent what to do:
+      200  accepted, or an exact duplicate of an accepted result (stop retrying)
+      404  unknown attempt (permanent)
+      409  tenant/alert/job/evidence mismatch or a conflicting payload (permanent)
+      503  schema not ready or database failure: nothing was recorded, retry later
+    """
     _require_agent_token(x_soc_agent_token)
-    tenant_id = _resolve_tenant_id(payload)
-    if not tenant_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert or tenant not found")
-
-    alert = fetch_one(
-        """
-        SELECT id::text AS id, tenant_id::text AS tenant_id, ai_triage_status
-        FROM security_alerts
-        WHERE id = %s::uuid AND tenant_id = %s::uuid
-        LIMIT 1;
-        """,
-        (payload.alert_id, tenant_id),
-    )
-    if not alert:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert not found")
-
-    if (alert.get("ai_triage_status") or "").strip() == "accepted":
-        return {
-            "ok": True,
-            "skipped": "already_accepted",
-            "alert_id": payload.alert_id,
-        }
-
-    body = payload.model_dump()
     try:
-        result = apply_callback_payload(
-            alert_id=payload.alert_id,
-            tenant_id=tenant_id,
-            payload=body,
+        result = acc.accept_result(
+            source="callback",
+            attempt_id=payload.attempt_id,
+            claimed_tenant_id=payload.tenant_id,
+            claimed_alert_id=payload.alert_id,
+            claimed_job_id=payload.job_id,
+            claimed_evidence_version=payload.evidence_version,
+            raw=payload.model_dump(),
+        )
+    except tia_schema.SchemaNotReady as exc:
+        logger.error("SOC agent callback held: TIA schema not ready alert=%s missing=%s", payload.alert_id, exc.missing)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Result acceptance is not ready; retry later",
         )
     except Exception:  # noqa: BLE001
-        logger.exception("SOC agent callback persist failed alert=%s", payload.alert_id)
+        logger.exception("SOC agent callback not recorded alert=%s", payload.alert_id)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to persist triage result",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Result could not be recorded; retry later",
         )
-    return result
+
+    if result.status == "rejected":
+        code = 404 if result.reason in ("unknown_attempt", "invalid_attempt_id", "alert_missing") else 409
+        if result.reason == "attempt_window_expired":
+            code = 409
+        raise HTTPException(status_code=code, detail=f"Result rejected: {result.reason}")
+    if result.status == "conflict":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Conflicting result for the same attempt")
+
+    tia_outbox.kick()
+    return {
+        "ok": True,
+        "status": result.status,
+        "reason": result.reason,
+        "alert_id": payload.alert_id,
+        "attempt_id": result.attempt_id,
+        "applied": result.applied,
+        "late": result.late,
+        "review_item_id": result.review_item_id,
+        "review_action": result.review_action,
+    }
+
+
+# ---------------------------------------------------------------------------
+# WhatsApp Cloud API delivery receipts (authenticated)
+# ---------------------------------------------------------------------------
+# Meta signs every POST with HMAC-SHA256 of the raw body using the app secret
+# (X-Hub-Signature-256) and verifies the endpoint once with a GET handshake.
+# Unsigned or wrongly signed requests change nothing. If the secret is not set
+# the endpoint refuses every POST, so delivery stays "unknown" instead of guessed.
+
+
+def _whatsapp_secret() -> str:
+    return (os.getenv("WHATSAPP_APP_SECRET") or "").strip()
+
+
+def verify_whatsapp_signature(raw_body: bytes, header: Optional[str]) -> bool:
+    secret = _whatsapp_secret()
+    if not secret or not header or not header.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, header[len("sha256="):].strip())
+
+
+def extract_whatsapp_statuses(body: Dict[str, Any]) -> list:
+    out = []
+    for entry in (body.get("entry") or []):
+        for change in (entry.get("changes") or []):
+            value = change.get("value") or {}
+            for st in (value.get("statuses") or []):
+                errors = st.get("errors") or []
+                detail = ""
+                if errors and isinstance(errors[0], dict):
+                    detail = f"{errors[0].get('code', '')} {errors[0].get('title', '')}".strip()
+                out.append({"id": str(st.get("id") or ""), "status": str(st.get("status") or ""), "error": detail})
+    return out
+
+
+@router.get("/api/v1/notifications/whatsapp/webhook")
+def whatsapp_webhook_verify(
+    hub_mode: Optional[str] = Query(default=None, alias="hub.mode"),
+    hub_verify_token: Optional[str] = Query(default=None, alias="hub.verify_token"),
+    hub_challenge: Optional[str] = Query(default=None, alias="hub.challenge"),
+) -> Response:
+    expected = (os.getenv("WHATSAPP_WEBHOOK_VERIFY_TOKEN") or "").strip()
+    if not expected or hub_mode != "subscribe" or not hub_verify_token or not secrets.compare_digest(hub_verify_token, expected):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="verification failed")
+    return Response(content=hub_challenge or "", media_type="text/plain")
+
+
+@router.post("/api/v1/notifications/whatsapp/webhook")
+async def whatsapp_webhook_receive(request: Request, x_hub_signature_256: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+    if not _whatsapp_secret():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="delivery receipts are not configured")
+    raw = await request.body()
+    if not verify_whatsapp_signature(raw, x_hub_signature_256):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid signature")
+    try:
+        body = json.loads(raw.decode("utf-8"))
+        statuses = extract_whatsapp_statuses(body if isinstance(body, dict) else {})
+    except Exception:  # noqa: BLE001
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="malformed receipt payload")
+    applied: Dict[str, int] = {}
+    try:
+        for st in statuses:
+            res = tia_outbox.apply_provider_status(st["id"], st["status"], error=st["error"])
+            applied[res] = applied.get(res, 0) + 1
+    except Exception:  # noqa: BLE001
+        logger.exception("delivery receipt not recorded")
+        # 5xx makes the provider retry the callback later.
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="receipt could not be recorded")
+    return {"ok": True, "applied": applied}

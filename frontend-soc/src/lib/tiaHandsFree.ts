@@ -246,58 +246,10 @@ export async function startHandsFree(handlers: HandsFreeHandlers): Promise<
   return { ok: true, session };
 }
 
-/** Name variants Google STT often returns for "Tia". */
-const TIA_NAME = String.raw`(?:tia|tea|teah|thea|tiya|tiaa|tiaah|tia'|t\.?\s*i\.?\s*a)`;
-const GREET = String.raw`(?:hey|hi|hello|ok|okay|yo|ah|oh)`;
-
-const WAKE_RE = new RegExp(
-  String.raw`\b${GREET}\s+${TIA_NAME}\b|\b${TIA_NAME}\b[,!]?(?:\s|$)`,
-  "i"
-);
-
 const GOODBYE_RE =
   /\b(?:goodbye|good\s*bye|bye)\s*(?:tia|tea|teya)?\b|\b(?:that'?s\s*all|stop\s*listening|go\s*to\s*sleep|end\s*conversation|talk\s*later)\b/i;
 
-export function matchWake(text: string): { woke: boolean; remainder: string } {
-  const raw = (text || "").trim();
-  if (!raw) return { woke: false, remainder: "" };
-  const norm = raw.replace(/[^\w\s']/g, " ").replace(/\s+/g, " ").trim();
-
-  // "Hi Tia …" / "Hey Tia …"
-  const greeter = new RegExp(String.raw`^\s*${GREET}\s+${TIA_NAME}\b[,!. ]*`, "i");
-  if (greeter.test(norm)) {
-    return { woke: true, remainder: norm.replace(greeter, "").trim() };
-  }
-
-  // Bare "Tia" / "Tia, how's Wazuh"
-  const bare = new RegExp(String.raw`^\s*${TIA_NAME}\b[,!. ]*`, "i");
-  if (bare.test(norm) && norm.length <= 80) {
-    return { woke: true, remainder: norm.replace(bare, "").trim() };
-  }
-
-  // Fuzzy: greeting + name-like token anywhere in a short phrase (STT mishears).
-  const fuzzyName = /\b(tia|tea|teah|thea|tiya|tiaa|dear|tier|chia|dia|sia|via)\b/i;
-  const fuzzyGreet = /\b(hi|hey|hello|ok|okay|yo)\b/i;
-  if (norm.length <= 48 && fuzzyGreet.test(norm) && fuzzyName.test(norm)) {
-    const remainder = norm
-      .replace(fuzzyGreet, " ")
-      .replace(fuzzyName, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return { woke: true, remainder };
-  }
-
-  if (WAKE_RE.test(norm)) {
-    const remainder = norm
-      .replace(new RegExp(String.raw`${GREET}\s+${TIA_NAME}`, "ig"), " ")
-      .replace(new RegExp(String.raw`\b${TIA_NAME}\b`, "ig"), " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    return { woke: true, remainder };
-  }
-
-  return { woke: false, remainder: raw };
-}
+export { matchWake } from "./tiaUtterance";
 
 export function isGoodbye(text: string): boolean {
   return GOODBYE_RE.test((text || "").trim());

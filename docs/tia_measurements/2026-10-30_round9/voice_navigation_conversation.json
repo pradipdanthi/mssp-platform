@@ -1,0 +1,76 @@
+{
+  "classification": "real integration demonstrated (disposable e2e rig, synthetic tenant E2EA)",
+  "not": "physical microphone; production VM 100 console; production VM 117",
+  "conversation_id": "a964643b-2a27-4543-918f-b96c1b8d440f",
+  "session_id": "s00a963b23e1daee9122b",
+  "operator": "operator.e2e@example.test",
+  "tenant_short_code": "E2EA",
+  "tenant_id": "eeeeeeee-0000-0000-0000-00000000000a",
+  "turns": [
+    {
+      "turn_no": 1,
+      "client_turn_id": "tmvv6466fab8c582d",
+      "request_id": "2cacb9edbe4946b7",
+      "user": "How many critical alerts do we have?",
+      "intent": "list",
+      "tool": "list_alerts",
+      "result": "For e2e customer a: 2 critical and 1 high open alerts (tenant-scoped; E2EB excluded)"
+    },
+    {
+      "turn_no": 3,
+      "client_turn_id": "tmvv64m6w738fbad8",
+      "request_id": "3f5b1e7e9f8b42ff",
+      "user": "Tell me about the first one.",
+      "intent": "describe",
+      "tool": "describe_alert",
+      "result": "Ransomware-like file renames on HOST-A2; MALICIOUS 72% investigation; Shall I open it?"
+    },
+    {
+      "turn_no": 5,
+      "client_turn_id": "tmvv64xute0480a3d",
+      "request_id": "2d95f0f248284ebe",
+      "user": "Yes, please open it.",
+      "intent": "open_case",
+      "spoken_at_issue": "Asking your dashboard to open ... I'll confirm once it has loaded.",
+      "did_not_claim_opened_in_this_turn": true
+    },
+    {
+      "turn_no": 7,
+      "request_id": "dashboard-ack",
+      "source": "uiBridge acknowledgement after route load",
+      "text": "Confirmed: Ransomware-like file renames on HOST-A2 is open on your screen (critical, E2EA)."
+    },
+    {
+      "turn_no": 8,
+      "client_turn_id": "tmvv658tn9ae725b1",
+      "request_id": "01f0aa3706fb4c8d",
+      "user": "Why did this trigger, and what have you checked?",
+      "intent": "evidence",
+      "tool": "explain_evidence",
+      "used_selected_alert_id": "0104dd4a-2634-48e9-8be1-92c56c9c7380"
+    }
+  ],
+  "alert_id": "0104dd4a-2634-48e9-8be1-92c56c9c7380",
+  "incident_id": "90631fba-33b1-4c33-9400-fd51b3d89c1b",
+  "incident_number": "INC-E2E-002",
+  "pending_action": {
+    "id": "2cac80ba-46ed-4dab-bac3-3cb5d3c61d96",
+    "action_type": "open_case",
+    "status": "executed",
+    "expires_at": "2026-10-30 16:13:06.291708+00"
+  },
+  "ui_command": {
+    "id": "a032c465-59a1-4753-a2cb-e0494f7eeb09",
+    "status": "acknowledged",
+    "path": "/alerts/0104dd4a-2634-48e9-8be1-92c56c9c7380",
+    "issued_at": "2026-10-30 16:10:21.397964+00",
+    "acknowledged_at": "2026-10-30 16:10:21.55104+00",
+    "ack_to_confirm_ms": 153,
+    "ack_payload": {
+      "late": false,
+      "loaded_alert_id": "0104dd4a-2634-48e9-8be1-92c56c9c7380"
+    }
+  },
+  "frontend_url_after_ack": "http://127.0.0.1:15174/alerts/0104dd4a-2634-48e9-8be1-92c56c9c7380",
+  "authorisation": "JWT soc_analyst on /admin/soc-console/converse and ui-commands ack; tenant_id bound on pending action and command"
+}

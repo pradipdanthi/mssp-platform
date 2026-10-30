@@ -617,7 +617,10 @@ def admin_alerts(
             sa.ai_triaged_at,
             sa.customer_visible,
             sa.status,
-            sa.created_at
+            sa.created_at,
+            sa.occurrence_count,
+            sa.first_seen_at,
+            sa.last_seen_at
         FROM security_alerts sa
         JOIN tenants t ON t.id = sa.tenant_id
         {where_sql}

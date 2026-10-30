@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Seeing Movement Inside the Network | Kevantic</title>
+  <meta name="description" content="After a login, intruders move from laptop to file server to backup. NikTiar DeepSight NDR watches that internal path for lateral movement and beaconing." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://kevantic.com/blog/movement-inside-the-network.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Kevantic Cyber Security Solutions" />
+  <meta property="og:title" content="Seeing Movement Inside the Network | Kevantic" />
+  <meta property="og:description" content="After a login, intruders move from laptop to file server to backup. NikTiar DeepSight NDR watches that internal path for lateral movement and beaconing." />
+  <meta property="og:url" content="https://kevantic.com/blog/movement-inside-the-network.html" />
+  <meta property="og:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Seeing Movement Inside the Network | Kevantic" />
+  <meta name="twitter:description" content="After a login, intruders move from laptop to file server to backup. NikTiar DeepSight NDR watches that internal path for lateral movement and beaconing." />
+  <meta name="twitter:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <link rel="icon" href="../assets/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../assets/brand/favicon.ico" type="image/x-icon" />
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon-180.png" />
+  <link rel="preload" href="insights.css?v=4" as="style" />
+  <link rel="stylesheet" href="../assets/brand/kevantic-brand.css" />
+  <link rel="stylesheet" href="insights.css?v=4" />
+</head>
+<body class="blog-shell">
+<header class="blog-top">
+  <div class="blog-wrap blog-top-inner" id="blog-top">
+    <a class="blog-brand" href="../index.html" aria-label="Kevantic Cyber Security">
+      <img src="../assets/brand/kevantic-horizontal-ink.svg?v=1.1.1" alt="Kevantic Cyber Security" width="190" height="40" decoding="async" />
+    </a>
+    <button class="blog-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-blog-toggle><span></span><span></span><span></span></button>
+    <ul class="blog-nav">
+      <li><a class="is-active" href="index.html">Blog</a></li>
+      <li><a href="../services.html">Services</a></li>
+      <li><a href="../platform.html">Platform</a></li>
+      <li><a href="../contact.html">Contact</a></li>
+      <li><a class="blog-cta" href="../index.html#demo">Request Demo</a></li>
+    </ul>
+  </div>
+</header>
+
+<main>
+  <section class="blog-hero"><div class="blog-wrap">
+    <nav class="blog-crumbs" aria-label="Breadcrumb"><a href="../index.html">Home</a><span aria-hidden="true">/</span><a href="index.html">Blog</a><span aria-hidden="true">/</span><span>Seeing movement inside the network</span></nav>
+    <span class="blog-kicker">How protection works</span>
+    <h1>Seeing movement inside the network</h1>
+    <p class="lede">Once they are inside, the firewall at the front door is no longer on the path.</p>
+  </div></section>
+  <div class="blog-wrap blog-layout">
+    <article class="blog-article">
+      <p class="meta">28 October 2026 · 3 min read · Kevantic Cyber Security</p>
+      <p>A stolen laptop is rarely the destination. The person using it looks for the file server, the backup, the identity system, the jump host into the plant. That walk from system to system is inside the building. The firewall on the internet edge is no longer standing on the path.</p>
+<h2 id="two-patterns-worth-naming">Two patterns worth naming</h2>
+<p>Lateral movement is the walk: one computer using another, often with a real account, toward the system that would hurt if it stopped. Beaconing is the quiet repeat call a compromised computer makes to its controller, on a schedule, hoping to look like ordinary traffic. Both can be invisible to a tool that only watches the front door.</p>
+<h2 id="why-this-is-a-network-job">Why this is a network job</h2>
+<p><a href="../services/network-detection-response.html">NikTiar DeepSight NDR</a> inspects that internal traffic. It is a Platinum capability because it needs the network, not only the laptop. The Cloud SOC reads it next to identity alerts and the endpoint. A graph with no case owner is still just a graph.</p>
+<p>Identity tells you the account looked wrong. The network tells you where it walked. Containment, when the tier includes it, stops the walk: the computer is marked isolated only after the endpoint confirms it. <a href="ransomware-is-an-operations-problem.html">Ransomware is an operations problem</a> covers why that confirmation matters.</p>
+<h2 id="what-the-soc-should-be-able-to-say">What the SOC should be able to say</h2>
+<p>A useful network finding is a sentence. “This finance laptop, with this account, spoke to the backup server at this hour, which it does not usually do.” Or: “This plant PC has been calling out on a steady timer since Tuesday.” NikTiar DeepSight NDR is there to support that sentence. The Cloud SOC turns it into a case, next to the identity story and the endpoint story, instead of leaving it as a chart.</p>
+<p>This is a Platinum-tier capability because it watches the network itself. A company whose risk is mostly mailbox fraud may live well on identity and incident response. A company whose risk is a walk toward the backup, the domain, or the line should not pretend the front-door firewall saw that walk.</p>
+<p>If the sentence cannot be written, do not add another dashboard. Fix retention and placement first, so the traffic that matters is actually visible to DeepSight and the raw record still sits on the NikTiar Edge Node.</p>
+<aside class="blog-pull"><p>If your current service can describe the login and cannot describe the next computer that login touched, you are watching the door and not the hallway.</p></aside>
+      <div class="blog-related">
+        <h2>Keep reading</h2>
+        <div class="blog-grid"><a class="blog-card" href="stolen-logins-look-like-normal-work.html"><span class="blog-kicker">Active threats</span><h2>Stolen logins that look like normal work</h2><p>The password was correct. The prompt was approved. That is often how the intrusion begins.</p></a><a class="blog-card" href="ransomware-is-an-operations-problem.html"><span class="blog-kicker">Active threats</span><h2>Ransomware is an operations problem</h2><p>By the time files are renamed, the group has usually already had a login and time inside.</p></a></div>
+      </div>
+    </article>
+    <aside class="blog-aside">
+      <span class="blog-kicker">Related service</span>
+      <h2>NikTiar DeepSight NDR</h2>
+      <p>NikTiar DeepSight NDR, on the Platinum tier, inspects traffic inside the network for a computer walking toward another system, and for a quiet repeated call to a controller. The Cloud SOC turns a match into a case.</p>
+      <a class="blog-btn" href="../services/network-detection-response.html">View this service</a>
+      <a class="soft-link" href="../contact.html">Request a demo</a>
+      <a class="soft-link" href="mailto:sales@kevantic.com">sales@kevantic.com</a>
+    </aside>
+  </div>
+</main>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BlogPosting",
+      "headline": "Seeing movement inside the network",
+      "description": "After a login, intruders move from laptop to file server to backup. NikTiar DeepSight NDR watches that internal path for lateral movement and beaconing.",
+      "datePublished": "2026-10-28",
+      "dateModified": "2026-10-28",
+      "inLanguage": "en",
+      "mainEntityOfPage": "https://kevantic.com/blog/movement-inside-the-network.html",
+      "image": "https://kevantic.com/assets/brand/kevantic-og-1200x630.png",
+      "author": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://kevantic.com/assets/brand/kevantic-horizontal-ink.svg?v=1.1.1"
+        }
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://kevantic.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Blog",
+          "item": "https://kevantic.com/blog/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Seeing movement inside the network",
+          "item": "https://kevantic.com/blog/movement-inside-the-network.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+<footer class="blog-foot"><div class="blog-wrap">
+  <p>&copy; 2026 Kevantic Cyber Security Solutions · <a href="../index.html">kevantic.com</a> · <a href="mailto:sales@kevantic.com">sales@kevantic.com</a> · Bengaluru</p>
+</div></footer>
+<script>
+(function(){var t=document.querySelector('[data-blog-toggle]');var n=document.getElementById('blog-top');if(!t||!n)return;t.addEventListener('click',function(){var o=n.classList.toggle('is-open');t.setAttribute('aria-expanded',o?'true':'false');});})();
+</script>
+</body>
+</html>

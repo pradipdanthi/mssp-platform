@@ -1,0 +1,157 @@
+target=http://127.0.0.1:18000  turns=8  concurrency=3  (typed turns; no speech or browser)
+navigation/tool: what's critical [serial, warm] n=8   p50=     21 ms  p95=     49 ms  max=     49 ms errors=0
+navigation/tool: what's critical [concurrent x3] n=8   p50=     32 ms  p95=     38 ms  max=     38 ms errors=0
+tool: how many alerts are open [serial, warm] n=8   p50=     18 ms  p95=     20 ms  max=     20 ms errors=0
+tool: how many alerts are open [concurrent x3] n=8   p50=     32 ms  p95=     39 ms  max=     39 ms errors=0
+engine health (live probes) [serial, warm]   n=8   p50=     69 ms  p95=    114 ms  max=    114 ms errors=0
+engine health (live probes) [concurrent x3]  n=8   p50=     69 ms  p95=     80 ms  max=     80 ms errors=0
+engine health (cached) [serial, warm]        n=8   p50=     15 ms  p95=     18 ms  max=     18 ms errors=0
+engine health (cached) [concurrent x3]       n=8   p50=     26 ms  p95=     30 ms  max=     30 ms errors=0
+model fallback [serial, warm]                n=3   p50=     84 ms  p95=     87 ms  max=     87 ms errors=0
+model fallback [concurrent x3]               n=8   p50=    124 ms  p95=    189 ms  max=    189 ms errors=0
+
+server-side stage breakdown (30 min window):
+{
+ "window_minutes": 30,
+ "paths": [
+  {
+   "path": "action",
+   "n": 29,
+   "failed": 0,
+   "p50_ms": 11.7,
+   "p95_ms": 17.8,
+   "max_ms": 19.5
+  },
+  {
+   "path": "model",
+   "n": 15,
+   "failed": 0,
+   "p50_ms": 80.8,
+   "p95_ms": 115.1,
+   "max_ms": 116.6
+  },
+  {
+   "path": "navigation",
+   "n": 93,
+   "failed": 2,
+   "p50_ms": 12.0,
+   "p95_ms": 60.4,
+   "max_ms": 97.9
+  },
+  {
+   "path": "status",
+   "n": 93,
+   "failed": 0,
+   "p50_ms": 14.9,
+   "p95_ms": 26.3,
+   "max_ms": 37.9
+  }
+ ],
+ "server_stages": [
+  {
+   "path": "action",
+   "stage": "total",
+   "n": 29,
+   "p50_ms": 11.7,
+   "p95_ms": 17.8
+  },
+  {
+   "path": "action",
+   "stage": "tool_execution",
+   "n": 29,
+   "p50_ms": 10.9,
+   "p95_ms": 16.6
+  },
+  {
+   "path": "action",
+   "stage": "auth_and_context",
+   "n": 29,
+   "p50_ms": 0.7,
+   "p95_ms": 1.4
+  },
+  {
+   "path": "model",
+   "stage": "total",
+   "n": 15,
+   "p50_ms": 80.8,
+   "p95_ms": 115.1
+  },
+  {
+   "path": "model",
+   "stage": "snapshot",
+   "n": 11,
+   "p50_ms": 90.5,
+   "p95_ms": 98.8
+  },
+  {
+   "path": "model",
+   "stage": "auth_and_context",
+   "n": 15,
+   "p50_ms": 0.0,
+   "p95_ms": 0.8
+  },
+  {
+   "path": "navigation",
+   "stage": "tool_execution",
+   "n": 91,
+   "p50_ms": 11.4,
+   "p95_ms": 60.7
+  },
+  {
+   "path": "navigation",
+   "stage": "total",
+   "n": 93,
+   "p50_ms": 12.0,
+   "p95_ms": 60.4
+  },
+  {
+   "path": "navigation",
+   "stage": "auth_and_context",
+   "n": 93,
+   "p50_ms": 0.6,
+   "p95_ms": 1.2
+  },
+  {
+   "path": "status",
+   "stage": "total",
+   "n": 93,
+   "p50_ms": 14.9,
+   "p95_ms": 26.3
+  },
+  {
+   "path": "status",
+   "stage": "tool_execution",
+   "n": 93,
+   "p50_ms": 14.3,
+   "p95_ms": 26.3
+  },
+  {
+   "path": "status",
+   "stage": "auth_and_context",
+   "n": 93,
+   "p50_ms": 0.6,
+   "p95_ms": 1.2
+  }
+ ],
+ "client_stages": [
+  {
+   "stage": "chat_roundtrip",
+   "n": 8,
+   "p50_ms": 52.5,
+   "p95_ms": 65.9
+  },
+  {
+   "stage": "first_audio",
+   "n": 2,
+   "p50_ms": 640.0,
+   "p95_ms": 640.0
+  },
+  {
+   "stage": "interrupt_to_stop",
+   "n": 2,
+   "p50_ms": 210.0,
+   "p95_ms": 210.0
+  }
+ ],
+ "note": "Sample sizes are in n. Percentiles from n < 20 are indicative, not a target verification."
+}

@@ -20,6 +20,7 @@ import SuppressionRuleModal, {
   SuppressionSeedAlert,
 } from "../components/soc/SuppressionRuleModal";
 import { useAdminQuery } from "../hooks/useAdminQuery";
+import { uiBridge } from "../../lib/tiaBridge";
 import { NIKTIAR, niktiairSourceLabel } from "../config/niktiairBrands";
 import { AiSuggestedSuppressionScope } from "../lib/ai-triage";
 import { alertStatusLabel } from "../utils/socStatusLabels";
@@ -54,6 +55,20 @@ export default function AlertDetailPage() {
     user?.role === "platform_admin" ||
     user?.role === "soc_manager" ||
     user?.role === "soc_analyst";
+
+  // Tell TIA which alert this page really loaded. The server compares it with the target of any
+  // "open this alert" command and only then confirms it to the operator.
+  const loadedAlertId = status === "success" ? data?.alert?.id : undefined;
+  useEffect(() => {
+    if (!loadedAlertId) return undefined;
+    uiBridge.alertLoaded(loadedAlertId);
+    return () => uiBridge.alertUnloaded(loadedAlertId);
+  }, [loadedAlertId]);
+  useEffect(() => {
+    if (alertId && (status === "error" || status === "forbidden")) {
+      uiBridge.alertLoadFailed(alertId, status === "forbidden" ? "alert_forbidden" : "alert_load_failed");
+    }
+  }, [alertId, status]);
 
   useEffect(() => {
     if (data) {
@@ -131,9 +146,51 @@ export default function AlertDetailPage() {
                 </td>
               </tr>
               <tr><th>Event time</th><td>{alert.event_time ?? "—"}</td></tr>
+              <tr>
+                <th>Times seen</th>
+                <td>
+                  {alert.occurrence_count ?? 1}
+                  {alert.first_seen_at || alert.last_seen_at
+                    ? ` · first ${alert.first_seen_at ?? "—"} · last ${alert.last_seen_at ?? "—"}`
+                    : ""}
+                </td>
+              </tr>
               <tr><th>Description</th><td>{alert.alert_description ?? "—"}</td></tr>
             </tbody>
           </table>
+
+          {(data?.occurrences?.length ?? 0) > 0 ? (
+            <>
+              <h2 className="section-title">Occurrence history</h2>
+              <p className="page-subtitle">
+                Identical detections on this host are kept on this one alert. Each engine
+                event stays on file. The SLA clock is the first seen time and is not reset
+                when the same thing happens again.
+              </p>
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Engine id</th>
+                    <th>When</th>
+                    <th>Received</th>
+                    <th>Severity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data?.occurrences ?? []).map((row) => (
+                    <tr key={`${row.occurrence_no}-${row.external_alert_id}`}>
+                      <td>{row.occurrence_no}</td>
+                      <td className="cell-mono">{row.external_alert_id}</td>
+                      <td>{row.event_time ?? "—"}</td>
+                      <td>{row.received_at ?? "—"}</td>
+                      <td>{row.severity ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          ) : null}
 
           <h2 className="section-title">Endpoint & asset</h2>
           <table className="data-table">

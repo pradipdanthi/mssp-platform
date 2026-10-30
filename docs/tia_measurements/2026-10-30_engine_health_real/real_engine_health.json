@@ -1,0 +1,1386 @@
+{
+ "run_started": "2026-10-30T15:19:11Z",
+ "cold_seconds": 0.39,
+ "cached_seconds": 0.0,
+ "admin_view": {
+  "scope": "platform",
+  "checked_at": "2026-10-30T15:19:12+00:00",
+  "engines": [
+   {
+    "engine": "control_plane",
+    "label": "Control Plane",
+    "vm": "VM 100",
+    "host": "192.168.0.201",
+    "port": 8000,
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "not_applicable",
+      "detail": "in-process or database-derived",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "in_process",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "in_process",
+      "detail": "database and queue answer",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "control_plane",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "application"
+    ],
+    "unverified_layers": [
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 80,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "wazuh",
+    "label": "Wazuh Manager",
+    "vm": "VM 101",
+    "host": "192.168.0.211",
+    "port": 55000,
+    "status": "degraded",
+    "reason": "daemons_not_running",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "7 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "wazuh_api",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "ok",
+      "reason": null,
+      "source": "wazuh_api",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "degraded",
+      "reason": "daemons_not_running",
+      "source": "wazuh_api",
+      "detail": "wazuh-agentlessd, wazuh-clusterd, wazuh-csyslogd, wazuh-dbd, wazuh-maild, wazuh-reportd",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "degraded",
+      "reason": "telemetry_stale",
+      "source": "database",
+      "detail": "last event 19070s ago; expected within 60 min",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "auth"
+    ],
+    "unverified_layers": [],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 190,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "thehive",
+    "label": "TheHive",
+    "vm": "VM 102",
+    "host": "192.168.0.212",
+    "port": 9000,
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "7 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "thehive_api",
+      "detail": "HTTP 200",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "ok",
+      "reason": null,
+      "source": "thehive_api",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "thehive_api",
+      "detail": "authenticated call succeeded",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "thehive",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "auth",
+     "application"
+    ],
+    "unverified_layers": [
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 152,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "shuffle",
+    "label": "Shuffle SOAR",
+    "vm": "VM 102",
+    "host": "192.168.0.212",
+    "port": 3001,
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "5 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "shuffle_api",
+      "detail": "HTTP 200",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "webhook_only_integration",
+      "source": "shuffle",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "shuffle_api",
+      "detail": "health endpoint ok",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "shuffle",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "application"
+    ],
+    "unverified_layers": [
+     "auth",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 71,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "suricata",
+    "label": "Suricata NDR",
+    "vm": "VM 106",
+    "host": "192.168.0.216",
+    "port": 22,
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "9 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "suricata",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "suricata",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "suricata",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 51,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "zeek",
+    "label": "Zeek NDR",
+    "vm": "VM 106",
+    "host": "192.168.0.216",
+    "port": 22,
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "5 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "zeek",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "zeek",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "zeek",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 28,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "misp",
+    "label": "MISP / Threat Intel",
+    "vm": "VM 108",
+    "host": "192.168.0.218",
+    "port": 8080,
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "5 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "misp",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "misp",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "misp",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "misp",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 5,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "greenbone",
+    "label": "Vuln / EASM",
+    "vm": "VM 109",
+    "host": "192.168.0.219",
+    "port": 22,
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "2 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "greenbone",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "greenbone",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "greenbone",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 25,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "velociraptor",
+    "label": "Velociraptor",
+    "vm": "VM 110",
+    "host": "192.168.0.220",
+    "port": 8001,
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "0 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "velociraptor",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "velociraptor",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "velociraptor",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "velociraptor",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 1,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "secure_edge",
+    "label": "Secure Edge",
+    "vm": "VM 116",
+    "host": "192.168.0.217",
+    "port": 9080,
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "0 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "secure_edge",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "secure_edge",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "secure_edge",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 29,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "soc_agent",
+    "label": "SOC Agent",
+    "vm": "VM 117",
+    "host": "192.168.0.228",
+    "port": 8443,
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "detail": "0 ms",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "soc_agent",
+      "detail": "HTTP 200",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "ok",
+      "reason": null,
+      "source": "soc_agent",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "soc_agent",
+      "detail": "model route available",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "soc_agent",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "auth",
+     "application"
+    ],
+    "unverified_layers": [
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 37,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "appliances",
+    "label": "Customer Appliances",
+    "vm": "fleet",
+    "host": "192.168.0.201",
+    "port": 8000,
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "not_applicable",
+      "detail": "in-process or database-derived",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "detail": null,
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "ok",
+      "reason": null,
+      "source": "database",
+      "detail": "1/1 online, 15 heartbeats in 15 min",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "telemetry"
+    ],
+    "unverified_layers": [],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 20,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   }
+  ],
+  "counts": {
+   "ok": 5,
+   "degraded": 1,
+   "unknown": 6
+  },
+  "total": 12
+ },
+ "analyst_view": {
+  "scope": "platform",
+  "checked_at": "2026-10-30T15:19:12+00:00",
+  "engines": [
+   {
+    "engine": "control_plane",
+    "label": "Control Plane",
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "not_applicable",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "in_process",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "in_process",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "control_plane",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "application"
+    ],
+    "unverified_layers": [
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 80,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "wazuh",
+    "label": "Wazuh Manager",
+    "status": "degraded",
+    "reason": "daemons_not_running",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "wazuh_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "ok",
+      "reason": null,
+      "source": "wazuh_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "degraded",
+      "reason": "daemons_not_running",
+      "source": "wazuh_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "degraded",
+      "reason": "telemetry_stale",
+      "source": "database",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "auth"
+    ],
+    "unverified_layers": [],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 190,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "thehive",
+    "label": "TheHive",
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "thehive_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "ok",
+      "reason": null,
+      "source": "thehive_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "thehive_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "thehive",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "auth",
+     "application"
+    ],
+    "unverified_layers": [
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 152,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "shuffle",
+    "label": "Shuffle SOAR",
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "shuffle_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "webhook_only_integration",
+      "source": "shuffle",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "shuffle_api",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "shuffle",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "application"
+    ],
+    "unverified_layers": [
+     "auth",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 71,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "suricata",
+    "label": "Suricata NDR",
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "suricata",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "suricata",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "suricata",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 51,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "zeek",
+    "label": "Zeek NDR",
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "zeek",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "zeek",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "zeek",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 28,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "misp",
+    "label": "MISP / Threat Intel",
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "misp",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "misp",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "misp",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "misp",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 5,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "greenbone",
+    "label": "Vuln / EASM",
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "greenbone",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "greenbone",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "greenbone",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 25,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "velociraptor",
+    "label": "Velociraptor",
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "velociraptor",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "velociraptor",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "velociraptor",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "velociraptor",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 1,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "secure_edge",
+    "label": "Secure Edge",
+    "status": "unknown",
+    "reason": "only_port_reachability_verified",
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "secure_edge",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "secure_edge",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "no_adapter",
+      "source": "secure_edge",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_events_recorded",
+      "source": "database",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability"
+    ],
+    "unverified_layers": [
+     "api",
+     "auth",
+     "application",
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 29,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "soc_agent",
+    "label": "SOC Agent",
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "tcp_connect",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "ok",
+      "reason": null,
+      "source": "soc_agent",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "ok",
+      "reason": null,
+      "source": "soc_agent",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "ok",
+      "reason": null,
+      "source": "soc_agent",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "unknown",
+      "reason": "no_telemetry_source",
+      "source": "soc_agent",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "api",
+     "auth",
+     "application"
+    ],
+    "unverified_layers": [
+     "telemetry"
+    ],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 37,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   },
+   {
+    "engine": "appliances",
+    "label": "Customer Appliances",
+    "status": "ok",
+    "reason": null,
+    "layers": {
+     "reachability": {
+      "status": "ok",
+      "reason": null,
+      "source": "not_applicable",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "api": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "auth": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "application": {
+      "status": "unknown",
+      "reason": "not_checked",
+      "source": "",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     },
+     "telemetry": {
+      "status": "ok",
+      "reason": null,
+      "source": "database",
+      "checked_at": "2026-10-30T15:19:12+00:00"
+     }
+    },
+    "verified_layers": [
+     "reachability",
+     "telemetry"
+    ],
+    "unverified_layers": [],
+    "scope": "platform",
+    "checked_at": "2026-10-30T15:19:12+00:00",
+    "duration_ms": 20,
+    "cached": false,
+    "age_s": 0,
+    "freshness": "live"
+   }
+  ],
+  "counts": {
+   "ok": 5,
+   "degraded": 1,
+   "unknown": 6
+  },
+  "total": 12,
+  "detail_level": "status_only"
+ },
+ "spoken_summary": {
+  "answer": "5 of 12 engines are verified healthy. Wazuh Manager is degraded (has daemons that are not running); Suricata NDR is unverified (has an open port, but I have no way to verify more than that); Zeek NDR is unverified (has an open port, but I have no way to verify more than that); MISP / Threat Intel is unverified (has an open port, but I have no way to verify more than that); Vuln / EASM is unverified (has an open port, but I have no way to verify more than that); Velociraptor is unverified (has an open port, but I have no way to verify more than that), and 1 more. Checked just now.",
+  "spoken": "7 of 12 engines need attention: Wazuh Manager is degraded; Suricata NDR is unverified; Zeek NDR is unverified and others."
+ }
+}

@@ -4,6 +4,8 @@ import SocTiles, { type SocKpis, type TileId } from "./SocTiles";
 import { useAuth } from "../auth/AuthContext";
 import { getActivity, getTenants } from "../api/soc";
 import { ApiError } from "../api/client";
+import TiaCommandBridge from "./TiaCommandBridge";
+import { TiaDockProvider } from "./TiaDock";
 
 function tileFromPath(pathname: string): TileId {
   if (pathname.startsWith("/alerts")) return "alert";
@@ -55,7 +57,9 @@ export default function SocShell() {
   const isCommandCenter = location.pathname === "/" || location.pathname === "";
 
   return (
+    <TiaDockProvider floating={!isCommandCenter}>
     <div className={`ops ops-fit ops-routed ${isCommandCenter ? "ops-cc" : ""}`}>
+      <TiaCommandBridge />
       {!isCommandCenter && (
         <header className="ops-top">
           <button type="button" className="brand brand-btn" onClick={() => navigate("/")}>
@@ -66,6 +70,9 @@ export default function SocShell() {
               <i />
               LIVE
             </span>
+            <button type="button" className="btn btn-ghost" onClick={() => navigate("/reviews")}>
+              Reviews
+            </button>
             <span>{user?.full_name || user?.email}</span>
             <span>·</span>
             <span>{user?.role}</span>
@@ -82,5 +89,6 @@ export default function SocShell() {
         <Outlet context={{ setKpis }} />
       </div>
     </div>
+    </TiaDockProvider>
   );
 }

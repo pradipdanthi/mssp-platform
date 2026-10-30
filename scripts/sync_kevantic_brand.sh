@@ -13,6 +13,7 @@ TARGETS=(
 ASSETS=(
   kevantic-horizontal.svg
   kevantic-horizontal-dark.svg
+  kevantic-horizontal-ink.svg
   kevantic-wordmark.svg
   kevantic-mark.svg
   favicon.svg

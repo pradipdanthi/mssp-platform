@@ -56,6 +56,7 @@ def create_quote(
             terms_text=body.terms_text,
             opportunity_name=body.opportunity_name,
             sales_owner=body.sales_owner,
+            opportunity_id=body.opportunity_id,
             tax_mode_forced=body.tax_mode,
             status=body.status,
         )
@@ -103,10 +104,26 @@ def mark_sent(
 def mark_accepted(
     quote_id: UUID, db: Session = Depends(get_db), _: str = Depends(require_admin)
 ) -> QuoteOut:
-    quote = db.get(Quote, quote_id)
+    quote = (
+        db.query(Quote)
+        .options(joinedload(Quote.lines), joinedload(Quote.party))
+        .filter(Quote.id == quote_id)
+        .one_or_none()
+    )
     if not quote:
         raise HTTPException(404, "Quote not found")
     quote.status = "accepted"
+    from app.services.pipeline import mark_closed_won
+
+    mark_closed_won(db, quote.opportunity_id)
+    # Lead-to-cash: accepted quote with an Opportunity becomes a tax invoice
+    if quote.opportunity_id and quote.status != "invoiced":
+        try:
+            quote_engine.accept_quote_to_invoice(db, quote, invoice_type="tax_invoice")
+        except ValueError:
+            db.commit()
+            return _load(db, quote_id)
+        return _load(db, quote_id)
     db.commit()
     return _load(db, quote_id)
 
@@ -196,6 +213,7 @@ def quote_pdf(
         lines=[
             {
                 "sku": ln.sku,
+                "vendor_name": ln.vendor_name,
                 "description": ln.description,
                 "hsn_sac": ln.hsn_sac,
                 "quantity": ln.quantity,

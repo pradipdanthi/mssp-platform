@@ -1,0 +1,91 @@
+[
+ {
+  "role": "soc_analyst",
+  "question": "Are the engines healthy right now?",
+  "intent": "engine_health",
+  "tool_ok": true,
+  "error": null,
+  "spoken": "7 of 12 engines need attention: Wazuh Manager is degraded; Suricata NDR is unverified; Zeek NDR is unverified and others.",
+  "answer": "5 of 12 engines are verified healthy. Wazuh Manager is degraded (has agents that stopped reporting); Suricata NDR is unverified (has an open port, but I have no way to verify more than that); Zeek NDR is unverified (has an open port, but I have no way to verify more than that); MISP / Threat Intel is unverified (has an open port, but I have no way to verify more than that); Vuln / EASM is unverified (has an open port, but I have no way to verify more than that); Velociraptor is unverified (has an open port, but I have no way to verify more than that), and 1 more. Checked just now.",
+  "wazuh_view": {
+   "host": null,
+   "port": null,
+   "layers": {
+    "reachability": {
+     "status": "ok",
+     "reason": null
+    },
+    "api": {
+     "status": "ok",
+     "reason": null
+    },
+    "auth": {
+     "status": "ok",
+     "reason": null
+    },
+    "application": {
+     "status": "ok",
+     "reason": null
+    },
+    "telemetry": {
+     "status": "degraded",
+     "reason": "agents_disconnected"
+    }
+   },
+   "detail_level": "status_only"
+  }
+ },
+ {
+  "role": "soc_manager",
+  "question": "Is Wazuh healthy right now?",
+  "intent": "engine_health",
+  "tool_ok": true,
+  "error": null,
+  "spoken": "Wazuh Manager is degraded. It has agents that stopped reporting.",
+  "answer": "Wazuh Manager is degraded: it has agents that stopped reporting. Verified: reachability, api, auth, application. Checked just now.",
+  "wazuh_view": {
+   "host": "192.168.0.211",
+   "port": 55000,
+   "layers": {
+    "reachability": {
+     "status": "ok",
+     "reason": null,
+     "detail": "0 ms"
+    },
+    "api": {
+     "status": "ok",
+     "reason": null,
+     "detail": "API 4.14.6"
+    },
+    "auth": {
+     "status": "ok",
+     "reason": null,
+     "detail": "roles: administrator"
+    },
+    "application": {
+     "status": "ok",
+     "reason": null,
+     "detail": "11 daemons running; not running but optional: wazuh-agentlessd, wazuh-clusterd, wazuh-csyslogd, wazuh-dbd, wazuh-maild, wazuh-reportd"
+    },
+    "telemetry": {
+     "status": "degraded",
+     "reason": "agents_disconnected",
+     "detail": "2 agents reporting, 2 disconnected, 0 never connected"
+    }
+   },
+   "detail_level": null
+  }
+ },
+ {
+  "role": "customer_admin",
+  "question": "Are the engines healthy?",
+  "intent": "engine_health",
+  "tool_ok": false,
+  "error": "forbidden",
+  "spoken": "Your role cannot use this tool",
+  "answer": "Your role cannot use this tool",
+  "wazuh_view": {
+   "refused": "forbidden"
+  }
+ }
+]

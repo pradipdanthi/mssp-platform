@@ -1,0 +1,51 @@
+[CRITICAL] Ransomware-like file renames on HOST-A2 on HOST-A2 (E2EA)
+
+Confirmed (from the stored record):
+- critical alert from wazuh at 2026-10-30 14:44:05.115028: Ransomware-like file renames on HOST-A2
+- affected host: HOST-A2
+- user: E2EA\j.doe
+- parent process: C:\Program Files\Microsoft Office\root\Office16\winword.exe
+- parent command line: powershell.exe -nop -w hidden -enc SQBFAFgAIAAoAE4AZQB3AC0ATwBiAGoAZQBjAHQA
+- 1 other alert(s) on the same host or source in the last 24 hours: [medium] Certutil download on HOST-A2 (new)
+
+Supported hypotheses (unverified):
+- TIA model assessment (MALICIOUS, confidence 72%): The raw_event section reports ransomware-like file renames (rule 92002) on high-criticality Finance workstation HOST-A2 for user E2EA\j.doe, with a parent path of winword.exe but a parent command line of hidden, encoded PowerShell (-nop -w hidden -enc…), which is inconsistent and highly suspicious. The correlations section shows a related Certutil download alert on the same host and user about ten minutes earlier, supporting a multi-stage chain hypothesis. Confidence is capped because the same raw_event marks the alert as synthetic E2E, runbooks and prior_cases are empty, and process IDs, hashes, network addresses, working directory, and full rename/file evidence are listed as missing. (a model view, not a finding)
+- Proposed cause, unverified: Hypothesis only: user or document-driven Word activity on HOST-A2 led to obfuscated PowerShell (encoded command consistent with an IEX/New-Object-style cradle prefix in the provided -enc string), preceded by certutil-based download, culminating in ransomware-like mass renames—while noting the dossier also labels this a synthetic E2E alert, so production compromise is not proven.
+
+Unresolved: Scope and entry point still need analyst confirmation.
+
+What TIA checked:
+- asset: 1 item(s) from protected_assets
+- identity: 1 item(s) from security_alerts+identity
+- research: 2 item(s) from tia_research_disclosures
+- runbooks: checked, nothing found (tia_runbooks)
+- raw event: 4 item(s) from security_alerts
+- prior cases: checked, nothing found (no human-reviewed cases of this detection in 90 days)
+- correlations: 1 item(s) from security_alerts
+
+Gaps:
+- identity: missing identity provider events (no identity integration for this customer)
+- identity: missing directory role and group membership (no directory adapter)
+- runbooks: missing approved runbook for this detection
+- raw event: missing working directory
+- raw event: missing integrity level
+- raw event: missing process id
+- raw event: missing parent process id
+- raw event: missing user SID
+- raw event: missing logon id
+- raw event: missing SHA-256
+- raw event: missing MD5
+- raw event: missing source address
+- raw event: missing destination address
+- prior cases: missing reviewed precedent
+- correlations: missing same asset
+- correlations: missing same source address
+- correlations: missing same file hash
+
+External research:
+- lolbas 'powershell.exe': provider has no entry for this name; absence is not evidence of safety
+- lolbas 'winword.exe': provider has no entry for this name; absence is not evidence of safety
+
+Investigation: Investigation finished; disposition malicious.
+Next step: Analyst review now. Any containment needs human approval in Needs You.
+Record: attempt 1 (22b1ff2f-1303-4791-97de-c446b7433a19), evidence version 12851cbe75f5cb665075a6dd80d9e925, dossier 1f478657fdfc, policy tia-closure-1.

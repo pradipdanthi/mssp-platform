@@ -8,9 +8,19 @@ import secrets
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
+from psycopg.types.json import Json
+
 from app.db.session import db_transaction
 from app.schemas.soc_sync import SocSyncRequest
 from app.services.alert_suppressions import try_suppress_alert
+from app.services.soc_alert_merge import (
+    OPEN_MERGE_STATUSES,
+    TERMINAL_STATUSES,
+    audit_details,
+    higher_severity,
+    merge_fingerprint,
+    occurrence_summary,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -337,13 +347,198 @@ def _safe_inet(value: Optional[str]) -> Optional[str]:
     return text or None
 
 
+def _record_occurrence(
+    cur: Any,
+    *,
+    tenant_id: str,
+    alert_id: str,
+    payload: SocSyncRequest,
+    occurrence_no: int,
+    fingerprint: Optional[str],
+    audit_action: str,
+    sla_first_seen_preserved: bool,
+) -> None:
+    cur.execute(
+        """
+        INSERT INTO security_alert_occurrences (
+            tenant_id, alert_id, source_tool, external_alert_id,
+            occurrence_no, event_time, severity, fingerprint, summary
+        )
+        VALUES (
+            %s, %s::uuid, %s, %s,
+            %s, %s, %s, %s, %s
+        )
+        ON CONFLICT (tenant_id, source_tool, external_alert_id) DO NOTHING;
+        """,
+        (
+            tenant_id,
+            alert_id,
+            payload.source_tool,
+            payload.external_alert_id,
+            occurrence_no,
+            payload.event_time or datetime.utcnow(),
+            payload.severity,
+            fingerprint,
+            occurrence_summary(payload),
+        ),
+    )
+    details = audit_details(
+        parent_id=alert_id,
+        occurrence_no=occurrence_no,
+        payload=payload,
+        fingerprint=fingerprint or "",
+        sla_first_seen_preserved=sla_first_seen_preserved,
+    )
+    cur.execute(
+        """
+        INSERT INTO audit_logs (
+            tenant_id, action, entity_type, entity_id, details,
+            actor_role, action_status, resource_type, resource_id
+        )
+        VALUES (
+            %s, %s, 'security_alert', %s::uuid, %s,
+            'system', 'SUCCESS', 'security_alert', %s
+        );
+        """,
+        (tenant_id, audit_action, alert_id, Json(details), alert_id),
+    )
+
+
+def _find_open_parent(cur: Any, *, tenant_id: str, fingerprint: str) -> Optional[Dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT id::text AS id, customer_visible, status,
+               occurrence_count, first_seen_at, created_at, severity
+        FROM security_alerts
+        WHERE tenant_id = %s
+          AND merge_fingerprint = %s
+          AND status = ANY(%s)
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE;
+        """,
+        (tenant_id, fingerprint, list(OPEN_MERGE_STATUSES)),
+    )
+    return cur.fetchone()
+
+
+def _find_closed_parent(cur: Any, *, tenant_id: str, fingerprint: str) -> Optional[str]:
+    cur.execute(
+        """
+        SELECT id::text AS id
+        FROM security_alerts
+        WHERE tenant_id = %s
+          AND merge_fingerprint = %s
+          AND status = ANY(%s)
+        ORDER BY created_at DESC
+        LIMIT 1;
+        """,
+        (tenant_id, fingerprint, list(TERMINAL_STATUSES)),
+    )
+    row = cur.fetchone()
+    return str(row["id"]) if row else None
+
+
+def _merge_into_parent(
+    cur: Any,
+    *,
+    tenant_id: str,
+    parent: Dict[str, Any],
+    payload: SocSyncRequest,
+    fingerprint: str,
+) -> Dict[str, Any]:
+    """Attach this engine event to the open parent. Does not reset SLA clocks."""
+    next_no = int(parent.get("occurrence_count") or 1) + 1
+    new_sev = higher_severity(parent.get("severity"), payload.severity)
+    cur.execute(
+        """
+        UPDATE security_alerts
+        SET occurrence_count = %s,
+            last_seen_at = GREATEST(COALESCE(last_seen_at, created_at), %s::timestamptz, now()),
+            severity = %s,
+            updated_at = now()
+        WHERE id = %s::uuid
+          AND status = ANY(%s)
+        RETURNING id::text AS id, customer_visible, status,
+                  occurrence_count, first_seen_at, created_at, severity;
+        """,
+        (
+            next_no,
+            payload.event_time or datetime.utcnow(),
+            new_sev,
+            parent["id"],
+            list(OPEN_MERGE_STATUSES),
+        ),
+    )
+    updated = cur.fetchone() or parent
+    _record_occurrence(
+        cur,
+        tenant_id=tenant_id,
+        alert_id=str(updated["id"]),
+        payload=payload,
+        occurrence_no=int(updated.get("occurrence_count") or next_no),
+        fingerprint=fingerprint,
+        audit_action="alert_occurrence_merged",
+        sla_first_seen_preserved=True,
+    )
+    cur.execute(
+        """
+        SELECT id::text AS id, incident_number
+        FROM incidents
+        WHERE tenant_id = %s
+          AND primary_alert_id = %s::uuid
+        ORDER BY opened_at DESC
+        LIMIT 1;
+        """,
+        (tenant_id, updated["id"]),
+    )
+    inc = cur.fetchone()
+    if inc:
+        cur.execute(
+            """
+            INSERT INTO incident_timeline (
+                incident_id, event_type, visibility, title, details
+            )
+            VALUES (
+                %s::uuid, 'comment', 'internal',
+                'Identical detection merged',
+                %s
+            );
+            """,
+            (
+                inc["id"],
+                (
+                    f"Occurrence {updated.get('occurrence_count')} of the same detection "
+                    f"on {payload.destination_host or 'n/a'} "
+                    f"(engine id {payload.external_alert_id}). "
+                    f"SLA first-seen was not reset."
+                )[:4000],
+            ),
+        )
+    logger.info(
+        "SOC sync merged occurrence %s into alert %s fingerprint=%s",
+        updated.get("occurrence_count"),
+        updated["id"],
+        fingerprint[:80],
+    )
+    return {
+        "id": updated["id"],
+        "customer_visible": bool(updated.get("customer_visible")),
+        "status": updated.get("status") or parent.get("status"),
+        "occurrence_count": int(updated.get("occurrence_count") or next_no),
+        "incident_id": inc["id"] if inc else None,
+        "incident_number": inc["incident_number"] if inc else None,
+    }
+
+
 def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
     """
     Insert or return existing security_alerts row; optionally create incident.
 
-    Customer-visible for real events (status is not false_positive). Dedup key:
-    tenant + source_tool + external_alert_id.
-    Phase-1: correlated bursts reuse one open incident; known noise skips incident.
+    Dedup keys, in order:
+      1. exact engine id (tenant + source_tool + external_alert_id)
+      2. open occurrence merge (same tenant/rule/host/behaviour)
+    Closed parents never absorb a later hit. first_seen_at is immutable.
     """
     with db_transaction() as cur:
         cur.execute(
@@ -380,7 +575,21 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
 
         cur.execute(
             """
-            SELECT id::text AS id, customer_visible, status
+            SELECT o.alert_id::text AS id, sa.customer_visible, sa.status,
+                   sa.occurrence_count
+            FROM security_alert_occurrences o
+            JOIN security_alerts sa ON sa.id = o.alert_id
+            WHERE o.tenant_id = %s
+              AND o.source_tool = %s
+              AND o.external_alert_id = %s
+            LIMIT 1;
+            """,
+            (tenant_id, payload.source_tool, payload.external_alert_id),
+        )
+        existing_occ = cur.fetchone()
+        cur.execute(
+            """
+            SELECT id::text AS id, customer_visible, status, occurrence_count
             FROM security_alerts
             WHERE tenant_id = %s
               AND source_tool = %s
@@ -390,10 +599,12 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
             """,
             (tenant_id, payload.source_tool, payload.external_alert_id),
         )
-        alert_row = cur.fetchone()
+        alert_row = existing_occ or cur.fetchone()
         duplicate = False
+        merged = False
         incident_id: Optional[str] = None
         incident_number: Optional[str] = None
+        fingerprint = merge_fingerprint(payload)
 
         if alert_row:
             duplicate = True
@@ -465,78 +676,136 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
                         "status": "incident_created",
                     }
         else:
-            event_time = payload.event_time or datetime.utcnow()
-            initial_status = (
-                "false_positive" if payload.create_incident is False else "new"
-            )
-            # Customer-safe normalized rows are visible on the tenant portal.
-            # False positives stay hidden. SOC can still hide a row in triage.
-            customer_visible = initial_status != "false_positive"
-            cur.execute(
-                """
-                INSERT INTO security_alerts (
-                    tenant_id, source_tool, external_alert_id,
-                    severity, alert_title, alert_description, event_time,
-                    destination_host, destination_ip, source_ip, source_user,
-                    asset_id, customer_visible, status,
-                    ai_plain_summary, ai_technical_summary
+            if fingerprint:
+                merge_lock = f"soc-merge:{tenant_id}:{fingerprint}"
+                cur.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0));",
+                    (merge_lock,),
                 )
-                VALUES (
-                    %s, %s, %s,
-                    %s, %s, %s, %s,
-                    %s, %s::inet, %s::inet, %s,
-                    %s::uuid, %s, %s,
-                    %s, %s
+                parent = _find_open_parent(
+                    cur, tenant_id=tenant_id, fingerprint=fingerprint
                 )
-                RETURNING id::text AS id, customer_visible, status;
-                """,
-                (
-                    tenant_id,
-                    payload.source_tool,
-                    payload.external_alert_id,
-                    payload.severity,
-                    payload.alert_title,
-                    payload.alert_description,
-                    event_time,
-                    payload.destination_host,
-                    destination_ip,
-                    source_ip,
-                    source_user,
-                    asset_id,
-                    customer_visible,
-                    initial_status,
-                    payload.customer_visible_summary,
-                    technical_summary,
-                ),
-            )
-            alert_row = cur.fetchone()
+                if parent:
+                    merged_row = _merge_into_parent(
+                        cur,
+                        tenant_id=tenant_id,
+                        parent=parent,
+                        payload=payload,
+                        fingerprint=fingerprint,
+                    )
+                    duplicate = True
+                    merged = True
+                    alert_row = {
+                        "id": merged_row["id"],
+                        "customer_visible": merged_row["customer_visible"],
+                        "status": merged_row["status"],
+                        "occurrence_count": merged_row["occurrence_count"],
+                    }
+                    incident_id = merged_row.get("incident_id")
+                    incident_number = merged_row.get("incident_number")
 
-            suppressed = try_suppress_alert(
-                cur,
-                tenant_id=tenant_id,
-                alert_id=alert_row["id"],
-                destination_host=payload.destination_host,
-                rule_id=payload.rule_id,
-            )
-            if suppressed:
-                alert_row = {
-                    "id": alert_row["id"],
-                    "customer_visible": False,
-                    "status": "false_positive",
-                }
-            elif _should_create_incident(payload):
-                incident_id, incident_number = _create_or_correlate_incident(
+            if not merged:
+                event_time = payload.event_time or datetime.utcnow()
+                initial_status = (
+                    "false_positive" if payload.create_incident is False else "new"
+                )
+                # Customer-safe normalized rows are visible on the tenant portal.
+                # False positives stay hidden. SOC can still hide a row in triage.
+                customer_visible = initial_status != "false_positive"
+                recurrence_of = (
+                    _find_closed_parent(
+                        cur, tenant_id=tenant_id, fingerprint=fingerprint
+                    )
+                    if fingerprint
+                    else None
+                )
+                cur.execute(
+                    """
+                    INSERT INTO security_alerts (
+                        tenant_id, source_tool, external_alert_id,
+                        severity, alert_title, alert_description, event_time,
+                        destination_host, destination_ip, source_ip, source_user,
+                        asset_id, customer_visible, status,
+                        ai_plain_summary, ai_technical_summary,
+                        occurrence_count, first_seen_at, last_seen_at,
+                        merge_fingerprint, recurrence_of_alert_id
+                    )
+                    VALUES (
+                        %s, %s, %s,
+                        %s, %s, %s, %s,
+                        %s, %s::inet, %s::inet, %s,
+                        %s::uuid, %s, %s,
+                        %s, %s,
+                        1, %s, %s,
+                        %s, %s::uuid
+                    )
+                    RETURNING id::text AS id, customer_visible, status, occurrence_count;
+                    """,
+                    (
+                        tenant_id,
+                        payload.source_tool,
+                        payload.external_alert_id,
+                        payload.severity,
+                        payload.alert_title,
+                        payload.alert_description,
+                        event_time,
+                        payload.destination_host,
+                        destination_ip,
+                        source_ip,
+                        source_user,
+                        asset_id,
+                        customer_visible,
+                        initial_status,
+                        payload.customer_visible_summary,
+                        technical_summary,
+                        event_time,
+                        event_time,
+                        fingerprint,
+                        recurrence_of,
+                    ),
+                )
+                alert_row = cur.fetchone()
+                _record_occurrence(
                     cur,
                     tenant_id=tenant_id,
-                    short_code=short_code,
                     alert_id=alert_row["id"],
                     payload=payload,
+                    occurrence_no=1,
+                    fingerprint=fingerprint,
+                    audit_action=(
+                        "alert_recurrence_opened"
+                        if recurrence_of
+                        else "alert_occurrence_recorded"
+                    ),
+                    sla_first_seen_preserved=False,
                 )
-                alert_row = {
-                    "id": alert_row["id"],
-                    "customer_visible": bool(alert_row["customer_visible"]),
-                    "status": "incident_created",
-                }
+
+                suppressed = try_suppress_alert(
+                    cur,
+                    tenant_id=tenant_id,
+                    alert_id=alert_row["id"],
+                    destination_host=payload.destination_host,
+                    rule_id=payload.rule_id,
+                )
+                if suppressed:
+                    alert_row = {
+                        "id": alert_row["id"],
+                        "customer_visible": False,
+                        "status": "false_positive",
+                    }
+                elif _should_create_incident(payload):
+                    incident_id, incident_number = _create_or_correlate_incident(
+                        cur,
+                        tenant_id=tenant_id,
+                        short_code=short_code,
+                        alert_id=alert_row["id"],
+                        payload=payload,
+                    )
+                    alert_row = {
+                        "id": alert_row["id"],
+                        "customer_visible": bool(alert_row["customer_visible"]),
+                        "status": "incident_created",
+                    }
 
         result = {
             "alert_id": alert_row["id"],
@@ -544,18 +813,23 @@ def sync_soc_alert(payload: SocSyncRequest) -> Tuple[Dict[str, Any], bool]:
             "incident_number": incident_number,
             "customer_visible": bool(alert_row["customer_visible"]),
             "status": alert_row["status"],
+            "merged": merged,
+            "occurrence_count": int(alert_row.get("occurrence_count") or 1),
         }
 
-        # KB-092: enqueue high/critical alerts for LLM plain-English fill (no-op if disabled).
+    # Enqueue only after the alert row is committed. tia_jobs.alert_id is a
+    # foreign key; a second connection cannot see the insert until COMMIT.
+    # Merged occurrences must not start a second investigation or a new SLA job.
+    if not duplicate:
         try:
             from app.services.ai_alert_queue import enqueue_ai_alert_analysis
 
             enqueue_ai_alert_analysis(
-                alert_id=str(alert_row["id"]),
+                alert_id=str(result["alert_id"]),
                 tenant_id=str(tenant_id),
                 severity=payload.severity,
             )
         except Exception:  # noqa: BLE001
-            logger.exception("AI alert enqueue failed for alert_id=%s", alert_row["id"])
+            logger.exception("AI alert enqueue failed for alert_id=%s", result["alert_id"])
 
-        return result, duplicate
+    return result, duplicate

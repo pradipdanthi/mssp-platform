@@ -10,6 +10,7 @@
   "assets": {
     "primary_horizontal": "kevantic-horizontal.svg",
     "horizontal_dark": "kevantic-horizontal-dark.svg",
+    "horizontal_ink": "kevantic-horizontal-ink.svg",
     "wordmark": "kevantic-wordmark.svg",
     "mark": "kevantic-mark.svg",
     "favicon_svg": "favicon.svg",

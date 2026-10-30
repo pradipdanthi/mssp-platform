@@ -11,10 +11,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from app.db.session import fetch_one, fetch_one_write
-from app.services.soc_agent_client import (
-    forward_alert_for_expert_triage,
-    soc_agent_enabled,
-)
+from app.services import tia_investigation as tia
 
 logger = logging.getLogger(__name__)
 
@@ -132,13 +129,34 @@ def agent_result_to_triage(agent_result: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _run_write(cur, query: str, params: tuple) -> Dict[str, Any]:
+    """Execute inside the caller's transaction when a cursor is given."""
+    if cur is None:
+        return fetch_one_write(query, params)
+    cur.execute(query, params)
+    row = cur.fetchone()
+    return dict(row) if row else {}
+
+
+def _run_read(cur, query: str, params: tuple) -> Dict[str, Any]:
+    if cur is None:
+        return fetch_one(query, params)
+    cur.execute(query, params)
+    row = cur.fetchone()
+    return dict(row) if row else {}
+
+
 def persist_expert_fields(
     *,
     alert_id: str,
     tenant_id: str,
     triage: Dict[str, Any],
+    cur=None,
 ) -> None:
     """Write expert results into the same AI columns Admin already shows."""
+    if triage.get("execution_status") != "succeeded":
+        # Only a validated, completed analysis may write verdict fields.
+        raise ValueError("refusing to persist verdict fields from a non-succeeded investigation")
     pkg = triage.get("action_package") or {}
     pkg_json = json.dumps(pkg, default=str)[:3500]
     enrichment = triage.get("enrichment_notes") or ""
@@ -148,13 +166,19 @@ def persist_expert_fields(
     # Schema only allows ai_queue NULL or 'low_priority' (see 039_ai_tier1_queue_persist.sql)
     verdict = str(triage.get("verdict") or "")
     confidence = float(triage.get("confidence") or 0)
+    # Never bury an alert the model itself flagged for review or that arrived as
+    # critical severity; a benign recommendation there stays in the actionable queue.
     ai_queue = (
         "low_priority"
-        if verdict == "BENIGN_FALSE_POSITIVE" and confidence >= 85.0
+        if verdict == "BENIGN_FALSE_POSITIVE"
+        and confidence >= 85.0
+        and not triage.get("model_review_requested")
+        and str(triage.get("source_severity") or "").lower() != "critical"
         else None
     )
 
-    fetch_one_write(
+    _run_write(
+        cur,
         """
         UPDATE security_alerts
         SET
@@ -198,6 +222,7 @@ def maybe_create_customer_recommendation(
     alert_id: str,
     tenant_id: str,
     triage: Dict[str, Any],
+    cur=None,
 ) -> Optional[str]:
     """Idempotent: at most one open SOC-agent recommendation per alert."""
     pkg = triage.get("action_package") or {}
@@ -210,7 +235,8 @@ def maybe_create_customer_recommendation(
     if not body:
         return None
 
-    existing = fetch_one(
+    existing = _run_read(
+        cur,
         """
         SELECT id::text AS id
         FROM customer_recommendations
@@ -231,7 +257,8 @@ def maybe_create_customer_recommendation(
     elif verdict == "BENIGN_FALSE_POSITIVE":
         priority = "low"
 
-    row = fetch_one_write(
+    row = _run_write(
+        cur,
         """
         INSERT INTO customer_recommendations (
             tenant_id, related_alert_id, title, description,
@@ -248,65 +275,39 @@ def maybe_create_customer_recommendation(
     return (row or {}).get("id")
 
 
-def run_expert_on_alert(
-    *,
-    alert_id: str,
-    tenant_id: str,
-    alert: Dict[str, Any],
-) -> Optional[Dict[str, Any]]:
-    """Call agent, persist fields, optional recommendation. Returns triage dict or None."""
-    if not soc_agent_enabled():
-        return None
-    result = forward_alert_for_expert_triage(alert)
-    if not result or not result.get("ok"):
-        return None
-    triage = agent_result_to_triage(result)
-    try:
-        persist_expert_fields(alert_id=alert_id, tenant_id=tenant_id, triage=triage)
-        rec_id = maybe_create_customer_recommendation(
-            alert_id=alert_id, tenant_id=tenant_id, triage=triage
+def outcome_to_triage(outcome: "tia.Outcome") -> Dict[str, Any]:
+    """Triage dict for the escalation rules and persistence.
+
+    A succeeded outcome carries a validated analysis. Any other outcome carries no
+    verdict at all: verdict/confidence/action are None so nothing downstream can
+    read a conclusion that does not exist.
+    """
+    if outcome.succeeded and outcome.llm is not None:
+        triage = agent_result_to_triage(
+            {
+                "llm": outcome.llm,
+                "dossier_id": outcome.dossier_id,
+                "llm_meta": {"provider": outcome.provenance.get("provider")},
+            }
         )
-        if rec_id:
-            triage["recommendation_id"] = rec_id
-    except Exception:  # noqa: BLE001
-        logger.exception("Failed persisting SOC agent expert fields id=%s", alert_id)
-        return None
-    logger.info(
-        "SOC agent expert complete id=%s verdict=%s confidence=%.1f provider=%s",
-        alert_id,
-        triage.get("verdict"),
-        triage.get("confidence") or 0,
-        triage.get("provider"),
-    )
-    return triage
-
-
-def apply_callback_payload(
-    *,
-    alert_id: str,
-    tenant_id: str,
-    payload: Dict[str, Any],
-) -> Dict[str, Any]:
-    """Apply a push callback from the agent (same persist path as pull)."""
-    # Allow either full ingest-shaped result or a slim triage body.
-    if payload.get("llm") or payload.get("verdict"):
-        triage = agent_result_to_triage(payload if payload.get("ok") is not False else {**payload, "ok": True})
-    else:
-        triage = {
-            "verdict": map_agent_verdict(str(payload.get("verdict") or "Suspicious")),
-            "confidence": float(payload.get("confidence") or 50),
-            "recommended_action": payload.get("recommended_action") or "INVESTIGATE_HOST",
-            "model": "cursor-soc-agent-callback",
-            "summary": str(payload.get("summary") or "")[:4000],
-            "root_cause": str(payload.get("root_cause") or "")[:2000],
-            "containment_suggestion": str(payload.get("containment_suggestion") or "")[:4000],
-            "enrichment_notes": str(payload.get("enrichment_notes") or "")[:4000],
-            "risk_score": float(payload.get("confidence") or 50),
-            "risk_rationale": str(payload.get("summary") or "")[:2000],
-            "action_package": extract_action_package(payload),
-        }
-    persist_expert_fields(alert_id=alert_id, tenant_id=tenant_id, triage=triage)
-    rec_id = maybe_create_customer_recommendation(
-        alert_id=alert_id, tenant_id=tenant_id, triage=triage
-    )
-    return {"ok": True, "alert_id": alert_id, "triage": triage, "recommendation_id": rec_id}
+        triage["model"] = outcome.provenance.get("provider") or "cursor-agent"
+        triage["execution_status"] = "succeeded"
+        triage["disposition"] = outcome.disposition
+        triage["model_review_requested"] = outcome.model_review_requested
+        triage["source_severity"] = outcome.source_severity
+        triage["provenance"] = outcome.provenance
+        return triage
+    return {
+        "verdict": None,
+        "confidence": None,
+        "recommended_action": None,
+        "model": outcome.provenance.get("provider") or "cursor-agent",
+        "execution_status": outcome.execution_status,
+        "error_category": outcome.error_category,
+        "disposition": "unset",
+        "model_review_requested": True,
+        "source_severity": outcome.source_severity,
+        "provenance": outcome.provenance,
+        "limited_evidence": outcome.limited_evidence,
+        "outcome": outcome,
+    }

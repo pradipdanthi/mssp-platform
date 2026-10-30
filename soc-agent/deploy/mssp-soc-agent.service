@@ -1,20 +1,56 @@
 [Unit]
-Description=MSSP SOC Analyst Agent (Cursor LLM)
-After=network-online.target
+Description=MSSP SOC Analyst Agent (control-plane facing; holds no provider credential)
+After=network-online.target tia-cli-runner.service
 Wants=network-online.target
+Requires=tia-cli-runner.service
+StartLimitIntervalSec=300
+StartLimitBurst=10
 
 [Service]
 Type=simple
-User=secadmin
-Group=secadmin
+User=soc-agent
+Group=soc-agent
 WorkingDirectory=/opt/soc-agent
-EnvironmentFile=-/opt/soc-agent/.env
-Environment=PATH=/home/secadmin/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Holds SOC_AGENT_INGEST_TOKEN and MSSP_CALLBACK_TOKEN. Owner root:soc-agent, mode 0640.
+EnvironmentFile=/etc/soc-agent/agent.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=SOC_AGENT_WORKSPACE=/opt/soc-agent
-ExecStart=/opt/soc-agent/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8443
-Restart=unless-stopped
+Environment=TIA_CLI_RUNNER_SOCKET=/run/tia-cli-runner/runner.sock
+Environment=TIA_REQUIRE_CLI_RUNNER=true
+# TLS: the agent serves HTTPS with an internal-CA certificate (scripts/tia_tls_setup.sh).
+# The control plane verifies it with SOC_AGENT_CA_BUNDLE.
+ExecStart=/opt/soc-agent/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8443 \
+    --ssl-keyfile /etc/soc-agent/tls/agent.key --ssl-certfile /etc/soc-agent/tls/agent.crt \
+    --timeout-graceful-shutdown 25
+
+# Restart= takes no, on-success, on-failure, on-abnormal, on-watchdog, on-abort, always.
+# (The earlier "unless-stopped" is a Docker value and is invalid for systemd.)
+Restart=on-failure
 RestartSec=5
-# No Ollama dependency
+TimeoutStopSec=35
+
+StateDirectory=soc-agent
+LogsDirectory=soc-agent
+UMask=0077
+
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictNamespaces=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/soc-agent /var/log/soc-agent /opt/soc-agent/data
+# The provider credential and the runner's state are not visible to the agent.
+InaccessiblePaths=/etc/tia-cli-runner /var/lib/tia-cli-runner
+
 MemoryMax=1536M
 CPUQuota=200%
 

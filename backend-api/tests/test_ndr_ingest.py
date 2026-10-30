@@ -214,5 +214,40 @@ class NdrAssetIpAttributionTests(unittest.TestCase):
         mock_fetch.assert_not_called()
 
 
+class VulnerabilityInventorySkipTests(unittest.TestCase):
+    def test_skips_vulnerability_detector_group(self):
+        raw = {
+            "id": "1793387021.27044030",
+            "rule": {
+                "id": "23505",
+                "level": 10,
+                "groups": ["vulnerability-detector"],
+                "description": "CVE-2026-69934 affects Microsoft Windows Server 2022 Standard Evaluation",
+            },
+            "agent": {"id": "006", "name": "WIN-BL72S84GDTF"},
+        }
+        self.assertTrue(soc_sync.is_vulnerability_inventory_alert(raw))
+
+    def test_skips_cve_affects_title_even_without_group(self):
+        raw = {
+            "rule": {
+                "id": "100001",
+                "description": "CVE-2024-1234 affects openssl",
+            }
+        }
+        self.assertTrue(soc_sync.is_vulnerability_inventory_alert(raw))
+
+    def test_does_not_skip_endpoint_detection_that_mentions_cve(self):
+        raw = {
+            "rule": {
+                "id": "92213",
+                "level": 15,
+                "groups": ["windows", "sysmon"],
+                "description": "Exploit attempt for CVE-2024-1234 via PowerShell",
+            }
+        }
+        self.assertFalse(soc_sync.is_vulnerability_inventory_alert(raw))
+
+
 if __name__ == "__main__":
     unittest.main()

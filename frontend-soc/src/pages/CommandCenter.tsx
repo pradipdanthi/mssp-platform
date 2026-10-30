@@ -11,7 +11,7 @@ import {
   runRoutine,
 } from "../api/soc";
 import { useAuth } from "../auth/AuthContext";
-import ChatPanel from "../components/ChatPanel";
+import { TiaDockSlot } from "../components/TiaDock";
 import TiaGlobe from "../components/TiaGlobe";
 
 const VOICE_KEY = "tia_voice_settings_v1";
@@ -237,6 +237,9 @@ export default function CommandCenter() {
           </button>
           <button type="button" className={`cc-tab ${panel === "voice" ? "on" : ""}`} onClick={() => setPanel("voice")}>
             AI Voice
+          </button>
+          <button type="button" className="btn btn-ghost" onClick={() => navigate("/reviews")}>
+            Reviews
           </button>
           <button type="button" className="btn btn-ghost cc-signout" onClick={logout}>
             Sign out
@@ -517,7 +520,7 @@ export default function CommandCenter() {
           )}
         </div>
         <div className="cc-dock-chat">
-          <ChatPanel />
+          <TiaDockSlot />
         </div>
       </div>
     </div>

@@ -1,0 +1,11 @@
+{
+ "nothing_pending_yes": {
+  "intent": "confirm_nothing",
+  "tool_ok": false
+ },
+ "isolate_refused": {
+  "intent": "disruptive_refused",
+  "tool_ok": false,
+  "answer": "I won't do that from chat or voice. Isolating, disabling, blocking, containing, closing or resolving needs a human approval in Needs You, tied to the exact target. I can open the alert so you can appr"
+ }
+}

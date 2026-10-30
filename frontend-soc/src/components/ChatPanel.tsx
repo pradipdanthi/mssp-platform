@@ -1,6 +1,19 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ApiError } from "../api/client";
-import { getChatStatus, getTenants, getWakeBriefing, postChat, speakTia } from "../api/soc";
+import {
+  getChatStatus,
+  getTenants,
+  getWakeBriefing,
+  postChat,
+  postClientTiming,
+  postConverse,
+  speakTia,
+  type TiaConverseResponse,
+} from "../api/soc";
+import { uiBridge } from "../lib/tiaBridge";
+import { newTurnId, tiaSessionId } from "../lib/tiaSession";
+import { loadTranscript, saveTranscript, TRANSCRIPT_EVENT, type TranscriptTurn } from "../lib/tiaTranscript";
 import { useAuth } from "../auth/AuthContext";
 import { useOps } from "../state/OpsContext";
 import {
@@ -21,9 +34,10 @@ import {
   noteSpokenLine,
   shouldSpeakLine,
 } from "../lib/tiaBriefingGate";
-import { playBase64Audio, speakText, stopSpeaking, voiceSupported } from "../lib/voice";
+import { interruptPlayback, looksLikeEcho } from "../lib/tiaBargeIn";
+import { playBase64Audio, speakText, stopSpeaking, unlockTiaAudio, voiceSupported } from "../lib/voice";
 
-type Turn = { role: "user" | "assistant"; text: string; meta?: string; error?: boolean };
+type Turn = TranscriptTurn;
 
 const SHORTCUTS = [
   "Hi Tia, any critical alerts while I was away?",
@@ -45,7 +59,9 @@ export default function ChatPanel() {
   const [tenant, setTenant] = useState("");
   const [tenants, setTenants] = useState<{ short_code: string; name: string }[]>([]);
   const [message, setMessage] = useState("");
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const navigate = useNavigate();
+  const [turns, setTurns] = useState<Turn[]>(() => loadTranscript());
+  const scopeEpochRef = useRef(0);
   const [busy, setBusy] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [voiceOut, setVoiceOut] = useState(true);
@@ -58,6 +74,9 @@ export default function ChatPanel() {
   const [phaseDetail, setPhaseDetail] = useState("");
   const [interim, setInterim] = useState("");
   const [voiceErr, setVoiceErr] = useState<string | null>(null);
+  const [pendingVoice, setPendingVoice] = useState<{ text: string; b64?: string; type?: string } | null>(
+    null
+  );
   const threadRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<EarsSession | null>(null);
   const busyRef = useRef(false);
@@ -67,7 +86,12 @@ export default function ChatPanel() {
   const enabledRef = useRef(false);
   const autoTriedRef = useRef(false);
   const idleTimerRef = useRef<number | null>(null);
+  const speakGenRef = useRef(0);
+  const speakingRef = useRef(false);
+  const lastSpokenRef = useRef("");
   const lastWakeAtRef = useRef(0);
+  const lastRequestIdRef = useRef("");
+  const voiceEosRef = useRef(0);
   const startListenRef = useRef<() => Promise<void>>(async () => undefined);
   const handleTextRef = useRef<(text: string, meta: { inConversation: boolean }) => Promise<void>>(
     async () => undefined
@@ -151,30 +175,79 @@ export default function ChatPanel() {
   }, [clearIdle]);
 
   const speakAnswer = useCallback(async (spoken: string, fullText: string) => {
-    if (!voiceOutRef.current) return;
     const line = (spoken || fullText || "").trim();
     if (!line) return;
     if (!shouldSpeakLine(line)) {
       return;
     }
     noteSpokenLine(line);
+    if (!voiceOutRef.current) setVoiceOut(true);
 
-    sessionRef.current?.setMuted(true);
+    // Keep STT live during TTS. Muting aborted recognition and made barge-in impossible.
+    // Echo of TIA's own line is dropped in processTranscript.
+    lastSpokenRef.current = line;
+    speakingRef.current = true;
     setSpeaking(true);
+    setPendingVoice(null);
+    const gen = ++speakGenRef.current;
+    const speakStarted = performance.now();
     const speakJob = async () => {
-      if (neuralTtsRef.current) {
-        try {
-          const audio = await speakTia(line);
-          if (audio.available && audio.audio_base64) {
-            await playBase64Audio(audio.audio_base64, audio.content_type || "audio/mpeg");
+      try {
+        // Synthesis time grows with length, so the first sentence is requested on its own and
+        // starts playing while the rest is still being synthesised.
+        const cut = line.search(/(?<=[.!?])\s+/);
+        const head = cut > 0 && cut < line.length - 1 ? line.slice(0, cut) : line;
+        const tail = head === line ? "" : line.slice(cut).trim();
+        const tailReq = tail ? speakTia(tail).catch(() => null) : null;
+        const ttsStarted = performance.now();
+        const audio = await speakTia(head);
+        const requestId = lastRequestIdRef.current;
+        if (requestId) {
+          void postClientTiming(requestId, { tts_roundtrip: Math.round(performance.now() - ttsStarted) }).catch(
+            () => undefined
+          );
+        }
+        if (gen !== speakGenRef.current) return;
+        if (audio.available && audio.audio_base64) {
+          if (gen !== speakGenRef.current) return;
+          const played = await playBase64Audio(audio.audio_base64, audio.content_type || "audio/mpeg", {
+            onstart: () => {
+              const stages: Record<string, number> = { first_audio: Math.round(performance.now() - speakStarted) };
+              if (voiceEosRef.current) {
+                stages.eos_to_first_audio = Math.round(performance.now() - voiceEosRef.current);
+              }
+              if (requestId) {
+                void postClientTiming(requestId, stages).catch(() => undefined);
+              }
+            },
+          });
+          if (gen !== speakGenRef.current) return;
+          if (played) {
+            const rest = tailReq ? await tailReq : null;
+            if (gen !== speakGenRef.current) return;
+            if (rest?.available && rest.audio_base64) {
+              await playBase64Audio(rest.audio_base64, rest.content_type || "audio/mpeg");
+            } else if (tail && supportRef.current.tts) {
+              await speakText(tail);
+            }
             return;
           }
-        } catch {
-          /* fall through */
+          setPendingVoice({
+            text: line,
+            b64: audio.audio_base64,
+            type: audio.content_type || "audio/mpeg",
+          });
+          setVoiceErr("Click Hear Tia. The browser blocked the sound until you click.");
+          return;
         }
+      } catch {
+        /* fall through to the browser voice */
       }
-      if (supportRef.current.tts) {
-        await speakText(line);
+      if (gen !== speakGenRef.current) return;
+      const said = supportRef.current.tts ? await speakText(line) : false;
+      if (!said) {
+        setPendingVoice({ text: line });
+        setVoiceErr("Click Hear Tia so she can say this out loud.");
       }
     };
     try {
@@ -183,12 +256,49 @@ export default function ChatPanel() {
         new Promise<void>((resolve) => window.setTimeout(resolve, 45000)),
       ]);
     } finally {
-      setSpeaking(false);
-      // Longer gap so Tia's own voice is not captured as the next user turn.
-      await new Promise((r) => window.setTimeout(r, 700));
-      sessionRef.current?.setMuted(false);
+      if (gen === speakGenRef.current) {
+        speakingRef.current = false;
+        setSpeaking(false);
+      }
     }
   }, []);
+
+  // A tenant change starts a new scope: any answer still in flight for the old one is dropped.
+  useEffect(() => {
+    scopeEpochRef.current += 1;
+  }, [tenant]);
+
+  useEffect(() => {
+    saveTranscript(turns);
+  }, [turns]);
+
+  useEffect(() => {
+    const reload = () => setTurns(loadTranscript());
+    window.addEventListener(TRANSCRIPT_EVENT, reload);
+    return () => window.removeEventListener(TRANSCRIPT_EVENT, reload);
+  }, []);
+
+  // Verified outcome of "open this alert": shown and spoken only after the dashboard reported it.
+  useEffect(() => {
+    uiBridge.setChatMounted(true);
+    const off = uiBridge.subscribe((e) => {
+      if (e.kind === "navigating") return;
+      setTurns((t) => [
+        ...t,
+        {
+          role: "assistant",
+          text: e.text,
+          meta: e.kind === "confirmed" ? "Tia · dashboard confirmed" : "Tia · not confirmed",
+          error: e.kind === "failed",
+        },
+      ]);
+      if (voiceOutRef.current) void speakAnswer(e.spoken, e.text);
+    });
+    return () => {
+      off();
+      uiBridge.setChatMounted(false);
+    };
+  }, [speakAnswer]);
 
   useEffect(() => {
     const onSpeak = (ev: Event) => {
@@ -214,6 +324,7 @@ export default function ChatPanel() {
         q = `Hi Tia, analyze this alert for me. Title: ${selectedAlert.alert_title || selectedAlert.title}. Severity: ${selectedAlert.severity}. Host: ${selectedAlert.destination_host || "unknown"}. Status: ${selectedAlert.status}. What should we do next?`;
       }
       const speakReply = voiceOutRef.current && (Boolean(opts?.fromVoice) || Boolean(sessionRef.current));
+      speakGenRef.current += 1;
       stopSpeaking();
       setSpeaking(false);
       busyRef.current = true;
@@ -223,11 +334,61 @@ export default function ChatPanel() {
       setMessage("");
       setInterim("");
       try {
-        const res = await postChat(q, {
-          tenant_short_code: tenant || selectedAlert?.short_code || undefined,
-          alert_id: selectedAlert?.id,
-          auto_approve: autoApproveRef.current,
-        });
+        const epoch = scopeEpochRef.current;
+        const turnId = newTurnId();
+        const tenantCode = tenant || selectedAlert?.short_code || undefined;
+        const converseOnce = () =>
+          postConverse(q, {
+            session_id: tiaSessionId(),
+            client_turn_id: turnId,
+            tenant_short_code: tenantCode,
+            view_alert_id: uiBridge.loadedAlert() || selectedAlert?.id || null,
+          });
+        const sentAt = performance.now();
+        let conv: TiaConverseResponse | null = null;
+        try {
+          conv = await converseOnce();
+        } catch (e) {
+          if (e instanceof ApiError && e.status === 0) {
+            // Network blip: resend the SAME turn id. The server returns the stored result instead of acting twice.
+            await new Promise((r) => window.setTimeout(r, 1200));
+            conv = await converseOnce();
+          } else if (
+            e instanceof ApiError &&
+            ((e.status === 404 && e.detail === "Not Found") || (e.status === 503 && e.detail === "conversation_schema_unavailable"))
+          ) {
+            conv = null; // older server or migration not applied: legacy chat, without verified actions
+          } else {
+            throw e;
+          }
+        }
+        const res: {
+          answer: string;
+          spoken_answer?: string;
+          provider?: string;
+          actions_applied?: { ok?: boolean; type?: string }[];
+          pending_approval?: { id?: string; summary?: string };
+        } = conv
+          ? conv
+          : await postChat(q, {
+              tenant_short_code: tenantCode,
+              alert_id: selectedAlert?.id,
+              auto_approve: autoApproveRef.current,
+            });
+        if (epoch !== scopeEpochRef.current) {
+          setTurns((t) => [
+            ...t,
+            { role: "assistant", text: "I dropped a late answer: you changed customer scope while I was working on it. Ask again.", meta: "Tia · scope changed", error: true },
+          ]);
+          return;
+        }
+        if (conv) {
+          lastRequestIdRef.current = conv.request_id;
+          void postClientTiming(conv.request_id, { chat_roundtrip: Math.round(performance.now() - sentAt) }).catch(() => undefined);
+          (conv.notices || []).forEach((n) =>
+            setTurns((t) => [...t, { role: "assistant", text: n, meta: "Tia · dashboard not confirmed", error: true }])
+          );
+        }
         const answer = res.answer || "";
         const spoken = res.spoken_answer || answer;
         const applied = (res.actions_applied || []).filter((a) => a.ok).length;
@@ -242,10 +403,17 @@ export default function ChatPanel() {
           {
             role: "assistant",
             text: answer,
-            meta: `Tia · ${res.provider || "cursor"}${applied ? ` · updated ${applied} ticket(s)` : ""}${pending}`,
+            meta: `Tia · ${res.provider === "tia-live" ? "live" : res.provider === "tia-tools" ? "from platform data" : res.provider || "cursor"}${applied ? ` · updated ${applied} ticket(s)` : ""}${pending}${conv?.ui_command ? " · waiting for the dashboard to confirm" : ""}`,
           },
         ]);
-        if (speakReply) await speakAnswer(spoken, answer);
+        if (conv?.ui_command) uiBridge.register(conv.ui_command, navigate);
+        // Release the processing hold before TTS so the microphone stays live for barge-in
+        // and a follow-up after she finishes speaking is not blocked by a hung send().
+        busyRef.current = false;
+        setBusy(false);
+        sessionRef.current?.setBusy(false);
+        // While a dashboard command is pending, stay quiet: the spoken line is the VERIFIED confirmation.
+        if (speakReply && !conv?.ui_command) void speakAnswer(spoken, answer);
         if (opts?.fromVoice) armIdle();
       } catch (e) {
         if (e instanceof ApiError && e.status === 401) {
@@ -265,17 +433,38 @@ export default function ChatPanel() {
         sessionRef.current?.setBusy(false);
       }
     },
-    [selectedAlert, tenant, logout, speakAnswer, armIdle]
+    [selectedAlert, tenant, logout, speakAnswer, armIdle, navigate]
   );
 
   const processTranscript = useCallback(
     async (text: string, inConversation: boolean) => {
       const cleaned = text.trim();
       if (!cleaned) return;
+      voiceEosRef.current = performance.now();
+
+      if (speakingRef.current) {
+        if (looksLikeEcho(cleaned, lastSpokenRef.current)) {
+          return;
+        }
+        const ms = interruptPlayback(() => {
+          speakGenRef.current += 1;
+          stopSpeaking();
+        });
+        speakingRef.current = false;
+        setSpeaking(false);
+        const requestId = lastRequestIdRef.current;
+        if (requestId) {
+          void postClientTiming(requestId, { interrupt_to_stop: ms }).catch(() => undefined);
+        }
+      }
 
       // Ignore tiny noise / single-letter junk that used to stall the loop.
       const words = cleaned.split(/\s+/).filter(Boolean);
-      if (words.length === 1 && cleaned.length < 4 && !/tia|tea|hi|hey|bye/i.test(cleaned)) {
+      if (
+        words.length === 1 &&
+        cleaned.length < 4 &&
+        !/^(yes|yeah|yep|yup|no|ok|tia|tea|hi|hey|bye)$/i.test(cleaned)
+      ) {
         setInterim("…");
         return;
       }
@@ -284,7 +473,7 @@ export default function ChatPanel() {
         sessionRef.current?.setInConversation(false);
         clearIdle();
         setTurns((t) => [...t, { role: "user", text: cleaned }]);
-        const bye = "Alright boss — say Hi Tia whenever you need me.";
+        const bye = "Alright. Say Hi Tia whenever you need me.";
         setTurns((t) => [...t, { role: "assistant", text: bye, meta: "Tia · standby" }]);
         await speakAnswer(bye, bye);
         return;
@@ -310,7 +499,7 @@ export default function ChatPanel() {
           // Bare re-wake within the window — still acknowledge so it never feels dead.
           sessionRef.current?.setInConversation(true);
           armIdle();
-          const short = "Still here, boss — go ahead.";
+          const short = "Hi Dad. I'm here. Go ahead.";
           setTurns((t) => [
             ...t,
             { role: "user", text: cleaned },
@@ -327,7 +516,7 @@ export default function ChatPanel() {
         if (!remainder || remainder.length < 2) {
           setTurns((t) => [...t, { role: "user", text: cleaned }]);
           if (briefingRecentlySpoken() || !beginBriefingTurn()) {
-            const short = "I'm here, boss — what do you need?";
+            const short = "Hi Dad. I'm here. What do you need?";
             setTurns((t) => [...t, { role: "assistant", text: short, meta: "Tia · wake" }]);
             await speakAnswer(short, short);
             return;
@@ -336,11 +525,12 @@ export default function ChatPanel() {
           setBusy(true);
           sessionRef.current?.setBusy(true);
           try {
-            const brief = await getWakeBriefing();
-            const answer = brief.answer || "Hello boss — welcome back. I'm ready.";
-            const spoken =
-              brief.spoken_answer ||
-              "Hello boss — welcome back. What do you want to dig into?";
+            const brief = await getWakeBriefing({
+              session_id: tiaSessionId(),
+              tenant_short_code: tenant || undefined,
+            });
+            const answer = brief.answer || "Hi Dad. I'm ready.";
+            const spoken = brief.spoken_answer || "Hi Dad. What do you want to dig into?";
             setTurns((t) => [
               ...t,
               {
@@ -350,6 +540,9 @@ export default function ChatPanel() {
               },
             ]);
             markBriefingSpoken(spoken);
+            busyRef.current = false;
+            setBusy(false);
+            sessionRef.current?.setBusy(false);
             await speakAnswer(spoken, answer);
           } catch (e) {
             if (e instanceof ApiError && e.status === 401) {
@@ -357,7 +550,7 @@ export default function ChatPanel() {
               return;
             }
             const fallback =
-              "Hello boss — welcome back. I'm online, but the briefing feed hiccuped. What do you need?";
+              "Hi Dad. I'm online, but the briefing feed hiccuped. What do you need?";
             setTurns((t) => [...t, { role: "assistant", text: fallback, meta: "Tia · wake", error: true }]);
             markBriefingSpoken(fallback);
             await speakAnswer(fallback, fallback);
@@ -373,7 +566,7 @@ export default function ChatPanel() {
         // "Hi Tia, <question>" → answer directly (no separate yes-boss ack).
         // Skip re-running the same Hello-boss brief if we just gave it.
         if (briefingRecentlySpoken() && isBriefingAsk(remainder)) {
-          const short = "Still here, boss — what do you want to dig into?";
+          const short = "Hi Dad. I'm here. What do you want to dig into?";
           setTurns((t) => [
             ...t,
             { role: "user", text: cleaned },
@@ -387,7 +580,12 @@ export default function ChatPanel() {
       }
 
       // Ask for a repeat on very short unclear utterances instead of guessing.
-      if (cleaned.length < 6 && !/\d/.test(cleaned)) {
+      // Bare yes/ok/no/stop must still reach the server (pending confirm vs nothing waiting).
+      if (
+        cleaned.length < 6 &&
+        !/\d/.test(cleaned) &&
+        !/^(yes|yeah|yep|yup|no|nope|nah|ok|okay|stop|cancel)$/i.test(cleaned)
+      ) {
         const again = "Sorry boss, I didn't catch that — say it one more time?";
         setTurns((t) => [...t, { role: "user", text: cleaned }, { role: "assistant", text: again, meta: "Tia · clarify" }]);
         await speakAnswer(again, again);
@@ -396,8 +594,19 @@ export default function ChatPanel() {
 
       await send(cleaned, { fromVoice: true });
     },
-    [send, speakAnswer, armIdle, clearIdle, logout]
+    [send, speakAnswer, armIdle, clearIdle, logout, tenant]
   );
+
+  useEffect(() => {
+    const onReplay = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ text?: string; inConversation?: boolean }>).detail || {};
+      const spoken = String(detail.text || "").trim();
+      if (!spoken) return;
+      void handleTextRef.current(spoken, { inConversation: Boolean(detail.inConversation) });
+    };
+    window.addEventListener("tia-voice-transcript", onReplay as EventListener);
+    return () => window.removeEventListener("tia-voice-transcript", onReplay as EventListener);
+  }, []);
 
   useEffect(() => {
     handleTextRef.current = async (text, meta) => {
@@ -405,8 +614,14 @@ export default function ChatPanel() {
       const { woke } = matchWake(cleaned);
       // Never drop a wake phrase even if a previous turn left busy stuck.
       if (busyRef.current && !woke) {
-        setInterim("Tia is busy — one moment…");
-        return;
+        if (speakingRef.current || meta.inConversation || sessionRef.current?.getInConversation()) {
+          busyRef.current = false;
+          setBusy(false);
+          sessionRef.current?.setBusy(false);
+        } else {
+          setInterim("Tia is busy — one moment…");
+          return;
+        }
       }
       if (busyRef.current && woke) {
         busyRef.current = false;
@@ -439,6 +654,7 @@ export default function ChatPanel() {
         busyRef.current = false;
         setBusy(false);
         setSpeaking(false);
+        speakGenRef.current += 1;
         stopSpeaking();
         sessionRef.current?.setBusy(false);
         sessionRef.current?.setMuted(false);
@@ -573,6 +789,7 @@ export default function ChatPanel() {
       .catch(() => undefined);
 
     const armGesture = () => {
+      unlockTiaAudio();
       if (!sessionRef.current && enabledRef.current) {
         let preferAuto = true;
         try {
@@ -606,6 +823,7 @@ export default function ChatPanel() {
       if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
       void sessionRef.current?.stop();
       sessionRef.current = null;
+      speakGenRef.current += 1;
       stopSpeaking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -656,7 +874,8 @@ export default function ChatPanel() {
         : 'On air — say "Hi Tia"';
     }
     if (needMicGate) return "Allow the microphone once — then Tia stays listening";
-    if (!window.isSecureContext) return "Open https://192.168.0.201:3443 for always-on voice";
+    if (!window.isSecureContext)
+      return "Voice needs HTTPS. Open https://192.168.0.201:3443 (Advanced → Proceed if asked).";
     return "Starting always-on listener…";
   })();
 
@@ -675,9 +894,42 @@ export default function ChatPanel() {
       </div>
       <div className={`chat-context ${listening ? "live" : ""}`}>{statusLine}</div>
       {voiceErr && <div className="err chat-context">{voiceErr}</div>}
+      {pendingVoice && (
+        <div className="chat-context">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              const pending = pendingVoice;
+              sessionRef.current?.setMuted(true);
+              const finish = (ok: boolean) => {
+                window.setTimeout(() => sessionRef.current?.setMuted(false), 380);
+                if (ok) {
+                  setPendingVoice(null);
+                  setVoiceErr(null);
+                }
+              };
+              if (pending.b64) {
+                void playBase64Audio(pending.b64, pending.type || "audio/mpeg").then(finish);
+              } else {
+                void speakText(pending.text).then(finish);
+              }
+            }}
+          >
+            Hear Tia
+          </button>
+        </div>
+      )}
       {needMicGate && !listening && enabled && (
         <div className="chat-context">
-          <button type="button" className="btn btn-primary" onClick={() => void startListening()}>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              unlockTiaAudio();
+              void startListening();
+            }}
+          >
             Allow mic — keep Tia listening
           </button>
         </div>
@@ -742,6 +994,7 @@ export default function ChatPanel() {
             className={`btn btn-ghost ${voiceOut ? "" : "off"}`}
             onClick={() => {
               if (voiceOut) {
+                speakGenRef.current += 1;
                 stopSpeaking();
                 setSpeaking(false);
                 sessionRef.current?.setMuted(false);

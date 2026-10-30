@@ -9,8 +9,20 @@ from unittest.mock import patch
 from app.services import ai_deep_triage as deep
 
 
-def _triage(verdict: str, confidence: float, action: str = "INVESTIGATE_HOST", model: str = "qwen2.5:7b"):
-    return {"verdict": verdict, "confidence": confidence, "recommended_action": action, "model": model}
+def _triage(
+    verdict: str,
+    confidence: float,
+    action: str = "INVESTIGATE_HOST",
+    model: str = "qwen2.5:7b",
+    execution_status: str = "succeeded",
+):
+    return {
+        "verdict": verdict,
+        "confidence": confidence,
+        "recommended_action": action,
+        "model": model,
+        "execution_status": execution_status,
+    }
 
 
 def _alert(severity: str, asset_criticality: str = "") -> dict:
@@ -42,7 +54,9 @@ class DecideEscalationTests(unittest.TestCase):
         self.assertFalse(d["escalate"])
 
     def test_degraded_model_on_critical_fails_toward_human(self) -> None:
-        d = deep.decide_escalation(_alert("critical"), _triage("SUSPICIOUS", 52, model="rule_based_fallback"))
+        d = deep.decide_escalation(
+            _alert("critical"), _triage("SUSPICIOUS", 52, execution_status="degraded")
+        )
         self.assertTrue(d["escalate"])
         self.assertTrue(d["degraded"])
         self.assertEqual(d["urgency"], "high")
@@ -83,10 +97,16 @@ class TimeoutBudgetTests(unittest.TestCase):
 class CachedFallbackRetryTests(unittest.TestCase):
     def test_cached_rule_based_result_is_recomputed_with_model(self) -> None:
         alert = {"severity": "critical", "ai_triage_status": ""}
-        cached_fallback = dict(_triage("SUSPICIOUS", 52, model="rule_based_fallback"), cached=True)
+        cached_fallback = dict(
+            _triage("SUSPICIOUS", 52, model="rule_based_fallback", execution_status="degraded"),
+            cached=True,
+        )
         fresh = _triage("BENIGN_FALSE_POSITIVE", 92)
         with patch.dict(os.environ, {"AI_DEEP_TRIAGE_ENABLED": "true"}), \
              patch.object(deep, "load_alert_for_triage", return_value=alert), \
+             patch.object(deep.tia_schema, "require_schema"), \
+             patch.object(deep.acc, "accept_local_triage", return_value=deep.acc.AcceptanceResult("accepted")), \
+             patch.object(deep.tia_outbox, "kick"), \
              patch.object(deep, "run_tier1_triage", side_effect=[cached_fallback, fresh]) as run:
             self.assertTrue(deep.process_deep_triage_job(alert_id="a", tenant_id="t"))
         self.assertEqual(run.call_count, 2)

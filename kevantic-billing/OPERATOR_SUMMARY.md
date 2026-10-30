@@ -1,36 +1,19 @@
-# Operator summary — Kevantic Quote & Billing (overnight build)
+# Kevantic Sales Cloud (internal)
 
-## What you have (v1.1)
+**URL:** `http://192.168.0.201:8090/` · version **1.4.0**  
+**Login:** `kevantic-billing/data/OPERATOR_CREDS.txt` (do not commit)
 
-Standalone **enterprise quote-to-cash** for NikTiar: dashboard, CPQ quotes, Tally-style GST invoices, payments, aging, company/bank settings. Own Compose — **does not** touch Admin `:3000` / Customer `:3001`.
+Salesforce Lightning–style sales desk on top of the existing quote + GST invoice engine.
 
-| Item | Value |
-|---|---|
-| UI + API | `http://192.168.0.201:8090/` |
-| Health | `http://127.0.0.1:8090/health` |
-| Postgres | `127.0.0.1:5433` (loopback only) |
-| Containers | `kevantic-billing-app`, `kevantic-billing-db` |
-| Login | `data/OPERATOR_CREDS.txt` |
+## What you see
 
-## Features
+- Dark slate sidebar, Inter typography, Salesforce blue actions
+- **+ New Lead** modal (first/last name, company, source, budget, owner)
+- Lead list filters, record banner, chevron path, **Convert Lead** modal → Account + Contact + Opportunity
+- Opportunity Kanban with drag-and-drop stages
+- Create Quote from Opportunity; Accept Quote → Closed Won + tax invoice when linked
+- Dashboard: pipeline, weighted forecast, AR aging, quick actions
 
-- **Dashboard** — open quotes, AR, MTD invoiced/collected, GST break-up, aging bars, overdue + expiring quotes  
-- **Parties** — GSTIN, Indian state codes, export flag, payment terms  
-- **Catalog** — edit list prices / active flags in UI  
-- **Quotes** — opportunity, owner, line + doc discount, approval when discount ≥ threshold, duplicate, send/accept/decline, PDF, terms  
-- **Invoices** — tax invoice + proforma, credit note, void, record payment (UTR/UPI/cheque), balance due, PDF with bank details  
-- **Company settings** — GSTIN, bank/IFSC/UPI, default terms, LUT, validity days  
+Sample rows are prefixed **TEST —**. Own Compose — does **not** touch Admin `:3000` / Customer `:3001`.
 
-## How to quote
-
-1. Sign in → **Company settings** (GSTIN + bank) once  
-2. **Parties** → customer  
-3. **New quote** → SKUs + term → Create  
-4. Approve if prompted → Tax invoice / Proforma → Record payment  
-
-## Move to another cloud VM
-
-```bash
-cd /opt/mssp-control/kevantic-billing
-docker compose up -d --build   # after copying folder + volume / dump
-```
+Architecture: `docs/CRM_ARCHITECTURE.md`

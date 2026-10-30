@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Compliance Scorecards Without Shipping Every Log | Kevantic</title>
+  <meta name="description" content="CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST indicators are useful when they move with real controls — and when raw logs stay on the NikTiar Edge Node." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://kevantic.com/blog/compliance-without-shipping-every-log.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Kevantic Cyber Security Solutions" />
+  <meta property="og:title" content="Compliance Scorecards Without Shipping Every Log | Kevantic" />
+  <meta property="og:description" content="CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST indicators are useful when they move with real controls — and when raw logs stay on the NikTiar Edge Node." />
+  <meta property="og:url" content="https://kevantic.com/blog/compliance-without-shipping-every-log.html" />
+  <meta property="og:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Compliance Scorecards Without Shipping Every Log | Kevantic" />
+  <meta name="twitter:description" content="CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST indicators are useful when they move with real controls — and when raw logs stay on the NikTiar Edge Node." />
+  <meta name="twitter:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <link rel="icon" href="../assets/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../assets/brand/favicon.ico" type="image/x-icon" />
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon-180.png" />
+  <link rel="preload" href="insights.css?v=4" as="style" />
+  <link rel="stylesheet" href="../assets/brand/kevantic-brand.css" />
+  <link rel="stylesheet" href="insights.css?v=4" />
+</head>
+<body class="blog-shell">
+<header class="blog-top">
+  <div class="blog-wrap blog-top-inner" id="blog-top">
+    <a class="blog-brand" href="../index.html" aria-label="Kevantic Cyber Security">
+      <img src="../assets/brand/kevantic-horizontal-ink.svg?v=1.1.1" alt="Kevantic Cyber Security" width="190" height="40" decoding="async" />
+    </a>
+    <button class="blog-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-blog-toggle><span></span><span></span><span></span></button>
+    <ul class="blog-nav">
+      <li><a class="is-active" href="index.html">Blog</a></li>
+      <li><a href="../services.html">Services</a></li>
+      <li><a href="../platform.html">Platform</a></li>
+      <li><a href="../contact.html">Contact</a></li>
+      <li><a class="blog-cta" href="../index.html#demo">Request Demo</a></li>
+    </ul>
+  </div>
+</header>
+
+<main>
+  <section class="blog-hero"><div class="blog-wrap">
+    <nav class="blog-crumbs" aria-label="Breadcrumb"><a href="../index.html">Home</a><span aria-hidden="true">/</span><a href="index.html">Blog</a><span aria-hidden="true">/</span><span>Compliance scorecards without shipping every log</span></nav>
+    <span class="blog-kicker">How protection works</span>
+    <h1>Compliance scorecards without shipping every log</h1>
+    <p class="lede">A score painted on a slide is not a control. A score that moves when encryption drops is closer.</p>
+  </div></section>
+  <div class="blog-wrap blog-layout">
+    <article class="blog-article">
+      <p class="meta">28 October 2026 · 3 min read · Kevantic Cyber Security</p>
+      <p>A score of 78 on a slide does not encrypt a laptop. A score that falls when disk encryption is off, or when audit logging is disabled, is closer to the truth. Leaders need the second kind, because the first kind fails the moment someone asks a follow-up question.</p>
+<h2 id="what-the-five-names-actually-mean-here">What the five names actually mean here</h2>
+<p>Kevantic continuous compliance shows live indicators for CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST. Read them as technical-safeguard indicators: is the control present and behaving. They are not a claim that Kevantic certifies your company, and they are not a substitute for your own audit.</p>
+<p>HIPAA §164.312, in this scorecard, points at safeguards such as encryption, audit logging, file integrity, and the ability to contain a host. It is an indicator of those safeguards. It is not a certification badge.</p>
+<h2 id="the-log-question-sits-underneath-the-score">The log question sits underneath the score</h2>
+<p>For a clinic, or anyone whose logs might contain health information, the design choice matters as much as the number. Raw logs stay on the NikTiar Edge Node. The customer portal shows the scorecard and the case. Seeing the score does not require shipping the raw log off the network. That split is explained in <a href="where-security-logs-should-live.html">where security logs should live</a>.</p>
+<p>The service itself is <a href="../services/continuous-compliance.html">Continuous Compliance and Hardening</a>.</p>
+<h2 id="how-a-director-should-read-the-portal">How a director should read the portal</h2>
+<p>Look for movement, not a trophy number. Did endpoint encryption drop on a group of laptops? Did audit logging stop on a server that handles payments or care? Did a containment control that you believe is armed fail to acknowledge? Those are the moments a scorecard earns its place. Kevantic shows CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST as technical-safeguard indicators in the customer portal. They describe controls. They do not certify the company.</p>
+<p>Then ask the residency question in the same breath. If the only way to see the score is to copy raw logs, including logs that may contain health information, out of your environment, the scorecard has created a new risk while describing an old one. On NikTiar, the raw logs stay on the Edge Node. The portal shows the indicator and the case.</p>
+<p>Bring the scorecard to the same meeting as operations. A control that fails and nobody can name the owner will fail again next month, at a prettier percentage.</p>
+<aside class="blog-pull"><p>If a provider’s compliance view only works after every raw log has left your building, ask what else left with it.</p></aside>
+      <div class="blog-related">
+        <h2>Keep reading</h2>
+        <div class="blog-grid"><a class="blog-card" href="where-security-logs-should-live.html"><span class="blog-kicker">Foundations</span><h2>Where your security logs should live</h2><p>There is a quiet second bill hiding in many security contracts: the copy of your own logs.</p></a><a class="blog-card" href="kinds-of-security-a-business-needs.html"><span class="blog-kicker">Foundations</span><h2>The kinds of security a business actually needs</h2><p>When a board asks whether the company is secure, the useful answer is a set of jobs with owners — not a product name.</p></a></div>
+      </div>
+    </article>
+    <aside class="blog-aside">
+      <span class="blog-kicker">Related service</span>
+      <h2>Continuous Compliance and Hardening</h2>
+      <p>Continuous Compliance shows live technical-safeguard indicators for CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST. These describe whether a control is present. They are not a certification. Raw logs stay on the Edge Node.</p>
+      <a class="blog-btn" href="../services/continuous-compliance.html">View this service</a>
+      <a class="soft-link" href="../contact.html">Request a demo</a>
+      <a class="soft-link" href="mailto:sales@kevantic.com">sales@kevantic.com</a>
+    </aside>
+  </div>
+</main>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BlogPosting",
+      "headline": "Compliance scorecards without shipping every log",
+      "description": "CIS, ISO 27001, PCI-DSS, HIPAA §164.312, and NIST indicators are useful when they move with real controls — and when raw logs stay on the NikTiar Edge Node.",
+      "datePublished": "2026-10-28",
+      "dateModified": "2026-10-28",
+      "inLanguage": "en",
+      "mainEntityOfPage": "https://kevantic.com/blog/compliance-without-shipping-every-log.html",
+      "image": "https://kevantic.com/assets/brand/kevantic-og-1200x630.png",
+      "author": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://kevantic.com/assets/brand/kevantic-horizontal-ink.svg?v=1.1.1"
+        }
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://kevantic.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Blog",
+          "item": "https://kevantic.com/blog/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Compliance scorecards without shipping every log",
+          "item": "https://kevantic.com/blog/compliance-without-shipping-every-log.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+<footer class="blog-foot"><div class="blog-wrap">
+  <p>&copy; 2026 Kevantic Cyber Security Solutions · <a href="../index.html">kevantic.com</a> · <a href="mailto:sales@kevantic.com">sales@kevantic.com</a> · Bengaluru</p>
+</div></footer>
+<script>
+(function(){var t=document.querySelector('[data-blog-toggle]');var n=document.getElementById('blog-top');if(!t||!n)return;t.addEventListener('click',function(){var o=n.classList.toggle('is-open');t.setAttribute('aria-expanded',o?'true':'false');});})();
+</script>
+</body>
+</html>

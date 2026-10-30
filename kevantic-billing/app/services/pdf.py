@@ -100,7 +100,14 @@ def render_document_pdf(
         data.append(
             [
                 str(i),
-                f"{ln['sku']}\n{ln['description']}"[:90],
+                (
+                    (
+                        f"{ln['vendor_name']} · {ln['sku']}"
+                        if (ln.get("vendor_name") or "").strip()
+                        else ln["sku"]
+                    )
+                    + f"\n{ln['description']}"
+                )[:110],
                 ln.get("hsn_sac") or "—",
                 _money(ln["quantity"]),
                 _money(ln["unit_price"]),

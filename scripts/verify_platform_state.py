@@ -1213,8 +1213,11 @@ def check_soc_agent_integration() -> CheckResult:
     deep_txt = read(deep) if deep.is_file() else ""
     expect(
         f,
-        "run_expert_on_alert" in deep_txt and "soc_agent_enabled" in deep_txt,
-        "ai_deep_triage prefers Cursor SOC agent before Ollama fallback",
+        "call_agent_ingest" in deep_txt
+        and "soc_agent_enabled" in deep_txt
+        and "acc.accept_result" in deep_txt
+        and "run_expert_on_alert" not in deep_txt,
+        "ai_deep_triage prefers Cursor SOC agent before Ollama fallback and hands every result to tia_acceptance",
         path=deep,
         status_if_false="FAILED",
     )
@@ -1470,8 +1473,9 @@ def check_soc_agent_integration() -> CheckResult:
     expect(
         f,
         "/api/v1/soc-agent/triage-result" in cb_txt
-        and "apply_callback_payload" in cb_txt,
-        "callback route persists triage via apply_callback_payload",
+        and "acc.accept_result" in cb_txt
+        and "apply_callback_payload" not in cb_txt,
+        "callback route accepts triage through the single tia_acceptance.accept_result path",
         path=callback,
         status_if_false="FAILED",
     )
@@ -1504,6 +1508,312 @@ def check_soc_agent_integration() -> CheckResult:
         path=expert,
         status_if_false="FAILED",
     )
+    voice_chat = BACKEND / "app" / "services" / "soc_console_chat.py"
+    voice_txt = read(voice_chat) if voice_chat.is_file() else ""
+    expect(
+        f,
+        "render_voice_answer" in voice_txt
+        and "tia-live" in voice_txt
+        and "_answers_from_live_floor" in voice_txt
+        and "context_trimmed_for_size" not in voice_txt,
+        "Tia voice answers from the live floor and does not emit a trimmed-context note",
+        path=voice_chat,
+        status_if_false="FAILED",
+    )
+    tts_py = BACKEND / "app" / "services" / "soc_console_tts.py"
+    tts_txt = read(tts_py) if tts_py.is_file() else ""
+    expect(
+        f,
+        "edge_tts" in tts_txt and "en-US-AriaNeural" in tts_txt,
+        "Tia speaks with a neural voice audio file, not browser speech alone",
+        path=tts_py,
+        status_if_false="FAILED",
+    )
+    policy_py = BACKEND / "app" / "services" / "tia_closure_policy.py"
+    policy_txt = read(policy_py) if policy_py.is_file() else ""
+    expect(
+        f,
+        "POLICY_VERSION = \"tia-closure-1\"" in policy_txt
+        and "shadow_mode" in policy_txt
+        and "authorized_benign" in policy_txt
+        and "false_positive" in policy_txt
+        and "model_confidence" in policy_txt
+        and "Never fabricate evidence, approvals, or successful actions." in policy_txt,
+        "TIA closure policy is versioned, shadow-mode, and does not treat benign as a false positive",
+        path=policy_py,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "partition_proposed_actions" in voice_txt
+        and "execution_source=\"model_auto\"" in voice_txt
+        and "I did not close anything" in voice_txt,
+        "TIA voice ticket changes go through the closure policy before any write",
+        path=voice_chat,
+        status_if_false="FAILED",
+    )
+    analyst_py = ROOT / "soc-agent" / "app" / "core" / "analyst.py"
+    analyst_txt = read(analyst_py) if analyst_py.is_file() else ""
+    expect(
+        f,
+        "heuristic_fallback_cursor_error" not in analyst_txt
+        and "RESULT_CONTRACT" in analyst_txt
+        and '"disposition": "unset"' in analyst_txt
+        and "limited_evidence" in analyst_txt,
+        "Agent failure path returns an explicit failed result with no manufactured verdict",
+        path=analyst_py,
+        status_if_false="FAILED",
+    )
+    inv_py = BACKEND / "app" / "services" / "tia_investigation.py"
+    inv_txt = read(inv_py) if inv_py.is_file() else ""
+    deep_py = BACKEND / "app" / "services" / "ai_deep_triage.py"
+    deep_txt = read(deep_py) if deep_py.is_file() else ""
+    queue_py = BACKEND / "app" / "services" / "ai_alert_queue.py"
+    queue_txt = read(queue_py) if queue_py.is_file() else ""
+    migration = ROOT / "postgres" / "init" / "117_tia_review_items.sql"
+    expect(
+        f,
+        "def normalize_agent_result" in inv_txt
+        and "def decide_review" in inv_txt
+        and "def _review_upsert" in read(BACKEND / "app" / "services" / "tia_acceptance.py")
+        and '"fallback" in model' not in deep_txt
+        and "acc.accept_result" in deep_txt
+        and "_review_for_dead_letter" in queue_txt
+        and migration.is_file()
+        and "uq_tia_review_items_alert_live" in read(migration),
+        "Failed investigations become durable review items; degradation uses explicit status, not model-name text",
+        path=inv_py,
+        status_if_false="FAILED",
+    )
+    # ---- Increment 2: unified acceptance, outbox, review queue, schema readiness ----
+    acc_py = BACKEND / "app" / "services" / "tia_acceptance.py"
+    out_py = BACKEND / "app" / "services" / "tia_outbox.py"
+    rev_py = BACKEND / "app" / "services" / "tia_review.py"
+    sch_py = BACKEND / "app" / "services" / "tia_schema.py"
+    mig118 = ROOT / "postgres" / "init" / "118_tia_result_acceptance.sql"
+    console_py = BACKEND / "app" / "api" / "routes" / "soc_console.py"
+    spool_py = ROOT / "soc-agent" / "app" / "core" / "callback.py"
+    for path, label in (
+        (acc_py, "tia_acceptance.py"), (out_py, "tia_outbox.py"), (rev_py, "tia_review.py"),
+        (sch_py, "tia_schema.py"), (mig118, "migration 118"), (spool_py, "soc-agent callback spool"),
+    ):
+        require_file(f, path, label)
+    acc_txt = read(acc_py) if acc_py.is_file() else ""
+    out_txt = read(out_py) if out_py.is_file() else ""
+    rev_txt = read(rev_py) if rev_py.is_file() else ""
+    sch_txt = read(sch_py) if sch_py.is_file() else ""
+    mig_txt = read(mig118) if mig118.is_file() else ""
+    console_txt = read(console_py) if console_py.is_file() else ""
+    spool_txt = read(spool_py) if spool_py.is_file() else ""
+    expect(
+        f,
+        "def accept_result" in acc_txt
+        and "def accept_local_triage" in acc_txt
+        and "def record_attempt_failure" in acc_txt
+        and "payload_hash" in acc_txt
+        and "conflict" in acc_txt
+        and "stale_evidence" in acc_txt
+        and "human_decision" in acc_txt
+        and "superseded_by_newer_attempt" in acc_txt
+        and "first_seen_at" in acc_txt,
+        "TIA result acceptance is one tenant-bound transaction with duplicate/conflict, stale-evidence and human-decision rules",
+        path=acc_py,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "CREATE TABLE IF NOT EXISTS tia_results" in mig_txt
+        and "CREATE TABLE IF NOT EXISTS tia_notifications" in mig_txt
+        and "CREATE TABLE IF NOT EXISTS tia_investigation_attempts" in mig_txt
+        and "CREATE TABLE IF NOT EXISTS tia_review_events" in mig_txt
+        and "idempotency_key" in mig_txt
+        and "DROP TABLE" not in mig_txt.upper()
+        and "DROP COLUMN" not in mig_txt.upper(),
+        "migration 118 is additive (no drops) and defines immutable results, attempts, review events and an idempotent notification outbox",
+        path=mig118,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "def require_schema" in sch_txt
+        and "class SchemaNotReady" in sch_txt
+        and "SOC_ONCALL_WHATSAPP" in sch_txt
+        and "def readiness" in sch_txt
+        and "SchemaNotReady" in deep_txt
+        and "RECOVERABLE_DEAD_REASONS" in queue_txt,
+        "Missing schema or unset on-call recipients is a visible readiness fault; schema-blocked jobs stay queued",
+        path=sch_py,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "def record_delivery_receipt" in out_txt
+        and "def escalate_overdue" in out_txt
+        and "def deliver_pending" in out_txt
+        and "'delivered'" in out_txt
+        and "def set_transport" in out_txt,
+        "Notification outbox has bounded retries, overdue-ack escalation and delivered only via a provider receipt",
+        path=out_py,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "def acknowledge" in rev_txt and "def assign" in rev_txt and "def resolve" in rev_txt and "def reopen" in rev_txt
+        and "case_status_unchanged" in rev_txt
+        and "/review-queue/{item_id}/acknowledge" in console_txt
+        and "/tia-readiness" in console_txt
+        and "require_roles(*ADMIN_SOC_ROLES)" in console_txt
+        and (ROOT / "frontend-soc" / "src" / "pages" / "ReviewQueuePage.tsx").is_file(),
+        "Review queue API is SOC-role-only with audited acknowledge/assign/resolve/reopen and a SOC console page",
+        path=rev_py,
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "spool" in spool_txt.lower() and "rejected" in spool_txt and "expired" in spool_txt and "attempt_id" in spool_txt,
+        "SOC agent callback is spooled to disk and retried, echoing the attempt binding",
+        path=spool_py,
+        status_if_false="FAILED",
+    )
+    # ---- Increment 3: conversation, durable jobs, engine health, playbooks, research ----
+    svc = BACKEND / "app" / "services"
+    jobs_txt = read(svc / "tia_jobs.py") if (svc / "tia_jobs.py").is_file() else ""
+    queue_txt = read(svc / "ai_alert_queue.py")
+    expect(
+        f,
+        "FOR UPDATE SKIP LOCKED" in jobs_txt and "next_run_at" in jobs_txt and "recover_expired" in jobs_txt
+        and "dead" in jobs_txt and "at least once" in jobs_txt.lower(),
+        "TIA investigation jobs are durable: leased, rescheduled with backoff (no sleeping), recovered after worker death, dead-lettered",
+        path=svc / "tia_jobs.py",
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "tia_jobs.enqueue" in queue_txt and "_run_ai_pipeline(" in queue_txt
+        and "inline" not in queue_txt.split("def enqueue_ai_alert_analysis")[1].split("def job_handler")[0].lower().replace("never run the pipeline inline", ""),
+        "Alert enqueue has no inline fallback that reports success for non-durable work",
+        path=svc / "ai_alert_queue.py",
+        status_if_false="FAILED",
+    )
+    conv_txt = read(svc / "tia_conversation.py") if (svc / "tia_conversation.py").is_file() else ""
+    tools_txt = read(svc / "tia_tools.py") if (svc / "tia_tools.py").is_file() else ""
+    kn_txt = read(svc / "tia_knowledge.py") if (svc / "tia_knowledge.py").is_file() else ""
+    expect(
+        f,
+        "scope_changed" in conv_txt and "loaded_alert_id" in conv_txt and "client_turn_id" in conv_txt
+        and "approval_required" in tools_txt and "NOT_AVAILABLE_BY_CHAT" in tools_txt,
+        "TIA conversation binds pending actions to type/target/tenant/session, confirms only on a matching dashboard acknowledgement, and refuses disruptive actions",
+        path=svc / "tia_conversation.py",
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        all(k in tools_txt for k in ("platform_inventory", "component_lookup", "ingest_status", "assess_criticality", "known_unknowns"))
+        and "allow_live_floor=False" in read(ROOT / "backend-api" / "app" / "api" / "routes" / "soc_console.py")
+        and "A critical detection *label* is not a critical incident" in kn_txt
+        and "reachable is not the same as" in kn_txt,
+        "TIA answers natural ops questions from inventory/ingest/criticality tools and never substitutes a live dashboard recap",
+        path=svc / "tia_knowledge.py",
+        status_if_false="FAILED",
+    )
+    sync_txt = read(ROOT / "backend-api" / "app" / "api" / "routes" / "soc_sync.py")
+    expect(
+        f,
+        "is_vulnerability_inventory_alert" in sync_txt
+        and "vulnerability-detector" in sync_txt
+        and "vulnerability_inventory" in sync_txt
+        and "forwarded_to_shuffle" in sync_txt,
+        "Wazuh vulnerability-detector CVE inventory is skipped at ingress and does not open SOC alerts",
+        path=ROOT / "backend-api" / "app" / "api" / "routes" / "soc_sync.py",
+        status_if_false="FAILED",
+    )
+    merge_txt = read(svc / "soc_alert_merge.py") if (svc / "soc_alert_merge.py").is_file() else ""
+    sync_svc_txt = read(svc / "soc_sync_service.py")
+    expect(
+        f,
+        "first_seen_at and created_at never move" in merge_txt
+        and "alert_occurrence_merged" in sync_svc_txt
+        and "alert_recurrence_opened" in sync_svc_txt
+        and "uq_security_alerts_open_fingerprint" in read(ROOT / "postgres" / "init" / "124_alert_occurrences.sql")
+        and "times_seen" in read(ROOT / "backend-api" / "app" / "api" / "routes" / "customer.py"),
+        "Identical detections merge into one open alert with immutable first_seen SLA clock, per-engine occurrence records, and a new alert after close",
+        path=svc / "soc_alert_merge.py",
+        status_if_false="FAILED",
+    )
+    eh_txt = read(svc / "tia_engine_health.py") if (svc / "tia_engine_health.py").is_file() else ""
+    expect(
+        f,
+        all(k in eh_txt for k in ("reachability", "api", "auth", "application", "telemetry", "only_port_reachability_verified", "credentials_rejected", "check_timed_out", "redact_for_role")),
+        "Engine health is layered (reachability/API/login/application/telemetry), labels cached results, times out per engine and never rolls an open port up to healthy",
+        path=svc / "tia_engine_health.py",
+        status_if_false="FAILED",
+    )
+    pb_txt = read(svc / "tia_playbooks.py") if (svc / "tia_playbooks.py").is_file() else ""
+    mig121 = ROOT / "postgres" / "init" / "121_tia_playbooks.sql"
+    t1_txt = read(svc / "ai_tier1_triage.py")
+    expect(
+        f,
+        "PlaybookVerdict" in policy_txt and "verified_playbook" in policy_txt and "model_confidence_cannot_authorize_closure" in t1_txt
+        and "return False" in t1_txt.split("def _auto_close_enabled")[1].split("_AUTO_CLOSE_ENV_WARNED = False")[0]
+        and "authorized_benign" in pb_txt and "tia_playbook_enablements" in read(mig121),
+        "Unattended closure exists only as a verified, customer-enabled playbook (authorized_benign); model confidence and the old env flag cannot close alerts",
+        path=svc / "tia_playbooks.py",
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        all(k in pb_txt for k in ("outside_approved_scope", "correlation_unavailable", "incident_has_unresolved_malicious"))
+        and "destination_cidr" in read(ROOT / "postgres" / "init" / "123_tia_authorized_scope.sql"),
+        "Authorized-scanner playbook refuses out-of-scope scans, treats unavailable correlation as review not absence of malice, and never closes an incident because one sibling alert was eligible",
+        path=svc / "tia_playbooks.py",
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        "start_investigation" in tools_txt and "I have not waited for the model" in conv_txt
+        and "looksLikeEcho" in read(ROOT / "frontend-soc" / "src" / "components" / "ChatPanel.tsx")
+        and "Keep STT live during TTS" in read(ROOT / "frontend-soc" / "src" / "components" / "ChatPanel.tsx"),
+        "Conversation can queue a deep investigation without waiting for Cursor; voice barge-in keeps recognition live during TTS and drops echo",
+        path=svc / "tia_conversation.py",
+        status_if_false="FAILED",
+    )
+    res_txt = read(svc / "tia_research.py") if (svc / "tia_research.py").is_file() else ""
+    expect(
+        f,
+        all(k in res_txt for k in ("ip_is_public", "address_not_public", "host_not_allowed", "untrusted_external_content", "_PinnedHTTPS", "MAX_REDIRECTS")),
+        "Research is SSRF-guarded (allow-listed https hosts, public addresses only, pinned connection, bounded redirects), identifier-only, and off by default",
+        path=svc / "tia_research.py",
+        status_if_false="FAILED",
+    )
+    for rel in (
+        "postgres/init/119_tia_conversation.sql",
+        "postgres/init/120_tia_jobs.sql",
+        "postgres/init/121_tia_playbooks.sql",
+        "postgres/init/123_tia_authorized_scope.sql",
+        "postgres/init/124_alert_occurrences.sql",
+        "backend-api/app/services/soc_alert_merge.py",
+        "backend-api/tests/test_soc_alert_merge.py",
+        "frontend-soc/src/lib/tiaBargeIn.ts",
+        "backend-api/tests/test_tia_jobs.py",
+        "backend-api/tests/test_tia_conversation.py",
+        "backend-api/tests/test_tia_engine_health.py",
+        "backend-api/tests/test_tia_playbooks.py",
+        "backend-api/tests/test_tia_research.py",
+        "backend-api/tests/test_tia_ticket_summary.py",
+        "backend-api/tests/test_tia_transport.py",
+        "frontend-soc/src/lib/uiBridge.test.ts",
+        "scripts/tia_local_test.sh",
+        "scripts/tia_latency_probe.py",
+        "scripts/tia_host_diagnostics.sh",
+    ):
+        require_file(f, ROOT / rel, rel)
+    for rel in (
+        "backend-api/tests/test_tia_acceptance.py",
+        "backend-api/tests/test_tia_failure_path.py",
+        "soc-agent/tests/test_callback_spool.py",
+        "scripts/tia_migration_validate.sh",
+    ):
+        require_file(f, ROOT / rel, rel)
     return cr
 
 

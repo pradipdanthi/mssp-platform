@@ -188,14 +188,18 @@ export function postChat(
 }
 
 /** Proactive Hi-Tia welcome: alerts + urgency + end-to-end stack (single spoken turn). */
-export function getWakeBriefing() {
+export function getWakeBriefing(opts?: { session_id?: string; tenant_short_code?: string }) {
+  const q = new URLSearchParams();
+  if (opts?.session_id) q.set("session_id", opts.session_id);
+  if (opts?.tenant_short_code) q.set("tenant_short_code", opts.tenant_short_code);
+  const suffix = q.toString() ? `?${q.toString()}` : "";
   return request<{
     answer: string;
     spoken_answer?: string;
     agent?: string;
     mode?: string;
     provider?: string;
-  }>("/admin/soc-console/wake-briefing");
+  }>(`/admin/soc-console/wake-briefing${suffix}`);
 }
 
 export type CommandCenterPayload = {
@@ -328,6 +332,8 @@ export function speakTia(text: string) {
     audio_base64?: string;
     content_type?: string;
     provider?: string;
+    synthesis_ms?: number;
+    cached?: boolean;
   }>("/admin/soc-console/speak", {
     method: "POST",
     body: { text },
@@ -633,4 +639,177 @@ export async function openActivityStream(
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// TIA review queue (analyst work list). Deadlines are provisional, not SLAs.
+// ---------------------------------------------------------------------------
+
+export type ReviewNotificationCounts = Partial<
+  Record<"required" | "queued" | "submitted" | "delivered" | "failed" | "acknowledged" | "cancelled", number>
+>;
+
+export type ReviewItem = {
+  id: string;
+  alert_id: string;
+  tenant_id: string;
+  customer_name: string;
+  customer_code: string;
+  case_title: string | null;
+  case_status: string | null;
+  status: "open" | "acknowledged" | "resolved";
+  reason_code: string;
+  execution_status: string;
+  error_category: string | null;
+  source_severity: string | null;
+  assessed_priority: string;
+  notify_urgency: string;
+  notification_state: string;
+  assigned_to: string | null;
+  assigned_at: string | null;
+  occurrences: number;
+  reopened_count: number;
+  analysis_available: boolean;
+  highest_finding: string | null;
+  deadline_basis: "provisional" | "approved";
+  first_seen_at: string;
+  last_seen_at: string;
+  due_at: string;
+  age_seconds: number;
+  seconds_to_deadline: number;
+  overdue: boolean;
+  reasons: string[];
+  limited_evidence: Record<string, unknown>;
+  notification_counts: ReviewNotificationCounts;
+};
+
+export type ReviewSummary = {
+  open_count: number;
+  unacknowledged_count: number;
+  overdue_count: number;
+  page_count: number;
+  undeliverable_page_count: number;
+  unassigned_count: number;
+  next_due_at: string | null;
+  deadline_basis: "provisional";
+};
+
+export type ReviewDetail = ReviewItem & {
+  events: { event_type: string; actor: string; from_status: string | null; to_status: string | null; at: string; detail: Record<string, unknown> }[];
+  attempts: { id: string; attempt_no: number; status: string; outcome_uncertain: boolean; transport_error: string | null; dispatched_at: string; closed_at: string | null }[];
+  results: { id: string; first_source: string; execution_status: string; error_category: string | null; verdict: string | null; confidence: number | null; disposition: string; applied: boolean; apply_reason: string; material: boolean; late: boolean; at: string }[];
+  notifications: { id: string; kind: string; level: number; channel: string; recipient: string | null; recipient_name: string | null; state: string; blocked_reason: string | null; attempts: number; max_attempts: number; last_error: string | null; delivery_evidence: string | null; submitted_at: string | null; delivered_at: string | null; failed_at: string | null; acknowledged_at: string | null; acknowledged_by: string | null; ack_due_at: string | null; escalated_at: string | null }[];
+};
+
+export type TiaFault = { code: string; severity: "fault" | "warning"; message: string };
+export type TiaReadiness = { ready: boolean; investigation_mode: string; faults: TiaFault[]; backlog: Record<string, number | null> };
+
+export function getReviewQueue(params?: { status?: string; include_resolved?: boolean }) {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.include_resolved) q.set("include_resolved", "true");
+  const qs = q.toString();
+  return request<{ items: ReviewItem[]; summary: ReviewSummary; deadline_basis: string }>(
+    `/admin/soc-console/review-queue${qs ? `?${qs}` : ""}`
+  );
+}
+
+export function getReviewItem(id: string) {
+  return request<ReviewDetail>(`/admin/soc-console/review-queue/${encodeURIComponent(id)}`);
+}
+
+export function getTiaReadiness() {
+  return request<TiaReadiness>("/admin/soc-console/tia-readiness");
+}
+
+export function reviewAction(
+  id: string,
+  action: "acknowledge" | "assign" | "resolve" | "reopen",
+  body: { note?: string; assignee?: string | null } = {}
+) {
+  return request<{ ok: boolean; changed: boolean; status?: string }>(
+    `/admin/soc-console/review-queue/${encodeURIComponent(id)}/${action}`,
+    { method: "POST", body }
+  );
+}
+
+// --- TIA conversation (typed tools, bound pending actions, verified dashboard commands) ---
+
+export type TiaUiCommand = {
+  id: string;
+  type: "open_case";
+  payload: { alert_id: string; title?: string; short_code?: string; severity?: string; path?: string };
+  status?: string;
+  deliver_by?: string;
+};
+
+export type TiaConverseResponse = {
+  answer: string;
+  spoken_answer?: string;
+  provider?: string;
+  intent?: string;
+  tool?: string | null;
+  tool_ok?: boolean;
+  request_id: string;
+  conversation_id: string;
+  turn_id?: string | null;
+  replayed?: boolean;
+  selected_alert_id?: string | null;
+  scope?: { kind: "tenant" | "platform"; tenant?: { name?: string; short_code?: string } | null };
+  ui_command?: TiaUiCommand;
+  verification?: "pending";
+  pending_action?: { id: string; action_type: string; summary: string; expires_at: string };
+  notices?: string[];
+  clarification?: boolean;
+  alerts?: { id: string; title: string; severity: string; short_code: string; host?: string | null }[];
+  pending_approval?: { id?: string; summary?: string };
+  actions_applied?: { ok?: boolean; type?: string }[];
+};
+
+export function postConverse(
+  message: string,
+  opts: {
+    session_id: string;
+    client_turn_id: string;
+    tenant_short_code?: string;
+    view_alert_id?: string | null;
+  }
+) {
+  return request<TiaConverseResponse>("/admin/soc-console/converse", {
+    method: "POST",
+    body: {
+      message,
+      session_id: opts.session_id,
+      client_turn_id: opts.client_turn_id,
+      tenant_short_code: opts.tenant_short_code || undefined,
+      view_alert_id: opts.view_alert_id || undefined,
+    },
+  });
+}
+
+export function ackUiCommand(
+  commandId: string,
+  body: { session_id: string; loaded_alert_id?: string; failure?: string }
+) {
+  return request<{
+    status: "acknowledged" | "failed" | "expired";
+    verified: boolean;
+    text?: string;
+    spoken?: string;
+    reason?: string;
+    selected_alert_id?: string;
+  }>(`/admin/soc-console/ui-commands/${encodeURIComponent(commandId)}/ack`, { method: "POST", body });
+}
+
+export function listUiCommands(sessionId: string) {
+  return request<{ commands: TiaUiCommand[] }>(
+    `/admin/soc-console/ui-commands?session_id=${encodeURIComponent(sessionId)}`
+  );
+}
+
+export function postClientTiming(requestId: string, stages: Record<string, number>) {
+  return request<{ recorded: number }>("/admin/soc-console/telemetry/client", {
+    method: "POST",
+    body: { request_id: requestId, stages },
+  });
 }

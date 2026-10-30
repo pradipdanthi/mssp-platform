@@ -1,0 +1,55 @@
+{
+  "classification": "simulated_voice_fixture + real_model_worker",
+  "physical_microphone": "not_run",
+  "production_touched": false,
+  "ui": "http://127.0.0.1:15174",
+  "api": "http://127.0.0.1:18000",
+  "session_id": "s00a963b23e1daee9122b",
+  "turns": [
+    {
+      "operator": "Hi Tia, what's critical",
+      "intent": "list",
+      "answer_head": "Across all customers: 3 critical and 1 high open alerts",
+      "first_listed": {"id": "0104dd4a-2634-48e9-8be1-92c56c9c7380", "title": "Ransomware-like file renames on HOST-A2", "short_code": "E2EA"}
+    },
+    {
+      "operator": "describe the first one",
+      "how": "spoken barge-in during TIA TTS",
+      "intent": "describe",
+      "alert_id": "0104dd4a-2634-48e9-8be1-92c56c9c7380",
+      "pending_action": "open_case"
+    },
+    {
+      "operator": "yes, open it",
+      "intent": "open_case",
+      "ui_command": "c5bd4e41-13ce-44fd-8ab9-55dea3801fe6",
+      "loaded_alert_id": "0104dd4a-2634-48e9-8be1-92c56c9c7380",
+      "verified": true,
+      "href": "http://127.0.0.1:15174/alerts/0104dd4a-2634-48e9-8be1-92c56c9c7380",
+      "ack_ms": 32
+    },
+    {
+      "operator": "what's the host on this one",
+      "intent": "describe",
+      "selected_alert_id": "0104dd4a-2634-48e9-8be1-92c56c9c7380",
+      "host": "HOST-A2",
+      "context_retained": true
+    },
+    {
+      "operator": "investigate this",
+      "intent": "start_investigation",
+      "job_id": "d83ceaa5-52c1-4ef6-8744-c81186f40478",
+      "alert_id": "0104dd4a-2634-48e9-8be1-92c56c9c7380",
+      "note": "same evidence version as a prior-round note; new attempt did not add a second timeline row"
+    },
+    {
+      "operator": "investigate this",
+      "after": "describe the third (Credential dumping HOST-A1)",
+      "intent": "start_investigation",
+      "job_id": "c4d4e9bf-1771-4257-b9f7-9d3f871f45e7",
+      "alert_id": "6055184f-2ba4-493e-883c-292d387b7744",
+      "model": {"provider": "cursor-agent", "duration_ms": 28862, "verdict": "Critical", "confidence": 72, "disposition": "malicious"},
+      "ticket": {"incident_number": "INC-E2E-001", "incident_id": "63ebe6ee-f1d1-4e69-8b79-396ba89df8c4", "note_at": "2026-10-30T16:39:30.882237Z", "effect_kind": "ticket_note"}
+    }
+  ]
+}

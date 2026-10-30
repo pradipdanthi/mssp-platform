@@ -35,3 +35,11 @@ def next_invoice_number(db: Session) -> str:
 
 def next_credit_note_number(db: Session) -> str:
     return next_number(db, "KEV/CN", "credit_note")
+
+
+def next_lead_number(db: Session) -> str:
+    return next_number(db, "KEV/LD", "lead")
+
+
+def next_opportunity_number(db: Session) -> str:
+    return next_number(db, "KEV/OP", "opportunity")

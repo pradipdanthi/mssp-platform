@@ -1,0 +1,17 @@
+---
+description: TIA investigation policy — shadow closure, human approval for disruptive actions
+alwaysApply: true
+---
+
+# TIA investigation policy
+
+TIA is the Threat Intelligence & Automation Agent (named for Tiara).
+
+- The model recommends. `backend-api/app/services/tia_closure_policy.py` authorizes. Policy version `tia-closure-1`.
+- Unattended closure stays off. `model_auto` must not set `false_positive`, `closed`, or `resolved`.
+- Do not add an environment flag that turns auto-closure on. A future playbook must be versioned, customer-enabled, and tested first.
+- Dispositions: `malicious`, `false_positive`, `authorized_benign`, `duplicate`, `inconclusive`, `unset`. Authorized activity is not a false positive. Duplicate is not proof of benign. A model "Benign" is `inconclusive` until verified; only an analyst or verified playbook sets `false_positive` / `authorized_benign`.
+- A failed, timed-out, malformed, or incomplete investigation never produces a verdict. It becomes a durable analyst review item; critical and urgent cases still page. Degradation is read from validated execution status, never from a model-name substring.
+- Host isolation, account disable, quarantine, block, and similar actions stay approval-gated. A spoken yes is not approval.
+- Ticket writes from the model must use the server tenant, never a tenant id supplied by the model.
+- Cursor CLI on the SOC agent VM is a development/subscription interface. Do not treat it as a cleared production inference path for customer data.

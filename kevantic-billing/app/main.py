@@ -8,9 +8,10 @@ from fastapi.staticfiles import StaticFiles
 
 from app.auth import require_admin
 from app.db import Base, SessionLocal, engine
-from app.routers import catalog, dashboard, invoices, parties, quotes, settings
+from app.routers import catalog, crm, dashboard, invoices, parties, quotes, settings
 from app.services.catalog_seed import seed_catalog
 from app.services.company import get_or_create_profile
+from app.services.demo_sales import seed_sales_showcase
 from app.services.migrate import run_migrations
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
@@ -22,7 +23,7 @@ app = FastAPI(
         "for the NikTiar product portfolio. Portable Docker stack — not part of "
         "mssp-control Admin/Customer portals."
     ),
-    version="1.1.0",
+    version="1.4.0",
 )
 
 
@@ -34,6 +35,7 @@ def on_startup() -> None:
     try:
         seed_catalog(db)
         get_or_create_profile(db)
+        seed_sales_showcase(db)
     finally:
         db.close()
 
@@ -50,7 +52,7 @@ def health() -> dict:
     return {
         "status": "ok" if db_ok else "degraded",
         "service": "kevantic-billing",
-        "version": "1.1.0",
+        "version": "1.4.0",
         "database": "ok" if db_ok else "error",
         "port": 8090,
     }
@@ -69,12 +71,13 @@ def me(user: str = Depends(require_admin)) -> dict:
             "company_state_code": profile.state_code,
             "currency": profile.currency,
             "lut_filed": profile.lut_filed,
-            "version": "1.1.0",
+            "version": "1.4.0",
         }
     finally:
         db.close()
 
 
+app.include_router(crm.router)
 app.include_router(parties.router)
 app.include_router(catalog.router)
 app.include_router(quotes.router)

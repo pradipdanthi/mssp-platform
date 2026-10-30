@@ -49,6 +49,8 @@ def enqueue_approval(
     question: str,
     answer_excerpt: str,
     actor_email: str,
+    policy_version: Optional[str] = None,
+    policy_decisions: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Stage proposed Tia actions for operator Approve / Decline."""
     clean_actions = [a for a in (actions or []) if isinstance(a, dict)][:5]
@@ -63,6 +65,8 @@ def enqueue_approval(
         "answer_excerpt": (answer_excerpt or "")[:400],
         "actions": clean_actions,
         "summary": _summarize(clean_actions),
+        "policy_version": policy_version,
+        "policy_decisions": list(policy_decisions or []),
     }
     items = [item] + [i for i in _load() if i.get("status") == "pending"]
     _save(items[:_MAX])
@@ -113,6 +117,7 @@ def decide_approval(
             list(found.get("actions") or []),
             actor_user_id=actor_user_id,
             actor_email=actor_email,
+            execution_source="analyst_approval",
         )
         found["status"] = "approved"
         found["results"] = results

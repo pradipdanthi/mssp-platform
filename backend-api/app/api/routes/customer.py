@@ -114,6 +114,9 @@ def _customer_safe_alert_detail_row(row: Optional[Dict[str, Any]]) -> Optional[D
         "win_eventdata": enriched.get("win_eventdata") or {},
         "mitre_tactics": enriched.get("mitre_tactics") or [],
         "mitre_techniques": enriched.get("mitre_techniques") or [],
+        "times_seen": int(enriched.get("occurrence_count") or 1),
+        "first_seen_at": enriched.get("first_seen_at"),
+        "last_seen_at": enriched.get("last_seen_at"),
     }
 
 
@@ -716,7 +719,10 @@ def customer_alerts(
             sa.alert_title,
             sa.alert_description,
             sa.destination_host,
-            sa.source_user
+            sa.source_user,
+            sa.occurrence_count,
+            sa.first_seen_at,
+            sa.last_seen_at
         FROM security_alerts sa
         LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
         WHERE {where_sql}
@@ -1041,7 +1047,10 @@ def customer_alert_detail(
             sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
-            sa.ai_likely_attack_type
+            sa.ai_likely_attack_type,
+            sa.occurrence_count,
+            sa.first_seen_at,
+            sa.last_seen_at
         FROM security_alerts sa
         LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
         WHERE sa.tenant_id = %s
@@ -1115,7 +1124,10 @@ def customer_alert_ai_triage(
             sa.mitre_mapping,
             sa.ai_business_impact,
             sa.ai_recommended_action,
-            sa.ai_likely_attack_type
+            sa.ai_likely_attack_type,
+            sa.occurrence_count,
+            sa.first_seen_at,
+            sa.last_seen_at
         FROM security_alerts sa
         LEFT JOIN protected_assets pa ON pa.id = sa.asset_id
         WHERE sa.tenant_id = %s

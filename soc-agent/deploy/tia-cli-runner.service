@@ -1,0 +1,83 @@
+[Unit]
+Description=TIA CLI runner (Cursor headless CLI under an isolated identity)
+Documentation=file:///opt/mssp-control/docs/TIA_INVESTIGATION_STATUS.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=tia-analyst
+Group=tia-analyst
+# Members of tia-runner may connect to the socket; the runner additionally checks
+# the peer uid (SO_PEERCRED) against TIA_RUNNER_ALLOWED_UID.
+SupplementaryGroups=tia-runner
+
+# The provider credential is a root-owned file delivered by systemd. The SOC agent
+# user cannot read it, and it is never in the agent's environment or on any command line.
+LoadCredential=cursor_api_key:/etc/tia-cli-runner/cursor_api_key
+Environment=TIA_RUNNER_SOCKET=/run/tia-cli-runner/runner.sock
+Environment=TIA_RUNNER_SOCKET_GROUP=tia-runner
+Environment=TIA_RUNNER_HOME=/var/lib/tia-cli-runner/home
+Environment=TIA_RUNNER_WORKSPACE=/var/lib/tia-cli-runner/workspace
+Environment=TIA_RUNNER_MAX_PARALLEL=2
+Environment=TIA_CLI_SANDBOX=enabled
+Environment=PATH=/var/lib/tia-cli-runner/home/.local/bin:/usr/local/bin:/usr/bin:/bin
+# TIA_RUNNER_ALLOWED_UID (numeric uid of the soc-agent user) is written by install_runner.sh:
+EnvironmentFile=/etc/tia-cli-runner/runner.env
+ExecStart=/bin/sh -c 'CURSOR_API_KEY="$(cat "$CREDENTIALS_DIRECTORY/cursor_api_key")" exec /usr/bin/python3 /opt/tia-cli-runner/runner/tia_cli_runner.py'
+
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+KillMode=control-group
+
+RuntimeDirectory=tia-cli-runner
+RuntimeDirectoryMode=0755
+StateDirectory=tia-cli-runner
+StateDirectoryMode=0700
+UMask=0077
+
+# --- Sandbox -------------------------------------------------------------
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectProc=invisible
+ProcSubset=pid
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+# MemoryDenyWriteExecute is deliberately NOT set: the CLI is a Node.js program and V8's
+# JIT needs writable+executable memory. Re-evaluate if the CLI changes runtime.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+# Everything that belongs to the SOC agent, the control plane or deployment is invisible.
+InaccessiblePaths=/opt/soc-agent /opt/mssp-control /etc/soc-agent /var/lib/soc-agent /var/log/soc-agent /root /home /srv /mnt /media
+ReadWritePaths=/var/lib/tia-cli-runner /run/tia-cli-runner
+
+# Resource limits: one analysis must not starve the VM or the agent.
+MemoryMax=1536M
+TasksMax=256
+CPUQuota=150%
+
+# Network egress: the CLI must reach only the Cursor API. Prefer an allow-listing HTTPS
+# proxy (set HTTPS_PROXY in runner.env) and pin egress to it:
+#   IPAddressDeny=any
+#   IPAddressAllow=<proxy-ip>/32 127.0.0.1/8
+# Left disabled here because the proxy address is site-specific. See the status doc.
+
+[Install]
+WantedBy=multi-user.target

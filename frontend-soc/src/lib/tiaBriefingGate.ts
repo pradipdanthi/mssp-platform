@@ -4,7 +4,8 @@
  */
 
 const COOLDOWN_MS = 90_000;
-const SPEAK_DEDUP_MS = 75_000;
+/** Only block an instant double-fire of the same line, not a real repeat ask. */
+const SPEAK_DEDUP_MS = 2_500;
 
 let lastBriefingAt = 0;
 let lastSpokenNorm = "";
@@ -30,12 +31,10 @@ export function briefingRecentlySpoken(): boolean {
   return Date.now() - lastBriefingAt < COOLDOWN_MS;
 }
 
-export function markBriefingSpoken(text?: string): void {
+export function markBriefingSpoken(_text?: string): void {
+  // Cooldown only. Do not record the line as already spoken — that skipped
+  // the real playback on the same turn (text on screen, silence).
   lastBriefingAt = Date.now();
-  if (text) {
-    lastSpokenNorm = norm(text);
-    lastSpokenAt = Date.now();
-  }
 }
 
 export function beginBriefingTurn(): boolean {

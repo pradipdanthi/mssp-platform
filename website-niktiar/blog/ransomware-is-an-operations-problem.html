@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ransomware Is an Operations Problem | Kevantic</title>
+  <meta name="description" content="Encryption is the last scene. The earlier problem is a stolen login, an open remote door, and whether you can isolate a host and still read last month’s logs." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://kevantic.com/blog/ransomware-is-an-operations-problem.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Kevantic Cyber Security Solutions" />
+  <meta property="og:title" content="Ransomware Is an Operations Problem | Kevantic" />
+  <meta property="og:description" content="Encryption is the last scene. The earlier problem is a stolen login, an open remote door, and whether you can isolate a host and still read last month’s logs." />
+  <meta property="og:url" content="https://kevantic.com/blog/ransomware-is-an-operations-problem.html" />
+  <meta property="og:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Ransomware Is an Operations Problem | Kevantic" />
+  <meta name="twitter:description" content="Encryption is the last scene. The earlier problem is a stolen login, an open remote door, and whether you can isolate a host and still read last month’s logs." />
+  <meta name="twitter:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <link rel="icon" href="../assets/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../assets/brand/favicon.ico" type="image/x-icon" />
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon-180.png" />
+  <link rel="preload" href="insights.css?v=4" as="style" />
+  <link rel="stylesheet" href="../assets/brand/kevantic-brand.css" />
+  <link rel="stylesheet" href="insights.css?v=4" />
+</head>
+<body class="blog-shell">
+<header class="blog-top">
+  <div class="blog-wrap blog-top-inner" id="blog-top">
+    <a class="blog-brand" href="../index.html" aria-label="Kevantic Cyber Security">
+      <img src="../assets/brand/kevantic-horizontal-ink.svg?v=1.1.1" alt="Kevantic Cyber Security" width="190" height="40" decoding="async" />
+    </a>
+    <button class="blog-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-blog-toggle><span></span><span></span><span></span></button>
+    <ul class="blog-nav">
+      <li><a class="is-active" href="index.html">Blog</a></li>
+      <li><a href="../services.html">Services</a></li>
+      <li><a href="../platform.html">Platform</a></li>
+      <li><a href="../contact.html">Contact</a></li>
+      <li><a class="blog-cta" href="../index.html#demo">Request Demo</a></li>
+    </ul>
+  </div>
+</header>
+
+<main>
+  <section class="blog-hero"><div class="blog-wrap">
+    <nav class="blog-crumbs" aria-label="Breadcrumb"><a href="../index.html">Home</a><span aria-hidden="true">/</span><a href="index.html">Blog</a><span aria-hidden="true">/</span><span>Ransomware is an operations problem</span></nav>
+    <span class="blog-kicker">Active threats</span>
+    <h1>Ransomware is an operations problem</h1>
+    <p class="lede">By the time files are renamed, the group has usually already had a login and time inside.</p>
+  </div></section>
+  <div class="blog-wrap blog-layout">
+    <article class="blog-article">
+      <p class="meta">28 October 2026 · 3 min read · Kevantic Cyber Security</p>
+      <p>Ransomware is discussed as a file problem. The files are the last scene. Before that scene, a group usually has a working login, a remote-access path, and enough quiet time to look around. Manufacturing, energy, and healthcare show up again and again in public reporting because stopping the line, the supply, or the clinic is how the pressure works.</p>
+<h2 id="treat-it-like-the-plant-not-like-a-virus-scan">Treat it like the plant, not like a virus scan</h2>
+<ul><li>Name the systems that would stop the business if they stopped tonight.</li><li>Know whether a person can hold one computer aside, and what proves it actually stopped.</li><li>Know whether last month’s logs still exist on your premises if the file server is the thing encrypted.</li><li>Know whether the backup can be reached by the same stolen account.</li></ul>
+<p>A backup that the intruder can also open is not a backup. A log store that lives only on the machine being encrypted is not a record.</p>
+<h2 id="how-kevantic-shortens-the-blind-time">How Kevantic shortens the blind time</h2>
+<p><a href="../services/security-automation.html">Security Automation and Containment</a> uses NikTiar Apex Orchestrator to isolate a computer, stop a malicious process, or block a known-bad file without waiting on a ticket queue. A computer is marked isolated only after the endpoint confirms it. <a href="../services/log-event-monitoring.html">Log and Event Monitoring</a> keeps that history on the NikTiar Edge Node, so an investigation on Monday can still see last week even if the file server was encrypted. <a href="../services/secure-edge.html">NikTiar SecureEdge</a> adds DNS, web, and ransomware-exposure controls on an edge dedicated to that customer.</p>
+<h2 id="rehearse-the-boring-hour">Rehearse the boring hour</h2>
+<p>The useful rehearsal is not a slide about malware families. It is a timed hour. Pick one important system. Decide who may approve taking it offline. Confirm the backup cannot be opened with the same account that runs the system. Confirm last week’s logs are still readable from the NikTiar Edge Node if the file server is the thing you are worried about. Write down the sentence the director will receive, in plain language, before you need to send it for real.</p>
+<p>Groups return to industries where downtime is expensive: production lines, energy operations, clinics. They do not need a novel technique if remote access is exposed and a valid account still works. That is why this article sits next to identity watching and the edge, not next to a list of file extensions.</p>
+<p>If you want the containment side explained as a service, start with Security Automation. If you want the record of the week to survive the incident, start with Log and Event Monitoring. Most companies that feel this risk need both.</p>
+<aside class="blog-pull"><p>None of this is a promise that ransomware cannot happen. It is a way to shorten the time the business is blind, and the time a live host stays in play.</p></aside>
+<p>The door they often use first is covered in <a href="edge-devices-are-the-front-door.html">why the firewall is the front door</a>.</p>
+      <div class="blog-related">
+        <h2>Keep reading</h2>
+        <div class="blog-grid"><a class="blog-card" href="edge-devices-are-the-front-door.html"><span class="blog-kicker">Active threats</span><h2>Edge devices are the new front door</h2><p>The box with the firewall logo is often the most public computer you own.</p></a><a class="blog-card" href="where-security-logs-should-live.html"><span class="blog-kicker">Foundations</span><h2>Where your security logs should live</h2><p>There is a quiet second bill hiding in many security contracts: the copy of your own logs.</p></a></div>
+      </div>
+    </article>
+    <aside class="blog-aside">
+      <span class="blog-kicker">Related service</span>
+      <h2>Security Automation and Containment</h2>
+      <p>Security Automation isolates a computer, stops a malicious process, or blocks a known-bad file. The computer is marked isolated only after the endpoint confirms it. Last week’s logs stay on the NikTiar Edge Node even if a file server is encrypted.</p>
+      <a class="blog-btn" href="../services/security-automation.html">View this service</a>
+      <a class="soft-link" href="../contact.html">Request a demo</a>
+      <a class="soft-link" href="mailto:sales@kevantic.com">sales@kevantic.com</a>
+    </aside>
+  </div>
+</main>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BlogPosting",
+      "headline": "Ransomware is an operations problem",
+      "description": "Encryption is the last scene. The earlier problem is a stolen login, an open remote door, and whether you can isolate a host and still read last month’s logs.",
+      "datePublished": "2026-10-28",
+      "dateModified": "2026-10-28",
+      "inLanguage": "en",
+      "mainEntityOfPage": "https://kevantic.com/blog/ransomware-is-an-operations-problem.html",
+      "image": "https://kevantic.com/assets/brand/kevantic-og-1200x630.png",
+      "author": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://kevantic.com/assets/brand/kevantic-horizontal-ink.svg?v=1.1.1"
+        }
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://kevantic.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Blog",
+          "item": "https://kevantic.com/blog/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Ransomware is an operations problem",
+          "item": "https://kevantic.com/blog/ransomware-is-an-operations-problem.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+<footer class="blog-foot"><div class="blog-wrap">
+  <p>&copy; 2026 Kevantic Cyber Security Solutions · <a href="../index.html">kevantic.com</a> · <a href="mailto:sales@kevantic.com">sales@kevantic.com</a> · Bengaluru</p>
+</div></footer>
+<script>
+(function(){var t=document.querySelector('[data-blog-toggle]');var n=document.getElementById('blog-top');if(!t||!n)return;t.addEventListener('click',function(){var o=n.classList.toggle('is-open');t.setAttribute('aria-expanded',o?'true':'false');});})();
+</script>
+</body>
+</html>

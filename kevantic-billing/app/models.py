@@ -69,6 +69,7 @@ class CatalogItem(Base):
     # GST rate percent e.g. 18.00
     gst_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("18.00"))
     hsn_sac: Mapped[str | None] = mapped_column(String(16))
+    vendor_name: Mapped[str | None] = mapped_column(String(128))
     min_qty: Mapped[int] = mapped_column(Integer, default=1)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=100)
@@ -92,6 +93,7 @@ class Quote(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     internal_notes: Mapped[str | None] = mapped_column(Text)
     terms_text: Mapped[str | None] = mapped_column(Text)
+    opportunity_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("opportunities.id"))
     opportunity_name: Mapped[str | None] = mapped_column(String(255))
     sales_owner: Mapped[str | None] = mapped_column(String(128))
     requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -132,6 +134,7 @@ class QuoteLine(Base):
     discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     gst_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("18.00"))
     hsn_sac: Mapped[str | None] = mapped_column(String(16))
+    vendor_name: Mapped[str | None] = mapped_column(String(128))
     line_subtotal: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     line_taxable: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     line_tax: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
@@ -148,6 +151,7 @@ class Invoice(Base):
     invoice_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     party_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("parties.id"), nullable=False)
     quote_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("quotes.id"))
+    opportunity_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("opportunities.id"))
     status: Mapped[str] = mapped_column(String(32), default="draft")
     # draft | issued | paid | partially_paid | void | credited
     invoice_type: Mapped[str] = mapped_column(String(32), default="tax_invoice")
@@ -194,6 +198,7 @@ class InvoiceLine(Base):
     discount_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     gst_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("18.00"))
     hsn_sac: Mapped[str | None] = mapped_column(String(16))
+    vendor_name: Mapped[str | None] = mapped_column(String(128))
     line_subtotal: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     line_taxable: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
     line_tax: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
@@ -260,3 +265,142 @@ class CompanyProfile(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+class Contact(Base):
+    """A person at a customer. A company (party) can have several."""
+
+    __tablename__ = "contacts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    party_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("parties.id"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    title: Mapped[str | None] = mapped_column(String(128))
+    email: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(64))
+    is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    party: Mapped[Party] = relationship()
+
+
+class Lead(Base):
+    """First contact, before there is a deal. Source and interest are free text."""
+
+    __tablename__ = "leads"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    lead_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    company_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    contact_name: Mapped[str | None] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(64))
+    contact_title: Mapped[str | None] = mapped_column(String(128))
+    source: Mapped[str | None] = mapped_column(String(128))
+    interest: Mapped[str | None] = mapped_column(Text)
+    estimated_budget: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    status: Mapped[str] = mapped_column(String(32), default="new")
+    # new | contacted | qualified | unqualified | converted
+    salesperson_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("salespeople.id"))
+    owner: Mapped[str | None] = mapped_column(String(128))
+    notes: Mapped[str | None] = mapped_column(Text)
+    party_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("parties.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class Opportunity(Base):
+    """One customer requirement / deal. Quotes and invoices hang off this."""
+
+    __tablename__ = "opportunities"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    opportunity_number: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    party_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("parties.id"), nullable=False)
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contacts.id"))
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("leads.id"))
+    stage: Mapped[str] = mapped_column(String(32), default="prospecting")
+    # prospecting | needs_analysis | proposal | negotiation | closed_won | closed_lost
+    source: Mapped[str | None] = mapped_column(String(128))
+    supplier: Mapped[str | None] = mapped_column(String(128))
+    deal_reg_number: Mapped[str | None] = mapped_column(String(128))
+    salesperson_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("salespeople.id"))
+    owner: Mapped[str | None] = mapped_column(String(128))
+    requirement: Mapped[str | None] = mapped_column(Text)
+    amount_expected: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    currency: Mapped[str] = mapped_column(String(8), default="INR")
+    close_date: Mapped[date | None] = mapped_column(Date)
+    probability: Mapped[int] = mapped_column(Integer, default=10)
+    next_step: Mapped[str | None] = mapped_column(String(255))
+    lost_reason: Mapped[str | None] = mapped_column(Text)
+    customer_po: Mapped[str | None] = mapped_column(String(128))
+    supplier_order_ref: Mapped[str | None] = mapped_column(String(128))
+    fulfillment_status: Mapped[str] = mapped_column(String(32), default="none")
+    # none | customer_po | ordered_from_supplier | delivered | invoiced | collected
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    party: Mapped[Party] = relationship()
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("leads.id"))
+    opportunity_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("opportunities.id"))
+    party_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("parties.id"))
+    contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contacts.id"))
+    kind: Mapped[str] = mapped_column(String(32), default="note")
+    # note | call | email | meeting | task
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    due_on: Mapped[date | None] = mapped_column(Date)
+    done: Mapped[bool] = mapped_column(Boolean, default=False)
+    owner: Mapped[str | None] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Salesperson(Base):
+    """Someone on our sales team. A lead or a deal is assigned to one of them."""
+
+    __tablename__ = "salespeople"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    # bdc | bde | manager
+    email: Mapped[str | None] = mapped_column(String(255))
+    phone: Mapped[str | None] = mapped_column(String(64))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class SupplierPrice(Base):
+    """A price our sales person took from an OEM or a distributor for one requirement."""
+
+    __tablename__ = "supplier_prices"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=_uuid)
+    opportunity_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("opportunities.id"), nullable=False)
+    supplier_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    supplier_kind: Mapped[str] = mapped_column(String(32), default="oem")
+    # oem | distributor
+    item_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sku: Mapped[str | None] = mapped_column(String(64))
+    quantity: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("1"))
+    unit_cost: Mapped[Decimal] = mapped_column(Numeric(14, 2), default=Decimal("0"))
+    sell_unit_price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    gst_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("18.00"))
+    quote_ref: Mapped[str | None] = mapped_column(String(128))
+    valid_until: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(32), default="requested")
+    # requested | received | chosen | declined
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

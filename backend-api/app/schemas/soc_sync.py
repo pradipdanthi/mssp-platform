@@ -42,3 +42,5 @@ class SocSyncResponse(BaseModel):
     customer_visible: bool
     status: str
     message: str
+    merged: bool = False
+    occurrence_count: Optional[int] = None

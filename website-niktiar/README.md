@@ -36,6 +36,7 @@ Set customer portal URL in `js/site-config.js` (`portal.kevantic.com` or `/porta
 | `solutions.html` | Audience solutions |
 | `about.html` | Brand + company story |
 | `contact.html` | Demo form |
+| `blog/` | Security insights (hub + service-aligned articles) |
 | `privacy.html` / `terms.html` | Placeholders |
 | `css/styles.css` | Design system |
 | `js/site-config.js` | Portal URL |

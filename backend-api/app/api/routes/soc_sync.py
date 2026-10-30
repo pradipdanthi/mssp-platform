@@ -6,6 +6,7 @@ import hmac
 import json
 import logging
 import os
+import re
 import threading
 import urllib.request
 from pathlib import Path
@@ -279,6 +280,40 @@ def is_known_noise_file_drop(raw: Dict[str, Any]) -> bool:
     return "__psscriptpolicytest_" in blob
 
 
+_VD_GROUPS = frozenset(
+    {
+        "vulnerability-detector",
+        "vulnerability-detection",
+        "vulnerability_detector",
+    }
+)
+_VD_TITLE = re.compile(r"^CVE-\d{4}-\d+\s+affects\s+", re.I)
+
+
+def is_vulnerability_inventory_alert(raw: Dict[str, Any]) -> bool:
+    """Wazuh vulnerability-detector emits one alert per CVE.
+
+    Those rows are inventory findings (unpatched Evaluation SKUs produce
+    hundreds at once). They are not SOC detections and must not open
+    incidents or fill the analyst queue.
+    """
+    rule = raw.get("rule") if isinstance(raw.get("rule"), dict) else {}
+    groups = rule.get("groups") or []
+    if isinstance(groups, str):
+        groups = [groups]
+    gset = {str(g).strip().lower() for g in groups if str(g).strip()}
+    if gset & _VD_GROUPS:
+        return True
+    try:
+        rid = int(str(rule.get("id") or "0"))
+    except (TypeError, ValueError):
+        rid = 0
+    if 23500 <= rid <= 23599:
+        return True
+    title = str(rule.get("description") or raw.get("title") or "").strip()
+    return bool(_VD_TITLE.match(title))
+
+
 def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
     from app.services.tenant_engine_provisioner import resolve_short_code_by_wazuh_group
 
@@ -412,6 +447,7 @@ def _normalize_wazuh_alert(raw: Dict[str, Any]) -> SocSyncRequest:
         source_user=source_user,
         wazuh_agent_id=agent_id,
         technical_summary=_build_wazuh_technical_summary(raw),
+        rule_id=str(rule.get("id") or "")[:64] or None,
         tenant_short_code=tenant_code,
         create_incident=create_incident,
         customer_visible_summary=f"SOC is reviewing: {title}"[:4000],
@@ -471,8 +507,12 @@ def sync_from_soc(
         "duplicate": duplicate,
         "customer_visible": result["customer_visible"],
         "status": result["status"],
+        "merged": bool(result.get("merged")),
+        "occurrence_count": result.get("occurrence_count"),
         "message": (
-            "Alert already synced"
+            "Identical detection merged into the open alert; SLA first-seen was not reset"
+            if result.get("merged")
+            else "Alert already synced"
             if duplicate
             else "Alert synced for SOC triage"
         ),
@@ -499,6 +539,23 @@ async def wazuh_instant_ingress(token: str, request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid alert payload")
 
     raw = unwrap_wazuh_ingress_payload(raw)
+
+    if is_vulnerability_inventory_alert(raw):
+        rule = raw.get("rule") if isinstance(raw.get("rule"), dict) else {}
+        logger.info(
+            "Wazuh ingress: skipping vulnerability-detector inventory alert rule=%s",
+            rule.get("id"),
+        )
+        return {
+            "success": True,
+            "duplicate": False,
+            "skipped": True,
+            "reason": "vulnerability_inventory",
+            "alert_id": None,
+            "incident_number": None,
+            "forwarded_to_shuffle": False,
+            "message": "Vulnerability inventory is not a SOC detection",
+        }
 
     try:
         payload = _normalize_wazuh_alert(raw)
@@ -530,13 +587,22 @@ async def wazuh_instant_ingress(token: str, request: Request) -> Dict[str, Any]:
             detail="Ingress failed due to an internal error",
         )
 
-    threading.Thread(target=_forward_to_shuffle, args=(raw_body,), daemon=True).start()
+    forwarded = False
+    if not result.get("merged"):
+        threading.Thread(target=_forward_to_shuffle, args=(raw_body,), daemon=True).start()
+        forwarded = bool(_shuffle_webhook_url())
 
     return {
         "success": True,
         "duplicate": duplicate,
+        "merged": bool(result.get("merged")),
+        "occurrence_count": result.get("occurrence_count"),
         "alert_id": result["alert_id"],
         "incident_number": result.get("incident_number"),
-        "forwarded_to_shuffle": bool(_shuffle_webhook_url()),
-        "message": "Alert ingested instantly for SOC dashboards",
+        "forwarded_to_shuffle": forwarded,
+        "message": (
+            "Identical detection merged into the open alert; SLA first-seen was not reset"
+            if result.get("merged")
+            else "Alert ingested instantly for SOC dashboards"
+        ),
     }

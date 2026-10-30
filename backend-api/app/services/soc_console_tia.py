@@ -323,21 +323,85 @@ def apply_tia_actions(
     *,
     actor_user_id: Optional[str],
     actor_email: str,
+    tenant_id: Optional[str] = None,
+    execution_source: str = "recommend_only",
 ) -> List[Dict[str, Any]]:
-    """Execute allowed ticket updates. Returns per-action results."""
+    """Execute ticket updates that policy allows. Returns per-action results.
+
+    Default execution_source is recommend_only, which writes nothing.
+    model_auto cannot close tickets (shadow mode). analyst_approval and
+    analyst_api can change ticket status. Disruptive actions never run here.
+    """
+    from app.services.tia_closure_policy import authorize_ticket_action, sanitize_model_action
+
     results: List[Dict[str, Any]] = []
-    for action in actions:
+    for raw in actions:
+        action = sanitize_model_action(raw if isinstance(raw, dict) else {})
         atype = str(action.get("type") or "").strip().lower()
+        decision = authorize_ticket_action(
+            action,
+            tenant_id=tenant_id,
+            execution_source=execution_source,
+        )
+        if not decision.allow:
+            results.append(
+                {
+                    "ok": False,
+                    "type": atype,
+                    "error": decision.reason,
+                    "policy_version": decision.policy_version,
+                    "disposition": decision.disposition,
+                }
+            )
+            continue
+        scope_tenant = (tenant_id or "").strip() or None
+        if execution_source == "model_auto":
+            scoped = resolve_action_scope(action)
+            if scoped.get("_scope_error"):
+                results.append(
+                    {
+                        "ok": False,
+                        "type": atype,
+                        "error": scoped["_scope_error"],
+                        "policy_version": decision.policy_version,
+                    }
+                )
+                continue
+            row_tenant = str(scoped.get("_tenant_id") or "")
+            if scope_tenant and row_tenant and row_tenant != scope_tenant:
+                results.append(
+                    {
+                        "ok": False,
+                        "type": atype,
+                        "error": "tenant_mismatch",
+                        "policy_version": decision.policy_version,
+                    }
+                )
+                continue
+            scope_tenant = row_tenant or scope_tenant
+            action = scoped
         try:
             if atype == "update_alert":
-                results.append(_update_alert(action, actor_email=actor_email))
+                results.append(
+                    _update_alert(action, actor_email=actor_email, tenant_id=scope_tenant)
+                )
             elif atype == "update_incident":
                 results.append(
-                    _update_incident(action, actor_user_id=actor_user_id, actor_email=actor_email)
+                    _update_incident(
+                        action,
+                        actor_user_id=actor_user_id,
+                        actor_email=actor_email,
+                        tenant_id=scope_tenant,
+                    )
                 )
             elif atype == "comment_incident":
                 results.append(
-                    _comment_incident(action, actor_user_id=actor_user_id, actor_email=actor_email)
+                    _comment_incident(
+                        action,
+                        actor_user_id=actor_user_id,
+                        actor_email=actor_email,
+                        tenant_id=scope_tenant,
+                    )
                 )
             else:
                 results.append({"ok": False, "type": atype, "error": "unsupported_action"})
@@ -347,11 +411,52 @@ def apply_tia_actions(
     return results
 
 
+def resolve_action_scope(action: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach the ticket's real tenant. Ignore any tenant the model supplied."""
+    scoped = dict(action)
+    atype = str(scoped.get("type") or "").strip().lower()
+    if atype == "update_alert":
+        alert_id = str(scoped.get("alert_id") or "").strip()
+        try:
+            UUID(alert_id)
+        except ValueError:
+            scoped["_scope_error"] = "invalid_alert_id"
+            return scoped
+        row = fetch_one(
+            "SELECT tenant_id::text AS tenant_id FROM security_alerts WHERE id = %s::uuid",
+            (alert_id,),
+        )
+        if not row:
+            scoped["_scope_error"] = "not_found"
+            return scoped
+        scoped["_tenant_id"] = str(row.get("tenant_id") or "")
+        return scoped
+    if atype in {"update_incident", "comment_incident"}:
+        incident_id = str(scoped.get("incident_id") or "").strip()
+        try:
+            UUID(incident_id)
+        except ValueError:
+            scoped["_scope_error"] = "invalid_incident_id"
+            return scoped
+        row = fetch_one(
+            "SELECT tenant_id::text AS tenant_id FROM incidents WHERE id = %s::uuid",
+            (incident_id,),
+        )
+        if not row:
+            scoped["_scope_error"] = "not_found"
+            return scoped
+        scoped["_tenant_id"] = str(row.get("tenant_id") or "")
+        return scoped
+    return scoped
+
+
 _ALERT_STATUSES = {"new", "triaged", "incident_created", "false_positive", "closed"}
 _INC_STATUSES = {"open", "in_progress", "waiting_customer", "resolved", "closed"}
 
 
-def _update_alert(action: Dict[str, Any], *, actor_email: str) -> Dict[str, Any]:
+def _update_alert(
+    action: Dict[str, Any], *, actor_email: str, tenant_id: Optional[str] = None
+) -> Dict[str, Any]:
     alert_id = str(action.get("alert_id") or "").strip()
     status_v = str(action.get("status") or "").strip().lower()
     note = str(action.get("note") or "")[:500]
@@ -363,18 +468,33 @@ def _update_alert(action: Dict[str, Any], *, actor_email: str) -> Dict[str, Any]
         return {"ok": False, "type": "update_alert", "error": "invalid_alert_id"}
 
     hide = status_v == "false_positive"
-    row = fetch_one_write(
-        """
-        UPDATE security_alerts
-        SET status = %s,
-            customer_visible = CASE WHEN %s THEN false ELSE customer_visible END,
-            ai_triage_status = coalesce(ai_triage_status, 'tia_updated'),
-            updated_at = now()
-        WHERE id = %s::uuid
-        RETURNING id::text, alert_title, status;
-        """,
-        (status_v, hide, alert_id),
-    )
+    if tenant_id:
+        row = fetch_one_write(
+            """
+            UPDATE security_alerts
+            SET status = %s,
+                customer_visible = CASE WHEN %s THEN false ELSE customer_visible END,
+                ai_triage_status = coalesce(ai_triage_status, 'tia_updated'),
+                updated_at = now()
+            WHERE id = %s::uuid
+              AND tenant_id = %s::uuid
+            RETURNING id::text, alert_title, status;
+            """,
+            (status_v, hide, alert_id, tenant_id),
+        )
+    else:
+        row = fetch_one_write(
+            """
+            UPDATE security_alerts
+            SET status = %s,
+                customer_visible = CASE WHEN %s THEN false ELSE customer_visible END,
+                ai_triage_status = coalesce(ai_triage_status, 'tia_updated'),
+                updated_at = now()
+            WHERE id = %s::uuid
+            RETURNING id::text, alert_title, status;
+            """,
+            (status_v, hide, alert_id),
+        )
     if not row:
         return {"ok": False, "type": "update_alert", "error": "not_found"}
     _audit(actor_email, "tia.update_alert", "security_alert", alert_id, {"status": status_v, "note": note})
@@ -382,7 +502,11 @@ def _update_alert(action: Dict[str, Any], *, actor_email: str) -> Dict[str, Any]
 
 
 def _update_incident(
-    action: Dict[str, Any], *, actor_user_id: Optional[str], actor_email: str
+    action: Dict[str, Any],
+    *,
+    actor_user_id: Optional[str],
+    actor_email: str,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     incident_id = str(action.get("incident_id") or "").strip()
     status_v = str(action.get("status") or "").strip().lower()
@@ -394,15 +518,27 @@ def _update_incident(
     except ValueError:
         return {"ok": False, "type": "update_incident", "error": "invalid_incident_id"}
 
-    row = fetch_one_write(
-        """
-        UPDATE incidents
-        SET status = %s, updated_at = now()
-        WHERE id = %s::uuid
-        RETURNING id::text, incident_number, status, title;
-        """,
-        (status_v, incident_id),
-    )
+    if tenant_id:
+        row = fetch_one_write(
+            """
+            UPDATE incidents
+            SET status = %s, updated_at = now()
+            WHERE id = %s::uuid
+              AND tenant_id = %s::uuid
+            RETURNING id::text, incident_number, status, title;
+            """,
+            (status_v, incident_id, tenant_id),
+        )
+    else:
+        row = fetch_one_write(
+            """
+            UPDATE incidents
+            SET status = %s, updated_at = now()
+            WHERE id = %s::uuid
+            RETURNING id::text, incident_number, status, title;
+            """,
+            (status_v, incident_id),
+        )
     if not row:
         return {"ok": False, "type": "update_incident", "error": "not_found"}
     if note:
@@ -410,13 +546,18 @@ def _update_incident(
             {"incident_id": incident_id, "note": note},
             actor_user_id=actor_user_id,
             actor_email=actor_email,
+            tenant_id=tenant_id,
         )
     _audit(actor_email, "tia.update_incident", "incident", incident_id, {"status": status_v})
     return {"ok": True, "type": "update_incident", "incident": row}
 
 
 def _comment_incident(
-    action: Dict[str, Any], *, actor_user_id: Optional[str], actor_email: str
+    action: Dict[str, Any],
+    *,
+    actor_user_id: Optional[str],
+    actor_email: str,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     incident_id = str(action.get("incident_id") or "").strip()
     note = str(action.get("note") or "").strip()
@@ -427,7 +568,13 @@ def _comment_incident(
     except ValueError:
         return {"ok": False, "type": "comment_incident", "error": "invalid_incident_id"}
 
-    exists = fetch_one("SELECT id::text FROM incidents WHERE id = %s::uuid", (incident_id,))
+    if tenant_id:
+        exists = fetch_one(
+            "SELECT id::text FROM incidents WHERE id = %s::uuid AND tenant_id = %s::uuid",
+            (incident_id, tenant_id),
+        )
+    else:
+        exists = fetch_one("SELECT id::text FROM incidents WHERE id = %s::uuid", (incident_id,))
     if not exists:
         return {"ok": False, "type": "comment_incident", "error": "not_found"}
 

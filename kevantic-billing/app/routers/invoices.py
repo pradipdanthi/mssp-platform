@@ -209,6 +209,7 @@ def invoice_pdf(
         lines=[
             {
                 "sku": ln.sku,
+                "vendor_name": ln.vendor_name,
                 "description": ln.description,
                 "hsn_sac": ln.hsn_sac,
                 "quantity": ln.quantity,

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Stolen Logins That Look Like Normal Work | Kevantic</title>
+  <meta name="description" content="Why a correct password and an approved MFA prompt can still be an intrusion, and how Kevantic identity protection watches what happens after sign-in." />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
+  <link rel="canonical" href="https://kevantic.com/blog/stolen-logins-look-like-normal-work.html" />
+  <meta property="og:type" content="article" />
+  <meta property="og:site_name" content="Kevantic Cyber Security Solutions" />
+  <meta property="og:title" content="Stolen Logins That Look Like Normal Work | Kevantic" />
+  <meta property="og:description" content="Why a correct password and an approved MFA prompt can still be an intrusion, and how Kevantic identity protection watches what happens after sign-in." />
+  <meta property="og:url" content="https://kevantic.com/blog/stolen-logins-look-like-normal-work.html" />
+  <meta property="og:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Stolen Logins That Look Like Normal Work | Kevantic" />
+  <meta name="twitter:description" content="Why a correct password and an approved MFA prompt can still be an intrusion, and how Kevantic identity protection watches what happens after sign-in." />
+  <meta name="twitter:image" content="https://kevantic.com/assets/brand/kevantic-og-1200x630.png" />
+  <link rel="icon" href="../assets/brand/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="../assets/brand/favicon.ico" type="image/x-icon" />
+  <link rel="apple-touch-icon" href="../assets/brand/apple-touch-icon-180.png" />
+  <link rel="preload" href="insights.css?v=4" as="style" />
+  <link rel="stylesheet" href="../assets/brand/kevantic-brand.css" />
+  <link rel="stylesheet" href="insights.css?v=4" />
+</head>
+<body class="blog-shell">
+<header class="blog-top">
+  <div class="blog-wrap blog-top-inner" id="blog-top">
+    <a class="blog-brand" href="../index.html" aria-label="Kevantic Cyber Security">
+      <img src="../assets/brand/kevantic-horizontal-ink.svg?v=1.1.1" alt="Kevantic Cyber Security" width="190" height="40" decoding="async" />
+    </a>
+    <button class="blog-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-blog-toggle><span></span><span></span><span></span></button>
+    <ul class="blog-nav">
+      <li><a class="is-active" href="index.html">Blog</a></li>
+      <li><a href="../services.html">Services</a></li>
+      <li><a href="../platform.html">Platform</a></li>
+      <li><a href="../contact.html">Contact</a></li>
+      <li><a class="blog-cta" href="../index.html#demo">Request Demo</a></li>
+    </ul>
+  </div>
+</header>
+
+<main>
+  <section class="blog-hero"><div class="blog-wrap">
+    <nav class="blog-crumbs" aria-label="Breadcrumb"><a href="../index.html">Home</a><span aria-hidden="true">/</span><a href="index.html">Blog</a><span aria-hidden="true">/</span><span>Stolen logins that look like normal work</span></nav>
+    <span class="blog-kicker">Active threats</span>
+    <h1>Stolen logins that look like normal work</h1>
+    <p class="lede">The password was correct. The prompt was approved. That is often how the intrusion begins.</p>
+  </div></section>
+  <div class="blog-wrap blog-layout">
+    <article class="blog-article">
+      <p class="meta">28 October 2026 · 3 min read · Kevantic Cyber Security</p>
+      <p>The password was correct. The sign-in prompt was approved. The person was at their desk. That is the shape of a large share of intrusions now, and it is why an alert that only says “login succeeded” tells you almost nothing.</p>
+<p>Microsoft’s 2026 Digital Defense Report, covering July 2025 through June 2026, put phishing at 23 percent of observed intrusions, up from 7 percent the year before. Of the intrusions that already had a valid account, 52 percent went on to steal more credentials. The pattern is a quiet chain. Someone borrows a real session, then uses it to collect the next one.</p>
+<h2 id="who-feels-this-first">Who feels this first</h2>
+<p>Finance teams feel it when an invoice thread grows a new rule that hides the vendor’s mail. Clinics feel it when a mailbox can reach scheduling and records. Factories feel it when a shared account can reach both email and the remote gateway into the plant. Anyone whose email approves money is in this group.</p>
+<h2 id="what-good-watching-looks-like">What good watching looks like</h2>
+<ul><li>A sign-in from two places that a person cannot physically be in at once.</li><li>A burst of approval prompts until someone, tired, taps yes.</li><li>A new mail rule, a new forwarding address, or a new app the user does not remember allowing.</li><li>The same account touching systems it has never touched, in the hour after a normal morning login.</li></ul>
+<p>None of those require a wrong password. All of them are behaviour after a sign-in that looked fine.</p>
+<h2 id="how-kevantic-handles-it">How Kevantic handles it</h2>
+<p><a href="../services/cloud-identity-protection.html">Cloud and Identity Protection</a> watches Microsoft Entra ID and Active Directory for what happens after a sign-in that looked fine: a login from two places one person cannot be, a burst of approval prompts, a new mailbox rule, or an account touching systems it has never used. The 24/7 Cloud SOC opens a case and writes a summary a director can read. Where the subscription includes containment, a computer is marked isolated only after the endpoint confirms the isolation took effect. The raw sign-in record stays on the NikTiar Edge Node in your environment.</p>
+<aside class="blog-pull"><p>Ask your current watcher one question: if the password is right, what do you still look for in the next hour? If the answer is “nothing,” the account is unguarded the moment it is stolen.</p></aside>
+<p>The same chain, from the email itself, is in <a href="after-a-phishing-click.html">what actually happens after a phishing click</a>.</p>
+      <div class="blog-related">
+        <h2>Keep reading</h2>
+        <div class="blog-grid"><a class="blog-card" href="after-a-phishing-click.html"><span class="blog-kicker">Active threats</span><h2>What actually happens after a phishing click</h2><p>Training posters talk about the click. The loss usually happens in the hour after it.</p></a><a class="blog-card" href="how-to-choose-a-managed-security-provider.html"><span class="blog-kicker">Choosing a provider</span><h2>How to choose a managed security provider</h2><p>A feature grid hides the five answers that decide whether the service will hold.</p></a></div>
+      </div>
+    </article>
+    <aside class="blog-aside">
+      <span class="blog-kicker">Related service</span>
+      <h2>Cloud and Identity Protection</h2>
+      <p>Cloud and Identity Protection watches Microsoft Entra ID and Active Directory after a sign-in looks successful: impossible travel, repeated approval prompts, new mailbox rules, and access the account has never used. The Cloud SOC opens the case.</p>
+      <a class="blog-btn" href="../services/cloud-identity-protection.html">View this service</a>
+      <a class="soft-link" href="../contact.html">Request a demo</a>
+      <a class="soft-link" href="mailto:sales@kevantic.com">sales@kevantic.com</a>
+    </aside>
+  </div>
+</main>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BlogPosting",
+      "headline": "Stolen logins that look like normal work",
+      "description": "Why a correct password and an approved MFA prompt can still be an intrusion, and how Kevantic identity protection watches what happens after sign-in.",
+      "datePublished": "2026-10-28",
+      "dateModified": "2026-10-28",
+      "inLanguage": "en",
+      "mainEntityOfPage": "https://kevantic.com/blog/stolen-logins-look-like-normal-work.html",
+      "image": "https://kevantic.com/assets/brand/kevantic-og-1200x630.png",
+      "author": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "Kevantic Cyber Security Solutions",
+        "url": "https://kevantic.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://kevantic.com/assets/brand/kevantic-horizontal-ink.svg?v=1.1.1"
+        }
+      }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Home",
+          "item": "https://kevantic.com/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Blog",
+          "item": "https://kevantic.com/blog/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Stolen logins that look like normal work",
+          "item": "https://kevantic.com/blog/stolen-logins-look-like-normal-work.html"
+        }
+      ]
+    }
+  ]
+}
+</script>
+<footer class="blog-foot"><div class="blog-wrap">
+  <p>&copy; 2026 Kevantic Cyber Security Solutions · <a href="../index.html">kevantic.com</a> · <a href="mailto:sales@kevantic.com">sales@kevantic.com</a> · Bengaluru</p>
+</div></footer>
+<script>
+(function(){var t=document.querySelector('[data-blog-toggle]');var n=document.getElementById('blog-top');if(!t||!n)return;t.addEventListener('click',function(){var o=n.classList.toggle('is-open');t.setAttribute('aria-expanded',o?'true':'false');});})();
+</script>
+</body>
+</html>

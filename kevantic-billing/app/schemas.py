@@ -43,6 +43,7 @@ class CatalogItemOut(BaseModel):
     currency: str
     gst_rate: Decimal
     hsn_sac: str | None
+    vendor_name: str | None = None
     min_qty: int
     active: bool
     sort_order: int
@@ -54,9 +55,24 @@ class CatalogItemUpdate(BaseModel):
     list_price: Decimal | None = None
     name: str | None = None
     description: str | None = None
+    vendor_name: str | None = None
     active: bool | None = None
     gst_rate: Decimal | None = None
     min_qty: int | None = None
+
+
+class CatalogItemIn(BaseModel):
+    sku: str = Field(min_length=1, max_length=64)
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    vendor_name: str | None = None
+    product_family: str = "resale"
+    billing_model: str = "one_time"
+    unit_label: str = "unit"
+    list_price: Decimal
+    gst_rate: Decimal = Decimal("18.00")
+    hsn_sac: str | None = None
+    min_qty: int = 1
 
 
 class QuoteLineIn(BaseModel):
@@ -68,6 +84,7 @@ class QuoteLineIn(BaseModel):
     discount_percent: Decimal = Decimal("0")
     gst_rate: Decimal | None = None
     hsn_sac: str | None = None
+    vendor_name: str | None = None
     billing_model: str | None = None
 
 
@@ -81,6 +98,7 @@ class QuoteCreate(BaseModel):
     terms_text: str | None = None
     opportunity_name: str | None = None
     sales_owner: str | None = None
+    opportunity_id: UUID | None = None
     tax_mode: str = "auto"
     status: str = "draft"
 
@@ -94,6 +112,7 @@ class QuoteLineOut(BaseModel):
     discount_percent: Decimal
     gst_rate: Decimal
     hsn_sac: str | None
+    vendor_name: str | None = None
     line_subtotal: Decimal
     line_taxable: Decimal
     line_tax: Decimal
@@ -116,6 +135,7 @@ class QuoteOut(BaseModel):
     internal_notes: str | None = None
     terms_text: str | None = None
     opportunity_name: str | None = None
+    opportunity_id: UUID | None = None
     sales_owner: str | None = None
     requires_approval: bool = False
     approved_by: str | None = None
@@ -144,6 +164,7 @@ class InvoiceLineOut(BaseModel):
     discount_percent: Decimal
     gst_rate: Decimal
     hsn_sac: str | None
+    vendor_name: str | None = None
     line_subtotal: Decimal
     line_taxable: Decimal
     line_tax: Decimal

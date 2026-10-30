@@ -1,0 +1,47 @@
+[CRITICAL] Credential dumping tool run on HOST-A1 on HOST-A1 (E2EA)
+
+Confirmed (from the stored record):
+- critical alert from wazuh at 2026-10-30 12:44:05.108408: Credential dumping tool run on HOST-A1
+- affected host: HOST-A1
+- user: E2EA\svc-backup
+- parent process: C:\Windows\System32\cmd.exe
+- parent command line: rundll32.exe C:\Windows\System32\comsvcs.dll MiniDump 624 C:\Temp\l.dmp full
+
+Supported hypotheses (unverified):
+- TIA model assessment (MALICIOUS, confidence 72%): The raw_event section shows a comsvcs.dll MiniDump invocation writing C:\Temp\l.dmp under user E2EA\svc-backup on HOST-A1, which matches a classic LSASS memory dump pattern and supports a Critical call. Correlations are empty (no related alerts in 24 hours) and asset inventory has no record for HOST-A1, so blast-radius and asset criticality cannot be confirmed from the dossier. Identity shows only this one alert/host for the account in 7 days, and raw_event explicitly marks the alert as synthetic with many process/hash/network fields missing, which caps confidence and leaves key attribution gaps. (a model view, not a finding)
+- Proposed cause, unverified: Hypothesis only: a process under E2EA\svc-backup on HOST-A1 invoked rundll32 with comsvcs.dll MiniDump (PID 624 → C:\Temp\l.dmp), consistent with intentional LSASS credential dumping; whether this is malicious abuse, misuse of a backup account, or purely synthetic E2E noise cannot be proven from the dossier alone.
+
+Unresolved: Scope and entry point still need analyst confirmation.
+
+What TIA checked:
+- asset: checked, nothing found (the host is not in the asset inventory)
+- identity: 1 item(s) from security_alerts+identity
+- research: checked, nothing found (no external research was run for this alert)
+- runbooks: checked, nothing found (tia_runbooks)
+- raw event: 4 item(s) from security_alerts
+- prior cases: checked, nothing found (no human-reviewed cases of this detection in 90 days)
+- correlations: checked, nothing found (no related alerts within 24 hours on same host, same user)
+
+Gaps:
+- asset: missing asset record
+- identity: missing identity provider events (no identity integration for this customer)
+- identity: missing directory role and group membership (no directory adapter)
+- runbooks: missing approved runbook for this detection
+- raw event: missing working directory
+- raw event: missing integrity level
+- raw event: missing process id
+- raw event: missing parent process id
+- raw event: missing user SID
+- raw event: missing logon id
+- raw event: missing SHA-256
+- raw event: missing MD5
+- raw event: missing source address
+- raw event: missing destination address
+- prior cases: missing reviewed precedent
+- correlations: missing same asset
+- correlations: missing same source address
+- correlations: missing same file hash
+
+Investigation: Investigation finished; disposition malicious.
+Next step: Analyst review now. Any containment needs human approval in Needs You.
+Record: attempt 2 (2ecf1067-fee2-42dd-9e8f-c0256c2193be), evidence version 1953c7e38e83ca99e1c47deee96ea7f6, dossier 92da8394a734, policy tia-closure-1.

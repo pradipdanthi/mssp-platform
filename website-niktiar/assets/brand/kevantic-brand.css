@@ -1,13 +1,16 @@
-/* Kevantic Cyber Security — Brand Tokens v1.0
-   Keep these values synchronized across Public, Admin, and Customer applications. */
+/* Kevantic Cyber Security — Brand Tokens v1.1 (light marketing)
+   Keep synchronized across Public, Admin, and Customer applications. */
 
 :root {
-  --kevantic-midnight-obsidian: #0B1120;
+  --kevantic-midnight-obsidian: #0A1628; /* footer / rare dark only */
+  --kevantic-paper: #FFFFFF;
+  --kevantic-mist: #F2F7FA;
+  --kevantic-ink: #0C2438;
   --kevantic-cosmic-platinum: #E2E8F0;
-  --kevantic-steel-cyber-blue: #1E293B;
-  --kevantic-network-blue: #06B6D4;
-  --kevantic-display-cyber-blue: #22D3EE;
-  --kevantic-status-emerald: #10B981;
+  --kevantic-steel-cyber-blue: #E7F0F5;
+  --kevantic-network-blue: #0E7490;
+  --kevantic-display-cyber-blue: #0891B2;
+  --kevantic-status-emerald: #059669;
 }
 
 .kevantic-brand-logo {
@@ -29,4 +32,9 @@
   .kevantic-brand-logo {
     width: clamp(145px, 42vw, 180px);
   }
+}
+
+/* Dark-stroke mark/logo readability on white header */
+.site-header .kevantic-brand-mark {
+  filter: brightness(0.42) saturate(1.15);
 }

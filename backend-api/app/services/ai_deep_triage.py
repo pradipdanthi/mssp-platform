@@ -13,16 +13,23 @@ Design rules:
     severe, escalate rather than stay silent.
   - Never auto-execute containment. This stage raises people; it does not act.
     Containment remains human-approved via the existing EDR paths.
-  - Idempotent per alert. One escalation per alert unless it is re-opened.
+  - Every result, from the HTTP reply or the callback, goes through ONE function,
+    tia_acceptance.accept_result, which records it, applies the review/escalation
+    policy and queues notifications in a single transaction.
 """
 
 from __future__ import annotations
 
+import json
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from app.db.session import fetch_one, fetch_one_write
+from app.db.session import fetch_one
+from app.services import tia_acceptance as acc
+from app.services import tia_investigation as tia
+from app.services import tia_outbox
+from app.services import tia_schema
 from app.services.ai_tier1_triage import run_tier1_triage
 from app.services.soc_alert_taxonomy import enrich_alert_row
 
@@ -180,75 +187,28 @@ def decide_escalation(
     alert: Dict[str, Any],
     triage: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Decide whether this alert wakes a human, using fixed rules only.
+    """Decide whether this alert needs a person, and whether to wake one.
 
-    Returns {"escalate": bool, "urgency": str, "reasons": [str], ...}.
+    Fixed rules only (tia_investigation.decide_review). Degradation is read from
+    the explicit ``execution_status`` on the triage, never from the model name; a
+    triage without one is treated as degraded (fail toward the human).
+
+    Returns {"escalate": bool, "review_required": bool, "urgency": str,
+    "reasons": [str], ...}. ``escalate`` means page; ``review_required`` means a
+    durable analyst review item.
     """
-    verdict = str(triage.get("verdict") or "").strip().upper()
-    action = str(triage.get("recommended_action") or "").strip().upper()
-    try:
-        confidence = float(triage.get("confidence") or 0.0)
-    except (TypeError, ValueError):
-        confidence = 0.0
-
-    severity = (alert.get("severity") or "").strip().lower()
-    severity_rank = _SEVERITY_RANKS.get(severity, 0)
-    asset_tier = (alert.get("asset_criticality") or "").strip().lower()
-    model = str(triage.get("model") or "")
-    degraded = "fallback" in model
-
-    reasons: List[str] = []
-    escalate = False
-    urgency = "normal"
-
-    if verdict == "MALICIOUS" and confidence >= _escalate_confidence_floor():
-        escalate = True
-        urgency = "high"
-        reasons.append(f"AI verdict MALICIOUS at {confidence:.0f}% confidence")
-
-    if action == "ISOLATE_AGENT":
-        escalate = True
-        urgency = "high"
-        reasons.append("AI recommends host isolation — needs human approval")
-
-    if verdict == "SUSPICIOUS" and severity_rank >= _SEVERITY_RANKS["critical"]:
-        escalate = True
-        reasons.append("Suspicious verdict on a critical-severity alert")
-
-    if escalate and asset_tier in _CRITICAL_ASSET_TIERS:
-        urgency = "high"
-        reasons.append(f"Asset criticality is {asset_tier}")
-
-    # Fail toward the human: if the model could not judge and the alert is
-    # severe, a person decides rather than nobody.
-    if degraded and severity_rank >= _SEVERITY_RANKS["critical"]:
-        escalate = True
-        urgency = "high"
-        reasons.append("AI degraded (model unavailable) on a critical alert")
-
-    if verdict == "BENIGN_FALSE_POSITIVE" and not degraded and action != "ISOLATE_AGENT":
-        silence_floor = _benign_silence_confidence()
-        if severity_rank >= _SEVERITY_RANKS["critical"] and confidence < silence_floor:
-            escalate = True
-            urgency = "normal"
-            reasons = [
-                f"AI leans benign at {confidence:.0f}% on a critical alert — "
-                f"below the {silence_floor:.0f}% bar to stay silent; human confirms"
-            ]
-        else:
-            escalate = False
-            urgency = "normal"
-            reasons = ["AI assessed benign false positive — no human wake"]
-
-    return {
-        "escalate": escalate,
-        "urgency": urgency,
-        "reasons": reasons,
-        "verdict": verdict or None,
-        "confidence": confidence,
-        "recommended_action": action or None,
-        "degraded": degraded,
-    }
+    return tia.decide_review(
+        source_severity=alert.get("severity"),
+        asset_criticality=alert.get("asset_criticality"),
+        execution_status=str(triage.get("execution_status") or "degraded"),
+        error_category=triage.get("error_category"),
+        verdict=triage.get("verdict"),
+        confidence=triage.get("confidence") or 0.0,
+        recommended_action=triage.get("recommended_action"),
+        model_review_requested=bool(triage.get("model_review_requested")),
+        escalate_floor=_escalate_confidence_floor(),
+        benign_silence_floor=_benign_silence_confidence(),
+    )
 
 
 def build_escalation_message(alert: Dict[str, Any], decision: Dict[str, Any]) -> str:
@@ -256,7 +216,7 @@ def build_escalation_message(alert: Dict[str, Any], decision: Dict[str, Any]) ->
     host = alert.get("asset_hostname") or alert.get("destination_host") or "unknown host"
     tenant = alert.get("tenant_name") or alert.get("short_code") or "unknown tenant"
     severity = (alert.get("severity") or "unknown").upper()
-    verdict = decision.get("verdict") or "UNKNOWN"
+    verdict = decision.get("verdict")
     confidence = decision.get("confidence") or 0.0
     summary = (alert.get("ai_plain_summary") or alert.get("alert_title") or "").strip()
     action = decision.get("recommended_action") or "INVESTIGATE_HOST"
@@ -265,8 +225,18 @@ def build_escalation_message(alert: Dict[str, Any], decision: Dict[str, Any]) ->
     lines = [
         f"[{severity}] Kevantic SOC escalation — {tenant}",
         f"Host: {host}",
-        f"AI verdict: {verdict} ({confidence:.0f}% confidence)",
+        (
+            f"AI verdict: {verdict} ({confidence:.0f}% confidence)"
+            if verdict
+            else f"AI investigation: {decision.get('execution_status', 'unavailable').replace('_', ' ').upper()}"
+            f" ({decision.get('error_category') or 'no analysis'}) — no verdict"
+        ),
         f"Suggested next step: {action}",
+        (
+            f"Review target: {decision.get('due_minutes')} minutes (provisional, not an approved customer SLA)"
+            if decision.get("due_minutes")
+            else None
+        ),
         "",
         summary[:600],
         "",
@@ -276,76 +246,44 @@ def build_escalation_message(alert: Dict[str, Any], decision: Dict[str, Any]) ->
     return "\n".join(line for line in lines if line is not None)
 
 
-def _already_escalated(alert_id: str) -> bool:
-    row = fetch_one(
-        """
-        SELECT 1 AS hit
-        FROM notification_events
-        WHERE alert_id = %s::uuid
-          AND status <> 'failed'
-        LIMIT 1;
-        """,
-        (alert_id,),
-    )
-    return bool(row)
+def record_dead_letter_review(*, alert_id: str, tenant_id: str, attempts: int) -> None:
+    """Last-resort durable record when a job exhausts its retries.
 
-
-def record_escalation(
-    *,
-    alert: Dict[str, Any],
-    decision: Dict[str, Any],
-    channel: str,
-    recipient_address: str,
-    recipient_name: Optional[str] = None,
-) -> Optional[str]:
-    """Queue one escalation for the notification worker to deliver."""
-    body = build_escalation_message(alert, decision)
-    row = fetch_one_write(
-        """
-        INSERT INTO notification_events (
-            tenant_id, alert_id, notification_type, recipient_name,
-            recipient_address, message_body, status
-        )
-        VALUES (%s::uuid, %s::uuid, %s, %s, %s, %s, 'queued')
-        RETURNING id::text AS id;
-        """,
-        (
-            alert.get("tenant_id"),
-            alert.get("id"),
-            channel,
-            recipient_name,
-            recipient_address,
-            body,
-        ),
-    )
-    return (row or {}).get("id")
-
-
-def _oncall_recipients() -> List[Dict[str, str]]:
-    """On-call roster from env until a managed roster table exists.
-
-    SOC_ONCALL_WHATSAPP="+919000000001,+919000000002"
-    SOC_ONCALL_NAME="Kevantic SOC on-call"
+    Called by the queue when it dead-letters a job for a reason other than a
+    missing schema, so the case shows up in the analyst review queue even if every
+    earlier attempt crashed before routing.
     """
-    raw = (os.getenv("SOC_ONCALL_WHATSAPP") or "").strip()
-    name = (os.getenv("SOC_ONCALL_NAME") or "Kevantic SOC on-call").strip()
-    out: List[Dict[str, str]] = []
-    for entry in raw.split(","):
-        number = entry.strip()
-        if number:
-            out.append({"address": number, "name": name})
-    return out
+    binding = acc.open_attempt(alert_id=alert_id, tenant_id=tenant_id)
+    acc.record_attempt_failure(
+        attempt_id=binding["attempt_id"],
+        category="unexpected_error",
+        error=f"job exhausted {attempts} attempts",
+    )
+    tia_outbox.kick()
+
+
+def _manual_review(alert_id: str, tenant_id: str) -> bool:
+    """Rollback / safe mode: no model call; the case goes to an analyst."""
+    binding = acc.open_attempt(alert_id=alert_id, tenant_id=tenant_id)
+    res = acc.record_attempt_failure(
+        attempt_id=binding["attempt_id"],
+        category="manual_review_mode",
+        error="TIA_INVESTIGATION_MODE=manual_review",
+    )
+    tia_outbox.kick()
+    return res.handled
 
 
 def process_deep_triage_job(*, alert_id: str, tenant_id: str) -> bool:
-    """Run expert (Cursor SOC agent) or Ollama Tier-1 deep triage, then escalate.
+    """Investigate one alert (Cursor SOC agent and/or local Tier-1) and accept the result.
 
-    When SOC_AGENT_ENABLED, prefer the Cursor agent on VM 117 (no parallel
-    Ollama deep call). Fall back to existing run_tier1_triage if the agent
-    is down or returns nothing. Never auto-contains.
+    Returns True when the case has been handled durably (analysis stored, or a
+    review item recorded). Returns False only when a retry may help (transient
+    infrastructure failure); the queue bounds retries and dead-letters. Raises
+    SchemaNotReady / a database error when nothing could be recorded, so the queue
+    keeps the job instead of acknowledging it. Never auto-contains.
     """
-    from app.services.soc_agent_client import soc_agent_enabled
-    from app.services.soc_agent_expert import run_expert_on_alert
+    from app.services.soc_agent_client import soc_agent_enabled, severity_meets_agent_threshold
 
     agent_on = soc_agent_enabled()
     if not deep_triage_enabled() and not agent_on:
@@ -356,13 +294,7 @@ def process_deep_triage_job(*, alert_id: str, tenant_id: str) -> bool:
         logger.info("Deep triage skipped — alert not found id=%s", alert_id)
         return False
 
-    # Severity gate: agent uses SOC_AGENT_MIN_SEVERITY; Ollama deep uses
-    # AI_DEEP_TRIAGE_MIN_SEVERITY. Allow the job if either path would accept.
-    from app.services.soc_agent_client import severity_meets_agent_threshold
-
-    severity_ok = False
-    if agent_on and severity_meets_agent_threshold(alert.get("severity")):
-        severity_ok = True
+    severity_ok = bool(agent_on and severity_meets_agent_threshold(alert.get("severity")))
     if deep_triage_enabled() and _severity_ok(alert.get("severity")):
         severity_ok = True
     if not severity_ok:
@@ -371,90 +303,149 @@ def process_deep_triage_job(*, alert_id: str, tenant_id: str) -> bool:
     if (alert.get("ai_triage_status") or "").strip() == "accepted":
         return True
 
-    triage: Optional[Dict[str, Any]] = None
+    # Work that depends on the new tables is never started without them.
+    tia_schema.require_schema()
+
+    if tia.investigation_mode() == "manual_review":
+        return _manual_review(alert_id, tenant_id)
 
     if agent_on and severity_meets_agent_threshold(alert.get("severity")):
-        try:
-            triage = run_expert_on_alert(
-                alert_id=alert_id, tenant_id=tenant_id, alert=alert
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("SOC agent expert failed id=%s: %s", alert_id, exc)
-            triage = None
+        return _investigate_with_agent(alert=alert, alert_id=alert_id, tenant_id=tenant_id)
 
-    if triage is None and deep_triage_enabled():
-        timeout = _llm_timeout_seconds()
-        try:
+    triage = _run_ollama(alert_id=alert_id, tenant_id=tenant_id, alert=alert, limited=False)
+    if triage is None:
+        return False
+    res = acc.accept_local_triage(alert_id=alert_id, tenant_id=tenant_id, triage=triage)
+    tia_outbox.kick()
+    logger.info(
+        "Local deep triage accepted id=%s status=%s review=%s action=%s",
+        alert_id, res.status, res.review_item_id, res.review_action,
+    )
+    return res.handled
+
+
+_TRANSIENT_CATEGORIES = ("timeout", "agent_unreachable", "agent_http_error")
+
+
+def _investigate_with_agent(*, alert: Dict[str, Any], alert_id: str, tenant_id: str) -> bool:
+    from app.services.soc_agent_client import AgentCallError, call_agent_ingest
+
+    binding = acc.open_attempt(alert_id=alert_id, tenant_id=tenant_id)
+    attempt_id = binding["attempt_id"]
+    alert = _with_evidence(alert, alert_id=alert_id, tenant_id=tenant_id, attempt_id=attempt_id)
+    try:
+        raw = call_agent_ingest(alert, binding)
+    except AgentCallError as exc:
+        logger.warning("SOC agent call failed id=%s category=%s attempt=%s", alert_id, exc.category, attempt_id)
+        fallback = (
+            _run_ollama(alert_id=alert_id, tenant_id=tenant_id, alert=alert, limited=True)
+            if deep_triage_enabled()
+            else None
+        )
+        res = acc.record_attempt_failure(
+            attempt_id=attempt_id, category=exc.category, timed_out=exc.timed_out,
+            error=exc.detail or None, fallback=fallback,
+        )
+        tia_outbox.kick()
+        _ticket_note(attempt_id)
+        logger.warning(
+            "Investigation not completed id=%s category=%s review_item=%s", alert_id, exc.category, res.review_item_id
+        )
+        # Retry only transient infrastructure failures. The review item is already
+        # durable, so a retry never loses the case; the queue bounds attempts.
+        return res.handled and exc.category not in _TRANSIENT_CATEGORIES
+
+    echo = raw.get("tia_binding") if isinstance(raw.get("tia_binding"), dict) else {}
+    probe = tia.normalize_agent_result(raw, source="agent_http", source_severity=alert.get("severity"))
+    fallback = (
+        _run_ollama(alert_id=alert_id, tenant_id=tenant_id, alert=alert, limited=True)
+        if (not probe.succeeded and deep_triage_enabled())
+        else None
+    )
+    res = acc.accept_result(
+        source="http",
+        attempt_id=attempt_id,
+        claimed_tenant_id=echo.get("tenant_id"),
+        claimed_alert_id=echo.get("alert_id"),
+        claimed_job_id=echo.get("job_id"),
+        claimed_evidence_version=echo.get("evidence_version"),
+        raw=raw,
+        fallback=fallback,
+    )
+    if not res.handled:
+        # A reply that does not belong to this attempt is a failed investigation,
+        # not an accepted one. The attempt is still open, so the case is kept.
+        logger.error("Agent reply rejected id=%s reason=%s attempt=%s", alert_id, res.reason, attempt_id)
+        res = acc.record_attempt_failure(attempt_id=attempt_id, category="invalid_agent_result", error=res.reason)
+    tia_outbox.kick()
+    _ticket_note(attempt_id)
+    logger.info(
+        "Investigation accepted id=%s status=%s reason=%s review_item=%s action=%s",
+        alert_id, res.status, res.reason, res.review_item_id, res.review_action,
+    )
+    return res.handled and probe.error_category not in _TRANSIENT_CATEGORIES
+
+
+def _ticket_note(attempt_id: str) -> None:
+    from app.services import tia_ticket_note
+
+    note = tia_ticket_note.after_acceptance(attempt_id)
+    if note:
+        logger.info("ticket note attempt=%s outcome=%s", attempt_id, note.get("outcome"))
+
+
+def _with_evidence(alert: Dict[str, Any], *, alert_id: str, tenant_id: str, attempt_id: str) -> Dict[str, Any]:
+    """Attach the dossier (full or redacted, per the tenant's grant) and record what was sent."""
+    from app.services import tia_evidence, tia_research_policy
+
+    out = dict(alert)
+    out["tia_research_policy"] = tia_research_policy.agent_research_policy(tenant_id)
+    ev = tia_evidence.for_agent(tenant_id, alert_id)
+    if ev is None:
+        manifest: Dict[str, Any] = {"dossier_version": tia_evidence.DOSSIER_VERSION, "sent_form": "none", "note": "dossier could not be built"}
+    else:
+        out["tia_evidence"] = ev["payload"]
+        manifest = ev["manifest"]
+    manifest["research_policy"] = out["tia_research_policy"]
+    try:
+        from app.db.session import execute
+
+        execute(
+            "UPDATE tia_investigation_attempts SET evidence_manifest = %s::jsonb WHERE id = %s::uuid;",
+            (json.dumps(manifest, default=str), attempt_id),
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("evidence manifest not recorded attempt=%s: %s", attempt_id, type(exc).__name__)
+    return out
+
+
+def _run_ollama(
+    *, alert_id: str, tenant_id: str, alert: Dict[str, Any], limited: bool
+) -> Optional[Dict[str, Any]]:
+    timeout = _llm_timeout_seconds()
+    try:
+        triage = run_tier1_triage(
+            alert_id=alert_id,
+            tenant_id=tenant_id,
+            alert=alert,
+            customer_safe=False,
+            force=False,
+            llm_timeout_seconds=timeout,
+            limited_evidence=limited,
+        )
+        # A rule-based result cached by an 8s dashboard timeout must not stand in
+        # for a real model verdict here.
+        if triage.get("cached") and triage.get("execution_status") == "degraded" and not limited:
             triage = run_tier1_triage(
                 alert_id=alert_id,
                 tenant_id=tenant_id,
                 alert=alert,
                 customer_safe=False,
-                force=False,
+                force=True,
                 llm_timeout_seconds=timeout,
+                limited_evidence=limited,
             )
-            # A rule-based result cached by an 8s dashboard timeout must not stand in
-            # for a real model verdict here.
-            if triage.get("cached") and triage.get("model") == "rule_based_fallback":
-                triage = run_tier1_triage(
-                    alert_id=alert_id,
-                    tenant_id=tenant_id,
-                    alert=alert,
-                    customer_safe=False,
-                    force=True,
-                    llm_timeout_seconds=timeout,
-                )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Deep triage failed id=%s: %s", alert_id, exc)
-            return False
-
-    if triage is None:
-        logger.warning("Deep triage produced no result id=%s", alert_id)
-        return False
-
-    decision = decide_escalation(alert, triage)
-    logger.info(
-        "Deep triage complete id=%s verdict=%s confidence=%.2f escalate=%s urgency=%s",
-        alert_id,
-        decision.get("verdict"),
-        decision.get("confidence") or 0.0,
-        decision.get("escalate"),
-        decision.get("urgency"),
-    )
-
-    if not decision.get("escalate"):
-        return True
-
-    if _already_escalated(alert_id):
-        logger.info("Deep triage escalation suppressed — already paged id=%s", alert_id)
-        return True
-
-    recipients = _oncall_recipients()
-    if not recipients:
-        logger.warning(
-            "Deep triage wants to escalate id=%s but SOC_ONCALL_WHATSAPP is empty",
-            alert_id,
-        )
-        return True
-
-    channel = (os.getenv("SOC_ESCALATION_CHANNEL") or "whatsapp").strip().lower()
-    for person in recipients:
-        try:
-            event_id = record_escalation(
-                alert=alert,
-                decision=decision,
-                channel=channel,
-                recipient_address=person["address"],
-                recipient_name=person.get("name"),
-            )
-            logger.info(
-                "SOC escalation queued alert=%s event=%s channel=%s urgency=%s",
-                alert_id,
-                event_id,
-                channel,
-                decision.get("urgency"),
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception("Failed to queue SOC escalation alert=%s", alert_id)
-
-    return True
+        return triage
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Deep triage (Ollama) failed id=%s: %s", alert_id, type(exc).__name__)
+        return None

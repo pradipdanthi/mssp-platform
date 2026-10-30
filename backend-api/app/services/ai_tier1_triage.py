@@ -43,6 +43,9 @@ ENRICHMENT_LIST_LIMIT = 8
 VT_TIMEOUT_SECONDS = 2.0
 # Low-priority / AI Reviewed queue: BENIGN_FALSE_POSITIVE + confidence threshold.
 LOW_PRIORITY_CONFIDENCE_MIN = 85.0
+# Model name stored for deterministic rule-based fallback results. This module is
+# the only place that knows it; everything downstream reads `execution_status`.
+RULE_BASED_MODEL = "rule_based_fallback"
 # Auto-close (opt-in) requires higher confidence than queue routing.
 AUTO_CLOSE_CONFIDENCE_MIN = 95.0
 AI_RESOLUTION_AUTO_CLOSE = "Closed (AI Auto-Triage)"
@@ -1215,13 +1218,20 @@ def _lookup_virustotal_hash(file_hash: str) -> Dict[str, Any]:
 
 
 def _auto_close_enabled() -> bool:
-    """OPT-IN only. Default false — no silent auto-close when unset."""
-    return (os.getenv("ENABLE_AUTO_CLOSE_LOW_RISK") or "false").strip().lower() in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    """Always False. Unattended closure is not controlled by an environment flag.
+
+    Policy tia-closure-1: a model verdict and confidence can never authorize closure. The only
+    unattended path is a versioned, customer-enabled, verified playbook (tia_playbooks).
+    ENABLE_AUTO_CLOSE_LOW_RISK is ignored; setting it is logged once so it is not a silent no-op.
+    """
+    global _AUTO_CLOSE_ENV_WARNED
+    if not _AUTO_CLOSE_ENV_WARNED and (os.getenv("ENABLE_AUTO_CLOSE_LOW_RISK") or "").strip().lower() in ("1", "true", "yes", "on"):
+        _AUTO_CLOSE_ENV_WARNED = True
+        logger.warning("ENABLE_AUTO_CLOSE_LOW_RISK is set but ignored: closure needs a verified playbook (tia-closure-1)")
+    return False
+
+
+_AUTO_CLOSE_ENV_WARNED = False
 
 
 def _wazuh_rule_level(alert: Dict[str, Any]) -> Optional[int]:
@@ -1536,8 +1546,16 @@ def _persist_alert_ai_fields(
     verdict: str,
     confidence: float,
     ai_queue: Optional[str],
+    execution_status: str = "succeeded",
 ) -> None:
-    """Write Tier-1 fields onto security_alerts for fast list filters."""
+    """Write Tier-1 fields onto security_alerts for fast list filters.
+
+    A degraded (rule-based) benign reading is not written: showing a manufactured
+    "benign" label on the alert is the failure this guard exists to prevent.
+    """
+    if execution_status != "succeeded" and str(verdict).upper() == "BENIGN_FALSE_POSITIVE":
+        logger.info("Tier-1 degraded benign reading not persisted alert_id=%s", alert_id)
+        return
     fetch_one_write(
         """
         UPDATE security_alerts
@@ -1562,13 +1580,14 @@ def _try_auto_close_low_risk(
     result: Dict[str, Any],
 ) -> Dict[str, Any]:
     """
-    OPT-IN auto-resolve. Default ENABLE_AUTO_CLOSE_LOW_RISK=false → no-op.
-    Requires ALL of: low severity/level guard, confidence >= 95,
-    BENIGN_FALSE_POSITIVE, known FP pattern. Uses status=closed (existing enum)
-    plus ai_auto_closed / ai_resolution_label — never invents new status values.
+    Model-driven closure is removed (policy tia-closure-1). This function never writes; it reports
+    why the model's benign verdict did not close the alert. Kept so callers and audit fields stay stable.
     """
     if not _auto_close_enabled():
         return {"auto_closed": False, "reason": "flag_disabled"}
+
+    if str(result.get("execution_status") or "degraded") != "succeeded":
+        return {"auto_closed": False, "reason": "degraded_evidence"}
 
     verdict = str(result.get("verdict") or "")
     try:
@@ -1590,71 +1609,9 @@ def _try_auto_close_low_risk(
     if current in ("closed", "false_positive"):
         return {"auto_closed": False, "reason": "already_terminal"}
 
-    label = AI_RESOLUTION_AUTO_CLOSE
-    note = (
-        f"{label}: verdict={verdict} confidence={confidence:.1f} "
-        f"severity={alert.get('severity')} wazuh_level={_wazuh_rule_level(alert)}"
-    )[:4000]
-    row = fetch_one_write(
-        """
-        UPDATE security_alerts
-        SET status = 'closed',
-            customer_visible = false,
-            ai_auto_closed = true,
-            ai_resolution_label = %s,
-            ai_queue = 'low_priority',
-            ai_technical_summary = CASE
-              WHEN ai_technical_summary IS NULL OR btrim(ai_technical_summary) = ''
-              THEN %s
-              ELSE left(ai_technical_summary || E'\\n' || %s, 4000)
-            END,
-            updated_at = now()
-        WHERE id = %s::uuid
-          AND status NOT IN ('closed', 'false_positive')
-        RETURNING id::text, status;
-        """,
-        (label, note, note, alert_id),
-    )
-    if not row:
-        return {"auto_closed": False, "reason": "update_skipped"}
-
-    try:
-        from app.services.audit_service import write_audit_event
-
-        write_audit_event(
-            action="alerts.ai_auto_close",
-            entity_type="security_alert",
-            entity_id=alert_id,
-            tenant_id=tenant_id,
-            actor_email="system:ai_tier1_triage",
-            actor_role="system",
-            details={
-                "resolution": label,
-                "verdict": verdict,
-                "confidence": confidence,
-                "severity": alert.get("severity"),
-                "wazuh_rule_level": _wazuh_rule_level(alert),
-                "signature_status": (enrichment.get("signature") or {}).get("status"),
-                "pre_score_flags": list(
-                    (enrichment.get("pre_score_hints") or {}).get("flags") or []
-                ),
-                "summary": str(result.get("summary") or "")[:500],
-            },
-        )
-    except Exception:  # noqa: BLE001
-        logger.exception("audit for AI auto-close failed alert_id=%s", alert_id)
-
-    logger.info(
-        "AI auto-closed alert %s (confidence=%.1f) — ENABLE_AUTO_CLOSE_LOW_RISK",
-        alert_id,
-        confidence,
-    )
-    return {
-        "auto_closed": True,
-        "status": "closed",
-        "ai_resolution_label": label,
-        "reason": "ok",
-    }
+    # Every check above is a recommendation filter. None of them is an authorization:
+    # closure happens only through tia_playbooks.execute_closure (verified, customer-enabled).
+    return {"auto_closed": False, "reason": "model_confidence_cannot_authorize_closure"}
 
 
 def _compute_action_guardrails(
@@ -2124,15 +2081,30 @@ def _write_cache(
     )
 
 
-def _attach_enrichment(result: Dict[str, Any], enrichment: Dict[str, Any]) -> Dict[str, Any]:
+def _attach_enrichment(
+    result: Dict[str, Any], enrichment: Dict[str, Any], *, limited_evidence: bool = False
+) -> Dict[str, Any]:
     summary = dict(enrichment.get("context_summary") or {})
     guardrails = enrichment.get("action_guardrails") or {}
     # Phase 3 inclusion rule wins over advisory guardrail queue_suggestion.
-    ai_queue = compute_ai_queue(result.get("verdict") or "", float(result.get("confidence") or 0))
+    # A rule-based fallback is limited evidence, not a model judgement: it is
+    # reported as degraded and can never place an alert in the low-priority queue.
+    rule_based = (
+        limited_evidence
+        or bool(result.get("rule_based_fallback"))
+        or result.get("model") == RULE_BASED_MODEL
+    )
+    ai_queue = (
+        None
+        if rule_based
+        else compute_ai_queue(result.get("verdict") or "", float(result.get("confidence") or 0))
+    )
     summary["queue_suggestion"] = ai_queue
     vt = (enrichment.get("threat_intel") or {}).get("external_vt") or {}
     return {
         **result,
+        "execution_status": "degraded" if rule_based else "succeeded",
+        "evidence_basis": "limited" if limited_evidence else ("rule_based" if rule_based else "model"),
         "enrichment": enrichment,
         "context_summary": summary,
         "pre_score_hints": enrichment.get("pre_score_hints"),
@@ -2152,9 +2124,14 @@ def run_tier1_triage(
     customer_safe: bool = False,
     force: bool = False,
     llm_timeout_seconds: Optional[float] = None,
+    limited_evidence: bool = False,
 ) -> Dict[str, Any]:
     """
     Return cached or freshly computed Tier-1 triage for one alert.
+
+    ``limited_evidence`` marks this run as a secondary path after the primary
+    investigation failed: the result is reported as degraded, is never queued as
+    low priority, never persists a benign label, and is never auto-closed.
 
     Phase 4: pre-LLM whitelist veto bypasses Ollama; unhealthy VM 115 falls back
     to rule-based scoring without raising HTTP errors to callers.
@@ -2182,13 +2159,14 @@ def run_tier1_triage(
                 "AI triage cache hit alert_id=%s cache=hit duration_ms=0",
                 alert_id,
             )
-            attached = _attach_enrichment(cached, enrichment)
+            attached = _attach_enrichment(cached, enrichment, limited_evidence=limited_evidence)
             ai_queue = attached.get("ai_queue")
             _persist_alert_ai_fields(
                 alert_id=alert_id,
                 verdict=str(attached["verdict"]),
                 confidence=float(attached["confidence"]),
                 ai_queue=ai_queue if isinstance(ai_queue, str) else None,
+                execution_status=str(attached.get("execution_status") or "degraded"),
             )
             auto = _try_auto_close_low_risk(
                 alert_id=alert_id,
@@ -2220,7 +2198,7 @@ def run_tier1_triage(
             payload,
             fallback_reason="health_probe_failed",
         )
-        model = "rule_based_fallback"
+        model = RULE_BASED_MODEL
         raw_response = {"rule_based_fallback": True, "reason": "health_probe_failed"}
     else:
         try:
@@ -2246,7 +2224,7 @@ def run_tier1_triage(
                 payload,
                 fallback_reason=type(exc).__name__,
             )
-            model = "rule_based_fallback"
+            model = RULE_BASED_MODEL
             raw_response = {"rule_based_fallback": True, "reason": type(exc).__name__}
 
     # Prefer alert process path when model omits it
@@ -2275,6 +2253,7 @@ def run_tier1_triage(
             "updated_at": None,
         },
         enrichment,
+        limited_evidence=limited_evidence,
     )
     ai_queue = attached.get("ai_queue")
     _persist_alert_ai_fields(
@@ -2282,6 +2261,7 @@ def run_tier1_triage(
         verdict=str(attached["verdict"]),
         confidence=float(attached["confidence"]),
         ai_queue=ai_queue if isinstance(ai_queue, str) else None,
+        execution_status=str(attached.get("execution_status") or "degraded"),
     )
     auto = _try_auto_close_low_risk(
         alert_id=alert_id,

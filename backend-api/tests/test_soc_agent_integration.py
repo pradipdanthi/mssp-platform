@@ -94,17 +94,18 @@ class DeepTriagePrefersAgentTests(unittest.TestCase):
             "verdict": "MALICIOUS",
             "confidence": 90,
             "recommended_action": "INVESTIGATE_HOST",
-            "model": "cursor-soc-agent",
+            "model": "cursor-agent",
+            "execution_status": "succeeded",
         }
         with patch.dict(
             os.environ,
             {"SOC_AGENT_ENABLED": "true", "AI_DEEP_TRIAGE_ENABLED": "true"},
             clear=False,
-        ), patch.object(deep, "load_alert_for_triage", return_value=alert), patch(
-            "app.services.soc_agent_expert.run_expert_on_alert", return_value=triage
-        ) as expert_run, patch.object(deep, "run_tier1_triage") as ollama, patch.object(
-            deep, "_already_escalated", return_value=True
-        ), patch.object(deep, "decide_escalation", return_value={"escalate": False}):
+        ), patch.object(deep, "load_alert_for_triage", return_value=alert), patch.object(
+            deep.tia_schema, "require_schema"
+        ), patch.object(deep, "_investigate_with_agent", return_value=True) as expert_run, patch.object(
+            deep, "run_tier1_triage"
+        ) as ollama:
             self.assertTrue(deep.process_deep_triage_job(alert_id="a", tenant_id="t"))
         expert_run.assert_called_once()
         ollama.assert_not_called()

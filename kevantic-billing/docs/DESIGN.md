@@ -13,6 +13,15 @@
 | Tally (billing / GST) | Party ledger, voucher-style invoice numbers, tax breakup on every line & total, printable tax invoice, credit note |
 | Product portfolio | Silver / Gold / Platinum subscription SKUs + NikTiar SecureEdge Shared/Dedicated + Edge Node appliance |
 
+## Lead-to-cash flow (internal)
+
+Supplier and product are free text. HPE, Dell, Lenovo, Microsoft, NikTiar, or a distributor are all the same kind of line. Deal registration is an optional number for suppliers that use one. It is not required.
+
+1. **Lead** — company, person, source, what they asked for  
+2. **Deal** — stage from qualification through won or lost, expected value, customer PO, supplier order  
+3. **Quote** — catalog line or a typed part (supplier, part number, price, GST)  
+4. **Invoice and payment** — existing GST path; the deal follows the money  
+
 ## Quote-to-cash flow
 
 1. **Party** — legal name, billing address, GSTIN, place-of-supply state, currency, payment terms  

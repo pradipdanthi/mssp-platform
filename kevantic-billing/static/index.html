@@ -3,54 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Kevantic Quote & Billing</title>
+  <title>Kevantic Sales Cloud</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/assets/app.css" />
 </head>
 <body>
   <div id="loginGate" class="login-gate">
     <div class="login-card">
+      <div class="login-mark">K</div>
       <p class="brand">Kevantic</p>
-      <h1>Quote &amp; Billing</h1>
-      <p class="sub">NikTiar CPQ · GST tax invoices · collections</p>
-      <label>User <input id="user" autocomplete="username" /></label>
+      <h1>Sales Cloud</h1>
+      <p class="sub">Lead → Opportunity → Quote → Invoice → Cash</p>
+      <label>Username <input id="user" autocomplete="username" /></label>
       <label>Password <input id="pass" type="password" autocomplete="current-password" /></label>
-      <button id="btnLogin" type="button" class="accent">Sign in</button>
-      <p class="hint">Credentials: <code>kevantic-billing/data/OPERATOR_CREDS.txt</code></p>
+      <button id="btnLogin" type="button" class="btn btn-brand btn-block">Sign in</button>
+      <p class="hint">Credentials live in <code>kevantic-billing/data/OPERATOR_CREDS.txt</code></p>
     </div>
   </div>
 
   <div id="appShell" class="app hidden">
     <aside class="side">
       <div class="side-brand">
-        <p class="brand">Kevantic</p>
-        <strong>Quote &amp; Billing</strong>
-        <span id="sideCompany" class="muted"></span>
+        <div class="side-logo">K</div>
+        <div>
+          <p class="brand">Kevantic</p>
+          <strong>Sales Cloud</strong>
+          <span id="sideCompany" class="side-co"></span>
+        </div>
       </div>
-      <nav id="nav">
-        <button data-tab="home" class="active">Dashboard</button>
-        <button data-tab="builder">New quote</button>
-        <button data-tab="quotes">Quotes</button>
-        <button data-tab="invoices">Invoices</button>
-        <button data-tab="parties">Parties</button>
-        <button data-tab="catalog">Catalog</button>
-        <button data-tab="settings">Company settings</button>
+      <nav id="nav" class="side-nav">
+        <p class="nav-label">Workspace</p>
+        <button data-tab="home" class="active"><span class="nav-ico" aria-hidden="true">⌂</span> Home</button>
+        <button data-tab="leads"><span class="nav-ico" aria-hidden="true">◎</span> Leads</button>
+        <button data-tab="pipeline"><span class="nav-ico" aria-hidden="true">▣</span> Opportunities</button>
+        <button data-tab="parties"><span class="nav-ico" aria-hidden="true">◫</span> Accounts</button>
+        <p class="nav-label">Commerce</p>
+        <button data-tab="builder"><span class="nav-ico" aria-hidden="true">＋</span> New Quote</button>
+        <button data-tab="quotes"><span class="nav-ico" aria-hidden="true">☰</span> Quotes</button>
+        <button data-tab="invoices"><span class="nav-ico" aria-hidden="true">₹</span> Invoices</button>
+        <button data-tab="catalog"><span class="nav-ico" aria-hidden="true">▦</span> Catalog</button>
+        <p class="nav-label">Admin</p>
+        <button data-tab="team"><span class="nav-ico" aria-hidden="true">☺</span> Sales Team</button>
+        <button data-tab="settings"><span class="nav-ico" aria-hidden="true">⚙</span> Company</button>
       </nav>
-      <button id="btnLogout" type="button" class="ghost side-out">Sign out</button>
+      <button id="btnLogout" type="button" class="btn btn-ghost side-out">Sign out</button>
     </aside>
+
     <div class="workspace">
       <header class="topbar">
-        <h2 id="pageTitle">Dashboard</h2>
+        <div class="topbar-left">
+          <h2 id="pageTitle">Home</h2>
+          <p id="pageSub" class="page-sub">Sales pipeline overview</p>
+        </div>
         <div class="top-actions">
-          <input id="globalSearch" placeholder="Filter lists…" />
-          <span id="userChip" class="chip"></span>
+          <div class="search-wrap">
+            <span class="search-ico" aria-hidden="true">⌕</span>
+            <input id="globalSearch" placeholder="Search this list…" />
+          </div>
+          <button type="button" id="btnQuickLead" class="btn btn-brand">+ New Lead</button>
+          <div class="profile-chip">
+            <span id="userAvatar" class="avatar">U</span>
+            <span id="userChip"></span>
+          </div>
         </div>
       </header>
       <main id="main">
         <section id="tab-home" class="panel"></section>
+        <section id="tab-leads" class="panel hidden"></section>
+        <section id="tab-pipeline" class="panel hidden"></section>
         <section id="tab-builder" class="panel hidden"></section>
         <section id="tab-quotes" class="panel hidden"></section>
         <section id="tab-invoices" class="panel hidden"></section>
         <section id="tab-parties" class="panel hidden"></section>
+        <section id="tab-team" class="panel hidden"></section>
         <section id="tab-catalog" class="panel hidden"></section>
         <section id="tab-settings" class="panel hidden"></section>
       </main>
@@ -58,13 +85,28 @@
   </div>
 
   <div id="drawer" class="drawer hidden">
+    <div class="drawer-scrim" data-close-drawer></div>
     <div class="drawer-panel">
-      <button type="button" id="drawerClose" class="ghost">Close</button>
+      <div class="drawer-head">
+        <button type="button" id="drawerClose" class="btn btn-ghost btn-sm">Close</button>
+      </div>
       <div id="drawerBody"></div>
     </div>
   </div>
 
-  <p id="status" class="status"></p>
+  <div id="modal" class="modal hidden">
+    <div class="modal-scrim" data-close-modal></div>
+    <div class="modal-panel" role="dialog" aria-modal="true">
+      <div class="modal-head">
+        <h3 id="modalTitle">Dialog</h3>
+        <button type="button" id="modalClose" class="btn btn-ghost btn-sm">✕</button>
+      </div>
+      <div id="modalBody" class="modal-body"></div>
+      <div id="modalFoot" class="modal-foot"></div>
+    </div>
+  </div>
+
+  <p id="status" class="toast"></p>
   <script src="/assets/app.js"></script>
 </body>
 </html>

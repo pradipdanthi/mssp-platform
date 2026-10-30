@@ -10,6 +10,7 @@ import CustomersWall from "./pages/CustomersWall";
 import CustomerMonitorShell from "./pages/CustomerMonitorShell";
 import CustomerMonitor from "./pages/CustomerMonitor";
 import PatchGapsPage from "./pages/PatchGapsPage";
+import { ReviewDetailPage, ReviewQueuePage } from "./pages/ReviewQueuePage";
 import AlertsPage from "./parity/pages/AlertsPage";
 import AlertDetailPage from "./parity/pages/AlertDetailPage";
 import IncidentsPage from "./parity/pages/IncidentsPage";
@@ -167,6 +168,22 @@ export default function App() {
           }
         />
         <Route path="customers" element={<CustomersWall />} />
+        <Route
+          path="reviews"
+          element={
+            <ParityScroll>
+              <ReviewQueuePage />
+            </ParityScroll>
+          }
+        />
+        <Route
+          path="reviews/:itemId"
+          element={
+            <ParityScroll>
+              <ReviewDetailPage />
+            </ParityScroll>
+          }
+        />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

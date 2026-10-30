@@ -1,0 +1,86 @@
+{
+ "seconds": 1.71,
+ "engines": [
+  {
+   "engine": "thehive",
+   "status": "unreachable",
+   "reason": "connection_failed",
+   "layers": {
+    "reachability": [
+     "unreachable",
+     "connection_failed"
+    ],
+    "api": [
+     "unknown",
+     "host_unreachable"
+    ],
+    "auth": [
+     "unknown",
+     "host_unreachable"
+    ],
+    "application": [
+     "unknown",
+     "host_unreachable"
+    ],
+    "telemetry": [
+     "unknown",
+     "no_telemetry_source"
+    ]
+   }
+  },
+  {
+   "engine": "shuffle",
+   "status": "unreachable",
+   "reason": "connection_failed",
+   "layers": {
+    "reachability": [
+     "unreachable",
+     "connection_failed"
+    ],
+    "api": [
+     "unknown",
+     "host_unreachable"
+    ],
+    "auth": [
+     "unknown",
+     "host_unreachable"
+    ],
+    "application": [
+     "unknown",
+     "host_unreachable"
+    ],
+    "telemetry": [
+     "unknown",
+     "no_telemetry_source"
+    ]
+   }
+  },
+  {
+   "engine": "soc_agent",
+   "status": "unauthorized",
+   "reason": "credentials_rejected",
+   "layers": {
+    "reachability": [
+     "ok",
+     null
+    ],
+    "api": [
+     "ok",
+     null
+    ],
+    "auth": [
+     "unauthorized",
+     "credentials_rejected"
+    ],
+    "application": [
+     "ok",
+     null
+    ],
+    "telemetry": [
+     "unknown",
+     "no_telemetry_source"
+    ]
+   }
+  }
+ ]
+}

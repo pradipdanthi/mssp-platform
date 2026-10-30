@@ -9,9 +9,9 @@ import {
   HandsFreePhase,
   HandsFreeSession,
   isGoodbye,
-  matchWake,
   startHandsFree,
 } from "./tiaHandsFree";
+import { looksIncompleteUtterance, matchWake, settleWaitMs } from "./tiaUtterance";
 import { ensureMicPermission, getSpeechRecognitionCtor, type SpeechRecognitionLike } from "./voice";
 
 export type EarsHandlers = {
@@ -33,51 +33,7 @@ export type EarsSession = {
 
 type RecCtor = new () => SpeechRecognitionLike;
 
-/** True when the operator likely paused mid-thought (do not act yet). */
-export function looksIncompleteUtterance(text: string): boolean {
-  const t = (text || "").trim();
-  if (!t) return true;
-
-  const { woke, remainder } = matchWake(t);
-  const body = (woke ? remainder : t).trim();
-  const words = body.split(/\s+/).filter(Boolean);
-  // Bare "Hi Tia" / "Hey Tia" is always complete — do not wait on trailing heuristics.
-  if (woke && words.length === 0) return false;
-
-  // Clear end-of-sentence markers → treat as finished.
-  if (/[.!?…]["')\]]?\s*$/.test(t)) return false;
-  // Trailing comma / colon → still going.
-  if (/[,;:]\s*$/.test(t)) return true;
-
-  const lower = t.toLowerCase().replace(/['']/g, "'");
-  // Function words / conjunctions that almost never end a finished ask.
-  // (Checked after bare-wake so "Hi Tia" never stalls.)
-  if (
-    /\b(and|or|but|so|because|if|when|while|that|which|who|whom|whose|what|where|how|why|to|for|of|the|a|an|my|your|our|their|its|is|are|was|were|am|be|been|being|have|has|had|do|does|did|can|could|would|should|will|shall|may|might|must|with|about|from|into|onto|on|in|at|as|than|then|also|just|please|tell|give|show|list|check|look|need|want|get|make|take|see|find|open|close|update|set|mark|run|start|stop)\s*$/i.test(
-      lower
-    )
-  ) {
-    return true;
-  }
-
-  // Short follow-on after wake ("Hi Tia status") — wait a beat for more words.
-  if (woke && words.length > 0 && words.length < 3) return true;
-  if (!woke && words.length > 0 && words.length < 3) return true;
-  return false;
-}
-
-function settleWaitMs(text: string, inConversation: boolean): number {
-  const incomplete = looksIncompleteUtterance(text);
-  const { woke, remainder } = matchWake(text);
-  const bareWake = woke && !(remainder || "").trim();
-
-  // Bare wake — act quickly (was 1100ms; felt like "not responding").
-  if (bareWake && !inConversation) return 450;
-  // Mid-sentence / trailing "and|the|to…" — wait for more speech.
-  if (incomplete) return inConversation ? 2600 : 2200;
-  // Finished-looking sentence — still allow a natural breath pause.
-  return inConversation ? 1400 : 1100;
-}
+export { looksIncompleteUtterance, settleWaitMs } from "./tiaUtterance";
 
 async function startBrowserEars(handlers: EarsHandlers): Promise<
   | { ok: true; session: EarsSession }
@@ -100,7 +56,6 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
   let pending = "";
   let hearingLive = false;
   /** When current pending utterance first received speech (ms). */
-  let pendingSince = 0;
   let incompleteHolds = 0;
   let rec: SpeechRecognitionLike | null = null;
 
@@ -127,7 +82,7 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
     const incomplete = looksIncompleteUtterance(text);
     setPhase(
       "capturing",
-      incomplete ? "Still listening — finish your sentence…" : "Waiting to make sure you're done…"
+      incomplete ? "Still with you — go on…" : "Listening through the pause…"
     );
     debounceTimer = window.setTimeout(() => {
       debounceTimer = null;
@@ -136,9 +91,8 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
         scheduleFlush();
         return;
       }
-      const elapsed = pendingSince ? Date.now() - pendingSince : 0;
-      // One extra hold if still incomplete — then act so we never stall forever.
-      if (looksIncompleteUtterance(pending) && pending.trim() && incompleteHolds < 1 && elapsed < 7000) {
+      // One longer hold only when the last word is clearly unfinished.
+      if (looksIncompleteUtterance(pending) && pending.trim() && incompleteHolds < 1) {
         incompleteHolds += 1;
         scheduleFlush();
         return;
@@ -151,7 +105,6 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
     const text = pending.trim();
     pending = "";
     hearingLive = false;
-    pendingSince = 0;
     incompleteHolds = 0;
     if (!text || stopped || muted || hold) return;
     setPhase("processing", "Got it…");
@@ -168,7 +121,6 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
     const bit = (piece || "").trim();
     if (!bit) return;
     if (!pending.trim()) {
-      pendingSince = Date.now();
       incompleteHolds = 0;
     }
     pending = `${pending} ${bit}`.trim();
@@ -268,7 +220,6 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
       if (m) {
         clearTimers();
         pending = "";
-        pendingSince = 0;
         incompleteHolds = 0;
         hearingLive = false;
         try {
@@ -296,7 +247,6 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
       if (b) {
         clearTimers();
         pending = "";
-        pendingSince = 0;
         incompleteHolds = 0;
         hearingLive = false;
         try {
