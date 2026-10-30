@@ -769,14 +769,17 @@ def handle_turn(
 
 
 _ENGINE_NAMES = {
-    "wazuh": "wazuh", "thehive": "thehive", "the hive": "thehive", "shuffle": "shuffle", "suricata": "suricata", "zeek": "zeek",
+    "wazuh": "wazuh", "wazoo": "wazuh", "wazu": "wazuh", "wasoo": "wazuh", "wahzoo": "wazuh", "siem": "wazuh",
+    "thehive": "thehive", "the hive": "thehive",
+    "shuffle": "shuffle", "shuffel": "shuffle", "shuffler": "shuffle", "soar": "shuffle",
+    "suricata": "suricata", "zeek": "zeek", "bro": "zeek",
     "misp": "misp", "greenbone": "greenbone", "velociraptor": "velociraptor", "secure edge": "secure_edge",
     "soc agent": "soc_agent", "control plane": "control_plane", "appliances": "appliances",
 }
 _RE_HEALTH = re.compile(
     r"\b(engines?|infrastructure|infra|stack|services|systems?|backend|"
-    r"wazuh|the ?hive|shuffle|suricata|zeek|misp|greenbone|velociraptor|secure edge|soc agent|control plane|appliances?)\b"
-    r".{0,60}\b(health|healthy|status|up|down|online|offline|running|working|degraded|reachable|ok|okay|fine|alive|broken)\b"
+    r"wazuh|wazoo|wazu|the ?hive|shuffle|shuffel|suricata|zeek|misp|greenbone|velociraptor|secure edge|soc agent|control plane|appliances?)\b"
+    r".{0,80}\b(health|healthy|status|up|down|online|offline|running|working|processing|process(?:ing)? work|degraded|reachable|ok|okay|fine|alive|broken)\b"
     r"|\b(health|status)\b.{0,30}\b(of )?(the )?(engines?|infrastructure|infra|stack|platform)\b",
     re.I,
 )
@@ -1093,6 +1096,40 @@ def _dispatch(scope: Scope, conv: Dict[str, Any], text: str, tenant: Optional[Di
         )
         return _reply(msg, "I can't do that by voice. It needs your approval in Needs You.", intent="disruptive_refused", tool=None, tool_ok=False)
 
+    # 2b. Turn family (assessment / recommendation / status / execution) before any
+    # loose "investigate" match. Recommendation must never enqueue a job.
+    from app.services import tia_intents
+
+    family = tia_intents.classify(text)
+    engines_named = tia_intents.engines_in_text(text)
+    if family == tia_intents.RECOMMENDATION:
+        return _recommend_next(scope, conv, tenant)
+    if family == tia_intents.STATUS:
+        target = conv.get("selected_alert_id") or conv.get("pinned_alert_id")
+        if not target:
+            return _reply(
+                "No alert is selected, so I have no investigation to report on. Open a case first.",
+                intent="investigation_status", tool="investigation_status", tool_ok=False,
+            )
+        return _investigation_status(scope, conv, target)
+    if family == tia_intents.ASSESSMENT and not (
+        _RE_CRITICALITY.search(text) or _RE_KNOWN.search(text) or _RE_DELAY.search(text)
+    ):
+        target = None
+        try:
+            target = resolve_reference(text, conv, pending)
+        except Ambiguous:
+            target = None
+        target = target or conv.get("selected_alert_id") or conv.get("pinned_alert_id")
+        if not target:
+            return _reply(
+                "Which alert should I assess? Open one, or ask what's critical and pick the first.",
+                intent="assessment_needs_target", tool="explain_evidence", tool_ok=False, clarification=True,
+            )
+        return _assess_case(scope, conv, target)
+    if engines_named and re.search(r"\b(process(?:ing)?|arriv(?:e|ing)|ingest|telemetry|events?)\b", text, re.I):
+        return _multi_ingest(scope, engines_named)
+
     if _RE_CAPS.search(text):
         names = ", ".join(t["name"].replace("_", " ") for t in tools.capabilities())
         return _reply(
@@ -1161,8 +1198,14 @@ def _dispatch(scope: Scope, conv: Dict[str, Any], text: str, tenant: Optional[Di
         ref = None
     if ref and _RE_EVIDENCE.search(text) and not _RE_DESCRIBE.search(text.replace("what's in", "")):
         return _evidence(scope, conv, ref)
-    # Investigate must win over "the third one" describe: "investigate the third one" is a job request.
-    if _RE_INVESTIGATE.search(text) and not _RE_INV_STATUS.search(text):
+    # Explicit execution only (recommendation already returned above).
+    if family == tia_intents.EXECUTION or (
+        _RE_INVESTIGATE.search(text)
+        and not _RE_INV_STATUS.search(text)
+        and family != tia_intents.RECOMMENDATION
+        and family != tia_intents.ASSESSMENT
+        and family != tia_intents.STATUS
+    ):
         target = ref or conv.get("selected_alert_id")
         if not target:
             return _reply("Which alert should I investigate? Tell me the first, second, or open one.", intent="investigate_needs_target", tool="start_investigation", tool_ok=False)
@@ -1192,6 +1235,95 @@ def _dispatch(scope: Scope, conv: Dict[str, Any], text: str, tenant: Optional[Di
         "I didn't catch a command I can run. Ask what's critical, describe the first one, open it, check an engine, or name a VM.",
         "I didn't catch that. Ask what's critical, or describe an alert.",
         intent="unrecognised", tool=None, tool_ok=False,
+    )
+
+
+def _assess_case(scope: Scope, conv: Dict[str, Any], alert_id: str) -> Dict[str, Any]:
+    """Read-only assessment: evidence + criticality. Never starts a job."""
+    ev = _evidence(scope, conv, alert_id)
+    crit_text = ""
+    crit_spoken = ""
+    try:
+        crit = tools.assess_criticality(scope, alert_id)
+        if isinstance(crit, dict):
+            crit_text = str(crit.get("answer") or "").strip()
+            crit_spoken = str(crit.get("spoken_answer") or "").strip()
+    except Exception:  # noqa: BLE001
+        crit_text = ""
+    body = ev["answer"]
+    if crit_text:
+        body = body.rstrip() + "\n\nAssessed risk vs detector label:\n" + crit_text
+        body = re.sub(
+            r"\n?I haven't established a cause\. Ask me to investigate if you want a deeper look\.\s*",
+            "\nI haven't established a confirmed cause from the record alone. Say investigate this if you want a durable deep look.\n",
+            body,
+            count=1,
+        )
+    spoken = (ev.get("spoken_answer") or "").rstrip()
+    if crit_spoken:
+        spoken = f"{spoken} {crit_spoken}".strip()
+    elif crit_text:
+        spoken = spoken + " Detector severity is a label, not proof of a critical incident."
+    out = dict(ev)
+    out["answer"] = body
+    out["spoken_answer"] = spoken
+    out["intent"] = "assessment"
+    out["tool"] = "explain_evidence+assess_criticality"
+    return out
+
+
+def _recommend_next(scope: Scope, conv: Dict[str, Any], tenant: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Advice only. Must not call start_investigation."""
+    selected = conv.get("selected_alert_id") or conv.get("pinned_alert_id")
+    listing = conv.get("referenced_alert_ids") or []
+    lines: List[str] = []
+    if selected:
+        row = tools.get_alert_row(scope, selected)
+        if row:
+            lines.append(
+                f"For the open case {row.get('title')} ({row.get('short_code')}), I would next: "
+                "confirm process ancestry and file hash against the host, check related alerts on the same host in the last 24 hours, "
+                "and only then decide whether a durable investigation is warranted."
+            )
+            lines.append("I have not started an investigation from this recommendation.")
+        else:
+            lines.append("I still have a selected case id, but it is not visible in this scope.")
+    elif listing:
+        lines.append(
+            "No case is open on screen. From the last list I would start with the first critical or high item, "
+            "describe it, then ask you before queuing an investigation."
+        )
+    else:
+        counts = tools.count_alerts(scope)
+        place = f"for {tenant['name']}" if (scope.tenant_id and tenant) else "across customers"
+        lines.append(
+            f"{place.capitalize()} there are {counts.get('critical', 0)} critical and {counts.get('high', 0)} high open. "
+            "Ask what's critical so we share a stable list, then I can recommend which to open first. "
+            "I will not queue a job until you say investigate this."
+        )
+    spoken = "That is my recommendation only. I have not started an investigation."
+    return _reply("\n".join(lines), spoken, intent="recommendation", tool="recommend_next", tool_ok=True)
+
+
+def _multi_ingest(scope: Scope, engines: List[str]) -> Dict[str, Any]:
+    parts: List[str] = []
+    spoken_bits: List[str] = []
+    for eid in engines[:4]:
+        try:
+            report = tools.ingest_status(scope, eid)
+            text = str((report or {}).get("answer") or "").strip() or f"{eid}: no ingest report."
+            spoken = str((report or {}).get("spoken_answer") or text)[:180]
+            parts.append(f"## {eid}\n{text}")
+            spoken_bits.append(spoken)
+        except Exception as exc:  # noqa: BLE001
+            parts.append(f"## {eid}\nCould not check ingest: {type(exc).__name__}. That is not proof of health.")
+            spoken_bits.append(f"{eid} check failed")
+    return _reply(
+        "\n\n".join(parts),
+        " ".join(spoken_bits)[:480],
+        intent="ingest_status",
+        tool="ingest_status",
+        tool_ok=True,
     )
 
 

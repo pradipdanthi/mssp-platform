@@ -35,6 +35,7 @@ import {
   shouldSpeakLine,
 } from "../lib/tiaBriefingGate";
 import { interruptPlayback, looksLikeEcho } from "../lib/tiaBargeIn";
+import { claimVoiceOwner, type VoiceOwnerHandle } from "../lib/tiaVoiceOwner";
 import { playBase64Audio, speakText, stopSpeaking, unlockTiaAudio, voiceSupported } from "../lib/voice";
 
 type Turn = TranscriptTurn;
@@ -79,6 +80,7 @@ export default function ChatPanel() {
   );
   const threadRef = useRef<HTMLDivElement | null>(null);
   const sessionRef = useRef<EarsSession | null>(null);
+  const voiceOwnerRef = useRef<VoiceOwnerHandle | null>(null);
   const busyRef = useRef(false);
   const voiceOutRef = useRef(true);
   const neuralTtsRef = useRef(false);
@@ -125,9 +127,13 @@ export default function ChatPanel() {
             if (!sessionRef.current && enabledRef.current) {
               window.setTimeout(() => void startListenRef.current(), 200);
             }
-          } else if (sessionRef.current) {
-            void sessionRef.current.stop();
+          } else if (sessionRef.current || voiceOwnerRef.current) {
+            void sessionRef.current?.stop();
             sessionRef.current = null;
+            voiceOwnerRef.current?.release();
+            voiceOwnerRef.current = null;
+            speakGenRef.current += 1;
+            stopSpeaking();
             setListening(false);
             setPhase("off");
             setPhaseDetail("");
@@ -683,6 +689,27 @@ export default function ChatPanel() {
     return code ? `Voice error: ${code}` : "Could not start microphone.";
   }
 
+  const releaseVoiceOwner = useCallback(() => {
+    const owner = voiceOwnerRef.current;
+    voiceOwnerRef.current = null;
+    owner?.release();
+  }, []);
+
+  const stopListening = useCallback(async () => {
+    clearIdle();
+    const s = sessionRef.current;
+    sessionRef.current = null;
+    setListening(false);
+    setEarsMode("");
+    setPhase("off");
+    setPhaseDetail("");
+    setInterim("");
+    speakGenRef.current += 1;
+    stopSpeaking();
+    releaseVoiceOwner();
+    if (s) await s.stop();
+  }, [clearIdle, releaseVoiceOwner]);
+
   const startListening = useCallback(async () => {
     setVoiceErr(null);
     if (!window.isSecureContext) {
@@ -695,6 +722,18 @@ export default function ChatPanel() {
 
     setPhase("starting");
     setPhaseDetail("Starting always-on mic…");
+    // Claim sole mic ownership across tabs before opening the stream.
+    releaseVoiceOwner();
+    voiceOwnerRef.current = claimVoiceOwner(() => {
+      void stopListening();
+      setVoiceErr("Microphone moved to another SOC tab. Re-enable Free Hand here to listen again.");
+      setNeedMicGate(true);
+      try {
+        localStorage.setItem(AUTO_KEY, "0");
+      } catch {
+        /* ignore */
+      }
+    });
     const started = await startTiaEars({
       onPhase: (p, detail) => {
         setPhase(p);
@@ -709,6 +748,7 @@ export default function ChatPanel() {
       setListening(false);
       setNeedMicGate(true);
       setVoiceErr(micHelpMessage(started.code));
+      releaseVoiceOwner();
       return;
     }
     sessionRef.current = started.session;
@@ -726,21 +766,9 @@ export default function ChatPanel() {
         ? 'Always listening — say "Hi Tia"'
         : 'Always listening (server ears) — say "Hi Tia"'
     );
-  }, []);
+  }, [releaseVoiceOwner, stopListening]);
 
   startListenRef.current = startListening;
-
-  const stopListening = useCallback(async () => {
-    clearIdle();
-    const s = sessionRef.current;
-    sessionRef.current = null;
-    setListening(false);
-    setEarsMode("");
-    setPhase("off");
-    setPhaseDetail("");
-    setInterim("");
-    if (s) await s.stop();
-  }, [clearIdle]);
 
   useEffect(() => {
     getChatStatus()
@@ -817,14 +845,29 @@ export default function ChatPanel() {
       }
     }, 8000);
 
+    const onPageHide = () => {
+      speakGenRef.current += 1;
+      stopSpeaking();
+      void sessionRef.current?.stop();
+      sessionRef.current = null;
+      voiceOwnerRef.current?.release();
+      voiceOwnerRef.current = null;
+    };
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("beforeunload", onPageHide);
+
     return () => {
       window.removeEventListener("pointerdown", armGesture, true);
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("beforeunload", onPageHide);
       window.clearInterval(watchdog);
       if (idleTimerRef.current) window.clearTimeout(idleTimerRef.current);
       void sessionRef.current?.stop();
       sessionRef.current = null;
       speakGenRef.current += 1;
       stopSpeaking();
+      voiceOwnerRef.current?.release();
+      voiceOwnerRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [logout]);

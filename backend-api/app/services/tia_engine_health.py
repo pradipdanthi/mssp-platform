@@ -267,6 +267,74 @@ def probe_shuffle(host: str) -> Dict[str, Layers]:
     return out
 
 
+def probe_misp() -> Dict[str, Layers]:
+    """Use the authorised MISP bridge client. Port-open alone is not application readiness."""
+    from app.services import misp_client as m
+
+    out: Dict[str, Any] = {}
+    if not m.configured():
+        out["api"] = _unknown("credentials_not_configured", "misp_api")
+        out["auth"] = _unknown("credentials_not_configured", "misp_api")
+        out["application"] = _unknown("needs_api_key", "misp_api")
+        return out
+    try:
+        doc = m.health()
+    except Exception as exc:  # noqa: BLE001
+        out["api"] = _layer("unreachable", "api_unreachable", "misp_api", type(exc).__name__)
+        out["auth"] = _unknown("api_unavailable", "misp_api")
+        out["application"] = _unknown("api_unavailable", "misp_api")
+        return out
+    status = str((doc or {}).get("status") or "").lower()
+    if status in ("ok", "healthy", "running"):
+        out["api"] = _layer("ok", None, "misp_api", "health endpoint ok")
+        out["application"] = _layer("ok", None, "misp_api", "bridge reports healthy")
+        out["auth"] = _layer("ok", None, "misp_api", "api key present; health reached")
+    elif status in ("unreachable",):
+        out["api"] = _layer("unreachable", "api_unreachable", "misp_api", str((doc or {}).get("error") or "")[:120])
+        out["auth"] = _unknown("api_unavailable", "misp_api")
+        out["application"] = _unknown("api_unavailable", "misp_api")
+    else:
+        detail = str((doc or {}).get("error") or status or "unexpected")[:120]
+        out["api"] = _layer("degraded", "unexpected_status", "misp_api", detail)
+        out["auth"] = _unknown("health_degraded", "misp_api")
+        out["application"] = _layer("degraded", "health_endpoint_not_ok", "misp_api", detail)
+    return out
+
+
+def probe_velociraptor() -> Dict[str, Layers]:
+    """Bridge health only — not proof that hunts are succeeding for every tenant."""
+    from app.services import velociraptor_client as v
+
+    out: Dict[str, Any] = {}
+    if not v.configured():
+        out["api"] = _unknown("credentials_not_configured", "velociraptor_bridge")
+        out["auth"] = _unknown("credentials_not_configured", "velociraptor_bridge")
+        out["application"] = _unknown("needs_bridge_key", "velociraptor_bridge")
+        return out
+    try:
+        doc = v.health()
+    except Exception as exc:  # noqa: BLE001
+        out["api"] = _layer("unreachable", "api_unreachable", "velociraptor_bridge", type(exc).__name__)
+        out["auth"] = _unknown("api_unavailable", "velociraptor_bridge")
+        out["application"] = _unknown("api_unavailable", "velociraptor_bridge")
+        return out
+    status = str((doc or {}).get("status") or "").lower()
+    err = str((doc or {}).get("error") or "")[:120]
+    if status in ("ok", "healthy", "running"):
+        out["api"] = _layer("ok", None, "velociraptor_bridge", "health endpoint ok")
+        out["application"] = _layer("ok", None, "velociraptor_bridge", "bridge reports healthy")
+        out["auth"] = _layer("ok", None, "velociraptor_bridge", "bridge key present; health reached")
+    elif status == "unreachable":
+        out["api"] = _layer("unreachable", "api_unreachable", "velociraptor_bridge", err)
+        out["auth"] = _unknown("api_unavailable", "velociraptor_bridge")
+        out["application"] = _unknown("api_unavailable", "velociraptor_bridge")
+    else:
+        out["api"] = _layer("degraded", "unexpected_status", "velociraptor_bridge", err or status)
+        out["auth"] = _unknown("health_degraded", "velociraptor_bridge")
+        out["application"] = _layer("degraded", "health_endpoint_not_ok", "velociraptor_bridge", err or status)
+    return out
+
+
 def probe_soc_agent() -> Dict[str, Layers]:
     from app.services import soc_agent_client as a
 
@@ -431,10 +499,11 @@ def _specs() -> List[Dict[str, Any]]:
     spec("thehive", lambda: probe_thehive(infra.thehive_url), telemetry=False)
     spec("shuffle", lambda: probe_shuffle(infra.shuffle_host), telemetry=False)
     spec("suricata", None, minutes=1440)
+    # Zeek has no direct control-plane API; ingest freshness is the application signal.
     spec("zeek", None, minutes=1440)
-    spec("misp", None, telemetry=False)
+    spec("misp", probe_misp, telemetry=False)
     spec("greenbone", None, minutes=10080)
-    spec("velociraptor", None, telemetry=False)
+    spec("velociraptor", probe_velociraptor, telemetry=False)
     spec("secure_edge", None, minutes=1440)
     spec("soc_agent", probe_soc_agent, telemetry=False)
     spec("appliances", probe_appliances, telemetry=False, reach=False)

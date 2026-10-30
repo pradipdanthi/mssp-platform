@@ -603,6 +603,55 @@ class ConversationFlowTests(ConversationBase):
         self.assertEqual(r["intent"], "evidence")
         self.assertEqual(r["tool"], "explain_evidence")
 
+    def test_recommend_next_does_not_queue_a_job(self) -> None:
+        from app.db.session import fetch_one
+
+        s = sid()
+        before = fetch_one("SELECT count(*)::int AS n FROM tia_jobs;")["n"]
+        self._focus_first(s)
+        r = self.converse("analyst", "What should we investigate next?", s)
+        self.assertEqual(r["intent"], "recommendation", r)
+        self.assertEqual(r["tool"], "recommend_next")
+        self.assertNotIn("job", r)
+        self.assertIn("not started an investigation", r["answer"].lower())
+        after = fetch_one("SELECT count(*)::int AS n FROM tia_jobs;")["n"]
+        self.assertEqual(before, after)
+
+    def test_what_happened_is_assessment_not_a_job(self) -> None:
+        from app.db.session import fetch_one
+
+        s = sid()
+        before = fetch_one("SELECT count(*)::int AS n FROM tia_jobs;")["n"]
+        self._focus_first(s)
+        r = self.converse("analyst", "What do you think happened here?", s)
+        self.assertEqual(r["intent"], "assessment", r)
+        self.assertIn("explain_evidence", r.get("tool") or "")
+        self.assertNotIn("job", r)
+        after = fetch_one("SELECT count(*)::int AS n FROM tia_jobs;")["n"]
+        self.assertEqual(before, after)
+
+    def test_wazoo_and_shuffle_processing_uses_ingest(self) -> None:
+        s = sid()
+        from unittest.mock import patch
+        from app.services import tia_tools as tools_mod
+
+        fake = {
+            "answer": "Reachability ok; telemetry freshness checked.",
+            "spoken_answer": "Wazuh ingest checked.",
+            "status": "ok",
+        }
+        with patch.object(tools_mod, "ingest_status", return_value=fake) as ingest:
+            r = self.converse(
+                "analyst",
+                "Are Wazoo and Shuffle actually processing work?",
+                s,
+            )
+        self.assertEqual(r["intent"], "ingest_status", r)
+        self.assertEqual(r["tool"], "ingest_status")
+        called = {c.args[1] for c in ingest.call_args_list}
+        self.assertEqual(called, {"wazuh", "shuffle"})
+        self.assertNotIn("job", r)
+
 
 if __name__ == "__main__":
     unittest.main()

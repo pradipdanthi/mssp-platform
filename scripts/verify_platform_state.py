@@ -1748,6 +1748,39 @@ def check_soc_agent_integration() -> CheckResult:
         path=svc / "tia_engine_health.py",
         status_if_false="FAILED",
     )
+    expect(
+        f,
+        "def probe_misp" in eh_txt and "def probe_velociraptor" in eh_txt and "probe_misp" in eh_txt.split("def _specs")[1],
+        "MISP and Velociraptor use authorised bridge/API probes in engine health (not reachability-only no_adapter stubs)",
+        path=svc / "tia_engine_health.py",
+        status_if_false="FAILED",
+    )
+    intents_txt = read(svc / "tia_intents.py") if (svc / "tia_intents.py").is_file() else ""
+    expect(
+        f,
+        all(k in intents_txt for k in ("ASSESSMENT", "RECOMMENDATION", "STATUS", "EXECUTION", "wazoo"))
+        and "recommend_next" in conv_txt
+        and "_assess_case" in conv_txt
+        and "family == tia_intents.RECOMMENDATION" in conv_txt,
+        "TIA turn families separate assessment/recommendation/status from execution so advice questions cannot enqueue jobs",
+        path=svc / "tia_intents.py",
+        status_if_false="FAILED",
+    )
+    voice_owner = ROOT / "frontend-soc" / "src" / "lib" / "tiaVoiceOwner.ts"
+    chat_txt = read(ROOT / "frontend-soc" / "src" / "components" / "ChatPanel.tsx")
+    utter_txt = read(ROOT / "frontend-soc" / "src" / "lib" / "tiaUtterance.ts")
+    ears_txt = read(ROOT / "frontend-soc" / "src" / "lib" / "tiaEars.ts")
+    expect(
+        f,
+        voice_owner.is_file()
+        and "claimVoiceOwner" in chat_txt
+        and "looksIncompleteUtterance" in utter_txt
+        and "incompleteHolds < 2" in ears_txt
+        and "Can you check" in utter_txt,
+        "Hands-free voice owns one tab, holds incomplete lead-ins across natural pauses, and releases mic on session end",
+        path=voice_owner,
+        status_if_false="FAILED",
+    )
     pb_txt = read(svc / "tia_playbooks.py") if (svc / "tia_playbooks.py").is_file() else ""
     mig121 = ROOT / "postgres" / "init" / "121_tia_playbooks.sql"
     t1_txt = read(svc / "ai_tier1_triage.py")
@@ -1797,6 +1830,8 @@ def check_soc_agent_integration() -> CheckResult:
         "backend-api/tests/test_tia_jobs.py",
         "backend-api/tests/test_tia_conversation.py",
         "backend-api/tests/test_tia_engine_health.py",
+        "backend-api/tests/test_tia_intents.py",
+        "frontend-soc/src/lib/tiaVoiceOwner.ts",
         "backend-api/tests/test_tia_playbooks.py",
         "backend-api/tests/test_tia_research.py",
         "backend-api/tests/test_tia_ticket_summary.py",

@@ -39,6 +39,55 @@ def incident_for_alert(tenant_id: str, alert_id: str) -> Optional[Dict[str, Any]
     ) or None
 
 
+def ensure_incident_for_alert(tenant_id: str, alert_id: str) -> Optional[Dict[str, Any]]:
+    """Open a minimal MSSP incident when TIA finishes an investigation with no case yet.
+
+    Ticket notes require an incident_timeline row. Skipping forever left durable analysis
+    invisible on the case page. Status/owner/resolution stay human-controlled.
+    """
+    existing = incident_for_alert(tenant_id, alert_id)
+    if existing:
+        return existing
+    from app.db.session import db_transaction
+
+    alert = fetch_one(
+        "SELECT a.id::text AS id, a.alert_title, a.severity, t.short_code "
+        "FROM security_alerts a JOIN tenants t ON t.id = a.tenant_id "
+        "WHERE a.id = %s::uuid AND a.tenant_id = %s::uuid;",
+        (alert_id, tenant_id),
+    )
+    if not alert:
+        return None
+    code = (alert.get("short_code") or "MSSP")[:12].upper()
+    with db_transaction() as cur:
+        cur.execute(
+            "SELECT count(*)::int AS n FROM incidents WHERE tenant_id = %s::uuid AND incident_number LIKE %s;",
+            (tenant_id, f"INC-TIA-{code}-%"),
+        )
+        n = int((cur.fetchone() or {}).get("n") or 0) + 1
+        number = f"INC-TIA-{code}-{n:04d}"
+        title = (alert.get("alert_title") or "TIA investigation")[:500]
+        sev = (alert.get("severity") or "medium").lower()
+        if sev not in ("critical", "high", "medium", "low", "info"):
+            sev = "medium"
+        cur.execute(
+            "INSERT INTO incidents (tenant_id, primary_alert_id, incident_number, title, severity, status, opened_at) "
+            "VALUES (%s::uuid, %s::uuid, %s, %s, %s, 'open', now()) "
+            "RETURNING id::text AS id, incident_number, status, NULL::text AS assigned_to;",
+            (tenant_id, alert_id, number, title, sev),
+        )
+        row = dict(cur.fetchone())
+        try:
+            cur.execute(
+                "INSERT INTO incident_alerts (incident_id, alert_id) VALUES (%s::uuid, %s::uuid) ON CONFLICT DO NOTHING;",
+                (row["id"], alert_id),
+            )
+        except Exception:  # noqa: BLE001 — join table optional on some schemas
+            pass
+    logger.info("tia ensured incident %s for alert %s", row.get("incident_number"), alert_id[:8])
+    return incident_for_alert(tenant_id, alert_id) or row
+
+
 def _attempt(attempt_id: str) -> Dict[str, Any]:
     return fetch_one(
         "SELECT a.id::text AS id, a.tenant_id::text AS tenant_id, a.alert_id::text AS alert_id, a.evidence_version, a.attempt_no, "
@@ -136,7 +185,7 @@ def compose(attempt_id: str) -> Dict[str, Any]:
 def write_investigation_note(attempt_id: str) -> Dict[str, Any]:
     note = compose(attempt_id)
     att = note["attempt"]
-    inc = incident_for_alert(att["tenant_id"], att["alert_id"])
+    inc = ensure_incident_for_alert(att["tenant_id"], att["alert_id"])
     if not inc:
         return tia_effects.skip(kind="ticket_note", tenant_id=att["tenant_id"], alert_id=att["alert_id"],
                                 evidence_version=att["evidence_version"], attempt_id=attempt_id, reason="no_incident_for_alert")

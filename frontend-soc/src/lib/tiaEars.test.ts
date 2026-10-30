@@ -18,4 +18,16 @@ describe("voice settle wait", () => {
     assert.equal(looksIncompleteUtterance("what's the"), true);
     assert.ok(settleWaitMs("what's the", true) >= 1600);
   });
+
+  it("holds a lead-in like can you check through a natural pause", () => {
+    assert.equal(looksIncompleteUtterance("Can you check"), true);
+    assert.equal(looksIncompleteUtterance("Can you check whether"), true);
+    assert.equal(
+      looksIncompleteUtterance(
+        "Can you check whether Wazuh and Shuffle are actually processing work?"
+      ),
+      false
+    );
+    assert.ok(settleWaitMs("Can you check", true) >= 2200);
+  });
 });

@@ -91,8 +91,8 @@ async function startBrowserEars(handlers: EarsHandlers): Promise<
         scheduleFlush();
         return;
       }
-      // One longer hold only when the last word is clearly unfinished.
-      if (looksIncompleteUtterance(pending) && pending.trim() && incompleteHolds < 1) {
+      // Allow two incomplete holds so a 2 s mid-sentence pause does not submit a lead-in.
+      if (looksIncompleteUtterance(pending) && pending.trim() && incompleteHolds < 2) {
         incompleteHolds += 1;
         scheduleFlush();
         return;

@@ -410,12 +410,23 @@ class TicketNoteTests(Base):
         self.assertEqual(row["resolution_summary"], "Analyst: user confirmed the macro was a test.")
         self.assertIn("incident status was not changed", self.timeline(inc)[0]["details"])
 
-    def test_no_incident_is_recorded_as_skipped_not_lost(self) -> None:
+    def test_missing_incident_is_opened_so_the_note_is_not_lost(self) -> None:
+        from app.db.session import fetch_one
         from app.services import tia_ticket_note as tn
 
         a = self.alert()
+        self.assertIsNone(tn.incident_for_alert(TA, a))
         out = tn.write_investigation_note(self.investigated(a)["attempt_id"])
-        self.assertEqual((out["outcome"], out["reason"]), ("skipped", "no_incident_for_alert"))
+        self.assertEqual(out["outcome"], "committed", out)
+        self.assertTrue(out.get("verified"))
+        inc = tn.incident_for_alert(TA, a)
+        self.assertIsNotNone(inc)
+        self.assertTrue(str(inc["incident_number"]).startswith("INC-TIA-"))
+        row = fetch_one(
+            "SELECT title FROM incident_timeline WHERE incident_id = %s::uuid AND title = %s;",
+            (inc["id"], tn.NOTE_TITLE),
+        )
+        self.assertIsNotNone(row)
 
     def test_failed_investigation_note_says_no_verdict(self) -> None:
         from app.services import tia_acceptance as acc

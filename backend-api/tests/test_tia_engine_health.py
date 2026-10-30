@@ -139,10 +139,24 @@ class AdapterTests(unittest.TestCase):
     def test_engines_without_an_adapter_say_so(self) -> None:
         from app.services import tia_engine_health as eh
 
+        # Suricata still has reachability + telemetry only (no API adapter).
         with patch.object(eh, "probe_reachability", return_value=L("ok")), patch.object(eh, "probe_telemetry", return_value=L("unknown", "no_events_recorded")):
-            e = eh.check_engine(self.spec("misp"))
+            e = eh.check_engine(self.spec("suricata"))
         self.assertEqual(e["status"], "unknown")
         self.assertEqual(e["layers"]["auth"]["reason"], "no_adapter")
+
+    def test_misp_adapter_reports_missing_credentials_honestly(self) -> None:
+        from app.services import misp_client as m
+        from app.services import tia_engine_health as eh
+
+        spec = dict(self.spec("misp"))
+        spec["probe"] = eh.probe_misp
+        with patch.object(eh, "probe_reachability", return_value=L("ok")), patch.object(
+            m, "configured", return_value=False
+        ):
+            e = eh.check_engine(spec)
+        self.assertEqual(e["layers"]["auth"]["reason"], "credentials_not_configured")
+        self.assertNotEqual(e["status"], "ok")
 
     def test_a_probe_that_raises_is_reported_unknown_not_ok(self) -> None:
         from app.services import tia_engine_health as eh

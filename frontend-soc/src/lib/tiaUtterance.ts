@@ -45,6 +45,9 @@ export function matchWake(text: string): { woke: boolean; remainder: string } {
   return { woke: false, remainder: raw };
 }
 
+/** Soft openers that often arrive as a Chrome "final" before the real question. */
+const LEAD_IN = /^(can you|could you|would you|will you|please|hey|ok|okay|so|um|uh)\b/i;
+
 export function looksIncompleteUtterance(text: string): boolean {
   const t = (text || "").trim();
   if (!t) return true;
@@ -54,11 +57,15 @@ export function looksIncompleteUtterance(text: string): boolean {
   const words = body.split(/\s+/).filter(Boolean);
   if (woke && words.length === 0) return false;
   if (/[.!?…]["')\]]?\s*$/.test(t)) return false;
-  if (/[,;:]\s*$/.test(t)) return true;
+  if (/[,;:…]\s*$/.test(t)) return true;
+  if (/\.{2,}\s*$/.test(t)) return true;
 
   const lower = t.toLowerCase().replace(/['']/g, "'");
+  // "Can you check" / "whether" alone are mid-thought, not commands.
+  if (LEAD_IN.test(body) && words.length <= 5 && !/[.!?]$/.test(body)) return true;
+  if (/\b(whether|if|about|regarding)\s*$/i.test(lower)) return true;
   if (
-    /\b(and|or|but|so|because|if|when|while|that|which|who|whom|whose|what|where|how|why|to|for|of|the|a|an|my|your|our|their|its|is|are|was|were|am|be|been|being|have|has|had|do|does|did|can|could|would|should|will|shall|may|might|must|with|about|from|into|onto|on|in|at|as|than|then|also|just|please|tell|give|show|list|check|look|need|want|get|make|take|see|find|open|close|update|set|mark|run|start|stop)\s*$/i.test(
+    /\b(and|or|but|so|because|if|when|while|that|which|who|whom|whose|what|where|how|why|to|for|of|the|a|an|my|your|our|their|its|is|are|was|were|am|be|been|being|have|has|had|do|does|did|can|could|would|should|will|shall|may|might|must|with|about|from|into|onto|on|in|at|as|than|then|also|just|please|tell|give|show|list|check|look|need|want|get|make|take|see|find|open|close|update|set|mark|run|start|stop|processing)\s*$/i.test(
       lower
     )
   ) {
@@ -73,6 +80,7 @@ export function settleWaitMs(text: string, inConversation: boolean): number {
   const { woke, remainder } = matchWake(text);
   const bareWake = woke && !(remainder || "").trim();
   if (bareWake && !inConversation) return 280;
-  if (incomplete) return inConversation ? 1800 : 1600;
+  // Hold long enough for a natural 1–3 s breath without blocking finished commands.
+  if (incomplete) return inConversation ? 2600 : 2200;
   return inConversation ? 280 : 220;
 }
