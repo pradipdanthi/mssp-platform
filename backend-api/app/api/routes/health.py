@@ -53,10 +53,25 @@ def health() -> Dict[str, Any]:
 
     api_status = "ok" if db_status == "ok" and redis_status == "ok" else "degraded"
 
+    tia_workers = None
+    try:
+        from app.services.ai_alert_queue import _ai_pipeline_enabled, start_ai_alert_worker
+        from app.services import tia_jobs
+
+        if _ai_pipeline_enabled():
+            tia_workers = tia_jobs.alive_workers()
+            if tia_workers <= 0:
+                start_ai_alert_worker()
+                tia_workers = tia_jobs.alive_workers()
+    except Exception:  # noqa: BLE001
+        logger.exception("health TIA worker check failed")
+        tia_workers = -1
+
     return {
         "api": api_status,
         "service": "mssp-backend-api",
         "environment": APP_ENV,
         "database": db_status,
         "redis": redis_status,
+        "tia_workers": tia_workers,
     }

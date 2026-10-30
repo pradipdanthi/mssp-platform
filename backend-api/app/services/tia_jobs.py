@@ -460,18 +460,22 @@ def alive_workers() -> int:
 def _worker(handler: Handler, index: int) -> None:
     wid = f"{WORKER_ID}#{index}"
     idle = 0.0
-    while not _stop.is_set():
-        try:
-            res = run_one(handler, wid)
-        except Exception:  # noqa: BLE001
-            logger.exception("tia_jobs: worker loop error")
-            res = None
-            _stop.wait(2.0)
-        if res is None:
-            idle = min(5.0, idle + 0.5)
-            _stop.wait(max(0.5, idle))
-        else:
-            idle = 0.0
+    logger.warning("tia_jobs: worker %s entered loop", wid)
+    try:
+        while not _stop.is_set():
+            try:
+                res = run_one(handler, wid)
+            except Exception:  # noqa: BLE001
+                logger.exception("tia_jobs: worker loop error")
+                res = None
+                _stop.wait(2.0)
+            if res is None:
+                idle = min(5.0, idle + 0.5)
+                _stop.wait(max(0.5, idle))
+            else:
+                idle = 0.0
+    finally:
+        logger.warning("tia_jobs: worker %s left loop (stop=%s)", wid, _stop.is_set())
 
 
 def _maintenance() -> None:

@@ -326,18 +326,21 @@ def start_ai_alert_worker() -> None:
     """Call from FastAPI startup when AI explain and/or SOC triage is enabled."""
     if _ai_pipeline_enabled():
         _ensure_worker()
+        from app.services import tia_jobs
         from app.services.tia_outbox import start_outbox_worker
 
         start_outbox_worker()
-        logger.info(
-            "AI pipeline worker starting (explain=%s triage=%s deep=%s soc_agent=%s)",
+        logger.warning(
+            "AI pipeline workers ready (explain=%s triage=%s deep=%s soc_agent=%s durable_workers=%s schema=%s)",
             ai_alert_enabled(),
             ai_soc_triage_enabled(),
             deep_triage_enabled(),
             soc_agent_enabled(),
+            tia_jobs.alive_workers(),
+            tia_jobs.schema_ready(),
         )
     else:
-        logger.info(
+        logger.warning(
             "AI pipeline worker not started (AI_ALERT_ENABLED=false, "
             "AI_SOC_TRIAGE_ENABLED=false, AI_DEEP_TRIAGE_ENABLED=false, "
             "SOC_AGENT_ENABLED=false)"

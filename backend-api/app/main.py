@@ -4,11 +4,14 @@ FastAPI app object, and router registration. All route logic (system,
 admin, customer, auth) now lives under app/api/routes/.
 """
 
+import logging
 import os
 
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger(__name__)
 
 from app.api.routes.admin import router as admin_router
 from app.api.routes.admin_ops import router as admin_ops_router
@@ -227,7 +230,28 @@ async def _start_background_tasks():
     global _sweeper_task
     _sweeper_task = asyncio.create_task(edr_sweeper_loop())
     start_shuffle_retry_worker()
-    start_ai_alert_worker()
+    try:
+        start_ai_alert_worker()
+        from app.services import tia_jobs as _tia_jobs
+
+        alive = _tia_jobs.alive_workers()
+        logger.warning("TIA investigation workers alive after startup: %s", alive)
+        if alive <= 0:
+            # DB pool can be momentarily unavailable during first connect; retry once.
+            async def _retry_tia_workers() -> None:
+                await asyncio.sleep(3)
+                try:
+                    start_ai_alert_worker()
+                    logger.warning(
+                        "TIA investigation workers alive after retry: %s",
+                        _tia_jobs.alive_workers(),
+                    )
+                except Exception:  # noqa: BLE001
+                    logger.exception("TIA worker retry failed")
+
+            asyncio.create_task(_retry_tia_workers())
+    except Exception:  # noqa: BLE001
+        logger.exception("AI/TIA worker startup failed")
     start_soc_notifier()
     start_log_archiver_worker()
 

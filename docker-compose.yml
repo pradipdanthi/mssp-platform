@@ -126,6 +126,8 @@ services:
       SOC_AGENT_CALLBACK_TOKEN: ${SOC_AGENT_CALLBACK_TOKEN:-}
       SOC_AGENT_TIMEOUT_SECONDS: ${SOC_AGENT_TIMEOUT_SECONDS:-90}
       SOC_AGENT_MIN_SEVERITY: ${SOC_AGENT_MIN_SEVERITY:-medium}
+      SOC_AGENT_CA_BUNDLE: ${SOC_AGENT_CA_BUNDLE:-}
+      SOC_AGENT_REQUIRE_TLS: ${SOC_AGENT_REQUIRE_TLS:-false}
       # Live Proxmox inventory for Tia (vCPU/RAM/status). Key mounted below.
       PROXMOX_ENABLED: ${PROXMOX_ENABLED:-true}
       PROXMOX_SSH_HOST: ${PROXMOX_SSH_HOST:-192.168.0.191}
@@ -179,6 +181,7 @@ services:
       - ./.secrets/wazuh_api_password:/run/secrets/wazuh_api_password:ro
       - ./.secrets/licensing-ed25519-v1.key:/opt/mssp-control/.secrets/licensing-ed25519-v1.key:ro
       - ./.secrets/proxmox_ssh_key:/run/secrets/proxmox_ssh_key:ro
+      - ./.secrets/soc-agent-tls/ca.crt:/run/secrets/soc_agent_ca.crt:ro
       - ./.cache/mssp:/var/cache/mssp
     networks:
       - mssp-backend

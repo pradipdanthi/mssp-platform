@@ -5,7 +5,10 @@
 (() => {
   try {
     const host = location.hostname;
-    if (host !== "127.0.0.1" && host !== "localhost") return;
+    // Lab SOC console (:3443) may drive the fixture for non-physical acceptance.
+    // Never auto-enable without ?voice=fixture. Physical mic proof stays separate.
+    const labHosts = new Set(["127.0.0.1", "localhost", "192.168.0.201"]);
+    if (!labHosts.has(host)) return;
     if (new URLSearchParams(location.search).get("voice") !== "fixture") return;
   } catch (e) {
     return;
