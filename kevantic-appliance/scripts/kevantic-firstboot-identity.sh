@@ -6,8 +6,8 @@
 #   * regenerate /etc/machine-id (unique host identity)
 #   * clear Wazuh client.keys so the node cannot reuse a prior agent identity
 #   * never plant mssp-callback.key (callback secret comes from manager shared groups)
-#   * rewrite netplan from live NIC MAC + Proxmox cloud-init IP; netplan generate
-#     (no netplan apply — this unit runs before systemd-networkd exists)
+#   * rewrite netplan from live NIC MAC + Proxmox cloud-init IP; netplan apply
+#     (unit After=systemd-networkd so apply can reload the running renderer)
 # Subsequent boots: marker removed → this unit is a no-op (ConditionPathExists).
 set -euo pipefail
 
@@ -130,10 +130,9 @@ cat >"$NETPLAN_OUT" <<EOF
 network:
   version: 2
   ethernets:
-    eth0:
+    clone0:
       match:
         macaddress: "${LIVE_MAC}"
-      set-name: "eth0"
       addresses:
       - "${CI_ADDR}/${CI_PREFIX:-24}"
       nameservers:
@@ -145,9 +144,18 @@ network:
 EOF
 chmod 600 "$NETPLAN_OUT"
 echo "netplan_written file=$NETPLAN_OUT addr=${CI_ADDR}/${CI_PREFIX:-24} mac=$LIVE_MAC gw=$CI_GW"
-# generate only — networkd is not up yet (Before=systemd-networkd)
 netplan generate
-echo "netplan_generate=ok"
+netplan apply
+echo "netplan_apply=ok"
+# Wait briefly for address to land (sshd starts after this unit).
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if ip -4 -o addr show | grep -q " ${CI_ADDR}/"; then
+    echo "addr_online=${CI_ADDR}"
+    break
+  fi
+  sleep 1
+done
+ip -4 -br addr || true
 
 [[ "$CIDATA_MOUNTED" == 1 ]] && umount "$CIDATA_MNT" 2>/dev/null || true
 
