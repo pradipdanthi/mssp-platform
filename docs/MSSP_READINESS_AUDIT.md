@@ -98,7 +98,7 @@ Legend: **PASS** / **PARTIAL** / **FAIL** / **UNKNOWN** / **N/A** — with evide
 | Capability | State | Evidence | Gaps / type |
 |---|---|---|---|
 | Customer onboarding (tenants/users/entitlements) | PARTIAL | Code+KB-075; 3 tenants, 7 active users in DB | Commercial onboarding runbook/staffing UNKNOWN (missing process) |
-| Offboarding / access revocation | PARTIAL | User status model + audit logs (207 in 7d) | End-to-end offboarding drill not evidenced (missing verification) |
+| Offboarding / access revocation | PASS | Disposable lab user drill 2026-10-31: inactive → login/me/dashboard 403; owner + other tenant unaffected (ledger E22) | — |
 | Asset inventory | PARTIAL | 4 protected_assets; 1 online appliance | Fleet coverage thin (data-state / missing verification) |
 | Agent deployment (Wazuh/Windows/Linux/appliance) | PARTIAL | Lab endpoints VMs 104/105 running; golden 199; packages in repo | Production customer enroll volume not evidenced |
 | Endpoint / server monitoring | PARTIAL | Wazuh stack reachable; mid-layer/EDR docs+tags exist | Almost no current alert corpus (data-state) |

@@ -166,6 +166,8 @@ cp "$OLLAMA_WRAPPER" "$TMP/ollama-serve-pinned.sh"
 cp "$OLLAMA_ENV_EX" "$TMP/ollama.env.example"
 cp "$INSTALL_OLLAMA" "$TMP/install_appliance_ollama.sh"
 cp "$PULL_MODEL" "$TMP/pull_local_ai_model.sh"
+cp "$ROOT/scripts/kevantic-firstboot-identity.sh" "$TMP/kevantic-firstboot-identity.sh"
+cp "$ROOT/systemd/kevantic-firstboot-identity.service" "$TMP/kevantic-firstboot-identity.service"
 python3 - "$TMP/image-release.json" "$GIT_COMMIT" "$ATTRIB" "$ATTRIB_MD" <<'PY'
 import hashlib
 import json
@@ -227,6 +229,8 @@ log "Installing CLI, heartbeat units, and image-release on ${HOST} (git_commit=$
   "$TMP/pull_local_ai_model.sh" \
   "$TMP/ollama-serve-pinned.sh" \
   "$TMP/ollama.env.example" \
+  "$TMP/kevantic-firstboot-identity.sh" \
+  "$TMP/kevantic-firstboot-identity.service" \
   "${USER_NAME}@${HOST}:/tmp/"
 
 "${SCP[@]}" -r "$TMP/ollama.service.d" "${USER_NAME}@${HOST}:/tmp/"
@@ -247,6 +251,13 @@ sudo install -m 0644 /tmp/licensing-ed25519-v1.pub /etc/kevantic/trust/keys/lice
 sudo install -m 0644 /tmp/licensing-ed25519-v1.pub /etc/niktiar/trust/keys/licensing-ed25519-v1.pub
 sudo install -m 0644 /tmp/image-release.json /etc/kevantic/image-release.json
 sudo install -m 0644 /tmp/image-release.json /etc/niktiar/image-release.json
+# Clone/factory identity: marker forces unique machine-id + empty client.keys before Wazuh starts.
+if [[ -f /tmp/kevantic-firstboot-identity.sh && -f /tmp/kevantic-firstboot-identity.service ]]; then
+  sudo install -m 0755 /tmp/kevantic-firstboot-identity.sh /usr/local/sbin/kevantic-firstboot-identity.sh
+  sudo install -m 0644 /tmp/kevantic-firstboot-identity.service /etc/systemd/system/kevantic-firstboot-identity.service
+  sudo touch /etc/kevantic/GOLDEN_TEMPLATE
+  sudo systemctl enable kevantic-firstboot-identity.service
+fi
 sudo install -m 0644 /tmp/kevantic-heartbeat.service /etc/systemd/system/kevantic-heartbeat.service
 sudo install -m 0644 /tmp/kevantic-heartbeat.timer /etc/systemd/system/kevantic-heartbeat.timer
 sudo install -m 0644 /tmp/niktiar-heartbeat.service /etc/systemd/system/niktiar-heartbeat.service

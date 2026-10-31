@@ -1,0 +1,15 @@
+[Unit]
+Description=Kevantic golden/clone first-boot host identity
+Documentation=file:///opt/mssp-control/kevantic-appliance/scripts/kevantic-firstboot-identity.sh
+DefaultDependencies=no
+After=local-fs.target systemd-machine-id-commit.service
+Before=wazuh-manager.service wazuh-agent.service network-online.target
+ConditionPathExists=/etc/kevantic/GOLDEN_TEMPLATE
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/kevantic-firstboot-identity.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
