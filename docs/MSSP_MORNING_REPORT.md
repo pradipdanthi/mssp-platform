@@ -1,48 +1,45 @@
-# Continuity handover — autonomous MSSP run (post morning checkpoint)
+# Continuity handover — gap-closure after a3df314
 
-Updated: 2026-10-31 ~06:45Z · Continues intermediate morning checkpoint  
-Git: `a3df314` (pushed `kb112-sovereign-edge`) · Deployed backend: `sha256:ebee1adb…` (2026-10-31T06:35:17Z) · Golden: `kb-edr-key-202610311152`
+Updated: 2026-10-31 ~13:00 IST  
+**Baseline preserved:** git `a3df314` / docs `7973f34+` · backend `sha256:ebee1adb…` · golden snap `kb-edr-key-202610311152`
 
-## 1. Verified improvements (this continuation)
+## 1. Newly verified / repaired
 
 | Area | Result |
 |---|---|
-| EDR key rollout | Unpublished key **did** break endpoints (manager held SOC-sync key → 401). Canary ALPHA → full central (8) + appliance (2) publish → golden bake. Accept new key / reject sync+invalid / wrong-agent bind proven. |
-| Linux source→incident | `linux-endpoint-lab` (001) syslog → appliance Wazuh 100901 → CP alert `c76efe84…` + `INC-BETAWINCORP-J3FW-APP-0001` → assign/comment/closed (authorized_benign lab). |
-| Network Suricata→CP | Live mirrored packets → eve `GPL ATTACK_RESPONSE id check returned root` → manager rule 100611 → CP `4987505d…` (`source_tool=suricata`, BETA). |
-| Ingress token state | Current works (200); retired bak token rejected (404); garbage 404; access logs `<redacted>`; no hung reload undoing state. |
-| 524 vs empty board | **Cause established:** `scripts/purge_lab_alerts_incidents.sh` ran in prior SOC session ([chat](0f0fa4e2-99b0-40ad-9a25-f67b58f3e41e)). Same DB; backup still holds 524/313. |
-| Isolated restore | Decrypt+DB path ~6s; tenants/users/alerts/incidents + role hashes verified; outbound suppressed (no workers on drill); live DB untouched. |
-| Notifications | File sink works; webhook fails closed after 4 attempts; WhatsApp blocked on missing creds; prior ack = **test harness**, not human. |
-| Portals + TIA typed | Admin/Customer auth workflows + tenant 404; greetings/goodbye/engines/Shuffel/Bro/customers (0 jobs)/criticality. Physical mic still UNVERIFIED. |
+| Requirement coverage | Full original gate map in `MSSP_EXECUTION_LEDGER.md` (evidence vs remaining check vs dependency vs N/A) |
+| Safe rollback | Removed guidance to restore pre-canary **shared** EDR/SOC-sync key. Fail-closed if dedicated key missing. Prior image compat checked in isolation with **current** secrets. |
+| App recovery | Isolated restored DB + API `:18000`: successful logins, tenant 404, incidents/reports readable; notifications/workers suppressed. DB restore time separate from app-recovery time. |
+| Windows path | Agent 006 live telemetry → ALPHA `INC-ALPHAWINCORP-6VS2-TH-0005` closed (SSH unused). |
+| Suricata lifecycle | `INC-BETAWINCORP-J3FW-TH-0001` assigned/commented/closed (not alert-only). |
+| Zeek | Manager processing of `notice.log` (rule 110101) verified; CP SOC rows still absent for those health notices. |
+| Golden clone | VM 219 full clone inspected offline; unique SMBIOS; empty `client.keys`; **no** embedded callback secret; left **stopped**. Rebake not required for fleet. |
+| Runtime security | Production TLS pin, dedicated EDR≠SOC sync, injection canary inert, :9200 closed, SOC agent TLS ExecStart confirmed. |
+| Stability | 45.3s / 88 typed turns / 0 errors / `jobs_delta=0` (not 24/7 proof). |
 
-## 2. Remaining failures / exact dependencies
+## 2. Remaining blocked / partial (exact)
 
-- **Windows endpoint SSH** to 192.168.0.214 — blocked (key/auth); agent still online for manager-side tests only.
-- **Real WhatsApp/Telegram paging** — missing provider tokens + authorized recipient.
-- **Physical microphone** — not tested.
-- **Autonomous closure** — intentionally off.
-- **Zeek** — health “unverified” beyond reachability (expected until Zeek adapter/telemetry deeper).
-- Golden bake recorded git `a2453bf` before this commit; AR files/keys were live-published; source now aligned at `a3df314` (rebake optional, not required for live fleet).
+- Real WhatsApp/Telegram delivery + human acknowledgement — missing provider creds + recipient  
+- Physical microphone — operator  
+- Autonomous closure — policy  
+- Zeek → CP SOC queue rows — health notices not treated as customer incidents (manager evidence only)  
+- Greenbone/Nuclei/Vuls/MISP/Velociraptor **customer hunt/scan** depth — bridge/health only this window  
+- Golden `machine-id` shared until regenerate — enroll only after regenerate  
+- Windows SSH — blocked; **not required**  
 
-## 3. Requirement coverage
+## 3. Owner actions (small set)
 
-See `docs/MSSP_EXECUTION_LEDGER.md` — no silent skips; Windows/mic/WhatsApp/closure marked BLOCKED with reason.
+1. Provide WhatsApp (or approved) paging credentials + test recipient when ready for real delivery proof.  
+2. Before cloning golden into a live customer edge: regenerate `machine-id` / Wazuh keys; enroll to correct tenant group.  
+3. Optional: physical mic on `:3443`; optional image-release rebake to label `a3df314`.  
 
-## 4. Rollback
-
-- App: prior backend image `f804c4e0…` / redeploy from git tag before this commit.
-- Wazuh central: `ossec.conf.bak.gate1-*`; do not re-activate leaked ingress token from logs.
-- EDR: restore `mssp-callback.key.bak.pre-edr-canary` only as emergency (re-opens sync-key era); prefer republish dedicated key.
-- Migration 125: keep on app rollback.
-
-## 5. Verdicts (updated)
+## 4. Verdicts
 
 | Question | Verdict |
 |---|---|
-| Technical lab acceptance | **PASS for lab scope** — EDR key, Linux+Suricata source paths, token hygiene, restore drill, human incident path |
-| Human-supervised pilot | **READY for narrow lab pilot** (ALPHA/BETA/SOMANNA; owner as analyst) |
-| Recurring production service | **NOT READY** — paging, staffing, Windows live SSH path, commercial ops |
+| Technical lab acceptance | **PASS** (mapped scope; partials documented) |
+| Human-supervised pilot | **READY** with written limits (local notify / phone until WhatsApp) |
+| Recurring production service | **NOT READY** (paging, staffing, commercial ops) |
 | Staffed 24/7 | **NOT READY** |
-| TIA assistance | **Typed assist verified**; voice/mic unverified; not required for human SOC |
+| TIA assist | Typed + automated voice-lifecycle units **verified**; physical mic blocked |
 | Autonomous actions | **NOT ENABLED** |
