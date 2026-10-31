@@ -78,7 +78,8 @@ Clone 219 from tip, Proxmox `ipconfig0=192.168.0.236/24` only, **no guestfish**.
 | Physical voice / mic | BLOCKED (operator) |
 | Paging / staffing / WhatsApp delivery | BLOCKED (provider + ops) |
 | Autonomous closure activation | BLOCKED (`tia-closure-1` shadow) |
-| Zeek CP SOC rows / hunts / enrichment / deeper vuln scans | Adapter backlog PARTIAL — not this pass |
+| **E6d Zeek security detection → SOC** | **VERIFIED** | Contract: rules `110110+` (level≥10) are SOC detections; `110101` CaptureLoss stays health (level 3, not ingress). Lab stimulus: Zeek **engine** `NOTICE(SSH::Password_Guessing)` → live `notice.log` → Wazuh agent 002 → rule **110110** alert `1793459427.7609981` → CP alert **`7a6a07ed-c59e-42ee-aef9-a3e2b4d2d081`** `source_tool=zeek` tenant **BETAWINCORP-J3FW** → `INC-BETAWINCORP-J3FW-TH-0002`. SOC analyst GET alert **200**. Dedup re-POST → `duplicate:true`, `ext_count=1`. ALPHA customer on BETA alert/incident → **404**. Label: engine notice stimulus (not packet-capture replay). CaptureLoss health rows in CP: **0**. |
+| Zeek hunts / enrichment / deeper NDR product depth | PARTIAL | Backlog — not claimed this pass |
 
 ## Bounded pass journal (2026-10-31 ~14:20 IST)
 
@@ -98,3 +99,4 @@ Clone 219 from tip, Proxmox `ipconfig0=192.168.0.236/24` only, **no guestfish**.
 - 2026-10-31 ~14:20 IST: Ambiguity close + golden candidate bake/enroll acceptance; ledger split prerequisites vs enrollment.
 - 2026-10-31 ~14:45 IST: Packaging bake `kb-firstboot-netplan-202610310909` (`c2ac85e`); unattended clone network **FAILED** (IP pinned `.225`).
 - 2026-10-31 ~20:25 IST: Tip promoted to `kb-firstboot-netplan-202610311451` (`6b18744`); unattended `.236` + enroll + reboot **PASSED**; clone 219 stopped; fleet keys unchanged.
+- 2026-10-31 ~20:45 IST: E6d Zeek detection path VERIFIED (`7a6a07ed…` / `INC-BETAWINCORP-J3FW-TH-0002`); no code deploy; golden tip unchanged.
