@@ -46,6 +46,27 @@ if [[ -d /var/ossec/etc ]]; then
   echo "wazuh client.keys cleared; shared mssp-callback.key removed if present"
 fi
 
+# Clones get a new NIC MAC; golden netplan often pins the bake MAC and then
+# has no usable address. Rewrite match MAC in /etc/netplan/*.yaml when present.
+LIVE_MAC=""
+for nic_addr in /sys/class/net/*/address; do
+  nic="$(basename "$(dirname "$nic_addr")")"
+  case "$nic" in lo|docker*|veth*|br*|virbr*) continue ;; esac
+  LIVE_MAC="$(tr '[:upper:]' '[:lower:]' <"$nic_addr" | tr -d '[:space:]')"
+  [[ -n "$LIVE_MAC" ]] && break
+done
+if [[ -n "${LIVE_MAC:-}" && -d /etc/netplan ]]; then
+  for f in /etc/netplan/*.yaml /etc/netplan/*.yml; do
+    [[ -f "$f" ]] || continue
+    if grep -q 'macaddress:' "$f"; then
+      sed -i -E "s/(macaddress:[[:space:]]*[\"']?)([0-9A-Fa-f:]+)([\"']?)/\\1${LIVE_MAC}\\3/" "$f"
+      echo "netplan_mac_updated file=$f mac=$LIVE_MAC"
+    fi
+  done
+else
+  echo "netplan_mac_skip live_mac=${LIVE_MAC:-empty}"
+fi
+
 rm -f "$MARKER"
 date -Is >"$DONE"
 echo "identity initialized; GOLDEN_TEMPLATE removed"
