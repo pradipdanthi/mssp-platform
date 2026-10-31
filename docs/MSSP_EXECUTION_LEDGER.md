@@ -1,6 +1,7 @@
 # MSSP execution ledger (persistent)
 
 Started: 2026-10-30T21:00Z · Baseline git `a2453bf` · Branch `kb112-sovereign-edge`  
+Git release: `a3df314` on `kb112-sovereign-edge` (pushed)  
 Latest deployed backend image: `sha256:ebee1adbdc3beb715f9423b30f8132efeaf1a6a41ee2786b6a5e52d9686ae2c6` (2026-10-31T06:35:17Z)  
 Golden snapshot: `kb-edr-key-202610311152` (VM 199)
 

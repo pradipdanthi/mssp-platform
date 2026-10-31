@@ -1,7 +1,7 @@
 # Continuity handover — autonomous MSSP run (post morning checkpoint)
 
-Updated: 2026-10-31 ~06:40Z · Continues `MSSP_MORNING_REPORT` intermediate checkpoint  
-Deployed backend: `sha256:ebee1adb…` (2026-10-31T06:35:17Z) · Golden: `kb-edr-key-202610311152`
+Updated: 2026-10-31 ~06:45Z · Continues intermediate morning checkpoint  
+Git: `a3df314` (pushed `kb112-sovereign-edge`) · Deployed backend: `sha256:ebee1adb…` (2026-10-31T06:35:17Z) · Golden: `kb-edr-key-202610311152`
 
 ## 1. Verified improvements (this continuation)
 
@@ -23,7 +23,7 @@ Deployed backend: `sha256:ebee1adb…` (2026-10-31T06:35:17Z) · Golden: `kb-edr
 - **Physical microphone** — not tested.
 - **Autonomous closure** — intentionally off.
 - **Zeek** — health “unverified” beyond reachability (expected until Zeek adapter/telemetry deeper).
-- Golden bake recorded git `a2453bf` while working tree had uncommitted repairs at bake time; AR **files/keys** were live-published; commit this tree to align source tags.
+- Golden bake recorded git `a2453bf` before this commit; AR files/keys were live-published; source now aligned at `a3df314` (rebake optional, not required for live fleet).
 
 ## 3. Requirement coverage
 
