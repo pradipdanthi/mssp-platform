@@ -13,6 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
+from app.core.access_log_redact import install_access_log_redaction
+
+install_access_log_redaction()
+
 from app.api.routes.admin import router as admin_router
 from app.api.routes.admin_ops import router as admin_ops_router
 from app.api.routes.alert_incident_triage import router as alert_incident_triage_router

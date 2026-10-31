@@ -666,6 +666,16 @@ def apply_action_callback(
     if not row:
         raise ValueError("Action not found")
 
+    target_aid = str(row.get("target_agent_id") or "").strip()
+    callback_aid = str(agent_id or "").strip()
+    if target_aid and callback_aid and callback_aid != target_aid:
+        raise ValueError(
+            "Callback agent_id does not match the execution target agent"
+        )
+    if target_aid and not callback_aid:
+        # Bind callback to the recorded target when the endpoint omits agent_id.
+        callback_aid = target_aid
+
     mapped = {
         "executing": "executing",
         "success": "success",
@@ -676,7 +686,7 @@ def apply_action_callback(
     final_status = mapped
     verified = False
 
-    aid = agent_id or row.get("target_agent_id")
+    aid = callback_aid or target_aid or None
     applied = None
     released = None
     if isinstance(payload, dict):

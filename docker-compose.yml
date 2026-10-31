@@ -82,6 +82,9 @@ services:
       WAZUH_API_USER_FILE: /run/secrets/wazuh_api_user
       WAZUH_API_PASSWORD_FILE: /run/secrets/wazuh_api_password
       WAZUH_API_VERIFY_TLS: ${WAZUH_API_VERIFY_TLS:-false}
+      WAZUH_API_CA_FILE: ${WAZUH_API_CA_FILE:-/run/secrets/wazuh_api_ca.crt}
+      WAZUH_API_TLS_CHECK_HOSTNAME: ${WAZUH_API_TLS_CHECK_HOSTNAME:-false}
+      EDR_CALLBACK_API_KEY_FILE: /run/secrets/edr_callback_api_key
       # Empty = fail-closed (require agent group → tenant binding). Set only for emergency override.
       WAZUH_DEFAULT_TENANT_SHORT_CODE: ${WAZUH_DEFAULT_TENANT_SHORT_CODE:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
@@ -179,6 +182,8 @@ services:
       - ./.secrets/thehive_password:/run/secrets/thehive_password:ro
       - ./.secrets/wazuh_api_user:/run/secrets/wazuh_api_user:ro
       - ./.secrets/wazuh_api_password:/run/secrets/wazuh_api_password:ro
+      - ./.secrets/wazuh_api_ca.crt:/run/secrets/wazuh_api_ca.crt:ro
+      - ./.secrets/edr_callback_api_key:/run/secrets/edr_callback_api_key:ro
       - ./.secrets/licensing-ed25519-v1.key:/opt/mssp-control/.secrets/licensing-ed25519-v1.key:ro
       - ./.secrets/proxmox_ssh_key:/run/secrets/proxmox_ssh_key:ro
       - ./.secrets/soc-agent-tls/ca.crt:/run/secrets/soc_agent_ca.crt:ro

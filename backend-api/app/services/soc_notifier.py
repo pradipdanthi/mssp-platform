@@ -156,16 +156,53 @@ def _send_telegram(recipient: str, message: str) -> str:
 
 def _send_webhook(recipient: str, message: str) -> str:
     """Generic webhook POST. `recipient` is the full destination URL."""
-    if not recipient.lower().startswith("https://"):
+    # Lab local sink may use http://127.0.0.1 when explicitly allowed.
+    allow_http = (os.getenv("SOC_NOTIFIER_ALLOW_HTTP_WEBHOOK") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+    lower = recipient.lower()
+    if lower.startswith("https://"):
+        pass
+    elif allow_http and lower.startswith("http://127.0.0.1"):
+        pass
+    elif allow_http and lower.startswith("http://localhost"):
+        pass
+    else:
         raise NotifyError("Webhook recipient must be an https URL")
     _http_post_json(recipient, {"text": message})
     return ""
+
+
+def _send_file(recipient: str, message: str) -> str:
+    """Controlled local file sink for provider-independent escalation tests.
+
+    `recipient` is an absolute path under SOC_NOTIFIER_FILE_SINK_DIR (default
+    /var/cache/mssp/notify-sink). Never invents human acknowledgement.
+    """
+    from pathlib import Path
+    import uuid
+
+    sink_root = Path(
+        (os.getenv("SOC_NOTIFIER_FILE_SINK_DIR") or "/var/cache/mssp/notify-sink").strip()
+    )
+    sink_root.mkdir(parents=True, exist_ok=True)
+    # recipient may be a relative leaf name; reject path escape
+    leaf = Path(recipient).name if recipient else "page.txt"
+    if not leaf or leaf in (".", ".."):
+        leaf = "page.txt"
+    path = sink_root / f"{uuid.uuid4().hex}-{leaf}"
+    path.write_text(message[:8000], encoding="utf-8")
+    return str(path)
 
 
 _ADAPTERS = {
     "whatsapp": _send_whatsapp,
     "telegram": _send_telegram,
     "webhook": _send_webhook,
+    "file": _send_file,
 }
 
 
@@ -174,6 +211,7 @@ def _provider_label(channel: str) -> str:
         "whatsapp": "meta_cloud_api",
         "telegram": "telegram_bot_api",
         "webhook": "http_webhook",
+        "file": "local_file_sink",
     }.get(channel, channel)
 
 

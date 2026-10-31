@@ -776,11 +776,20 @@ _ENGINE_NAMES = {
     "misp": "misp", "greenbone": "greenbone", "velociraptor": "velociraptor", "secure edge": "secure_edge",
     "soc agent": "soc_agent", "control plane": "control_plane", "appliances": "appliances",
 }
+_ENGINE_ALT = (
+    r"engines?|infrastructure|infra|stack|services|systems?|backend|platform|"
+    r"wazuh|wazoo|wazu|the ?hive|shuffle|shuffel|suricata|suricataa|zeek|bro|"
+    r"misp|greenbone|velociraptor|secure edge|soc agent|control plane|appliances?"
+)
 _RE_HEALTH = re.compile(
-    r"\b(engines?|infrastructure|infra|stack|services|systems?|backend|"
-    r"wazuh|wazoo|wazu|the ?hive|shuffle|shuffel|suricata|zeek|misp|greenbone|velociraptor|secure edge|soc agent|control plane|appliances?)\b"
-    r".{0,80}\b(health|healthy|status|up|down|online|offline|running|working|processing|process(?:ing)? work|degraded|reachable|ok|okay|fine|alive|broken)\b"
-    r"|\b(health|status)\b.{0,30}\b(of )?(the )?(engines?|infrastructure|infra|stack|platform)\b",
+    rf"\b({_ENGINE_ALT})\b"
+    rf".{{0,80}}\b(health|healthy|status|up|down|online|offline|running|working|doing|processing|process(?:ing)? work|degraded|reachable|ok|okay|fine|alive|broken)\b"
+    rf"|\b(health|status)\b.{{0,40}}\b(of )?(the )?(?P<eng2>{_ENGINE_ALT})\b"
+    rf"|\bhow (?:is|are)\b.{{0,40}}\b({_ENGINE_ALT})\b",
+    re.I,
+)
+_RE_GOODBYE = re.compile(
+    r"^\s*(good\s*bye|goodbye|bye|bye bye|see you|talk later)[.!?\s]*$",
     re.I,
 )
 _RE_INVESTIGATE = re.compile(
@@ -856,6 +865,12 @@ _RE_CHITCHAT = re.compile(
     r"how are you|you good|nice one|understood)\b",
     re.I,
 )
+_RE_GREETING = re.compile(
+    r"^\s*("
+    r"hi|hello|hey|hiya|good (morning|afternoon|evening)"
+    r")(\s*[,!]?\s*(tia|t\.?i\.?a\.?)?)?[.!?\s]*$",
+    re.I,
+)
 _RE_QUESTION = re.compile(
     r"\?|\b(why|how|which|where|who|when|could|would|should|is|are|does|do|did|can|what)\b",
     re.I,
@@ -914,6 +929,30 @@ def _knowledge_dispatch(scope: Scope, conv: Dict[str, Any], text: str, pending: 
     # Host/process evidence stays on the case record; do not steal it as a VM lookup.
     if _RE_EVIDENCE.search(text) and not (_RE_CRITICALITY.search(text) or _RE_KNOWN.search(text) or _RE_DELAY.search(text)):
         return None
+    if _RE_GOODBYE.match(text.strip()):
+        return _reply(
+            "Goodbye. I'm still here if you need me — typed chat works with the mic off.",
+            "Goodbye.",
+            intent="goodbye",
+            tool=None,
+            tool_ok=True,
+        )
+    if _RE_GREETING.match(text.strip()):
+        if conv.get("selected_alert_id") or conv.get("pinned_alert_id"):
+            return _reply(
+                "Hi — I'm with you on the open case. Ask whether it's really critical, what we know, or what to investigate next.",
+                "Hi. I'm on the open case with you.",
+                intent="greeting",
+                tool=None,
+                tool_ok=True,
+            )
+        return _reply(
+            "Hi — TIA here. Ask what's critical, how many customers are in scope, an engine's status, or name a VM.",
+            "Hi. What should we look at?",
+            intent="greeting",
+            tool=None,
+            tool_ok=True,
+        )
     if _RE_CHITCHAT.match(text):
         return _reply("Anytime. I'm still on the case we were looking at." if conv.get("selected_alert_id") or conv.get("pinned_alert_id") else "Anytime. Ask what's critical, or name a component.", intent="chitchat", tool=None)
     if _RE_EXPAND.search(text):
@@ -1172,6 +1211,9 @@ def _dispatch(scope: Scope, conv: Dict[str, Any], text: str, tenant: Optional[Di
     # 3c. Engine and infrastructure health: real adapters, never a model guess.
     if _RE_HEALTH.search(text) and not _RE_COUNT.search(text):
         return _engine_health(scope, text)
+    # Bare engine names / aliases ("Check Bro", "Suricataa?") → health, with clarify if needed.
+    if engines_named and re.search(r"^\s*(check|status|how(?:'s| is)|what about)?\s*", text, re.I) and len(text.strip()) < 48:
+        return _engine_health(scope, text)
 
     # 4. Counts and listings (real data, scoped).
     # "OK, what's critical first?" is a list request, not "the first one" of an earlier list.
@@ -1397,15 +1439,43 @@ def _engine_health(scope: Scope, text: str) -> Dict[str, Any]:
     from app.services import tia_engine_health as eh
 
     low = text.lower()
-    focus = next((eid for name, eid in _ENGINE_NAMES.items() if name in low), None)
+    named: List[str] = []
+    seen: set[str] = set()
+    for name, eid in _ENGINE_NAMES.items():
+        if name in low and eid not in seen:
+            seen.add(eid)
+            named.append(eid)
+    # One named engine → focus it; several → full report so Suricata+Zeek both appear.
+    focus = named[0] if len(named) == 1 else None
     try:
-        report = tools.engine_health(scope, engine=focus, force=bool(re.search(r"\b(right now|just now|recheck|re-check|again|fresh)\b", low)))
+        report = tools.engine_health(
+            scope,
+            engine=focus,
+            force=bool(re.search(r"\b(right now|just now|recheck|re-check|again|fresh)\b", low)),
+        )
     except tools.ToolError as err:
         return _reply(err.message, intent="engine_health", tool="engine_health", tool_ok=False, error=err.code)
     except Exception as exc:  # noqa: BLE001
         logger.warning("engine health failed: %s", type(exc).__name__)
         return _reply("I couldn't run the health checks just now, so I can't say whether the engines are up.", intent="engine_health", tool="engine_health", tool_ok=False, error="health_unavailable")
     said = eh.summarize(report, focus=focus)
+    if len(named) > 1:
+        # Prefer lines that mention the engines the operator named.
+        answer = str(said.get("answer") or "")
+        spoken = str(said.get("spoken") or said.get("answer") or "")
+        return _reply(
+            answer,
+            spoken,
+            intent="engine_health",
+            tool="engine_health",
+            tool_ok=True,
+            health={
+                "counts": report["counts"],
+                "checked_at": report["checked_at"],
+                "detail_level": report.get("detail_level", "full"),
+                "requested_engines": named,
+            },
+        )
     return _reply(said["answer"], said["spoken"], intent="engine_health", tool="engine_health", tool_ok=True, health={"counts": report["counts"], "checked_at": report["checked_at"], "detail_level": report.get("detail_level", "full")})
 
 

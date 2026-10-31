@@ -760,7 +760,16 @@ def admin_incidents(
             i.title,
             i.severity,
             i.status,
+            i.assigned_to_user_id::text,
             u.full_name AS assigned_to,
+            CASE
+              WHEN i.assigned_to_user_id IS NULL THEN 'unassigned'
+              ELSE 'assigned'
+            END AS ownership_state,
+            ROUND(
+              EXTRACT(EPOCH FROM (now() - COALESCE(i.opened_at, i.created_at))) / 3600.0,
+              2
+            )::float AS age_hours,
             i.customer_visible_summary,
             i.customer_action_required,
             i.opened_at,

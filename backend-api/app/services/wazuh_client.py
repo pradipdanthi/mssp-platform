@@ -75,6 +75,15 @@ def _ssl_context() -> ssl.SSLContext:
         ca_file = (os.getenv("WAZUH_API_CA_FILE") or "").strip()
         if ca_file:
             ctx.load_verify_locations(cafile=ca_file)
+        # Lab managers often present CN=wazuh.com while clients dial by IP.
+        # Certificate pin (WAZUH_API_CA_FILE) still validates the peer leaf/chain;
+        # hostname matching is opt-in via WAZUH_API_TLS_CHECK_HOSTNAME=true.
+        check_host = (os.getenv("WAZUH_API_TLS_CHECK_HOSTNAME") or "").strip().lower()
+        if check_host in ("1", "true", "yes", "on"):
+            ctx.check_hostname = True
+        else:
+            ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_REQUIRED
         return ctx
     # Lab / non-production managers may use self-signed certificates.
     ctx = ssl.create_default_context()

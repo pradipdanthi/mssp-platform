@@ -30,10 +30,9 @@ resolve_callback_key() {
     printf '%s' "$MSSP_CALLBACK_KEY"
     return
   fi
+  # Dedicated EDR callback secret only — never publish SOC sync key to endpoints.
   for f in \
-    "$ROOT/.secrets/soc_sync_api_key" \
     "$ROOT/.secrets/edr_callback_api_key" \
-    /run/secrets/soc_sync_api_key \
     /run/secrets/edr_callback_api_key
   do
     if [[ -f "$f" ]]; then

@@ -33,11 +33,15 @@ _DEFAULT_ORIGINS: tuple[str, ...] = (
     # Lab / LAN preview (VM 100)
     "http://192.168.0.201:3000",
     "http://192.168.0.201:3001",
+    "http://192.168.0.201:3002",
+    "https://192.168.0.201:3443",
     "http://192.168.0.201:8080",
     "http://localhost:3000",
     "http://localhost:3001",
+    "http://localhost:3002",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
 )
 
 

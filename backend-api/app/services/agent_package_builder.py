@@ -97,12 +97,10 @@ _LINUX_AR_OPTIONAL_FILES = (
 )
 
 _DEFAULT_PUBLIC_CALLBACK_URL = "https://api.kevantic.com/v1/edr/actions/callback"
+# Dedicated EDR callback secret only — never ship SOC sync key to endpoints.
 _CALLBACK_KEY_CANDIDATES = (
-    Path("/run/secrets/soc_sync_api_key"),
     Path("/run/secrets/edr_callback_api_key"),
-    Path("/opt/mssp-control/.secrets/soc_sync_api_key"),
     Path("/opt/mssp-control/.secrets/edr_callback_api_key"),
-    Path(__file__).resolve().parents[3] / ".secrets" / "soc_sync_api_key",
     Path(__file__).resolve().parents[3] / ".secrets" / "edr_callback_api_key",
 )
 

@@ -1758,12 +1758,61 @@ def check_soc_agent_integration() -> CheckResult:
     intents_txt = read(svc / "tia_intents.py") if (svc / "tia_intents.py").is_file() else ""
     expect(
         f,
-        all(k in intents_txt for k in ("ASSESSMENT", "RECOMMENDATION", "STATUS", "EXECUTION", "wazoo"))
+        all(k in intents_txt for k in ("ASSESSMENT", "RECOMMENDATION", "STATUS", "EXECUTION", "GREETING", "wazoo"))
         and "recommend_next" in conv_txt
         and "_assess_case" in conv_txt
-        and "family == tia_intents.RECOMMENDATION" in conv_txt,
-        "TIA turn families separate assessment/recommendation/status from execution so advice questions cannot enqueue jobs",
+        and "family == tia_intents.RECOMMENDATION" in conv_txt
+        and "_RE_GREETING" in conv_txt,
+        "TIA turn families separate assessment/recommendation/status/greeting from execution so advice questions cannot enqueue jobs",
         path=svc / "tia_intents.py",
+        status_if_false="FAILED",
+    )
+    edr_txt = read(ROOT / "backend-api" / "app" / "api" / "routes" / "edr.py")
+    expect(
+        f,
+        "Dedicated EDR callback secret only" in edr_txt
+        and "soc_sync_api_key" not in edr_txt.split("def _edr_callback_key")[1].split("def _require_callback_auth")[0]
+        and "del x_soc_sync_key" in edr_txt,
+        "EDR callbacks use a dedicated key and reject the SOC sync-key alias",
+        path=ROOT / "backend-api" / "app" / "api" / "routes" / "edr.py",
+        status_if_false="FAILED",
+    )
+    wazuh_txt = read(svc / "wazuh_client.py")
+    expect(
+        f,
+        "WAZUH_API_TLS_CHECK_HOSTNAME" in wazuh_txt
+        and "CERT_REQUIRED" in wazuh_txt
+        and "validate_production_tls" in wazuh_txt,
+        "Wazuh API TLS can pin a CA with CERT_REQUIRED while optionally skipping hostname for IP managers",
+        path=svc / "wazuh_client.py",
+        status_if_false="FAILED",
+    )
+    redact_path = ROOT / "backend-api" / "app" / "core" / "access_log_redact.py"
+    expect(
+        f,
+        redact_path.is_file()
+        and "install_access_log_redaction" in read(ROOT / "backend-api" / "app" / "main.py")
+        and "hooks/wazuh" in read(redact_path),
+        "Access logs redact Wazuh ingress tokens embedded in URL paths",
+        path=redact_path,
+        status_if_false="FAILED",
+    )
+    notifier_txt = read(svc / "soc_notifier.py")
+    expect(
+        f,
+        '"file": _send_file' in notifier_txt
+        and "local_file_sink" in notifier_txt
+        and (ROOT / "postgres" / "init" / "125_notification_channels_file_telegram.sql").is_file(),
+        "SOC notifier supports a local file sink and DB allows file/telegram channels",
+        path=svc / "soc_notifier.py",
+        status_if_false="FAILED",
+    )
+    admin_inc = read(ROOT / "backend-api" / "app" / "api" / "routes" / "admin.py")
+    expect(
+        f,
+        "ownership_state" in admin_inc and "age_hours" in admin_inc,
+        "Admin incident list exposes ownership_state and age_hours for unassigned/overdue visibility",
+        path=ROOT / "backend-api" / "app" / "api" / "routes" / "admin.py",
         status_if_false="FAILED",
     )
     voice_owner = ROOT / "frontend-soc" / "src" / "lib" / "tiaVoiceOwner.ts"

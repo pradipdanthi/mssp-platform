@@ -23,6 +23,7 @@ ASSESSMENT = "assessment"
 RECOMMENDATION = "recommendation"
 STATUS = "status"
 EXECUTION = "execution"
+GREETING = "greeting"
 OTHER = "other"
 
 ENGINE_ALIASES = {
@@ -39,6 +40,7 @@ ENGINE_ALIASES = {
     "shuffler": "shuffle",
     "soar": "shuffle",
     "suricata": "suricata",
+    "suricataa": "suricata",
     "zeek": "zeek",
     "bro": "zeek",
     "misp": "misp",
@@ -103,6 +105,13 @@ _ASSESS = re.compile(
     r")\b",
     re.I,
 )
+# Short greetings only — not "hi, investigate this" (execution still wins later).
+_GREET = re.compile(
+    r"^\s*("
+    r"hi|hello|hey|hiya|good (morning|afternoon|evening)"
+    r")(\s*[,!]?\s*(tia|t\.?i\.?a\.?)?)?[.!?\s]*$",
+    re.I,
+)
 
 
 def classify(text: str) -> str:
@@ -115,6 +124,8 @@ def classify(text: str) -> str:
         return EXECUTION
     if _ASSESS.search(t):
         return ASSESSMENT
+    if _GREET.match(t.strip()):
+        return GREETING
     return OTHER
 
 

@@ -814,11 +814,24 @@ def soc_console_queue(
     incidents = fetch_all(
         """
         SELECT i.id::text AS id, i.incident_number, i.title, i.severity, i.status,
-               i.opened_at::text, t.short_code, t.name AS tenant_name
+               i.opened_at::text, t.short_code, t.name AS tenant_name,
+               i.assigned_to_user_id::text AS assigned_to_user_id,
+               u.full_name AS assigned_to,
+               CASE
+                 WHEN i.assigned_to_user_id IS NULL THEN 'unassigned'
+                 ELSE 'assigned'
+               END AS ownership_state,
+               ROUND(
+                 EXTRACT(EPOCH FROM (now() - COALESCE(i.opened_at, i.created_at))) / 3600.0,
+                 2
+               )::float AS age_hours
         FROM incidents i
         JOIN tenants t ON t.id = i.tenant_id
+        LEFT JOIN platform_users u ON u.id = i.assigned_to_user_id
         WHERE i.status IN ('open','in_progress')
-        ORDER BY i.opened_at DESC NULLS LAST
+        ORDER BY
+          CASE WHEN i.assigned_to_user_id IS NULL THEN 0 ELSE 1 END,
+          COALESCE(i.opened_at, i.created_at) ASC
         LIMIT 40;
         """
     )

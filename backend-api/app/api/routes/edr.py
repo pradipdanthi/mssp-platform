@@ -65,6 +65,11 @@ def _read_secret_file(*candidates: str) -> str:
 
 
 def _edr_callback_key() -> str:
+    """Dedicated EDR callback secret only — never alias SOC sync key.
+
+    A shared SOC sync key would let Shuffle/TheHive sync credentials forge
+    endpoint containment success for any execution_id.
+    """
     env = (os.getenv("EDR_CALLBACK_API_KEY") or "").strip()
     if env:
         return env
@@ -74,12 +79,7 @@ def _edr_callback_key() -> str:
             return Path(key_file).read_text(encoding="utf-8").strip()
         except OSError:
             pass
-    direct = (os.getenv("SOC_SYNC_API_KEY") or "").strip()
-    if direct:
-        return direct
     return _read_secret_file(
-        "/run/secrets/soc_sync_api_key",
-        "/opt/mssp-control/.secrets/soc_sync_api_key",
         "/run/secrets/edr_callback_api_key",
         "/opt/mssp-control/.secrets/edr_callback_api_key",
     )
@@ -87,15 +87,21 @@ def _edr_callback_key() -> str:
 
 def _require_callback_auth(
     x_edr_callback_key: Optional[str],
-    x_soc_sync_key: Optional[str],
+    x_soc_sync_key: Optional[str] = None,
 ) -> None:
+    """Accept only X-EDR-Callback-Key matching the dedicated EDR secret.
+
+    X-SOC-Sync-Key is ignored (and cannot authorize callbacks) so a leaked
+    sync key cannot forge EDR action outcomes.
+    """
+    del x_soc_sync_key  # intentionally unused — do not accept sync-key alias
     expected = _edr_callback_key()
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="EDR callback authentication is not configured",
         )
-    provided = (x_edr_callback_key or x_soc_sync_key or "").strip()
+    provided = (x_edr_callback_key or "").strip()
     if not provided or not hmac.compare_digest(provided, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
