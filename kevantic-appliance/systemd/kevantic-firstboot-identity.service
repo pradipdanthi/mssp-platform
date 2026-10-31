@@ -13,4 +13,4 @@ ExecStart=/usr/local/sbin/kevantic-firstboot-identity.sh
 RemainAfterExit=yes
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=network-pre.target
