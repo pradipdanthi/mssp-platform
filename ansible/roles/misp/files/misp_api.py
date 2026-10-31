@@ -126,8 +126,14 @@ class Handler(BaseHTTPRequestHandler):
             if isinstance(payload.get("Attribute"), dict):
                 value = value or payload["Attribute"].get("value")
             if value:
-                needle = str(value).lower()
-                attrs = [a for a in attrs if needle in a["value"].lower()]
+                # Exact match only (case-insensitive). Substring matches caused
+                # false enrichment hits against unrelated attributes.
+                needle = str(value).strip().casefold()
+                attrs = [
+                    a
+                    for a in attrs
+                    if str(a.get("value") or "").strip().casefold() == needle
+                ]
             self._json(200, {"response": {"Attribute": attrs}})
             return
         if path in ("/events/restSearch", "/events/index"):

@@ -204,6 +204,7 @@ def admin_threat_intel_iocs(
         reputation_status=reputation_status,
         page=page,
         page_size=page_size,
+        include_source_refs=True,
     )
     pages = max(1, (total + page_size - 1) // page_size) if total else 1
     return {

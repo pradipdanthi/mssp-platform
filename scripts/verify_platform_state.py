@@ -1755,6 +1755,24 @@ def check_soc_agent_integration() -> CheckResult:
         path=svc / "tia_engine_health.py",
         status_if_false="FAILED",
     )
+    misp_client_txt = read(svc / "misp_client.py") if (svc / "misp_client.py").is_file() else ""
+    expect(
+        f,
+        "def rest_search_attributes" in misp_client_txt
+        and "casefold()" in misp_client_txt
+        and 'str(a.get("value") or "").strip().casefold() == needle' in misp_client_txt,
+        "MISP restSearch client enforces exact value match so unrelated attributes are not enrichment hits",
+        path=svc / "misp_client.py",
+        status_if_false="FAILED",
+    )
+    expect(
+        f,
+        (ROOT / "backend-api" / "tests" / "test_misp_enrichment_outcomes.py").is_file()
+        and "MOCKED" in read(ROOT / "backend-api" / "tests" / "test_misp_enrichment_outcomes.py"),
+        "MISP enrichment outcomes have mocked match/no-match/unavailable tests labeled separately from live lookups",
+        path=ROOT / "backend-api" / "tests" / "test_misp_enrichment_outcomes.py",
+        status_if_false="FAILED",
+    )
     intents_txt = read(svc / "tia_intents.py") if (svc / "tia_intents.py").is_file() else ""
     expect(
         f,

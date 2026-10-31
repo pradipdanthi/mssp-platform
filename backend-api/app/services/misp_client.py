@@ -93,7 +93,12 @@ def _post(path: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
 
 
 def rest_search_attributes(*, value: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Return Attribute dicts from MISP restSearch."""
+    """Return Attribute dicts from MISP restSearch.
+
+    When ``value`` is set, enforce an exact case-insensitive match on the
+    attribute value. Some bridge builds ignore or substring-filter the request
+    body; the control plane must not treat unrelated attributes as hits.
+    """
     body: Dict[str, Any] = {"returnFormat": "json"}
     if value:
         body["value"] = value
@@ -111,7 +116,11 @@ def rest_search_attributes(*, value: Optional[str] = None) -> List[Dict[str, Any
                 attrs.append(item)
     else:
         attrs = []
-    return [a for a in attrs if isinstance(a, dict)]
+    out = [a for a in attrs if isinstance(a, dict)]
+    if value is not None and str(value).strip() != "":
+        needle = str(value).strip().casefold()
+        out = [a for a in out if str(a.get("value") or "").strip().casefold() == needle]
+    return out
 
 
 def list_iocs(limit: int = 500) -> List[Dict[str, Any]]:
@@ -134,18 +143,25 @@ def list_iocs(limit: int = 500) -> List[Dict[str, Any]]:
             ioc_type = "OTHER"
         comment = str(attr.get("comment") or "")
         actor = comment.split(":", 1)[0].strip() if comment else "Unknown"
+        # Do not invent confidence / last-seen; MISP attributes here lack those
+        # fields. Analyst UI may treat missing confidence as unset.
         out.append(
             {
                 "ioc_value": value,
                 "ioc_type": ioc_type,
                 "threat_actor": actor[:120] or "Unknown",
-                "confidence_score": 85,
-                "reputation_status": "MALICIOUS",
+                # Schema only allows MALICIOUS|SUSPICIOUS|BENIGN; SUSPICIOUS =
+                # supporting intelligence present, not an automatic malicious verdict.
+                "confidence_score": None,
+                "reputation_status": "SUSPICIOUS",
                 "mitre_tactics": [],
                 "mitre_techniques": [],
                 "summary": comment[:500] or f"Threat indicator from MISP ({t})",
                 "recommended_action": "Block or monitor this indicator and hunt for related activity.",
                 "source": "misp",
+                "misp_attribute_id": str(attr.get("id") or "") or None,
+                "misp_event_id": str(attr.get("event_id") or "") or None,
+                "misp_timestamp": str(attr.get("timestamp") or "") or None,
             }
         )
     return out

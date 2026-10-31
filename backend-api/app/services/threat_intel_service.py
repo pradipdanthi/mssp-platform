@@ -226,21 +226,39 @@ def _import_from_misp(tenant_id: str) -> int:
             return 0
         count = 0
         for entry in misp_client.list_iocs(limit=500):
+            conf = entry.get("confidence_score")
+            conf_i = int(conf) if conf is not None else None
+            # Prefer MISP attribute timestamp when present; do not invent last-seen.
+            misp_ts = entry.get("misp_timestamp")
+            last_seen = None
+            if misp_ts not in (None, ""):
+                try:
+                    last_seen = datetime.fromtimestamp(int(misp_ts), tz=timezone.utc)
+                except (TypeError, ValueError, OSError):
+                    last_seen = None
+            raw = {
+                "source": "misp",
+                "feed": "vm108",
+                "misp_attribute_id": entry.get("misp_attribute_id"),
+                "misp_event_id": entry.get("misp_event_id"),
+                "misp_timestamp": entry.get("misp_timestamp"),
+                "outcome": "match_found_supporting_intelligence",
+            }
             _upsert_ioc(
                 tenant_id,
                 ioc_value=entry["ioc_value"],
                 ioc_type=entry["ioc_type"],
                 threat_actor=entry.get("threat_actor") or "Unknown",
-                confidence_score=int(entry.get("confidence_score") or 80),
-                reputation_status=entry.get("reputation_status") or "MALICIOUS",
+                confidence_score=conf_i if conf_i is not None else 0,
+                reputation_status=entry.get("reputation_status") or "SUSPICIOUS",
                 mitre_tactics=list(entry.get("mitre_tactics") or []),
                 mitre_techniques=list(entry.get("mitre_techniques") or []),
                 summary=entry.get("summary") or "Threat indicator from MISP",
                 recommended_action=entry.get("recommended_action")
                 or "Block or monitor this indicator.",
                 related_alert_count=0,
-                last_seen=_utcnow(),
-                raw={"source": "misp", "feed": "vm108"},
+                last_seen=last_seen,
+                raw=raw,
             )
             count += 1
         return count
@@ -448,6 +466,29 @@ def customer_ioc_row(row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def admin_ioc_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    """Analyst-facing IOC row including MISP attribute/event refs when present."""
+    out = customer_ioc_row(row)
+    raw = row.get("raw_details")
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except Exception:  # noqa: BLE001
+            raw = {}
+    if not isinstance(raw, dict):
+        raw = {}
+    source = raw.get("source")
+    if source:
+        out["intel_source"] = source
+    if raw.get("misp_attribute_id"):
+        out["misp_attribute_id"] = raw.get("misp_attribute_id")
+    if raw.get("misp_event_id"):
+        out["misp_event_id"] = raw.get("misp_event_id")
+    if raw.get("misp_timestamp"):
+        out["misp_timestamp"] = raw.get("misp_timestamp")
+    return out
+
+
 def customer_campaign_row(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": row.get("id"),
@@ -534,6 +575,7 @@ def list_iocs(
     min_confidence: Optional[int] = None,
     page: int = 1,
     page_size: int = 50,
+    include_source_refs: bool = False,
 ) -> Tuple[List[Dict[str, Any]], int]:
     where = ["tenant_id = %s::uuid", "status = 'active'"]
     params: List[Any] = [tenant_id]
@@ -556,12 +598,13 @@ def list_iocs(
     ) or {}
     total = int(total_row.get("n") or 0)
     offset = max(0, (page - 1) * page_size)
+    raw_col = ", raw_details" if include_source_refs else ""
     rows = fetch_all(
         f"""
         SELECT id::text, ioc_value, ioc_type, threat_actor, confidence_score,
                reputation_status, mitre_tactics, mitre_techniques, summary,
                recommended_action, related_alert_count,
-               last_seen_in_tenant::text
+               last_seen_in_tenant::text{raw_col}
         FROM tenant_threat_intel_iocs
         WHERE {clause}
         ORDER BY
@@ -576,7 +619,8 @@ def list_iocs(
         """,
         tuple(params + [page_size, offset]),
     ) or []
-    return [customer_ioc_row(r) for r in rows], total
+    mapper = admin_ioc_row if include_source_refs else customer_ioc_row
+    return [mapper(r) for r in rows], total
 
 
 def list_campaigns(tenant_id: str) -> List[Dict[str, Any]]:
