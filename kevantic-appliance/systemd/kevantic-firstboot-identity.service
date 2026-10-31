@@ -3,7 +3,8 @@ Description=Kevantic golden/clone first-boot host identity
 Documentation=file:///opt/mssp-control/kevantic-appliance/scripts/kevantic-firstboot-identity.sh
 DefaultDependencies=no
 After=local-fs.target systemd-machine-id-commit.service
-Before=wazuh-manager.service wazuh-agent.service network-online.target
+Before=network-pre.target systemd-networkd.service NetworkManager.service networking.service wazuh-manager.service wazuh-agent.service network-online.target
+Wants=network-pre.target
 ConditionPathExists=/etc/kevantic/GOLDEN_TEMPLATE
 
 [Service]
